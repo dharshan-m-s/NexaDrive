@@ -1,0 +1,27 @@
+# NexaDrive gitleaks configuration.
+#
+# Extends gitleaks' default rules and allowlists ONLY the deliberately
+# placeholder Authorization headers inside the local QA/security test scripts.
+# Those scripts craft `Authorization: Bearer $TOKEN` (a shell variable set at
+# run time by the operator) and `Authorization: Bearer invalid-token` (a
+# literal stub) to verify the server rejects bad credentials. None of them
+# embed a real secret; the tokens are supplied externally. Everything else is
+# scanned with the standard rules so real secrets still fail the pipeline.
+title = "NexaDrive gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "QA scripts that intentionally send placeholder Authorization headers"
+paths = [
+  '''scripts/security_test\.sh''',
+  '''scripts/prod_qa_suite\.sh''',
+  '''scripts/deploy\.sh''',
+]
+regexes = [
+  '''Authorization:\s*Bearer\s+\$TOKEN''',
+  '''Authorization:\s*Bearer\s+invalid-token''',
+  '''Authorization:\s*Bearer\s*$''',
+  '''Authorization:\s*Bearer\s*"''',
+]
