@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Downloaded, SHA-256-verified installers live in the app cache. The
+         Update Center writes under <cache>/nexadrive_updates/ and hands the
+         final file to the system installer via a content URI. -->
+    <cache-path name="update_cache" path="nexadrive_updates/"/>
+</paths>

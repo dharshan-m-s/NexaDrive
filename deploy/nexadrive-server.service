@@ -1,0 +1,40 @@
+# NexaDrive systemd unit template.
+#
+# `__NEXADRIVE_HOME__` is substituted by `deploy/install-server.sh` with the
+# chosen install path (defaults to /opt/nexadrive). If data lives on its own
+# disk, uncomment RequiresMountsFor with that mount point.
+[Unit]
+Description=NexaDrive private cloud server
+After=network-online.target
+Wants=network-online.target
+# RequiresMountsFor=/path/to/your/data-disk-mount
+
+[Service]
+Type=simple
+User=nexadrive
+Group=nexadrive
+
+WorkingDirectory=__NEXADRIVE_HOME__/server
+
+EnvironmentFile=/etc/nexadrive/server.env
+
+ExecStart=__NEXADRIVE_HOME__/server/target/release/nexadrive-server
+
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+ReadWritePaths=__NEXADRIVE_HOME__/data
+ReadWritePaths=__NEXADRIVE_HOME__/storage
+ReadWritePaths=__NEXADRIVE_HOME__/backups
+ReadWritePaths=__NEXADRIVE_HOME__/temp
+ReadWritePaths=__NEXADRIVE_HOME__/logs
+
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

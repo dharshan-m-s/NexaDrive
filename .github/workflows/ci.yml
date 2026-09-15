@@ -1,0 +1,206 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: "3.47.2"
+
+# Third-party actions are pinned to full commit SHAs (resolved from the tagged
+# release of each action); the human-readable tag is kept in a trailing comment.
+
+jobs:
+  version-consistency:
+    name: Version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
+      - name: Compare Cargo.toml and pubspec.yaml versions
+        run: |
+          set -euo pipefail
+          cargo_ver=$(sed -n 's/^version = "\(.*\)"/\1/p' server/Cargo.toml)
+          pubspec_ver=$(grep -E '^version:' app/pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          echo "server/Cargo.toml version: $cargo_ver"
+          echo "app/pubspec.yaml version:  $pubspec_ver"
+          [ "$cargo_ver" = "$pubspec_ver" ] || {
+            echo "::error::Version mismatch: server/Cargo.toml ($cargo_ver) != app/pubspec.yaml ($pubspec_ver)"
+            exit 1
+          }
+          echo "Versions match."
+
+  secret-scan:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.13
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Guardrail - no runtime .env committed
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          if git ls-files | grep -E '(^|/)\.env$' -q; then
+            echo "::error::A runtime .env file is tracked by git. Remove it."
+            exit 1
+          fi
+          echo "No runtime .env files tracked."
+      - name: Guardrail - no live admin password in tracked source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          # Flag ADMIN_PASSWORD assignments whose value is not a placeholder
+          # (e.g. "CHANGE_THIS", an empty reference, or a quoted variable).
+          if rg -n 'ADMIN_PASSWORD=[^"$< ]' \
+              --glob '!**/.env.example' \
+              --glob '!**/*.md' \
+              --glob '!docs/**' \
+              . 2>/dev/null; then
+            echo "::error::A live ADMIN_PASSWORD value appears in tracked source."
+            exit 1
+          fi
+          echo "No live ADMIN_PASSWORD values in tracked source."
+
+  flutter-analyze:
+    name: Flutter analyze
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.19.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - run: flutter pub get
+        working-directory: app
+      - run: flutter analyze
+        working-directory: app
+
+  flutter-test:
+    name: Flutter unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.19.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - run: flutter pub get
+        working-directory: app
+      - run: flutter test
+        working-directory: app
+
+  flutter-windows:
+    name: Flutter Windows build
+    runs-on: windows-latest
+    needs: [flutter-analyze, flutter-test]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.19.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - run: flutter pub get
+        working-directory: app
+      - run: flutter build windows --release --dart-define=NEXADRIVE_UPDATE_REPO=dharshan-m-s/NexaDrive
+        working-directory: app
+
+  flutter-linux:
+    name: Flutter Linux build
+    runs-on: ubuntu-latest
+    needs: [flutter-analyze, flutter-test]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.19.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build libgtk-3-dev pkg-config
+      - run: flutter pub get
+        working-directory: app
+      - run: flutter build linux --release --dart-define=NEXADRIVE_UPDATE_REPO=dharshan-m-s/NexaDrive
+        working-directory: app
+
+  flutter-android:
+    name: Flutter Android build
+    runs-on: ubuntu-latest
+    needs: [flutter-analyze, flutter-test]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.7.1
+        with:
+          distribution: "temurin"
+          java-version: "17"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.19.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - run: flutter pub get
+        working-directory: app
+      - run: flutter build apk --debug --dart-define=NEXADRIVE_UPDATE_REPO=dharshan-m-s/NexaDrive
+        working-directory: app
+
+  rust-qc:
+    name: Rust fmt + check + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # 1.98.1
+        with:
+          toolchain: 1.98.1
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: server
+      - run: cargo fmt --check
+        working-directory: server
+      - run: cargo clippy --all-targets -- -D warnings
+        working-directory: server
+      - run: cargo test
+        working-directory: server
+
+  rust-release:
+    name: Rust release build
+    runs-on: ubuntu-latest
+    needs: [rust-qc]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # 1.98.1
+        with:
+          toolchain: 1.98.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: server
+      - run: cargo build --release --locked
+        working-directory: server
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.9.3
+        with:
+          name: nexadrive-server-x86_64
+          path: server/target/release/nexadrive-server
+
+  dependency-audit:
+    name: Dependency audit (advisory)
+    runs-on: ubuntu-latest
+    needs: [rust-qc]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # 1.98.1
+        with:
+          toolchain: 1.98.1
+      - run: |
+          cargo install cargo-audit --locked && cargo audit
+        working-directory: server

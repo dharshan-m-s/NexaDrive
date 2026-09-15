@@ -1,0 +1,80 @@
+# ---------------------------------------------------------------------------
+# NexaDrive — root .gitignore
+#
+# Runtime data, secrets, build output and machine-specific files must never
+# be committed. Everything required to build and run from a fresh clone is
+# intentionally NOT ignored (source, lockfiles, migrations, service units,
+# packaging scripts, sanitized env templates).
+# ---------------------------------------------------------------------------
+
+# --- Server runtime state (never commit) -----------------------------------
+# SQLite database, WAL/SHM files, user files, backups, upload staging, logs.
+data/
+storage/
+backups/
+logs/
+temp/
+*.db-wal
+*.db-shm
+
+# --- Server configuration secrets ------------------------------------------
+server/.env
+.env
+.env.*
+!.env.example
+
+# --- Rust build output -----------------------------------------------------
+server/target/
+
+# --- Flutter / Dart ---------------------------------------------------------
+app/.dart_tool/
+app/build/
+app/android/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.packages
+.android/
+app/android/.gradle/
+app/android/local.properties
+app/android/key.properties
+app/android/captures/
+app/android/**/*.jks
+app/android/**/*.keystore
+app/linux/flutter/ephemeral/
+app/windows/flutter/ephemeral/
+coverage/
+*.symbols
+*.map.json
+
+# --- Release artifacts produced by local/CI packaging ----------------------
+dist/
+release-artifacts/
+*.AppImage
+*.deb
+*.apk
+*.aab
+
+# --- Editor / IDE -----------------------------------------------------------
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- OS noise ---------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.dll
+*.exe
+
+# --- Opencode / local tooling ------------------------------------------------
+.opencode/
+
+# --- Screenshots and large binary captures -----------------------------------
+screenshots/
+
+# --- Logs / test output ------------------------------------------------------
+*.log
+.coverage/
+test_results/
