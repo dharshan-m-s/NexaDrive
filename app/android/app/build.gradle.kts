@@ -4,13 +4,7 @@ import java.util.Properties
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
-    id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
-    // Kotlin is applied to the app module because pdfx 2.11.0 ships its Android
-    // implementation in Kotlin: without `kotlin-android` here, Gradle compiles
-    // this module's Java (including GeneratedPluginRegistrant, which references
-    // io.scer.pdfx.PdfxPlugin) before the plugin's Kotlin classes exist on the
-    // classpath, producing "package io.scer.pdfx does not exist".
 }
 
 // Release signing material. In CI the workflow decodes the KEYSTORE_BASE64 secret
