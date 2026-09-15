@@ -101,8 +101,7 @@ jobs:
         working-directory: server
       - name: Stage artifact
         run: |
-          VERSION="${{ github.ref_name }}"
-          VERSION="${VERSION#v}"
+          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' server/Cargo.toml)"
           mkdir -p dist
           cp server/target/release/nexadrive-server \
             "dist/NexaDrive-$VERSION-server-linux-x86_64"
@@ -132,8 +131,7 @@ jobs:
         working-directory: server
       - name: Stage artifact
         run: |
-          VERSION="${{ github.ref_name }}"
-          VERSION="${VERSION#v}"
+          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' server/Cargo.toml)"
           mkdir -p dist
           cp server/target/aarch64-unknown-linux-gnu/release/nexadrive-server \
             "dist/NexaDrive-$VERSION-server-linux-aarch64"
@@ -186,8 +184,7 @@ jobs:
         run: flutter build apk --release --dart-define=NEXADRIVE_UPDATE_REPO=dharshan-m-s/NexaDrive
       - name: Stage artifact
         run: |
-          VERSION="${{ github.ref_name }}"
-          VERSION="${VERSION#v}"
+          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' server/Cargo.toml)"
           mkdir -p dist
           cp app/build/app/outputs/flutter-apk/app-release.apk \
             "dist/NexaDrive-$VERSION.apk"
@@ -214,8 +211,7 @@ jobs:
         working-directory: app
       - name: Package AppImage and deb
         run: |
-          VERSION="${{ github.ref_name }}"
-          VERSION="${VERSION#v}"
+          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' server/Cargo.toml)"
           scripts/package-linux.sh "$VERSION" dist
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.9.3
         with:
@@ -240,7 +236,7 @@ jobs:
       - name: Stage portable ZIP
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}".TrimStart('v')
+          $version = (Select-String -Path "server\Cargo.toml" -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Compress-Archive -Path "app\build\windows\x64\runner\Release\*" `
             -DestinationPath "dist\NexaDrive-$version-windows-x64.zip"
@@ -248,7 +244,7 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup --yes --no-progress
-          $version = "${{ github.ref_name }}".TrimStart('v')
+          $version = (Select-String -Path "server\Cargo.toml" -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
           $isscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           & $isscc "/DMyAppVersion=$version" "app\windows\installer\nexadrive.iss"

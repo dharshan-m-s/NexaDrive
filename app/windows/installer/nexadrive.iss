@@ -14,7 +14,7 @@
 #define MyAppExeName "nexadrive.exe"
 #define MyAppSourceDir "..\..\build\windows\x64\runner\Release"
 #define MyAppOutputDir "..\..\..\dist"
-#define MyAppIcon "..\..\runner\resources\app_icon.ico"
+#define MyAppIcon "..\runner\resources\app_icon.ico"
 
 [Setup]
 AppId={{3F4E2A5B-1C2D-4E6F-9A8B-7C6D5E4F3A2B}}
