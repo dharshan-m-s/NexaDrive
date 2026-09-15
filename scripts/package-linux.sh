@@ -91,6 +91,8 @@ cp -r "$BUNDLE/." "$APP_DIR/"
 chmod +x "$APP_DIR/nexadrive"
 
 printf '%s' "$DESKTOP" > "$APP_DIR/nexadrive.desktop"
+# appimagetool requires Icon=nexadrive → nexadrive.png in the AppDir root
+cp "$ICON" "$APP_DIR/nexadrive.png"
 mkdir -p "$APP_DIR/$ICON_DIR_DEB"
 cp "$ICON" "$APP_DIR/$ICON_DIR_DEB/nexadrive.png"
 
