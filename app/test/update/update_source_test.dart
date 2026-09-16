@@ -141,6 +141,43 @@ void main() {
       await source.close();
     });
 
+    test('follows a redirect that stays on the release hosts', () async {
+      var hops = 0;
+      final source = sourceReturning(MockClient((request) async {
+        hops++;
+        if (hops == 1) {
+          return http.Response('', 302, headers: {
+            'location':
+                'https://github.com/dharshan-m-s/NexaDrive/releases/download/v1.2.0/nexadrive-update-manifest.json',
+          });
+        }
+        return http.Response(_manifestBody, 200, headers: {
+          'etag': '"abc"',
+        });
+      }));
+      final result = await source.fetchLatest();
+      expect(hops, 2);
+      expect(result.manifest!.version.toString(), '1.2.0');
+      await source.close();
+    });
+
+    test('rejects a manifest redirect off the release hosts', () async {
+      final source = sourceReturning(MockClient((request) async {
+        return http.Response('', 302, headers: {
+          'location': 'https://evil.example.com/nexadrive-update-manifest.json',
+        });
+      }));
+      expect(
+        () => source.fetchLatest(),
+        throwsA(isA<UpdateException>().having(
+          (e) => e.kind,
+          'kind',
+          UpdateErrorKind.manifestRejected,
+        )),
+      );
+      await source.close();
+    });
+
     test('a stalled body still terminates as a timeout', () async {
       // Server sends headers but then never delivers a body. This is the
       // classic infinite-"Preparing…" scenario: without a bound on the body

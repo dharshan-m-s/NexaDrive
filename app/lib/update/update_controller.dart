@@ -455,6 +455,7 @@ class UpdateController extends ChangeNotifier {
         resolvedPlatform!,
         archLabel!,
         installationKind ?? InstallationKind.installed,
+        explicitLinuxKind: linuxPackageChoice,
       );
       installerKind = selector.kindFor(
             resolvedPlatform!,
@@ -864,20 +865,26 @@ case AppPlatform.android:
     }
   }
 
-  /// Generates the detached Windows swap helper. Paths are inserted literally
-  /// (single-quoted), so no characters can break out of the script.
+  /// Generates the detached Windows swap helper. Paths are wrapped in double
+  /// quotes and every literal `%` is doubled (batch expands `%VAR%` at parse
+  /// time), so a path such as `C:\Users\50%Tax` cannot corrupt or escape the
+  /// script.
   static String _portableSwapScript({
     required String staging,
     required String appDir,
     required String exeName,
   }) {
+    String batchEscape(String value) => value.replaceAll('%', '%%');
+    final src = batchEscape(staging);
+    final dir = batchEscape(appDir);
+    final appExe = batchEscape('$appDir$Platform.pathSeparator$exeName');
     return '@echo off\r\n'
         'REM NexaDrive portable updater: waits for the app to exit, swaps the\r\n'
         'REM staged build into place, relaunches, then removes itself.\r\n'
         'setlocal\r\n'
-        'set "UPDATE_SRC=$staging"\r\n'
-        'set "APP_DIR=$appDir"\r\n'
-        'set "APP_EXE=$appDir$Platform.pathSeparator$exeName"\r\n'
+        'set "UPDATE_SRC=$src"\r\n'
+        'set "APP_DIR=$dir"\r\n'
+        'set "APP_EXE=$appExe"\r\n'
         ':wait\r\n'
         'tasklist /FI "IMAGENAME eq $exeName" 2>NUL | find /I "$exeName" >NUL\r\n'
         'if not errorlevel 1 (\r\n'

@@ -54,10 +54,26 @@ class AppPlatformDetector {
   /// Production reads [Platform.resolvedExecutable]; tests inject a path.
   final String? resolvedExecutableOverride;
 
+  /// Override for [Platform.environment] so detection can be unit-tested
+  /// on any host. Production uses the real process environment.
+  final Map<String, String> Function()? environmentOverride;
+
+  /// Override for child-process probing (`dpkg -s`, `uname -m`). Tests stub
+  /// this; production runs the real commands.
+  final Future<String?> Function(List<String> cmd)? runCmdOverride;
+
   const AppPlatformDetector({
     this.abiResolver,
     this.resolvedExecutableOverride,
+    this.environmentOverride,
+    this.runCmdOverride,
   });
+
+  Map<String, String> get _environment =>
+      environmentOverride?.call() ?? Platform.environment;
+
+  Future<String?> _run(List<String> cmd) =>
+      runCmdOverride?.call(cmd) ?? _realRun(cmd);
 
   AppPlatform get platform {
     if (Platform.isAndroid) return AppPlatform.android;
@@ -82,77 +98,31 @@ class AppPlatformDetector {
   Future<InstallationKind> resolveInstallationKind() async {
     switch (platform) {
       case AppPlatform.windows:
-        return _windowsInstallationKind();
+        String exe;
+        try {
+          exe = _executablePath();
+        } catch (_) {
+          exe = '';
+        }
+        return windowsInstallationKind(exe, _environment);
       case AppPlatform.linux:
-        return _linuxInstallationKind();
+        String exe;
+        try {
+          exe = _executablePath();
+        } catch (_) {
+          exe = '';
+        }
+        return linuxInstallationKind(
+          exePath: exe,
+          environment: _environment,
+          runCmd: runCmdOverride,
+        );
       default:
         return InstallationKind.installed;
     }
   }
 
   String _executablePath() => resolvedExecutableOverride ?? Platform.resolvedExecutable;
-
-  InstallationKind _windowsInstallationKind() {
-    // Installed layouts live under LOCALAPPDATA\Programs (per-user Inno Setup)
-    // or Program Files, and carry an Inno Setup uninstaller. Anything else is
-    // a portable ZIP extraction.
-    String exe;
-    try {
-      exe = _executablePath();
-    } catch (_) {
-      return InstallationKind.unknown;
-    }
-    if (exe.isEmpty) return InstallationKind.unknown;
-    final dir = File(exe).parent.path.toLowerCase();
-    final env = Platform.environment;
-    final installedRoots = [
-      env['LOCALAPPDATA']?.toLowerCase(),
-      env['ProgramFiles']?.toLowerCase(),
-      env['ProgramFiles(x86)']?.toLowerCase(),
-    ]
-        .whereType<String>()
-        .where((p) => p.isNotEmpty)
-        .map((p) => p.replaceAll('/', '\\'))
-        .toList();
-    if (installedRoots.any((root) {
-      final norm = dir.startsWith('\\') ? dir : dir.replaceFirst('\\\\?\\', '');
-      return norm.startsWith('$root\\');
-    })) {
-      return InstallationKind.installed;
-    }
-    // Inno Setup leaves unins*.exe / "Uninstall NexaDrive.exe" beside the exe.
-    try {
-      final uninstallers = File(exe)
-          .parent
-          .listSync(followLinks: false)
-          .where((f) => f.path.toLowerCase().contains('unins'))
-          .toList();
-      if (uninstallers.isNotEmpty) return InstallationKind.installed;
-    } catch (_) {}
-    return InstallationKind.portable;
-  }
-
-  Future<InstallationKind> _linuxInstallationKind() async {
-    final appImage = Platform.environment['APPIMAGE'];
-    if (appImage != null && appImage.isNotEmpty) {
-      return InstallationKind.appimage;
-    }
-    String exe;
-    try {
-      exe = _executablePath();
-    } catch (_) {
-      exe = '';
-    }
-    // A packaged .deb install places the binary under /usr (either as a symlink
-    // in /usr/bin or the real file in /usr/lib/nexadrive).
-    final looksDeb =
-        exe.startsWith('/usr/lib/nexadrive/') || exe == '/usr/bin/nexadrive';
-    if (looksDeb) {
-      final known = await _run(['dpkg', '-s', 'nexadrive']);
-      return known != null ? InstallationKind.deb : InstallationKind.installed;
-    }
-    return InstallationKind.source;
-  }
 
   Future<String?> resolveArch() async {
     switch (platform) {
@@ -166,27 +136,106 @@ class AppPlatformDetector {
         }
         return abis.first;
       case AppPlatform.windows:
-        final arch = Platform.environment['PROCESSOR_ARCHITECTURE']?.toLowerCase();
-        if (arch == 'amd64' || arch == 'x86_64' || arch == null) {
-          return ArchNames.desktopX64;
-        }
-        if (arch == 'arm64' || arch == 'aarch64') return ArchNames.aarch64;
-        return null;
+        return windowsArch(_environment['PROCESSOR_ARCHITECTURE']);
       case AppPlatform.linux:
-        final machine = await _run(['uname', '-m']);
-        if (machine == 'x86_64' || machine == 'amd64') {
-          return ArchNames.desktopX64;
-        }
-        if (machine == 'aarch64' || machine == 'arm64') {
-          return ArchNames.aarch64;
-        }
-        return null;
+        return linuxArch(await _run(['uname', '-m']));
       default:
         return null;
     }
   }
 
-  Future<String?> _run(List<String> cmd) async {
+  /// Windows install layout from the running executable's path and the
+  /// installer-related environment variables. Pure (string-based parent
+  /// splitting) so every branch is unit tested on any host.
+  static InstallationKind windowsInstallationKind(
+    String exePath,
+    Map<String, String> environment,
+  ) {
+    // Installed layouts live under LOCALAPPDATA\Programs (per-user Inno Setup)
+    // or Program Files, and carry an Inno Setup uninstaller. Anything else is
+    // a portable ZIP extraction.
+    if (exePath.isEmpty) return InstallationKind.unknown;
+    final parts = exePath.toLowerCase().split(RegExp(r'[\\/]'));
+    final dir =
+        parts.length > 1 ? parts.sublist(0, parts.length - 1).join(r'\') : '';
+    if (dir.isEmpty) return InstallationKind.unknown;
+    final installedRoots = [
+      environment['LOCALAPPDATA']?.toLowerCase(),
+      environment['ProgramFiles']?.toLowerCase(),
+      environment['ProgramFiles(x86)']?.toLowerCase(),
+    ]
+        .whereType<String>()
+        .where((p) => p.isNotEmpty)
+        .map((p) => p.replaceAll('/', '\\'))
+        .toList();
+    if (installedRoots.any((root) {
+      // Strip the \\?\ long-path prefix (UNC paths keep it and are handled by
+      // the incoming-backslash check below).
+      final norm =
+          dir.startsWith(r'\\') ? dir : dir.replaceFirst(RegExp(r'^\\\?\\'), '');
+      return norm.startsWith('$root\\');
+    })) {
+      return InstallationKind.installed;
+    }
+    // Inno Setup leaves unins*.exe / "Uninstall NexaDrive.exe" beside the exe.
+    try {
+      final uninstallers = File(exePath)
+          .parent
+          .listSync(followLinks: false)
+          .where((f) => f.path.toLowerCase().contains('unins'))
+          .toList();
+      if (uninstallers.isNotEmpty) return InstallationKind.installed;
+    } catch (_) {}
+    return InstallationKind.portable;
+  }
+
+  /// Linux install layout from the running executable's path, the environment
+  /// (AppImage), and an optional `dpkg` probe. Pure (stubbed in tests).
+  static Future<InstallationKind> linuxInstallationKind({
+    required String exePath,
+    required Map<String, String> environment,
+    Future<String?> Function(List<String> cmd)? runCmd,
+  }) async {
+    final appImage = environment['APPIMAGE'];
+    if (appImage != null && appImage.isNotEmpty) {
+      return InstallationKind.appimage;
+    }
+    // A packaged .deb install places the binary under /usr (either as a symlink
+    // in /usr/bin or the real file in /usr/lib/nexadrive).
+    final looksDeb =
+        exePath.startsWith('/usr/lib/nexadrive/') || exePath == '/usr/bin/nexadrive';
+    if (looksDeb) {
+      final probe = (runCmd ?? _realRun)(['dpkg', '-s', 'nexadrive']);
+      final known = await probe;
+      return known != null ? InstallationKind.deb : InstallationKind.installed;
+    }
+    return InstallationKind.source;
+  }
+
+  /// Windows CPU → manifest arch key. A missing value means 64-bit Windows
+  /// (the universal case); anything unrecognized → null (no update offered).
+  static String? windowsArch(String? processorArchitecture) {
+    final arch = processorArchitecture?.toLowerCase();
+    if (arch == 'amd64' || arch == 'x86_64' || arch == null) {
+      return ArchNames.desktopX64;
+    }
+    if (arch == 'arm64' || arch == 'aarch64') return ArchNames.aarch64;
+    return null;
+  }
+
+  /// Linux `uname -m` → manifest arch key.
+  static String? linuxArch(String? unameMachine) {
+    final machine = unameMachine?.trim().toLowerCase();
+    if (machine == 'x86_64' || machine == 'amd64') {
+      return ArchNames.desktopX64;
+    }
+    if (machine == 'aarch64' || machine == 'arm64') {
+      return ArchNames.aarch64;
+    }
+    return null;
+  }
+
+  static Future<String?> _realRun(List<String> cmd) async {
     try {
       final result = await Process.run(cmd.first, cmd.sublist(1));
       if (result.exitCode == 0 && result.stdout is String) {
@@ -250,12 +299,17 @@ class ArtifactSelector {
 
   /// Returns the single artifact to download for [platform]/[arch] given how
   /// the app is installed. Exact match only — no fuzzy cross-arch fallback.
+  ///
+  /// [explicitLinuxKind] is the user's prior package choice (AppImage vs. .deb)
+  /// for installs whose layout could not be auto-detected; it wins over the
+  /// default fallback so the artifact always matches the install flow.
   ArtifactInfo? select(
     UpdateManifest manifest,
     AppPlatform platform,
     String arch,
-    InstallationKind installation,
-  ) {
+    InstallationKind installation, {
+    String? explicitLinuxKind,
+  }) {
     final key = platformKey(platform);
     final archMap = manifest.artifacts[key];
     if (archMap == null) return null;
@@ -267,7 +321,11 @@ class ArtifactSelector {
       return kinds[preferred];
     }
     if (key == 'linux') {
-      // Portable / unknown Linux installs: pick whichever package exists.
+      // Portable / unknown Linux installs: honor the user's explicit pick
+      // first, then prefer AppImage, then .deb.
+      if (explicitLinuxKind != null && kinds.containsKey(explicitLinuxKind)) {
+        return kinds[explicitLinuxKind];
+      }
       return kinds['appimage'] ?? kinds['deb'];
     }
     return null;

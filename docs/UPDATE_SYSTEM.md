@@ -154,7 +154,7 @@ A development/source build reports "You are running a development/source buildâ€
 
 - **Streaming**: bytes are written to a `.part` file as they arrive and hashed incrementally; nothing large is held in memory.
 - **Verification before commit**: the `.part` file is renamed to its final name only after the size **and** SHA-256 match the manifest. A mismatch deletes the partial and reports `checksum mismatch`.
-- **Redirect safety**: every redirect hop is re-validated against the HTTPS github.com allowlist (`_SafeRedirectClient`).
+- **Redirect safety**: every redirect hop is re-validated against the HTTPS github.com allowlist (`RedirectGuardedClient`), which disables the inner client's auto-follow and re-issues each hop itself.
 - **Cancellation**: mid-stream cancel aborts, deletes the partial, and returns to the pre-download state (a mandatory release stays mandatory).
 - **Retry**: transient network/HTTP failures retry with backoff; permanent failures surface actionable errors.
 - **Cache bounds**: `UpdateCache.prune()` (runs on app start and after a completed update) keeps the update cache under 300 MB and 21 days, removing old installers and stale partials. Files live in the platform's app-private temp/cache dir â€” never in NexaDrive user storage or server data.

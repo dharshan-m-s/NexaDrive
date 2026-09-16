@@ -35,10 +35,107 @@ class UpdateConfig {
       'https://github.com/$repo/releases/latest/download/$manifestAssetName';
 }
 
+/// Wraps an [http.Client] so every redirect hop is re-checked against the
+/// update host allowlist.
+///
+/// The stock `http.Client` (IOClient) follows redirects transparently *before*
+/// the wrapper sees the reply, so a naive `Location` check in `send` never
+/// fires in production. This client disables the inner auto-follow and re-issues
+/// each hop itself, rejecting any hop that leaves the HTTPS allowlist or
+/// downgrades the scheme.
+///
+/// The final byte stream must still match the manifest's SHA-256 (the strong
+/// guarantee); this closes the "download from an unknown server" hole so an
+/// artifact can never be fetched from a host the release never pointed at.
+class RedirectGuardedClient extends http.BaseClient {
+  RedirectGuardedClient([http.Client? inner]) : _inner = inner ?? http.Client();
+
+  final http.Client _inner;
+
+  static const _maxHops = 5;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    var current = request;
+    for (var hop = 0; ; hop++) {
+      // The hop loop below owns redirect handling; keep the inner client from
+      // following them on its own. Tests inject clients that ignore this flag
+      // and return the raw 3xx, which is exactly what the loop expects.
+      current.followRedirects = false;
+      current.maxRedirects = 0;
+      final response = await _inner.send(current);
+      if (!_isRedirect(response)) return response;
+      final location = response.headers['location'];
+      if (location == null || location.isEmpty) return response;
+      if (hop >= _maxHops) {
+        await _drain(response);
+        throw const UpdateException(
+          UpdateErrorKind.manifestRejected,
+          'The download address redirected too many times.',
+        );
+      }
+      final target = current.url.resolveUri(Uri.parse(location));
+      if (!UpdateConfig.allowsHost(target.host)) {
+        await _drain(response);
+        throw const UpdateException(
+          UpdateErrorKind.manifestRejected,
+          'The download address redirected outside the official release '
+          'servers.',
+        );
+      }
+      // resolveUri preserves the scheme of a relative Location, but a crafted
+      // "http://github.com/..." would slip through the allowlist alone.
+      if (target.scheme != 'https') {
+        await _drain(response);
+        throw const UpdateException(
+          UpdateErrorKind.manifestRejected,
+          'The download address redirected to a non-HTTPS server.',
+        );
+      }
+      await _drain(response);
+      current = _reissue(current, target);
+    }
+  }
+
+  static bool _isRedirect(http.StreamedResponse response) {
+    final status = response.statusCode;
+    return status == 301 ||
+        status == 302 ||
+        status == 303 ||
+        status == 307 ||
+        status == 308;
+  }
+
+  static Future<void> _drain(http.StreamedResponse response) async {
+    try {
+      await response.stream.drain<void>();
+    } catch (_) {
+      // Nothing left to release.
+    }
+  }
+
+  /// Rebuilds [request] for [target], preserving method, headers, and body.
+  static http.BaseRequest _reissue(http.BaseRequest request, Uri target) {
+    final next = http.Request(request.method, target)
+      ..followRedirects = false
+      ..maxRedirects = 0;
+    request.headers.forEach((k, v) => next.headers[k] = v);
+    if (request is http.Request) {
+      final bodyBytes = request.bodyBytes;
+      if (bodyBytes.isNotEmpty) next.bodyBytes = bodyBytes;
+    }
+    return next;
+  }
+
+  @override
+  void close() => _inner.close();
+}
+
 /// Transport for the manifest, with HTTP conditional caching
-/// (ETag/Last-Modified) and a strict host allowlist. On a 304 Not Modified the
-/// caller keeps using its persisted copy of the manifest (see
-/// [UpdateController]); on a network failure it presents the offline state.
+/// every redirect hop (see [RedirectGuardedClient]), and a strict host
+  /// allowlist. On a 304 Not Modified the caller keeps using its persisted copy
+  /// of the manifest (see [UpdateController]); on a network failure it presents
+  /// the offline state.
 class UpdateSource {
   final http.Client _client;
   final Duration timeout;
@@ -48,7 +145,7 @@ class UpdateSource {
     http.Client? client,
     this.timeout = const Duration(seconds: 20),
     String? baseUrl,
-  })  : _client = client ?? http.Client(),
+  })  : _client = RedirectGuardedClient(client ?? http.Client()),
         baseUrl = baseUrl ?? UpdateConfig.manifestUrl;
 
   Future<void> close() async {

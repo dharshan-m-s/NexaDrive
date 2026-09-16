@@ -57,6 +57,7 @@ This repository is a complete runnable MVP foundation:
 - Light/dark mode
 - Search/filter UI
 - GitHub Actions checks
+- In-app Update Center with manifest-based auto-updates (Android APK, Windows EXE/ZIP, Linux AppImage/deb)
 
 ## Release status
 

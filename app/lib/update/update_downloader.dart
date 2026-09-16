@@ -57,7 +57,7 @@ class UpdateDownloader {
     this.timeout = const Duration(minutes: 10),
     this.idleTimeout = const Duration(seconds: 60),
     this.cacheProvider,
-  })  : _client = _SafeRedirectClient(client ?? http.Client()),
+  })  : _client = RedirectGuardedClient(client ?? http.Client()),
         _source = source ?? UpdateSource();
 
   /// Where final installers live. Shared by cache management.
@@ -380,55 +380,4 @@ class UpdateCache {
       } catch (_) {}
     }
   }
-}
-
-/// Wraps the download client so every redirect hop is re-checked against the
-/// update host allowlist. The base `http` package follows redirects
-/// transparently, so without this a manifest URL on `github.com` could be
-/// pointed at an off-allowlist host and the bytes would still be fetched.
-///
-/// The final byte stream still must match the manifest's SHA-256, which is
-/// the strong guarantee; this closes the remaining "download from an unknown
-/// server" hole.
-class _SafeRedirectClient extends http.BaseClient {
-  _SafeRedirectClient(this._inner);
-
-  final http.Client _inner;
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final response = await _inner.send(request);
-    final status = response.statusCode;
-    final isRedirect = status == 301 ||
-        status == 302 ||
-        status == 303 ||
-        status == 307 ||
-        status == 308;
-    if (isRedirect && response.headers['location'] != null) {
-      final location = Uri.parse(response.headers['location']!);
-      final target = request.url.resolveUri(location);
-      if (!UpdateConfig.allowsHost(target.host)) {
-        await response.stream.drain<void>().catchError((_) {});
-        throw const UpdateException(
-          UpdateErrorKind.manifestRejected,
-          'The download address redirected outside the official release '
-          'servers.',
-        );
-      }
-      // Redirects preserve scheme/https implicitly via resolveUri, but the
-      // allowlist alone is not enough if someone crafts a relative
-      // "http://github.com" — re-check the scheme explicitly.
-      if (target.scheme != 'https') {
-        await response.stream.drain<void>().catchError((_) {});
-        throw const UpdateException(
-          UpdateErrorKind.manifestRejected,
-          'The download address redirected to a non-HTTPS server.',
-        );
-      }
-    }
-    return response;
-  }
-
-  @override
-  void close() => _inner.close();
 }

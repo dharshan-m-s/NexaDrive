@@ -224,6 +224,81 @@ void main() {
       );
     });
 
+    test('a redirect back onto an allowed GitHub host is followed', () async {
+      var hops = 0;
+      final downloader = UpdateDownloader(
+        client: MockClient((request) async {
+          // The first hop bounces to GitHub's real object-storage host, the
+          // second serves the bytes. Both are on the release allowlist.
+          if (hops++ == 0) {
+            return http.Response('', 302, headers: {
+              'location':
+                  'https://objects.githubusercontent.com/NexaDrive-1.2.0.apk',
+            });
+          }
+          return http.Response.bytes(payload, 200);
+        }),
+        cacheProvider: () => cache,
+      );
+      final info = _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
+
+      final result = await downloader.download(
+        info,
+        artifactFileName: 'NexaDrive-1.2.0.apk',
+        installerKind: 'apk',
+      );
+      expect(hops, 2);
+      expect(result.sha256Hex, info.sha256Hex);
+      expect(await result.file.readAsBytes(), payload);
+    });
+
+    test('a loop of allowed redirects still reaches the bytes', () async {
+      var calls = 0;
+      final downloader = UpdateDownloader(
+        client: MockClient((request) async {
+          calls++;
+          if (calls < 3) {
+            return http.Response('', 302, headers: {
+              'location': 'https://github.com/acme/app/NexaDrive-1.2.0.apk',
+            });
+          }
+          return http.Response.bytes(payload, 200);
+        }),
+        cacheProvider: () => cache,
+      );
+      final info = _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
+
+      final result = await downloader.download(
+        info,
+        artifactFileName: 'NexaDrive-1.2.0.apk',
+        installerKind: 'apk',
+      );
+      expect(result.size, payload.length);
+    });
+
+    test('an unbounded redirect chain is rejected', () async {
+      final downloader = UpdateDownloader(
+        client: MockClient((request) async => http.Response('', 302, headers: {
+              'location': 'https://github.com/acme/app/NexaDrive-1.2.0.apk',
+            })),
+        cacheProvider: () => cache,
+      );
+      final info = _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
+      await expectLater(
+        downloader.download(
+          info,
+          artifactFileName: 'NexaDrive-1.2.0.apk',
+          installerKind: 'apk',
+        ),
+        throwsA(isA<UpdateException>().having(
+          (e) => e.kind,
+          'kind',
+          UpdateErrorKind.manifestRejected,
+        )),
+      );
+      expect(cache.listSync(followLinks: false), isEmpty);
+    });
+
     test('a mid-stream stall is aborted by the idle watchdog', () async {
       final downloader = UpdateDownloader(
         client: _StallingDownloadClient(emitThenStop: payload.length ~/ 2),
