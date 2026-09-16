@@ -106,9 +106,12 @@ with open(manifest_path, "w", encoding="utf-8") as fh:
 PY
 
 # 4. Re-validate against the artifacts before publishing the merged asset.
+#    GITHUB_REF_NAME is set to the release tag being published (not the CI
+#    branch ref or git-describe output) so verification succeeds on both
+#    tag-push and workflow_dispatch runs.
 (
   cd dist
-  GITHUB_REF_NAME= python3 ../scripts/verify-update-manifest.py nexadrive-update-manifest.json
+  GITHUB_REF_NAME="$TAG" python3 ../scripts/verify-update-manifest.py nexadrive-update-manifest.json
 )
 
 ASSET_ID="$(python3 -c '

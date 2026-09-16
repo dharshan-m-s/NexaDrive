@@ -42,6 +42,6 @@ Key properties:
 - **Bounded network**: manifest body reads, version probes, and download streams all have hard timeouts; a 60 s idle watchdog aborts stalled downloads instead of hanging forever.
 - **Server compatibility**: the manifest may declare `minimumServerVersion`/`serverApiVersion`; the Update Center compares them with the live server's status and warns the user (never blocks).
 - **No privilege escalation**: no silent install, no sudo, no security-setting changes. The Update Center hands off to the OS package installer/manager in every flow.
-- **Updater tests**: `app/test/update/` (97+ Flutter tests) plus the release-manifest verifier run in CI on every commit and tag; only tag releases publish a manifest.
+- **Updater tests**: `app/test/update/` (97+ Flutter tests) plus the release-manifest verifier run in CI on every commit; only real published releases ship a manifest.
 
 See `docs/UPDATE_SYSTEM.md` for the architecture, `docs/PLATFORM_SUPPORT.md` for per-platform flows, `docs/UPDATER_TROUBLESHOOTING.md` for diagnosis, and `docs/RELEASE_PROCESS.md` for the release procedure.

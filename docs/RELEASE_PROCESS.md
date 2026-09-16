@@ -6,39 +6,54 @@ How releases are built, verified, and published.
 
 ## Prerequisites
 
-- A clean working tree on `main` (or `main-rc` for pre-releases).
-- Both `app/pubspec.yaml` version and `server/Cargo.toml` version must match exactly — CI fails otherwise.
-- For production Android: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD` must be set as GitHub Actions secrets.
+- A clean working tree on `main` (or any branch whose code you want to ship).
+- The version is chosen in the GitHub UI when you start the workflow — it is
+  **not** read from `pubspec.yaml` / `Cargo.toml` (those keep dev defaults).
+- For a production Android APK: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
+  `KEY_ALIAS`, and `KEY_PASSWORD` must be set as GitHub Actions secrets
+  (a real release without them is refused).
 
 ---
 
-## 1. Bump versions
+## 1. Choose the version
 
-Update both files to the same `MAJOR.MINOR.PATCH[-prerelease]`:
+Releases are `MAJOR.MINOR.PATCH` with an optional `-prerelease` suffix and an
+optional `+N` build number:
 
-- `app/pubspec.yaml` → `version: X.Y.Z+N` (the `+N` build number increments independently)
-- `server/Cargo.toml` → `version = "X.Y.Z"`
+| Form | Meaning |
+| --- | --- |
+| `1.6.0` | final release → tag `v1.6.0`, versionCode `1006000` (derived) |
+| `1.6.0+24` | final release with Android versionCode `24` |
+| `1.7.0-rc.1+21` | pre-release → tag `v1.7.0-rc.1`, versionCode `21` (must be explicit) |
 
-Update `CHANGELOG.md` with a section for the new version.
+Only `+N` is a build number; it never appears in the tag or cross-platform
+version strings. A `-prerelease` version **must** carry an explicit `+N` so its
+versionCode cannot collide with the final release, and it must be released with
+the "Publish as a GitHub prerelease" checkbox ticked.
+
+Add a `CHANGELOG.md` section for the new version before starting the run.
 
 ---
 
-## 2. Tag and push
+## 2. Start the release
 
-```bash
-git tag vX.Y.Z
-git push origin vX.Y.Z
-```
+**Actions → Release → Run workflow** on the branch you want to ship
+(usually `main`), type the version, and run it. This triggers
+`.github/workflows/release.yml` which:
 
-This triggers `.github/workflows/release.yml` which:
-
-1. Verifies version agreement across `pubspec.yaml`, `Cargo.toml`, and the git tag.
+1. Validates the version (SemVer, prerelease checkbox agreement, versionCode
+   derivation) and fails fast if tag `v<version>` or its release already
+   exists — all **before** anything is compiled.
 2. Runs `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`.
 3. Runs `flutter analyze` and `flutter test`.
-4. Builds the server binary (x86_64 + aarch64), Android APK, Linux AppImage/DEB, Windows ZIP/EXE.
+4. Builds the server binary (x86_64 + aarch64), Android APK, Linux AppImage/DEB,
+   Windows ZIP/EXE — injecting the typed version into every build.
 5. Generates `SHA256SUMS.txt` and `nexadrive-update-manifest.json`.
 6. Verifies every artifact hash and URL against the on-disk artifacts.
-7. Publishes everything as a GitHub Release.
+7. Creates the `v<version>` tag and publishes everything as a GitHub Release.
+
+A test run (untick `publish_release`) compiles every artifact but creates no
+tag, release, or manifest — files land in the run's workflow-artifacts tab.
 
 ---
 
@@ -53,7 +68,7 @@ keyAlias      = <KEY_ALIAS>
 storeFile     = /tmp/release.keystore
 ```
 
-The keystore is decoded from `KEYSTORE_BASE64` and deleted after the build. A debug-signed APK is never published from a tag release. Manual `workflow_dispatch` builds skip the keystore check and produce debug-signed APKs suitable for sideload testing only.
+The keystore is decoded from `KEYSTORE_BASE64` and deleted after the build. A debug-signed APK is never published from a real release. A test run with `publish_release` unticked skips the keystore check and produces debug-signed APKs suitable for sideload testing only.
 
 ---
 
@@ -73,7 +88,9 @@ scripts/update-manifest.sh X.Y.Z 0 dist
 
 `scripts/verify-update-manifest.py` runs immediately after and fails the release if any artifact is missing, empty, mismatched in hash or size, or hosted outside the `github.com` allowlist.
 
-For manual local testing, the verifier skips the git-tag check when `GITHUB_REF_NAME` is unset.
+On CI the verifier is pointed at the release tag explicitly
+(`GITHUB_REF_NAME=v<version>`). For manual local testing, the verifier falls
+back to `git describe` when `GITHUB_REF_NAME` is unset.
 
 ---
 

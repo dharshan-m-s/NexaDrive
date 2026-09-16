@@ -56,7 +56,7 @@ flutter build windows --release
 Android release signing is optional **for local builds**. Without
 `app/android/key.properties` the build falls back to the Flutter debug key
 (fine for sideloading, not for Play Store or for upgrades over an existing
-install). CI refuses to publish a tag release without the production
+install). CI refuses to publish a release without the production
 keystore.
 
 ## Updating the app

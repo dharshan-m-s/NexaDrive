@@ -87,10 +87,12 @@ Both workflows rebuilt and pinned to commit SHAs (`ci.yml`, `release.yml`):
   Flutter Android debug APK, `rust-qc` (fmt + clippy `-D warnings` + test),
   `rust-release` (release binary artifact), advisory `cargo-audit`
   (non-blocking).
-- **`release.yml`** (tag push): `verify` replicates all gates + tag/version
-  check → `server-linux-x64`, `server-linux-arm64` (cross-compiled aarch64),
-  `android` (signed APK from `KEYSTORE_BASE64` secrets or debug-key
-  fallback), `linux` (AppImage + deb via `scripts/package-linux.sh`),
+- **`release.yml`** (workflow_dispatch — manual): `version` job validates the
+  typed version (SemVer, checkbox agreement) and fails fast if the tag/release
+  already exists → `verify` replicates all gates → `server-linux-x64`,
+  `server-linux-arm64` (cross-compiled aarch64), `android` (signed APK from
+  `KEYSTORE_BASE64` secrets or debug-key fallback when `publish_release` is
+  unticked), `linux` (AppImage + deb via `scripts/package-linux.sh`),
   `windows` (ZIP + Inno Setup via `app/windows/installer/nexadrive.iss`) →
   `checksums-and-release` publishes `NexaDrive-<ver>-*` + `SHA256SUMS.txt`.
 

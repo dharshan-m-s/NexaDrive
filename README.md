@@ -2,6 +2,13 @@
 
 A private personal cloud/file server for Android, Windows and Linux.
 
+[![Download NexaDrive](https://img.shields.io/badge/Download-NexaDrive-0066ff?style=flat&logo=github&logoColor=white)](https://github.com/dharshan-m-s/NexaDrive/releases/latest)
+
+Grab the newest pre-built bundles (APK, Windows installer, Linux AppImage/deb,
+server binaries) from the **Releases page** — the badge opens the latest
+release. The in-app Update Center upgrades installed clients from the same
+release automatically.
+
 ## Architecture
 
 ```text
@@ -71,7 +78,7 @@ For deployment and security requirements, see `docs/FINAL_RELEASE.md` and `docs/
 |---|---|---|
 | Server binary | `NexaDrive-<ver>-server-linux-x86_64` (or `-aarch64`) | Single static binary; no PostgreSQL. |
 | Systemd install | `sudo bash deploy/install-server.sh /opt/nexadrive` | Creates `nexadrive` user, dirs, service and env template. |
-| Android APK | `NexaDrive-<ver>.apk` | Signed with project keystore in CI; tag releases refuse to build without it. Updates via the in-app Update Center. |
+| Android APK | `NexaDrive-<ver>.apk` | Signed with project keystore in CI; releases refuse to build without it. Updates via the in-app Update Center. |
 | Windows installer | `NexaDrive-<ver>-windows-x64-setup.exe` | Inno Setup; also `*-windows-x64.zip` for a portable bundle. |
 | Linux desktop | `NexaDrive-<ver>-linux-x86_64.AppImage` / `*-linux-amd64.deb` | See `scripts/package-linux.sh`. In-app updates via the Update Center. |
 
@@ -222,8 +229,11 @@ https://<machine>.<tailnet>.ts.net
 
 CI (`ci.yml`) runs formatting, analyzer, tests and builds for the Flutter app
 and `cargo fmt/check/test`, Rust dependency audits and a gitleaks secret scan.
-Releases (`release.yml`) publish server binaries and client APK/Linux bundles
-as GitHub Releases when you push a `v*` tag. See `docs/GITHUB_ACTIONS.md`.
+Releases (`release.yml`) are created from the Actions page — no tag-pushing:
+**Actions → Release → Run workflow**, type the version you want to ship
+(e.g. `1.6.0`), tick "Publish as a GitHub prerelease" for an RC, and CI compiles
+every format, verifies it, and publishes a GitHub Release you can download.
+See `docs/GITHUB_ACTIONS.md`.
 
 ## Design direction
 
@@ -299,7 +309,7 @@ consolidated release engineering report is `docs/FINAL_RELEASE.md`.
 - `docs/UPDATE_SYSTEM.md` — updater architecture, manifest schema, security model.
 - `docs/PLATFORM_SUPPORT.md` — supported platforms, install types, per-platform update flows.
 - `docs/UPDATER_TROUBLESHOOTING.md` — updater error diagnosis and fixes.
-- `docs/RELEASE_PROCESS.md` — how tag releases are built, verified, and published.
+- `docs/RELEASE_PROCESS.md` — how releases are built, verified, and published.
 
 ## 1.1.0 release
 

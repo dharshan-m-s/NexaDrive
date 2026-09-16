@@ -1,9 +1,33 @@
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: |
+          Version to release — MAJOR.MINOR.PATCH[-prerelease][+N].
+          Examples: 1.6.0, 1.7.0-rc.1, 1.7.0+24.
+          +N is the Android build number / versionCode. Prereleases MUST set
+          +N explicitly so their versionCode cannot collide with the final
+          release (e.g. 1.7.0-rc.1+24).
+        required: true
+        type: string
+      prerelease:
+        description: |
+          Publish as a GitHub prerelease (hidden from /releases/latest and
+          ignored by the in-app auto-updater). Must be checked when the version
+          has a -prerelease suffix, and unchecked otherwise.
+        required: false
+        type: boolean
+        default: false
+      publish_release:
+        description: |
+          Create the tag + GitHub Release and publish the update manifest.
+          Disable to compile every artifact as a test: nothing is published
+          and a production keystore is not required (debug-signed APK).
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -13,43 +37,103 @@ env:
 
 # Third-party actions are pinned to full commit SHAs (resolved from the tagged
 # release of each action); the human-readable tag is kept in a trailing comment.
-# Expected artifacts for a tag vX.Y.Z:
+# Expected artifacts for version X.Y.Z:
 #   NexaDrive-X.Y.Z-server-linux-x86_64, -aarch64, .apk,
 #   -linux-x86_64.AppImage, -linux-amd64.deb, -windows-x64.zip,
 #   -windows-x64-setup.exe  + nexadrive-update-manifest.json + SHA256SUMS.txt
 #
-# Tag builds are release-gated: the APK must be signed with the project
-# keystore, the update manifest is generated and verified against the
-# artifacts, and every checksum is re-checked before anything is published.
-# workflow_dispatch runs (pre-release testing) build every artifact but never
-# create a GitHub Release — the client only consumes manifests from real tag
-# releases, and the release/finalize steps are gated to github.ref_type == 'tag'.
+# The version is chosen on the Actions page ("Run workflow") BEFORE anything
+# is compiled — the user types it into the release form; there is no tag-push
+# trigger and no in-app version prompt. The tag v<version> is created by the
+# release step, never exported by pushing a tag.
+#
+# A real release (publish_release=true) must ship a PRODUCTION-signed APK: an
+# APK signed with a different key cannot install as an upgrade, so a release
+# without KEYSTORE_BASE64 is refused. publish_release=false runs a test build
+# that only uploads workflow artifacts (debug-signed APK).
+# Only publish_release=true generates the update manifest and a GitHub release.
 # Client binaries are compiled with NEXADRIVE_UPDATE_REPO=dharshan-m-s/NexaDrive
-# baked in.
+# baked in. The +N build suffix is an Android build number only — it never
+# appears in the tag, the manifest, or cross-platform version strings.
 
 jobs:
+  version:
+    name: Compute release version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+      tag: ${{ steps.compute.outputs.tag }}
+      build_number: ${{ steps.compute.outputs.build_number }}
+      prerelease: ${{ steps.compute.outputs.prerelease }}
+    steps:
+      - id: compute
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+          [ -n "$VERSION_INPUT" ] || {
+            echo "::error::version is empty — enter MAJOR.MINOR.PATCH[-prerelease][+N], e.g. 1.6.0."
+            exit 1
+          }
+          core="${VERSION_INPUT%%+*}"
+          core="${core#v}"
+          [[ "$core" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || {
+            echo "::error::'$VERSION_INPUT' is not valid SemVer (MAJOR.MINOR.PATCH[-prerelease])."
+            exit 1
+          }
+          case "$core" in
+            *-*)
+              [ "$PRERELEASE" = "true" ] || {
+                echo "::error::version has a -prerelease suffix; tick the 'Publish as a GitHub prerelease' checkbox too."
+                exit 1
+              }
+              ;;
+            *)
+              [ "$PRERELEASE" = "false" ] || {
+                echo "::error::the 'Publish as a GitHub prerelease' checkbox is ticked but the version has no -prerelease suffix."
+                exit 1
+              }
+              ;;
+          esac
+          build_number=""
+          [[ "$VERSION_INPUT" =~ \+([0-9]+)$ ]] && build_number="${BASH_REMATCH[1]}"
+          if [ -z "$build_number" ]; then
+            IFS='.' read -r major minor rest <<< "$core"
+            patch="${rest%%-*}"
+            build_number=$((10#$major * 1000000 + 10#$minor * 1000 + 10#$patch))
+            if [ "$PRERELEASE" = "true" ]; then
+              echo "::error::a prerelease needs an explicit +<build> number (e.g. 1.7.0-rc.1+24) so its Android versionCode cannot collide with the final release."
+              exit 1
+            fi
+          fi
+          echo "version=$core" >> "$GITHUB_OUTPUT"
+          echo "tag=v$core" >> "$GITHUB_OUTPUT"
+          echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$core (build number $build_number, prerelease=$PRERELEASE)."
+      - name: Fail fast if this release/tag already exists
+        if: ${{ inputs.publish_release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.compute.outputs.tag }}"
+          if gh api "repos/${{ github.repository }}/releases/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::release $tag already exists on GitHub — enter a newer version."
+            exit 1
+          fi
+          if gh api "repos/${{ github.repository }}/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::tag $tag already exists on GitHub — enter a newer version."
+            exit 1
+          fi
+          echo "Tag $tag is free — proceeding to build."
+
   verify:
     name: Verify source
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
-      - name: Version consistency (incl. tag)
-        run: |
-          set -euo pipefail
-          cargo_ver=$(sed -n 's/^version = "\(.*\)"/\1/p' server/Cargo.toml)
-          pubspec_ver=$(grep -E '^version:' app/pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
-          echo "Cargo.toml=$cargo_ver pubspec.yaml=$pubspec_ver"
-          [ "$cargo_ver" = "$pubspec_ver" ] || {
-            echo "::error::Version mismatch Cargo.toml ($cargo_ver) vs pubspec.yaml ($pubspec_ver)"
-            exit 1
-          }
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            [ "${GITHUB_REF_NAME#v}" = "$cargo_ver" ] || {
-              echo "::error::Tag $GITHUB_REF_NAME does not match version v$cargo_ver"
-              exit 1
-            }
-          fi
-          echo "Versions match ($cargo_ver)."
       - name: Gitleaks
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.13
         with:
@@ -88,7 +172,7 @@ jobs:
   server-linux-x64:
     name: Server binary (x86_64 Linux)
     runs-on: ubuntu-latest
-    needs: [verify]
+    needs: [verify, version]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
       - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # 1.98.1
@@ -100,8 +184,9 @@ jobs:
       - run: cargo build --release --locked
         working-directory: server
       - name: Stage artifact
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' server/Cargo.toml)"
           mkdir -p dist
           cp server/target/release/nexadrive-server \
             "dist/NexaDrive-$VERSION-server-linux-x86_64"
@@ -114,7 +199,7 @@ jobs:
   server-linux-arm64:
     name: Server binary (aarch64 Linux)
     runs-on: ubuntu-latest
-    needs: [verify]
+    needs: [verify, version]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
       - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # 1.98.1
@@ -130,8 +215,9 @@ jobs:
       - run: cargo build --release --locked --target aarch64-unknown-linux-gnu
         working-directory: server
       - name: Stage artifact
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' server/Cargo.toml)"
           mkdir -p dist
           cp server/target/aarch64-unknown-linux-gnu/release/nexadrive-server \
             "dist/NexaDrive-$VERSION-server-linux-aarch64"
@@ -144,7 +230,7 @@ jobs:
   android:
     name: Android APK
     runs-on: ubuntu-latest
-    needs: [verify]
+    needs: [verify, version]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.7.1
@@ -155,36 +241,44 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-      - name: Restore signing keystore (signed APKs) or fall back to debug key
+      - name: Restore signing keystore, or refuse/debug-fallback
         shell: bash
+        env:
+          PUBLISH_RELEASE: ${{ inputs.publish_release }}
+          KEYSTORE: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            printf '%s' "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/android/nexadrive-release.jks
+          if [ -n "$KEYSTORE" ]; then
+            printf '%s' "$KEYSTORE" | base64 -d > app/android/nexadrive-release.jks
             chmod 600 app/android/nexadrive-release.jks
             printf 'storeFile=nexadrive-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
-              "${{ secrets.KEYSTORE_PASSWORD }}" \
-              "${{ secrets.KEY_ALIAS }}" \
-              "${{ secrets.KEY_PASSWORD }}" > app/android/key.properties
+              "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > app/android/key.properties
             chmod 600 app/android/key.properties
             keytool -list -keystore app/android/nexadrive-release.jks \
-              -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
-              -alias "${{ secrets.KEY_ALIAS }}" >/dev/null
+              -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
             echo "Signed release build enabled."
-          elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
+          elif [ "$PUBLISH_RELEASE" = "true" ]; then
             # Android update safety: an APK signed with a different key than
-            # the installed one can never install as an upgrade, so a tag
-            # build without the production keystore must not ship.
-            echo "::error::KEYSTORE_BASE64 is not set; refusing to build an unsigned release APK for tag $GITHUB_REF_NAME."
+            # the installed one can never install as an upgrade, so a real
+            # release without the production keystore must not ship.
+            echo "::error::KEYSTORE_BASE64 is not set; refusing to build an unsigned release APK."
             exit 1
           else
-            echo "::warning::No KEYSTORE_BASE64 secret set; this manual build is signed with the Flutter debug key (testing only)."
+            echo "::warning::No KEYSTORE_BASE64 secret set; test build is signed with the Flutter debug key (not installable over a signed release)."
           fi
       - name: Build release APK
         working-directory: app
-        run: flutter build apk --release --dart-define=NEXADRIVE_UPDATE_REPO=dharshan-m-s/NexaDrive
-      - name: Stage artifact
         run: |
-          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' server/Cargo.toml)"
+          flutter build apk --release \
+            --build-name="${{ needs.version.outputs.version }}" \
+            --build-number="${{ needs.version.outputs.build_number }}" \
+            --dart-define=NEXADRIVE_UPDATE_REPO=dharshan-m-s/NexaDrive
+      - name: Stage artifact
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
           mkdir -p dist
           cp app/build/app/outputs/flutter-apk/app-release.apk \
             "dist/NexaDrive-$VERSION.apk"
@@ -197,7 +291,7 @@ jobs:
   linux:
     name: Linux desktop (AppImage + deb)
     runs-on: ubuntu-latest
-    needs: [verify]
+    needs: [verify, version]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.19.0
@@ -207,12 +301,16 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ninja-build libgtk-3-dev pkg-config libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libsecret-1-dev
       - run: flutter pub get
         working-directory: app
-      - run: flutter build linux --release --dart-define=NEXADRIVE_UPDATE_REPO=dharshan-m-s/NexaDrive
+      - run: |
+          flutter build linux --release \
+            --build-name="${{ needs.version.outputs.version }}" \
+            --build-number="${{ needs.version.outputs.build_number }}" \
+            --dart-define=NEXADRIVE_UPDATE_REPO=dharshan-m-s/NexaDrive
         working-directory: app
       - name: Package AppImage and deb
-        run: |
-          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' server/Cargo.toml)"
-          scripts/package-linux.sh "$VERSION" dist
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: scripts/package-linux.sh "$VERSION" dist
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.9.3
         with:
           name: linux
@@ -222,7 +320,7 @@ jobs:
   windows:
     name: Windows desktop (ZIP + installer)
     runs-on: windows-latest
-    needs: [verify]
+    needs: [verify, version]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.19.0
@@ -231,23 +329,29 @@ jobs:
           channel: stable
       - run: flutter pub get
         working-directory: app
-      - run: flutter build windows --release --dart-define=NEXADRIVE_UPDATE_REPO=dharshan-m-s/NexaDrive
+      - run: |
+          flutter build windows --release \
+            --build-name="${{ needs.version.outputs.version }}" \
+            --build-number="${{ needs.version.outputs.build_number }}" \
+            --dart-define=NEXADRIVE_UPDATE_REPO=dharshan-m-s/NexaDrive
         working-directory: app
       - name: Stage portable ZIP
         shell: pwsh
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          $version = (Select-String -Path "server\Cargo.toml" -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Compress-Archive -Path "app\build\windows\x64\runner\Release\*" `
-            -DestinationPath "dist\NexaDrive-$version-windows-x64.zip"
+            -DestinationPath "dist\NexaDrive-$env:VERSION-windows-x64.zip"
       - name: Build Inno Setup installer
         shell: pwsh
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
           choco install innosetup --yes --no-progress
-          $version = (Select-String -Path "server\Cargo.toml" -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
           $isscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          & $isscc "/DMyAppVersion=$version" "app\windows\installer\nexadrive.iss"
+          & $isscc "/DMyAppVersion=$env:VERSION" "app\windows\installer\nexadrive.iss"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.9.3
         with:
           name: windows
@@ -257,7 +361,7 @@ jobs:
   checksums-and-release:
     name: Checksums, manifest, and GitHub release
     runs-on: ubuntu-latest
-    needs: [server-linux-x64, server-linux-arm64, android, linux, windows]
+    needs: [server-linux-x64, server-linux-arm64, android, linux, windows, version]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
       - name: Download all artifacts
@@ -279,14 +383,14 @@ jobs:
       - name: Re-verify every artifact against SHA256SUMS.txt
         working-directory: dist
         run: sha256sum --check --strict SHA256SUMS.txt
-      - name: Generate the update manifest (tag builds only)
-        if: ${{ github.ref_type == 'tag' }}
+      - name: Generate the update manifest (real releases only)
+        if: ${{ inputs.publish_release }}
         env:
-          RELEASE_PRERELEASE: ${{ contains(github.ref_name, '-') && '1' || '0' }}
+          RELEASE_PRERELEASE: ${{ inputs.prerelease && '1' || '0' }}
+          VERSION: ${{ needs.version.outputs.version }}
           NEXADRIVE_RELEASE_REPO: dharshan-m-s/NexaDrive
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
           # The client warns when the connected server is older than the
           # released server version, and reports the server's API contract.
           # Both are derived from source so they cannot drift from the build.
@@ -298,21 +402,26 @@ jobs:
           # raw markdown.
           scripts/update-manifest.sh "$VERSION" "${RELEASE_PRERELEASE:-0}" dist
       - name: Fail if the manifest references a missing artifact
-        if: ${{ github.ref_type == 'tag' }}
-        run: python3 scripts/verify-update-manifest.py dist/nexadrive-update-manifest.json
-      - name: Create GitHub release (tag builds only — never on workflow_dispatch)
-        if: ${{ github.ref_type == 'tag' }}
+        if: ${{ inputs.publish_release }}
+        run: |
+          export GITHUB_REF_NAME="v${{ needs.version.outputs.version }}"
+          python3 scripts/verify-update-manifest.py dist/nexadrive-update-manifest.json
+      - name: Create GitHub release (real releases only)
+        if: ${{ inputs.publish_release }}
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.4.0
         with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: NexaDrive ${{ needs.version.outputs.tag }}
           files: dist/*
+          prerelease: ${{ inputs.prerelease }}
           generate_release_notes: true
           body: |
-            ## NexaDrive ${{ github.ref_name }}
+            ## NexaDrive ${{ needs.version.outputs.tag }}
 
             Pre-built binaries for Android, Windows, and Linux (x86_64 + aarch64 server).
 
             - `NexaDrive-<ver>.apk` — Android client, signed with the project keystore
-              (tag builds refuse to ship without it).
+              (releases refuse to ship without it).
             - `*windows-x64-setup.exe` — Inno Setup installer.
             - `*windows-x64.zip` — portable Windows bundle.
             - `*-linux-x86_64.AppImage` / `*-linux-amd64.deb` — Linux desktop client.
@@ -327,17 +436,17 @@ jobs:
 
             The in-app Update Center downloads and verifies updates automatically.
       - name: Finalize manifest release notes
-        if: ${{ github.ref_type == 'tag' }}
+        if: ${{ inputs.publish_release }}
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
           RELEASE_REPO: ${{ github.repository }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          scripts/finalize-update-manifest.sh "$VERSION" "$RELEASE_TAG" "$RELEASE_REPO"
+          scripts/finalize-update-manifest.sh "$RELEASE_VERSION" "$RELEASE_TAG" "$RELEASE_REPO"
 
       - name: Notify update clients (fail-open)
-        if: ${{ github.ref_type == 'tag' }}
+        if: ${{ inputs.publish_release }}
         continue-on-error: true
         run: |
           # Warm the release CDN and give the redirect under
@@ -345,5 +454,5 @@ jobs:
           # a brief window where the manifest 404s (shows its cached copy).
           sleep 10
           curl -fsSLI -o /dev/null \
-            "https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/nexadrive-update-manifest.json" \
+            "https://github.com/${{ github.repository }}/releases/download/${{ needs.version.outputs.tag }}/nexadrive-update-manifest.json" \
             || echo "::warning::Manifest asset not reachable yet (propagation delay)."

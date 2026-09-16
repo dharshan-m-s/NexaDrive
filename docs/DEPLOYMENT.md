@@ -339,7 +339,7 @@ bash scripts/deploy.sh health
 
 GitHub Actions workflows in `.github/workflows/`:
 - **ci.yml:** Runs on push/PR — flutter analyze, test, build; rust fmt, check, test, build; dependency audit; secret scanning
-- **release.yml:** Runs on tag push — builds all targets, creates GitHub release with artifacts and SHA-256 checksums
+- **release.yml:** Workflow_dispatch (manual, type version in GitHub UI) — builds all targets, creates GitHub release with artifacts and SHA-256 checksums
 
 ### Deployment Validation
 

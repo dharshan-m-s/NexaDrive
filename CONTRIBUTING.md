@@ -61,18 +61,18 @@ flutter test             # unit tests
 
 ## Releasing
 
-Releases are produced automatically by CI when a `v*` tag is pushed. Do not
-manually create GitHub Releases — push a tag and let the workflow handle the
-rest.
+Releases are created from the **GitHub Actions UI** — no tag-pushing is needed.
+Open **Actions → Release → Run workflow**, type the version you want to ship
+(e.g. `1.6.0`), choose whether it is a prerelease, and run it. The workflow
+validates the version, builds every format, and publishes the GitHub Release.
 
 ```bash
-git tag v1.2.0
-git push origin v1.2.0
+# Local pre-release smoke test (no release is published):
+cd app && flutter build linux --release && cd ..
+scripts/package-linux.sh 1.6.0 dist
+scripts/update-manifest.sh 1.6.0 0 dist
+python3 scripts/verify-update-manifest.py dist/nexadrive-update-manifest.json
 ```
-
-The release workflow verifies version consistency (tag ↔ `Cargo.toml` ↔
-`pubspec.yaml`), runs all checks, and publishes server binaries, Android
-APKs, Linux AppImage/deb, Windows ZIP/installer and SHA256SUMS.
 
 ## Code style
 
