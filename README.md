@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="app/web/icons/nexadrive-logo.svg" alt="NexaDrive logo" width="140"/>
+</p>
+
 # NexaDrive
 
 A private personal cloud/file server for Android, Windows and Linux.
