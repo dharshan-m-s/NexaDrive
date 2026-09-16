@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="app/web/icons/nexadrive-logo.svg" alt="NexaDrive logo" width="140"/>
+  <img src="applogo.png" alt="NexaDrive logo" width="140"/>
 </p>
 
 # NexaDrive
