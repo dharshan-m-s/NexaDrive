@@ -35,6 +35,35 @@ class SyncManager {
 
   Future<String?> deviceId() async => (await SharedPreferences.getInstance()).getString(_deviceKey);
 
+  Future<String> deviceDisplayName() => _deviceName();
+
+  /// Renames this machine; the next sync pushes the new name to the server
+  /// along with the device id, so the change is visible on every device.
+  Future<void> setDeviceName(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    final bounded = String.fromCharCodes(trimmed.runes.take(64));
+    await prefs.setString(_deviceNameKey, bounded);
+  }
+
+  /// When the last sync finished on this device, or null if never.
+  Future<DateTime?> lastSyncAt() async {
+    final state = await _state();
+    return DateTime.tryParse(
+      state['__meta__']?['lastSyncAt']?.toString() ?? '',
+    )?.toLocal();
+  }
+
+  /// The platform string the server stores for this device.
+  static String platformName() {
+    if (Platform.isAndroid) return 'android';
+    if (Platform.isWindows) return 'windows';
+    if (Platform.isLinux) return 'linux';
+    if (Platform.isMacOS) return 'macos';
+    return 'unknown';
+  }
+
   Future<Map<String, Map<String, dynamic>>> _state() async {
     final p = await SharedPreferences.getInstance();
     final raw = p.getString(_stateKey);
@@ -147,9 +176,19 @@ class SyncManager {
       final prefs = await SharedPreferences.getInstance();
       final existingDeviceId = prefs.getString(_deviceKey);
       final previousServerCursor = state['__meta__']?['lastServerSyncAt']?.toString();
+      final deviceName = await _deviceName();
       final response = previousServerCursor == null
-          ? await api.syncManifest(deviceId: existingDeviceId, deviceName: await _deviceName())
-          : await api.syncDelta(since: previousServerCursor, deviceId: existingDeviceId, deviceName: await _deviceName());
+          ? await api.syncManifest(
+              deviceId: existingDeviceId,
+              deviceName: deviceName,
+              platform: platformName(),
+            )
+          : await api.syncDelta(
+              since: previousServerCursor,
+              deviceId: existingDeviceId,
+              deviceName: deviceName,
+              platform: platformName(),
+            );
       await prefs.setString(_deviceKey, response['device_id'] as String);
 
       final remote = <String, Map<String, dynamic>>{};

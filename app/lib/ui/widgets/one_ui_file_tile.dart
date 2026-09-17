@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
@@ -17,6 +19,10 @@ class OneUiFileTile extends StatelessWidget {
   final String? subtitle;
   final bool showChevron;
 
+  /// Server-generated preview bytes for image files. Null falls back to the
+  /// category icon, so the row is never empty while a thumbnail loads.
+  final Uint8List? thumbnail;
+
   const OneUiFileTile({
     super.key,
     required this.entry,
@@ -27,6 +33,7 @@ class OneUiFileTile extends StatelessWidget {
     this.trailing,
     this.subtitle,
     this.showChevron = true,
+    this.thumbnail,
   });
 
   @override
@@ -37,7 +44,11 @@ class OneUiFileTile extends StatelessWidget {
 
     final Widget? leading;
     if (category == Category.image) {
-      leading = _ImageThumb(entry: entry);
+      leading = _ImageThumb(
+        entry: entry,
+        bytes: thumbnail,
+        decodeWidth: _leadingDecodeWidth(context),
+      );
     } else {
       leading = _FileIconTile(category: category, brightness: brightness);
     }
@@ -121,14 +132,49 @@ class _FileIconTile extends StatelessWidget {
   }
 }
 
-/// Lazy thumbnail placeholder for image files.
+/// Decode budget for a list-row preview. A 48dp tile on a 3x screen needs 144
+/// physical pixels; decoding anything larger just wastes memory.
+double _leadingDecodeWidth(BuildContext context) =>
+    AppDimens.iconTileLarge * MediaQuery.devicePixelRatioOf(context);
+
+/// Image preview tile: the real server thumbnail when available, otherwise the
+/// category icon on a neutral tile.
 class _ImageThumb extends StatelessWidget {
   final FileEntry entry;
-  const _ImageThumb({required this.entry});
+  final Uint8List? bytes;
+  final double decodeWidth;
+
+  const _ImageThumb({
+    required this.entry,
+    this.bytes,
+    required this.decodeWidth,
+  });
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final radius = BorderRadius.circular(AppDimens.radiusInner);
+    final value = bytes;
+    if (value != null) {
+      return ClipRRect(
+        borderRadius: radius,
+        child: Image.memory(
+          value,
+          width: AppDimens.iconTileLarge,
+          height: AppDimens.iconTileLarge,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
+          cacheWidth: decodeWidth.round(),
+          semanticLabel: 'Preview of ${entry.name}',
+          errorBuilder: (context, _, __) => _fallback(brightness, radius),
+        ),
+      );
+    }
+    return _fallback(brightness, radius);
+  }
+
+  Widget _fallback(Brightness brightness, BorderRadius radius) {
     return Container(
       width: AppDimens.iconTileLarge,
       height: AppDimens.iconTileLarge,
@@ -136,7 +182,7 @@ class _ImageThumb extends StatelessWidget {
         color: brightness == Brightness.dark
             ? AppColors.surfaceAltDark
             : AppColors.surfaceAltLight,
-        borderRadius: BorderRadius.circular(AppDimens.radiusInner),
+        borderRadius: radius,
       ),
       child: Icon(
         Icons.image_rounded,
@@ -163,6 +209,11 @@ class _SelectionBadge extends StatelessWidget {
   }
 }
 
+/// Grid cells are bounded by the grid delegate; decode a little above the
+/// tile size so the preview stays crisp without holding full-resolution pixels.
+double _gridDecodeWidth(BuildContext context) =>
+    170 * MediaQuery.devicePixelRatioOf(context);
+
 /// Grid tile for the Files grid view.
 class OneUiFileGridTile extends StatelessWidget {
   final FileEntry entry;
@@ -171,6 +222,9 @@ class OneUiFileGridTile extends StatelessWidget {
   final bool selected;
   final bool selecting;
 
+  /// Server-generated preview bytes for image files.
+  final Uint8List? thumbnail;
+
   const OneUiFileGridTile({
     super.key,
     required this.entry,
@@ -178,6 +232,7 @@ class OneUiFileGridTile extends StatelessWidget {
     this.onLongPress,
     this.selected = false,
     this.selecting = false,
+    this.thumbnail,
   });
 
   @override
@@ -209,7 +264,14 @@ class OneUiFileGridTile extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _FileIconTile(category: category, brightness: brightness),
+                  if (category == Category.image)
+                    _ImageThumb(
+                      entry: entry,
+                      bytes: thumbnail,
+                      decodeWidth: _gridDecodeWidth(context),
+                    )
+                  else
+                    _FileIconTile(category: category, brightness: brightness),
                   if (selecting)
                     Icon(
                       selected

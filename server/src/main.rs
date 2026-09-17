@@ -10,6 +10,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use futures_util::StreamExt;
 use image::codecs::jpeg::JpegEncoder;
+use image::{ImageDecoder, ImageReader};
 use rand::{Rng, distr::Alphanumeric};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -28,7 +29,7 @@ use std::{
 };
 use tokio::{
     fs,
-    io::{AsyncSeekExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     process::Command,
 };
 use tokio_util::io::ReaderStream;
@@ -156,6 +157,9 @@ struct AuditResponse {
 struct SyncDeviceResponse {
     id: Uuid,
     name: String,
+    /// "android" | "windows" | "linux" | "macos", or null for devices that
+    /// registered before the platform column existed.
+    platform: Option<String>,
     last_seen_at: DateTime<Utc>,
     created_at: DateTime<Utc>,
 }
@@ -218,6 +222,10 @@ struct UpdateUserRequest {
     role: Option<String>,
     disabled: Option<bool>,
     quota_bytes: Option<i64>,
+    /// When true, `quota_bytes` is applied even when it is null, clearing the
+    /// quota back to unlimited. Without this flag a null/omitted quota_bytes
+    /// leaves the stored value untouched (partial-update semantics).
+    clear_quota: Option<bool>,
     /// Optional new password. When present, the password is re-hashed and the
     /// user's existing sessions are revoked (a password change invalidates
     /// every active session as a security baseline).
@@ -368,13 +376,21 @@ struct ChunkQuery {
 struct SyncManifestQuery {
     device_id: Option<Uuid>,
     device_name: Option<String>,
+    platform: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct SyncDeltaQuery {
     device_id: Option<Uuid>,
     device_name: Option<String>,
+    platform: Option<String>,
     since: String,
+}
+
+#[derive(Deserialize)]
+struct RenameDeviceRequest {
+    id: Uuid,
+    name: String,
 }
 
 #[derive(Deserialize)]
@@ -523,7 +539,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/sync/delete", post(sync_delete))
         .route(
             "/api/sync/devices",
-            get(list_sync_devices).delete(delete_sync_device),
+            get(list_sync_devices)
+                .delete(delete_sync_device)
+                .patch(rename_sync_device),
         )
         .route("/api/backup/status", get(backup_status))
         .route("/api/backup/run", post(backup_run))
@@ -601,6 +619,7 @@ async fn sync_delta(
         Query(SyncManifestQuery {
             device_id: query.device_id,
             device_name: query.device_name,
+            platform: query.platform,
         }),
     )
     .await?
@@ -645,11 +664,18 @@ async fn sync_manifest(
         .as_deref()
         .unwrap_or("NexaDrive desktop")
         .trim();
-    let device_name = if device_name.is_empty() {
-        "NexaDrive desktop"
+    let device_name: String = if device_name.is_empty() {
+        "NexaDrive desktop".to_string()
     } else {
-        device_name
+        // Bounded, multi-byte safe: a device name is user-visible metadata and
+        // must never be able to bloat a row or panic on a UTF-8 boundary.
+        device_name.chars().take(64).collect()
     };
+    // A device re-announcing itself keeps its id (and therefore its identity
+    // in the Sync Center list); a revoked or unknown id is re-registered, so a
+    // revocation never bricks a machine's sync permanently. The platform is
+    // refreshed on every call, including for devices that predate the column.
+    let platform = normalize_platform(query.platform.as_deref());
     let device_id = if let Some(id) = query.device_id {
         let exists: Option<Uuid> =
             sqlx::query_scalar("SELECT id FROM sync_devices WHERE id=$1 AND user_id=$2")
@@ -657,18 +683,33 @@ async fn sync_manifest(
                 .bind(user_id)
                 .fetch_optional(&state.db)
                 .await?;
-        if exists.is_none() {
-            return Err(AppError::NotFound);
+        match exists {
+            Some(existing) => {
+                sqlx::query("UPDATE sync_devices SET last_seen_at=CURRENT_TIMESTAMP, name=$3, platform=COALESCE($4, platform) WHERE id=$1 AND user_id=$2")
+                    .bind(existing).bind(user_id).bind(&device_name).bind(platform.as_deref()).execute(&state.db).await?;
+                existing
+            }
+            None => {
+                let new_id = Uuid::new_v4();
+                sqlx::query(
+                    "INSERT INTO sync_devices(id,user_id,name,platform) VALUES($1,$2,$3,$4)",
+                )
+                .bind(new_id)
+                .bind(user_id)
+                .bind(&device_name)
+                .bind(platform.as_deref())
+                .execute(&state.db)
+                .await?;
+                new_id
+            }
         }
-        sqlx::query("UPDATE sync_devices SET last_seen_at=CURRENT_TIMESTAMP, name=$3 WHERE id=$1 AND user_id=$2")
-            .bind(id).bind(user_id).bind(device_name).execute(&state.db).await?;
-        id
     } else {
         let id = Uuid::new_v4();
-        sqlx::query("INSERT INTO sync_devices(id,user_id,name) VALUES($1,$2,$3)")
+        sqlx::query("INSERT INTO sync_devices(id,user_id,name,platform) VALUES($1,$2,$3,$4)")
             .bind(id)
             .bind(user_id)
-            .bind(device_name)
+            .bind(&device_name)
+            .bind(platform.as_deref())
             .execute(&state.db)
             .await?;
         id
@@ -1145,17 +1186,50 @@ async fn list_sync_devices(
     State(state): State<AppState>,
     axum::extract::Extension(user_id): axum::extract::Extension<Uuid>,
 ) -> Result<Json<Vec<SyncDeviceResponse>>, AppError> {
-    let rows = sqlx::query("SELECT id,name,last_seen_at,created_at FROM sync_devices WHERE user_id=$1 ORDER BY last_seen_at DESC").bind(user_id).fetch_all(&state.db).await?;
+    let rows = sqlx::query("SELECT id,name,platform,last_seen_at,created_at FROM sync_devices WHERE user_id=$1 ORDER BY last_seen_at DESC").bind(user_id).fetch_all(&state.db).await?;
     Ok(Json(
         rows.into_iter()
             .map(|r| SyncDeviceResponse {
                 id: r.get("id"),
                 name: r.get("name"),
+                platform: r.get("platform"),
                 last_seen_at: r.get("last_seen_at"),
                 created_at: r.get("created_at"),
             })
             .collect(),
     ))
+}
+
+/// Renames a linked device. Only the owner's own devices are reachable, and a
+/// rename never resurrects a revoked device (the row must already exist).
+async fn rename_sync_device(
+    State(state): State<AppState>,
+    axum::extract::Extension(user_id): axum::extract::Extension<Uuid>,
+    Json(payload): Json<RenameDeviceRequest>,
+) -> Result<StatusCode, AppError> {
+    let name = payload.name.trim();
+    if name.is_empty() || name.chars().count() > 64 {
+        return Err(AppError::BadRequest(
+            "Device name must be 1-64 characters".into(),
+        ));
+    }
+    let result = sqlx::query("UPDATE sync_devices SET name=$3 WHERE id=$1 AND user_id=$2")
+        .bind(payload.id)
+        .bind(user_id)
+        .bind(name)
+        .execute(&state.db)
+        .await?;
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+    audit(
+        &state.db,
+        user_id,
+        "sync_device_rename",
+        Some(&payload.id.to_string()),
+    )
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn delete_sync_device(
@@ -1685,11 +1759,37 @@ async fn update_user(
             "You cannot disable your own account".into(),
         ));
     }
+    // The last administrator must never be demoted or disabled — otherwise the
+    // instance becomes unmanageable. Enforced server-side, not by the client.
+    if payload.role.as_deref() == Some("user") || payload.disabled == Some(true) {
+        let admins: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE role='admin' AND disabled=FALSE")
+                .fetch_one(&state.db)
+                .await?;
+        if admins <= 1 {
+            let target_is_admin: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM users WHERE id=$1 AND role='admin' AND disabled=FALSE",
+            )
+            .bind(id)
+            .fetch_one(&state.db)
+            .await?;
+            if target_is_admin == 1 {
+                return Err(AppError::Conflict(
+                    "The last administrator account cannot be demoted or disabled".into(),
+                ));
+            }
+        }
+    }
     if let Some(role) = payload.role.as_deref() {
         validate_role(role)?;
     }
     if payload.quota_bytes.is_some_and(|v| v < 0) {
         return Err(AppError::BadRequest("Quota cannot be negative".into()));
+    }
+    if payload.clear_quota == Some(true) && payload.quota_bytes.is_some() {
+        return Err(AppError::BadRequest(
+            "clear_quota and quota_bytes are mutually exclusive".into(),
+        ));
     }
     if payload
         .display_name
@@ -1712,8 +1812,10 @@ async fn update_user(
         Some(pw) => Some(hash_password(pw)?),
         None => None,
     };
-    let result = sqlx::query("UPDATE users SET display_name=COALESCE($1,display_name), role=COALESCE($2,role), disabled=COALESCE($3,disabled), quota_bytes=COALESCE($4,quota_bytes), password_hash=COALESCE($5,password_hash) WHERE id=$6")
-        .bind(payload.display_name.map(|v| v.trim().to_string())).bind(payload.role).bind(payload.disabled).bind(payload.quota_bytes).bind(new_hash).bind(id).execute(&state.db).await?;
+    // Quota: quota_bytes=COALESCE(null, quota_bytes) keeps partial-update
+    // semantics; clear_quota=true sets it to NULL (unlimited) explicitly.
+    let result = sqlx::query("UPDATE users SET display_name=COALESCE($1,display_name), role=COALESCE($2,role), disabled=COALESCE($3,disabled), quota_bytes=CASE WHEN $4 THEN NULL ELSE COALESCE($5,quota_bytes) END, password_hash=COALESCE($6,password_hash) WHERE id=$7")
+        .bind(payload.display_name.map(|v| v.trim().to_string())).bind(payload.role).bind(payload.disabled).bind(payload.clear_quota == Some(true)).bind(payload.quota_bytes).bind(new_hash).bind(id).execute(&state.db).await?;
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
@@ -1743,14 +1845,28 @@ async fn delete_user(
             "You cannot delete your own account".into(),
         ));
     }
-    let row = sqlx::query("SELECT username FROM users WHERE id=$1")
-        .bind(id)
-        .fetch_optional(&state.db)
-        .await?;
-    let Some(row) = row else {
+    // Never allow deleting the last active administrator. With only one admin
+    // left, deleting them (or deleting another admin that is the last enabled
+    // one) would leave the instance permanently unmanageable.
+    let target: Option<(String, String)> =
+        sqlx::query_as("SELECT username, role FROM users WHERE id=$1")
+            .bind(id)
+            .fetch_optional(&state.db)
+            .await?;
+    let Some((username, role)) = target else {
         return Err(AppError::NotFound);
     };
-    let username: String = row.get("username");
+    if role == "admin" {
+        let active_admins: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE role='admin' AND disabled=FALSE")
+                .fetch_one(&state.db)
+                .await?;
+        if active_admins <= 1 {
+            return Err(AppError::Conflict(
+                "The last administrator account cannot be deleted".into(),
+            ));
+        }
+    }
 
     sqlx::query("DELETE FROM users WHERE id=$1")
         .bind(id)
@@ -1812,6 +1928,29 @@ async fn list_shares(
     ))
 }
 
+/// Normalises a client-reported platform string to a small known set, so the
+/// device list can render a correct icon and an arbitrary client string can
+/// never reach the UI.
+fn normalize_platform(raw: Option<&str>) -> Option<String> {
+    let value = raw?.trim().to_ascii_lowercase();
+    let normalized = match value.as_str() {
+        "android" => "android",
+        "windows" | "win32" => "windows",
+        "linux" => "linux",
+        "macos" | "mac" | "darwin" => "macos",
+        _ => return None,
+    };
+    Some(normalized.to_string())
+}
+
+/// Whether a share request may be satisfied as a public link.
+///
+/// A link resolves to exactly one file download, so directories are only
+/// shareable with a named NexaDrive user.
+fn link_share_is_allowed(is_dir: bool, has_recipient: bool) -> bool {
+    !is_dir || has_recipient
+}
+
 async fn create_share(
     State(state): State<AppState>,
     axum::extract::Extension(owner_id): axum::extract::Extension<Uuid>,
@@ -1821,10 +1960,20 @@ async fn create_share(
     if path.as_os_str().is_empty() {
         return Err(AppError::BadRequest("Cannot share the root".into()));
     }
-    ensure_supported_entry(&user_root(&state, owner_id).join(&path)).await?;
+    let file_type = ensure_supported_entry(&user_root(&state, owner_id).join(&path)).await?;
     if !matches!(payload.permission.as_str(), "read" | "write") {
         return Err(AppError::BadRequest(
             "Permission must be read or write".into(),
+        ));
+    }
+    // A public link only ever resolves to a single file download, so a link to
+    // a directory would be created and then fail for every recipient. Refuse
+    // it up front instead of handing out a broken URL. Folder sharing to a
+    // named user still works (the recipient browses it through /api/shared).
+    if !link_share_is_allowed(file_type.is_dir(), payload.username.is_some()) {
+        return Err(AppError::BadRequest(
+            "Folders cannot be shared as public links. Share the folder with a NexaDrive user instead."
+                .into(),
         ));
     }
     let (recipient_user_id, recipient_name, is_link, token) =
@@ -1968,6 +2117,7 @@ async fn download_shared_file(
     State(state): State<AppState>,
     axum::extract::Extension(user_id): axum::extract::Extension<Uuid>,
     Query(query): Query<SharedQuery>,
+    headers: HeaderMap,
 ) -> Result<Response, AppError> {
     let (owner_id, base, permission, _) = resolve_share(&state.db, user_id, query.share_id).await?;
     if !permission_allows(&permission, false) {
@@ -1988,20 +2138,6 @@ async fn download_shared_file(
         .to_string_lossy()
         .replace('"', "'")
         .replace(['\r', '\n'], "_");
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("application/octet-stream"),
-    );
-    headers.insert(
-        header::CONTENT_LENGTH,
-        HeaderValue::from_str(&md.len().to_string()).map_err(|_| AppError::Internal)?,
-    );
-    headers.insert(
-        header::CONTENT_DISPOSITION,
-        HeaderValue::from_str(&format!("attachment; filename=\"{}\"", name))
-            .map_err(|_| AppError::Internal)?,
-    );
     audit(
         &state.db,
         user_id,
@@ -2009,7 +2145,11 @@ async fn download_shared_file(
         Some(&format!("{}:{}", query.share_id, rel.to_string_lossy())),
     )
     .await?;
-    Ok((headers, Body::from_stream(ReaderStream::new(file))).into_response())
+    let requested_range = headers
+        .get(header::RANGE)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    Ok(file_response(file, &md, &name, requested_range.as_deref()).await)
 }
 
 async fn shared_action(
@@ -2150,6 +2290,7 @@ async fn public_share_download(
     State(state): State<AppState>,
     axum::extract::Path(token): axum::extract::Path<String>,
     Query(query): Query<PathQuery>,
+    headers: HeaderMap,
 ) -> Result<Response, AppError> {
     let throttle_key = format!("share:{}", token_hash(&token));
     {
@@ -2193,20 +2334,6 @@ async fn public_share_download(
         .to_string_lossy()
         .replace('"', "'")
         .replace(['\r', '\n'], "_");
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("application/octet-stream"),
-    );
-    headers.insert(
-        header::CONTENT_LENGTH,
-        HeaderValue::from_str(&metadata.len().to_string()).map_err(|_| AppError::Internal)?,
-    );
-    headers.insert(
-        header::CONTENT_DISPOSITION,
-        HeaderValue::from_str(&format!("attachment; filename=\"{}\"", name))
-            .map_err(|_| AppError::Internal)?,
-    );
     let token_id = token_hash(&token);
     audit(
         &state.db,
@@ -2215,7 +2342,11 @@ async fn public_share_download(
         Some(&format!("{}:{}", token_id, rel.to_string_lossy())),
     )
     .await?;
-    Ok((headers, Body::from_stream(ReaderStream::new(file))).into_response())
+    let requested_range = headers
+        .get(header::RANGE)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    Ok(file_response(file, &metadata, &name, requested_range.as_deref()).await)
 }
 
 fn safe_relative_path(raw: &str) -> Result<PathBuf, AppError> {
@@ -3119,6 +3250,146 @@ fn is_photo(path: &Path) -> bool {
     )
 }
 
+/// Content-Type for a stored file. Media types the app renders or streams are
+/// returned with their real MIME type so players and viewers can handle them;
+/// everything else stays `application/octet-stream` so browsers always
+/// download rather than render (never trust unknown HTML/SVG for execution).
+fn mime_for_file(path: &Path) -> &'static str {
+    let ext = path
+        .extension()
+        .and_then(|x| x.to_str())
+        .map(|x| x.to_ascii_lowercase())
+        .unwrap_or_default();
+    match ext.as_str() {
+        // Images
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "heic" | "heif" => "image/heic",
+        "avif" => "image/avif",
+        "tif" | "tiff" => "image/tiff",
+        // Video (streamed by the in-app player)
+        "mp4" | "m4v" => "video/mp4",
+        "webm" => "video/webm",
+        "mkv" => "video/x-matroska",
+        "mov" => "video/quicktime",
+        // Audio (streamed by the in-app player)
+        "mp3" => "audio/mpeg",
+        "m4a" => "audio/mp4",
+        "aac" => "audio/aac",
+        "wav" => "audio/wav",
+        "flac" => "audio/flac",
+        "ogg" | "opus" => "audio/ogg",
+        // Documents
+        "pdf" => "application/pdf",
+        "txt" | "md" | "log" | "csv" | "json" | "xml" | "yaml" | "yml" | "toml" | "conf"
+        | "ini" | "cfg" => "text/plain; charset=utf-8",
+        "html" | "htm" => "text/html; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "js" => "text/javascript; charset=utf-8",
+        // Archives
+        "zip" => "application/zip",
+        "7z" => "application/x-7z-compressed",
+        "tar" => "application/x-tar",
+        "gz" => "application/gzip",
+        "rar" => "application/vnd.rar",
+        _ => "application/octet-stream",
+    }
+}
+
+/// Whether a MIME type is safe to serve inline (`inline` disposition). HTML,
+/// SVG and JavaScript are always forced to download: they can execute in a
+/// browser context and would turn the file host into an XSS vector.
+fn mime_is_safe_inline(mime: &str) -> bool {
+    !(mime.starts_with("text/html")
+        || mime == "image/svg+xml"
+        || mime.starts_with("text/javascript"))
+}
+
+/// Filename for a Content-Disposition header, ASCII-sanitized plus an
+/// RFC 5987/6266 UTF-8 fallback for non-ASCII names.
+fn content_disposition(name: &str, inline: bool) -> String {
+    let sanitized: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_graphic() && c != '"' && c != '\\' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let disposition = if inline { "inline" } else { "attachment" };
+    if name.chars().all(|c| c.is_ascii_graphic() || c == ' ') && !name.is_empty() {
+        format!("{disposition}; filename=\"{sanitized}\"")
+    } else {
+        let encoded: String = name
+            .bytes()
+            .map(|b| {
+                if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+                    (b as char).to_string()
+                } else {
+                    format!("%{b:02X}")
+                }
+            })
+            .collect();
+        format!("{disposition}; filename=\"{sanitized}\"; filename*=UTF-8''{encoded}")
+    }
+}
+
+/// Parsed byte range for HTTP partial content (video/audio seeking).
+struct ByteRange {
+    start: u64,
+    end: u64,
+}
+
+/// Parses a single-range `Range: bytes=start-end` header. Returns `None` when
+/// absent or malformed; syntactically unsatisfiable ranges return an error the
+/// caller maps to 416.
+fn parse_byte_range(header: Option<&str>, size: u64) -> Result<Option<ByteRange>, ()> {
+    let Some(value) = header else {
+        return Ok(None);
+    };
+    let spec = value.trim();
+    let Some(unit_and_set) = spec.strip_prefix("bytes=") else {
+        return Err(()); // unsupported unit -> 416
+    };
+    let mut raw = unit_and_set.split(',');
+    let first = raw.next().unwrap_or("");
+    if raw.next().is_some() {
+        return Err(()); // multi-range unsupported -> 416
+    }
+    let first = first.trim();
+    if let Some(suffix) = first.strip_prefix('-') {
+        // suffix form: last N bytes
+        let n: u64 = suffix.parse().map_err(|_| ())?;
+        if n == 0 || size == 0 {
+            return Err(());
+        }
+        let n = n.min(size);
+        return Ok(Some(ByteRange {
+            start: size - n,
+            end: size - 1,
+        }));
+    }
+    let (start_raw, end_raw) = first.split_once('-').ok_or(())?;
+    let start: u64 = start_raw.trim().parse().map_err(|_| ())?;
+    let end: u64 = if end_raw.trim().is_empty() {
+        size.saturating_sub(1)
+    } else {
+        end_raw.trim().parse().map_err(|_| ())?
+    };
+    if start > end || start >= size {
+        return Err(());
+    }
+    Ok(Some(ByteRange {
+        start,
+        end: end.min(size.saturating_sub(1)),
+    }))
+}
+
 async fn list_photos(
     State(state): State<AppState>,
     axum::extract::Extension(user_id): axum::extract::Extension<Uuid>,
@@ -3162,6 +3433,7 @@ async fn download_file(
     State(state): State<AppState>,
     axum::extract::Extension(user_id): axum::extract::Extension<Uuid>,
     Query(query): Query<PathQuery>,
+    headers: HeaderMap,
 ) -> Result<Response, AppError> {
     let relative = safe_relative_path(query.path.as_deref().unwrap_or(""))?;
     let absolute = user_root(&state, user_id).join(&relative);
@@ -3185,21 +3457,113 @@ async fn download_file(
         Some(&relative.to_string_lossy()),
     )
     .await?;
+    let requested_range = headers
+        .get(header::RANGE)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    Ok(file_response(file, &metadata, &name, requested_range.as_deref()).await)
+}
+
+/// Builds the HTTP response for a stored file: real Content-Type, correct
+/// disposition (inline for safe media so players can stream, attachment
+/// otherwise), and single-range support so video/audio seeking works. The
+/// body always streams from disk — nothing is buffered whole.
+async fn file_response(
+    file: fs::File,
+    metadata: &std::fs::Metadata,
+    name: &str,
+    range_header: Option<&str>,
+) -> Response {
+    let size = metadata.len();
+    let mime = mime_for_file(Path::new(name));
+    let disposition = content_disposition(name, mime_is_safe_inline(mime));
+
     let mut headers = HeaderMap::new();
     headers.insert(
         header::CONTENT_TYPE,
-        HeaderValue::from_static("application/octet-stream"),
+        HeaderValue::from_str(mime).unwrap_or(HeaderValue::from_static("application/octet-stream")),
     );
-    headers.insert(
-        header::CONTENT_LENGTH,
-        HeaderValue::from_str(&metadata.len().to_string()).map_err(|_| AppError::Internal)?,
-    );
+    headers.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
     headers.insert(
         header::CONTENT_DISPOSITION,
-        HeaderValue::from_str(&format!("attachment; filename=\"{}\"", name))
-            .map_err(|_| AppError::Internal)?,
+        HeaderValue::from_str(&disposition).unwrap_or(HeaderValue::from_static("attachment")),
     );
-    Ok((headers, Body::from_stream(ReaderStream::new(file))).into_response())
+
+    match range_header.map(|h| parse_byte_range(Some(h), size)) {
+        Some(Ok(Some(range))) => {
+            headers.insert(
+                header::CONTENT_RANGE,
+                HeaderValue::from_str(&format!("bytes {}-{}/{}", range.start, range.end, size))
+                    .unwrap_or(HeaderValue::from_static("bytes */*")),
+            );
+            let length = range.end - range.start + 1;
+            headers.insert(
+                header::CONTENT_LENGTH,
+                HeaderValue::from_str(&length.to_string()).unwrap_or(HeaderValue::from_static("0")),
+            );
+            let mut file = file;
+            if file
+                .seek(std::io::SeekFrom::Start(range.start))
+                .await
+                .is_err()
+            {
+                return AppError::Io(std::io::Error::other("seek failed")).into_response();
+            }
+            let stream = async_stream_range(file, range.start, length);
+            (
+                StatusCode::PARTIAL_CONTENT,
+                headers,
+                Body::from_stream(stream),
+            )
+                .into_response()
+        }
+        Some(Err(())) => {
+            // Unsatisfiable or unsupported range: 416 with the full extent.
+            headers.remove(header::CONTENT_DISPOSITION);
+            headers.insert(
+                header::CONTENT_RANGE,
+                HeaderValue::from_str(&format!("bytes */{}", size))
+                    .unwrap_or(HeaderValue::from_static("bytes */*")),
+            );
+            (StatusCode::RANGE_NOT_SATISFIABLE, headers).into_response()
+        }
+        _ => {
+            headers.insert(
+                header::CONTENT_LENGTH,
+                HeaderValue::from_str(&size.to_string()).unwrap_or(HeaderValue::from_static("0")),
+            );
+            (headers, Body::from_stream(ReaderStream::new(file))).into_response()
+        }
+    }
+}
+
+/// Streams [start, start+length) from an open file with a bounded chunk size.
+fn async_stream_range(
+    file: fs::File,
+    start: u64,
+    length: u64,
+) -> impl futures_util::Stream<Item = Result<Vec<u8>, std::io::Error>> {
+    const CHUNK: u64 = 256 * 1024;
+    futures_util::stream::unfold(
+        (file, start, length),
+        |(mut file, pos, remaining)| async move {
+            if remaining == 0 {
+                return None;
+            }
+            let want = remaining.min(CHUNK) as usize;
+            let mut buf = vec![0u8; want];
+            match file.read_exact(&mut buf).await {
+                Ok(n) => {
+                    let got = n as u64;
+                    let next_pos = pos + got;
+                    let next_remaining = remaining.saturating_sub(got);
+                    buf.truncate(n);
+                    Some((Ok(buf), (file, next_pos, next_remaining)))
+                }
+                Err(e) => Some((Err(e), (file, pos, 0))),
+            }
+        },
+    )
 }
 
 const THUMB_CACHE_MAX_ENTRIES: usize = 1024;
@@ -3254,7 +3618,22 @@ async fn thumbnail(
         }
     }
 
-    let img = image::open(&absolute).map_err(|_| AppError::UnsupportedMedia)?;
+    // Decode explicitly (not image::open) so the EXIF orientation is applied:
+    // phone photos store rotated pixels plus an orientation tag and would
+    // otherwise produce sideways or wrongly-cropped previews.
+    let mut reader = ImageReader::open(&absolute).map_err(|_| AppError::UnsupportedMedia)?;
+    reader.no_limits();
+    let mut decoder = reader
+        .into_decoder()
+        .map_err(|_| AppError::UnsupportedMedia)?;
+    let orientation = decoder
+        .orientation()
+        .unwrap_or(image::metadata::Orientation::NoTransforms);
+    let mut img =
+        image::DynamicImage::from_decoder(decoder).map_err(|_| AppError::UnsupportedMedia)?;
+    if orientation != image::metadata::Orientation::NoTransforms {
+        img.apply_orientation(orientation);
+    }
     let thumb = img.thumbnail(max, max);
     let mut out = Cursor::new(Vec::new());
     thumb
@@ -3617,6 +3996,107 @@ mod tests {
         assert!(short.len() < 10);
         let long = "a_very_long_password_123";
         assert!(long.len() >= 10);
+    }
+
+    #[test]
+    fn mime_types_are_media_aware() {
+        assert_eq!(mime_for_file(Path::new("a.JPG")), "image/jpeg");
+        assert_eq!(mime_for_file(Path::new("photo.png")), "image/png");
+        assert_eq!(mime_for_file(Path::new("clip.MP4")), "video/mp4");
+        assert_eq!(mime_for_file(Path::new("song.flac")), "audio/flac");
+        assert_eq!(mime_for_file(Path::new("doc.pdf")), "application/pdf");
+        assert_eq!(
+            mime_for_file(Path::new("notes.txt")),
+            "text/plain; charset=utf-8"
+        );
+        assert_eq!(mime_for_file(Path::new("archive.zip")), "application/zip");
+        // Unknown extensions stay octet-stream so browsers download them.
+        assert_eq!(
+            mime_for_file(Path::new("data.bin")),
+            "application/octet-stream"
+        );
+    }
+
+    #[test]
+    fn inline_disposition_is_restricted_to_safe_media() {
+        assert!(mime_is_safe_inline("image/jpeg"));
+        assert!(mime_is_safe_inline("video/mp4"));
+        assert!(mime_is_safe_inline("audio/mpeg"));
+        assert!(mime_is_safe_inline("application/pdf"));
+        assert!(mime_is_safe_inline("text/plain; charset=utf-8"));
+        // Executable-in-browser formats must always download.
+        assert!(!mime_is_safe_inline("text/html; charset=utf-8"));
+        assert!(!mime_is_safe_inline("image/svg+xml"));
+        assert!(!mime_is_safe_inline("text/javascript; charset=utf-8"));
+    }
+
+    #[test]
+    fn content_disposition_sanitizes_and_preserves_unicode() {
+        let d = content_disposition("report.pdf", true);
+        assert!(d.starts_with("inline"));
+        assert!(d.contains("filename=\"report.pdf\""));
+        let d = content_disposition("quote".to_string().as_str(), false);
+        assert!(d.starts_with("attachment"));
+        // Non-ASCII gets an RFC 5987 fallback.
+        let d = content_disposition("résumé.pdf", false);
+        assert!(d.contains("filename*=UTF-8''"));
+        assert!(d.contains("attachment"));
+    }
+
+    #[test]
+    fn platform_strings_are_normalised_to_a_known_set() {
+        assert_eq!(normalize_platform(Some("Android")), Some("android".into()));
+        assert_eq!(normalize_platform(Some(" win32 ")), Some("windows".into()));
+        assert_eq!(normalize_platform(Some("darwin")), Some("macos".into()));
+        // Anything unrecognised is dropped rather than stored and rendered.
+        assert_eq!(normalize_platform(Some("<script>")), None);
+        assert_eq!(normalize_platform(None), None);
+    }
+
+    #[test]
+    fn link_shares_of_directories_are_refused() {
+        // `/api/shares` must not hand out a public link that can never resolve.
+        assert!(
+            link_share_is_allowed(false, false),
+            "file link shares are allowed"
+        );
+        assert!(
+            link_share_is_allowed(false, true),
+            "file shares to a user work"
+        );
+        assert!(
+            link_share_is_allowed(true, true),
+            "folder shares to a user work"
+        );
+        assert!(
+            !link_share_is_allowed(true, false),
+            "folder link shares do not"
+        );
+    }
+
+    #[test]
+    fn byte_ranges_parse_correctly() {
+        let r = parse_byte_range(Some("bytes=0-99"), 1000).unwrap().unwrap();
+        assert_eq!((r.start, r.end), (0, 99));
+        let r = parse_byte_range(Some("bytes=500-"), 1000).unwrap().unwrap();
+        assert_eq!((r.start, r.end), (500, 999));
+        // suffix range: last 100 bytes
+        let r = parse_byte_range(Some("bytes=-100"), 1000).unwrap().unwrap();
+        assert_eq!((r.start, r.end), (900, 999));
+        // end clamped to size
+        let r = parse_byte_range(Some("bytes=900-5000"), 1000)
+            .unwrap()
+            .unwrap();
+        assert_eq!((r.start, r.end), (900, 999));
+        // absent header -> no range
+        assert!(parse_byte_range(None, 1000).unwrap().is_none());
+        // malformed / unsupported -> 416
+        assert!(parse_byte_range(Some("bytes=abc"), 1000).is_err());
+        assert!(parse_byte_range(Some("chunks=0-1"), 1000).is_err());
+        assert!(parse_byte_range(Some("bytes=0-1,5-9"), 1000).is_err());
+        assert!(parse_byte_range(Some("bytes=100-50"), 1000).is_err());
+        assert!(parse_byte_range(Some("bytes=2000-"), 1000).is_err());
+        assert!(parse_byte_range(Some("bytes=-0"), 1000).is_err());
     }
 
     #[test]

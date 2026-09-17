@@ -123,8 +123,50 @@ Optional query parameters:
 
 - `device_id`
 - `device_name`
+- `platform` — one of `android`, `windows`, `linux`, `macos` (normalised
+  server-side; anything else is dropped rather than stored)
 
 The response contains `device_id`, `server_time`, `entries`, and `tombstones`. Clients should persist `server_time` as the next cursor only after local reconciliation succeeds.
+
+### Sync devices
+
+- `GET /api/sync/devices` — devices linked to the account, newest activity
+  first. Each entry carries `id`, `name`, `platform`, `last_seen_at` and
+  `created_at`.
+- `PATCH /api/sync/devices` — body `{ "id": "<uuid>", "name": "..." }`
+  renames a linked device (1-64 characters). Only the caller's own devices
+  are reachable; a rename never resurrects a revoked device.
+- `DELETE /api/sync/devices?id=<uuid>` — unlinks a device. The next sync from
+  that machine re-registers it under a fresh id, so a revoke never leaves a
+  client permanently unable to sync.
+
+### Content types and range requests
+
+`GET /api/files/download` (and the public share download) return the stored
+file with its real `Content-Type`. `Accept-Ranges: bytes` is advertised and a
+single `Range` header is honoured with `206 Partial Content`; an unsatisfiable
+range returns `416` with `Content-Range: bytes */<size>`.
+
+Only media that is safe to render inline (images, video, audio, PDF, plain
+text) is served with `Content-Disposition: inline`. HTML, SVG and JavaScript
+are always `attachment`, so a file host can never become an XSS vector.
+
+### Sharing
+
+`POST /api/shares` accepts `path`, `permission` (`read` | `write`) and an
+optional `username`.
+
+- With `username`: a direct share with another account.
+- Without: a public link, returned with a one-time `token`. The token is
+  stored only as a SHA-256 hash.
+
+A **directory cannot be shared as a public link** — a link resolves to a
+single file download, so the request is rejected with `400` rather than
+handing out a URL that can never work. Share the folder with a named user
+instead; recipients browse it through `GET /api/shared/items`.
+
+Deleting a share (`DELETE /api/shares?id=`) removes the row outright, so a
+revoked link immediately stops resolving.
 
 ### POST `/api/backup/check`
 

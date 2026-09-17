@@ -74,6 +74,19 @@ class ThumbnailCache {
     await _shrink();
   }
 
+  /// Deletes every cached thumbnail. Used on sign-out so a shared device does
+  /// not keep one account's previews around for the next one.
+  Future<void> clear() async {
+    try {
+      final entities = await _dir.list().toList();
+      for (final entity in entities) {
+        try {
+          await entity.delete(recursive: true);
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
   /// Enforces [ThumbnailCache._maxBytes] and [ThumbnailCache._maxEntries] by
   /// deleting the oldest entries first. Called on open and after every write,
   /// so the budget can never slip for long.

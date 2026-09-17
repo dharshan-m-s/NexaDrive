@@ -33,6 +33,14 @@ class Session extends ChangeNotifier {
   String? role;
   String themeMode = 'system';
 
+  /// Cache namespace for on-disk thumbnails and cached media.
+  ///
+  /// Includes the signed-in account, not just the server: two users on the
+  /// same server have identical relative paths ("Camera/IMG_1.jpg"), so a
+  /// server-only key would let one account read another's cached previews on a
+  /// shared device.
+  String get cacheNamespace => '${serverUrl ?? ''}#${username ?? ''}';
+
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     serverUrl = prefs.getString(_serverKey);

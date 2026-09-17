@@ -8,10 +8,11 @@ import 'ui/shell/app_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Cache management: decoded thumbnail tiles at a budget that also leaves
-  // room for a couple of full-size viewer photos without risking an OOM on
-  // low-end phones. PhotoViewer keeps its own bounded raw-byte cache, so the
-  // image cache only ever holds decoded frames.
+  // Cache management: decoded frames only. The raw thumbnail/original byte
+  // caches live in ImageRepository (services/image_pipeline.dart) and are
+  // bounded separately, so this budget covers decoded tiles plus the couple of
+  // full-resolution frames the viewer holds without risking an OOM on a
+  // low-end phone.
   PaintingBinding.instance.imageCache
     ..maximumSizeBytes = 150 * 1024 * 1024
     ..maximumSize = 200;

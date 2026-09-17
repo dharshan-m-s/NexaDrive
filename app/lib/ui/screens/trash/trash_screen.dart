@@ -19,6 +19,7 @@ class TrashScreen extends StatefulWidget {
 class _TrashScreenState extends State<TrashScreen> {
   List<Map<String, dynamic>> _items = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -27,7 +28,10 @@ class _TrashScreenState extends State<TrashScreen> {
   }
 
   Future<void> load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final items = await widget.api.trash();
       if (!mounted) return;
@@ -37,9 +41,14 @@ class _TrashScreenState extends State<TrashScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      // A failed load must never render as "Trash is empty" — that would tell
+      // the user their deleted files are gone.
+      setState(() {
+        _error = e is ApiException
+            ? e.message
+            : 'Trash could not be loaded. Check your connection.';
+        _loading = false;
+      });
     }
   }
 
@@ -94,7 +103,15 @@ class _TrashScreenState extends State<TrashScreen> {
       subtitle: 'Deleted items are kept for 30 days',
       body: _loading
           ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
-          : _items.isEmpty
+          : _error != null
+              ? OneUiEmptyState(
+                  icon: Icons.cloud_off_rounded,
+                  title: 'Can\u2019t load Trash',
+                  hint: _error,
+                  actionLabel: 'Retry',
+                  onAction: load,
+                )
+              : _items.isEmpty
               ? const OneUiEmptyState(
                   icon: Icons.delete_outline_rounded,
                   title: 'Trash is empty',

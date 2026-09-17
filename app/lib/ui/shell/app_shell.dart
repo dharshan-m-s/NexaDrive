@@ -8,6 +8,8 @@ import '../../../services/api.dart';
 import '../../../services/session.dart';
 import '../../../services/transfer_queue.dart';
 import '../../../services/sync_service.dart';
+import '../../../services/media_cache.dart';
+import '../../../services/thumbnail_cache.dart';
 import '../../../services/background_transfer_service.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/files/files_screen.dart';
@@ -153,6 +155,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     try {
       await widget.session.clear();
     } catch (_) {}
+    await _purgeLocalCaches();
     if (!mounted || !context.mounted) return;
     _toast('Session expired. Please sign in again.');
     Navigator.of(context).pushAndRemoveUntil(
@@ -258,11 +261,27 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Future<void> logout() async {
     await BackgroundTransferService.cancel();
     await api.logout();
+    await _purgeLocalCaches();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => LoginScreen(session: widget.session)),
       (_) => false,
     );
+  }
+
+  /// Removes everything this account cached on the device: thumbnails, cached
+  /// media and decoded frames. A shared device must not hand the next account
+  /// another user's images.
+  Future<void> _purgeLocalCaches() async {
+    PaintingBinding.instance.imageCache
+      ..clear()
+      ..clearLiveImages();
+    try {
+      await (await ThumbnailCache.open()).clear();
+    } catch (_) {}
+    try {
+      await (await MediaCache.open(api)).clear();
+    } catch (_) {}
   }
 
   @override

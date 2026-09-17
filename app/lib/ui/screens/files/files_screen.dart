@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -9,19 +10,18 @@ import '../../../../core/models/file_entry.dart';
 import '../../../../core/utils/file_kind.dart';
 import '../../../../core/utils/format.dart';
 import '../../../services/api.dart';
+import '../../../services/download_service.dart';
+import '../../../services/image_pipeline.dart';
+import '../../../services/thumbnail_cache.dart';
 import '../../widgets/folder_picker.dart';
 import '../../widgets/one_ui_action_bar.dart';
 import '../../widgets/one_ui_empty_state.dart';
 import '../../widgets/one_ui_file_tile.dart';
 import '../../widgets/one_ui_sheet.dart';
 import '../../widgets/upload_progress_dialog.dart';
-import '../photos/photo_viewer.dart';
-import '../media/video_player_screen.dart';
-import '../media/audio_player_screen.dart';
 import '../scanner/scanner_screen.dart';
 import '../search/search_screen.dart';
-import '../viewers/text_viewer_screen.dart';
-import '../viewers/pdf_viewer_screen.dart';
+import '../../navigation/file_opener.dart';
 import 'file_details_sheet.dart';
 import 'file_share_sheet.dart';
 
@@ -29,26 +29,51 @@ enum _Sort { name, size, newOld, oldNew }
 
 class FilesScreen extends StatefulWidget {
   final Api api;
-  const FilesScreen({super.key, required this.api});
+
+  /// Folder to open at. Empty means the browser root.
+  final String initialPath;
+
+  const FilesScreen({super.key, required this.api, this.initialPath = ''});
 
   @override
   State<FilesScreen> createState() => _FilesScreenState();
 }
 
 class _FilesScreenState extends State<FilesScreen> {
-  String _path = '';
+  late final DownloadService _downloads = DownloadService(widget.api);
+  late final ImageRepository _images = ImageRepository(widget.api);
+  late String _path = widget.initialPath;
   List<FileEntry> _items = [];
   bool _loading = true;
   bool _grid = false;
   bool _selecting = false;
   final Set<String> _selected = <String>{};
   String? _error;
-  final _Sort _sort = _Sort.name;
+  _Sort _sort = _Sort.name;
+
+  /// Paths with a download in flight. A set (not a single flag) so starting
+  /// one download never silently swallows another one's request.
+  final Set<String> _busyDownloads = <String>{};
+
+  /// Paths the server cannot thumbnail (e.g. HEIC). Those rows keep the
+  /// category icon instead of pulling full-resolution bytes into the list.
+  final Set<String> _noThumbnail = <String>{};
+  final Set<String> _loadingThumbs = <String>{};
 
   @override
   void initState() {
     super.initState();
+    _attachDiskCache();
     load();
+  }
+
+  /// Previews survive a restart; the cache is keyed by account + path so it
+  /// never crosses accounts.
+  Future<void> _attachDiskCache() async {
+    try {
+      final cache = await ThumbnailCache.open();
+      if (mounted) _images.diskCache = cache;
+    } catch (_) {}
   }
 
   Future<void> load() async {
@@ -63,13 +88,59 @@ class _FilesScreenState extends State<FilesScreen> {
         _items = items.map(FileEntry.fromJson).toList();
         _loading = false;
       });
+      _prefetchThumbnails();
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = e is ApiException
+            ? e.message
+            : 'The folder could not be listed.';
         _loading = false;
       });
     }
+  }
+
+  /// Loads previews for image rows in the background, capped so opening a
+  /// folder with thousands of photos never queues thousands of requests.
+  void _prefetchThumbnails() {
+    final images = _items
+        .where((e) => e.category == Category.image)
+        .take(60)
+        .toList(growable: false);
+    for (final entry in images) {
+      unawaited(_ensureThumb(entry));
+    }
+  }
+
+  ImageKey _thumbKey(FileEntry entry) => ImageRepository.keyFor(
+        entry.toJson(),
+        namespace: widget.api.session.cacheNamespace,
+        rendition: ImageRendition.thumbnail,
+      );
+
+  Future<void> _ensureThumb(FileEntry entry) async {
+    if (_noThumbnail.contains(entry.path) ||
+        _loadingThumbs.contains(entry.path)) {
+      return;
+    }
+    final key = _thumbKey(entry);
+    if (_images.peekThumbnail(key) != null) return;
+    _loadingThumbs.add(entry.path);
+    try {
+      await _images.thumbnail(key);
+      if (mounted) setState(() {});
+    } on ThumbnailUnavailable {
+      if (mounted) setState(() => _noThumbnail.add(entry.path));
+    } catch (_) {
+      // Transient failures keep the icon; the next visit retries.
+    } finally {
+      _loadingThumbs.remove(entry.path);
+    }
+  }
+
+  Uint8List? _thumbFor(FileEntry entry) {
+    if (_noThumbnail.contains(entry.path)) return null;
+    return _images.peekThumbnail(_thumbKey(entry));
   }
 
   // ------------------------------------------------------------- actions
@@ -163,77 +234,14 @@ class _FilesScreenState extends State<FilesScreen> {
     _openFile(entry);
   }
 
+  /// Every file type opens through the one shared [FileOpener], so behaviour
+  /// is identical wherever a file is tapped from.
   void _openFile(FileEntry entry) {
-    switch (entry.category) {
-      case Category.image:
-        final images = _items.where((e) => e.category == Category.image).toList();
-        final index = images.indexWhere((e) => e.path == entry.path);
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => PhotoViewer(
-              photos: images.map((e) => e.toJson()).toList(),
-              initialIndex: index < 0 ? 0 : index,
-              api: widget.api,
-            ),
-          ),
-        );
-      case Category.video:
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => VideoPlayerScreen(file: entry, api: widget.api),
-          ),
-        );
-      case Category.audio:
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => AudioPlayerScreen(file: entry, api: widget.api),
-          ),
-        );
-      case Category.pdf:
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => PdfViewerScreen(file: entry, api: widget.api),
-          ),
-        );
-      case Category.text:
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => TextViewerScreen(file: entry, api: widget.api),
-          ),
-        );
-      default:
-        _showUnsupported(entry);
-    }
-  }
-
-  void _showUnsupported(FileEntry entry) {
-    showOneUiSheet<void>(
+    FileOpener.open(
       context,
-      builder: (sheetContext) => OneUiSheetBody(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            OneUiSheetHeader(title: entry.name, subtitle: 'Not viewable in NexaDrive'),
-            Text(
-              '${entry.category == Category.document ? 'Documents' : 'This format'}, '
-              'can\'t be opened inside NexaDrive. Download it and open it with another app.',
-              style: AppTextStyle.rowSubtitle.copyWith(
-                color: AppColors.textSecondaryFor(Theme.of(context).brightness),
-              ),
-            ),
-            const SizedBox(height: AppDimens.space24),
-            FilledButton.icon(
-              icon: const Icon(Icons.download_outlined, size: AppDimens.iconSmall),
-              label: const Text('Download'),
-              onPressed: () {
-                Navigator.pop(sheetContext);
-                _downloadItem(entry);
-              },
-            ),
-          ],
-        ),
-      ),
+      api: widget.api,
+      entry: entry,
+      siblings: _items,
     );
   }
 
@@ -344,34 +352,77 @@ class _FilesScreenState extends State<FilesScreen> {
     }
   }
 
-  Future<void> _downloadItem(FileEntry entry) async {
-    try {
-      final outPath = await _pickSaveLocation(entry.name);
-      if (outPath == null) return;
-      if (!mounted) return;
-      _toast('Download started…');
-      await widget.api.downloadToFile(entry.path, outPath);
-      if (mounted) _toast('Downloaded');
-    } catch (e) {
-      if (mounted) _toast(e.toString());
+  Future<void> _pickSort() async {
+    final selected = await showDialog<_Sort>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Sort by'),
+        children: [
+          for (final option in _Sort.values)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, option),
+              child: Row(
+                children: [
+                  Icon(
+                    option == _sort
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: AppDimens.iconSmall,
+                    color: option == _sort
+                        ? AppColors.accentFor(Theme.of(context).brightness)
+                        : AppColors.textTertiaryFor(Theme.of(context).brightness),
+                  ),
+                  const SizedBox(width: AppDimens.space12),
+                  Text(
+                    _sortLabel(option),
+                    style: AppTextStyle.rowTitle.copyWith(
+                      fontWeight: option == _sort ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    if (selected != null && selected != _sort) {
+      setState(() => _sort = selected);
     }
   }
 
-  /// Asks the user where to save [fileName] and returns a writable file path.
-  ///
-  /// file_picker 13's [FilePicker.saveFile] takes the file *contents* and
-  /// returns a Uri; for downloads we only need the destination, so the dialog
-  /// is driven with a placeholder byte and the returned location is used as
-  /// the target path. Returns null when the user cancels.
-  Future<String?> _pickSaveLocation(String fileName) async {
-    final uri = await FilePicker.saveFile(
-      fileName: fileName,
-      bytes: Uint8List(0),
-      dialogTitle: 'Save $fileName',
-    );
-    if (uri == null) return null;
-    return uri.toFilePath();
+  static String _sortLabel(_Sort sort) => switch (sort) {
+        _Sort.name => 'Name (A–Z)',
+        _Sort.size => 'Size (largest first)',
+        _Sort.newOld => 'Newest first',
+        _Sort.oldNew => 'Oldest first',
+      };
+
+  Future<void> _downloadItem(FileEntry entry) async {
+    // Already saving this exact file? Ignore the repeat instead of starting a
+    // second transfer that would fight over the same destination.
+    if (_busyDownloads.contains(entry.path)) return;
+    setState(() => _busyDownloads.add(entry.path));
+    try {
+      final result = await _downloads.saveAs(
+        remotePath: entry.path,
+        fileName: entry.name,
+        mimeType: FileKind.mimeFor(name: entry.name, type: 'file'),
+      );
+      if (!mounted) return;
+      if (result == null) {
+        _toast('Download cancelled');
+      } else {
+        _toast('Saved to ${result.location}');
+      }
+    } on SaveCancelled {
+      if (mounted) _toast('Download cancelled');
+    } catch (e) {
+      if (mounted) _toast(e.toString());
+    } finally {
+      if (mounted) setState(() => _busyDownloads.remove(entry.path));
+    }
   }
+
 
   // ---------------------------------------------------------- sorting
   List<FileEntry> get _sorted {
@@ -432,6 +483,7 @@ class _FilesScreenState extends State<FilesScreen> {
               : () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => SearchScreen(api: widget.api)),
                   ),
+          onSort: _selecting ? null : _pickSort,
           onScan: _selecting
               ? null
               : () => Navigator.of(context).push(
@@ -503,10 +555,47 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
+  /// Multi-select download. One file uses the normal single-file save dialog;
+  /// several files are streamed into one chosen folder with real progress, so
+  /// "Save 5 items" can never quietly save just the first one.
   Future<void> _downloadSelected() async {
-    for (final path in _selected.toList()) {
-      final entry = _items.firstWhere((e) => e.path == path, orElse: () => FileEntry(name: path.split('/').last, path: path, type: 'file'));
-      await _downloadItem(entry);
+    final entries = _items.where((e) => _selected.contains(e.path)).toList();
+    if (entries.isEmpty) return;
+    if (entries.length == 1) {
+      _exitSelection();
+      await _downloadItem(entries.first);
+      return;
+    }
+
+    final destination = await _downloads.pickBatchDestination();
+    if (destination == null) return;
+    if (!mounted) return;
+
+    final cancel = CancelToken();
+    final outcome = await showDialog<BatchSaveResult>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _BatchDownloadDialog(
+        items: [
+          for (final e in entries)
+            (remotePath: e.path, fileName: e.name),
+        ],
+        directory: destination,
+        downloads: _downloads,
+        cancel: cancel,
+      ),
+    );
+    if (!mounted || outcome == null) return;
+    _exitSelection();
+    if (outcome.cancelled) {
+      _toast('Download stopped after ${outcome.saved} file(s).');
+    } else if (outcome.failures.isEmpty) {
+      _toast('Saved ${outcome.saved} file(s) to ${outcome.directory}');
+    } else {
+      _toast(
+        'Saved ${outcome.saved} of ${outcome.saved + outcome.failures.length}. '
+        '${outcome.failures.length} failed.',
+      );
     }
   }
 
@@ -539,7 +628,20 @@ class _FilesScreenState extends State<FilesScreen> {
         onRefresh: load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          children: const [SizedBox(height: 40)],
+          children: [
+            SizedBox(height: MediaQuery.sizeOf(context).height * 0.16),
+            OneUiEmptyState(
+              icon: _path.isEmpty
+                  ? Icons.cloud_upload_outlined
+                  : Icons.folder_open_rounded,
+              title: _path.isEmpty ? 'Your cloud is empty' : 'This folder is empty',
+              hint: _path.isEmpty
+                  ? 'Upload files or create a folder to get started.'
+                  : 'Upload something here, or move files in from another folder.',
+              actionLabel: 'Upload files',
+              onAction: _pickAndUpload,
+            ),
+          ],
         ),
       );
     }
@@ -566,6 +668,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 final e = sorted[i];
                 return OneUiFileGridTile(
                   entry: e,
+                  thumbnail: _thumbFor(e),
                   selected: _selected.contains(e.path),
                   selecting: _selecting,
                   onTap: (v) => _openEntry(v),
@@ -615,6 +718,7 @@ class _FilesScreenState extends State<FilesScreen> {
   Widget _fileRow(FileEntry e) {
     return OneUiFileTile(
       entry: e,
+      thumbnail: _thumbFor(e),
       selected: _selected.contains(e.path),
       selecting: _selecting,
       onTap: (v) => _openEntry(v),
@@ -631,6 +735,8 @@ class _FilesScreenState extends State<FilesScreen> {
             ),
     );
   }
+
+  // ---- batch download dialog is declared at file scope, below the state ----
 
   void _showFileMenu(BuildContext context, FileEntry entry) {
     showOneUiSheet<void>(
@@ -725,6 +831,7 @@ class _ViewArea extends StatelessWidget {
   final VoidCallback? onUpload;
   final VoidCallback? onSearch;
   final VoidCallback? onScan;
+  final VoidCallback? onSort;
 
   const _ViewArea({
     required this.title,
@@ -740,6 +847,7 @@ class _ViewArea extends StatelessWidget {
     this.onUpload,
     this.onSearch,
     this.onScan,
+    this.onSort,
   });
 
   @override
@@ -786,12 +894,6 @@ class _ViewArea extends StatelessWidget {
               ],
             ),
           ),
-          if (onBackToRoot != null && !selecting)
-            IconButton(
-              tooltip: 'Up to My files',
-              onPressed: onBackToRoot,
-              icon: const Icon(Icons.arrow_upward_rounded),
-            ),
           if (selecting)
             IconButton(
               tooltip: 'Cancel selection',
@@ -799,30 +901,89 @@ class _ViewArea extends StatelessWidget {
               icon: const Icon(Icons.close_rounded),
             )
           else ...[
+            // Three controls, not seven: the primary action stays on screen
+            // and the rest live in one overflow menu, so the page title still
+            // has room on a phone.
+            IconButton.filled(
+              tooltip: 'Upload files',
+              onPressed: onUpload,
+              icon: const Icon(Icons.upload_rounded),
+            ),
             IconButton(
               tooltip: 'Search files',
               onPressed: onSearch,
               icon: const Icon(Icons.search_rounded),
             ),
-            IconButton(
-              tooltip: isGrid ? 'List view' : 'Grid view',
-              onPressed: onToggleView,
-              icon: Icon(isGrid ? Icons.view_list_outlined : Icons.grid_view_outlined),
-            ),
-            IconButton(
-              tooltip: 'New folder',
-              onPressed: onNewFolder,
-              icon: const Icon(Icons.create_new_folder_outlined),
-            ),
-            IconButton(
-              tooltip: 'Scan document',
-              onPressed: onScan,
-              icon: const Icon(Icons.document_scanner_outlined),
-            ),
-            IconButton(
-              tooltip: 'Upload files',
-              onPressed: onUpload,
-              icon: const Icon(Icons.upload_outlined),
+            PopupMenuButton<String>(
+              tooltip: 'More actions',
+              icon: const Icon(Icons.more_vert_rounded),
+              onSelected: (value) {
+                switch (value) {
+                  case 'folder':
+                    onNewFolder?.call();
+                  case 'scan':
+                    onScan?.call();
+                  case 'sort':
+                    onSort?.call();
+                  case 'view':
+                    onToggleView();
+                  case 'up':
+                    onBackToRoot?.call();
+                }
+              },
+              itemBuilder: (context) => [
+                if (onNewFolder != null)
+                  const PopupMenuItem(
+                    value: 'folder',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.create_new_folder_outlined),
+                      title: Text('New folder'),
+                    ),
+                  ),
+                if (onScan != null)
+                  const PopupMenuItem(
+                    value: 'scan',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.document_scanner_outlined),
+                      title: Text('Scan document'),
+                    ),
+                  ),
+                if (onSort != null)
+                  const PopupMenuItem(
+                    value: 'sort',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.sort_rounded),
+                      title: Text('Sort by'),
+                    ),
+                  ),
+                PopupMenuItem(
+                  value: 'view',
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      isGrid ? Icons.view_list_outlined : Icons.grid_view_outlined,
+                    ),
+                    title: Text(isGrid ? 'List view' : 'Grid view'),
+                  ),
+                ),
+                if (onBackToRoot != null)
+                  const PopupMenuItem(
+                    value: 'up',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.arrow_upward_rounded),
+                      title: Text('Back to My files'),
+                    ),
+                  ),
+              ],
             ),
           ],
         ],
@@ -844,39 +1005,58 @@ class _Breadcrumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     final parts = path.split('/');
-    return Container(
-      height: 40,
-      color: Colors.transparent,
+    return SizedBox(
+      // Meets the 48dp touch-target floor so crumbs are actually tappable.
+      height: AppDimens.touchTarget,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppDimens.pageMargin),
+        padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
         children: [
-          _crumb(context, 'My files', '', true),
+          _crumb(context, brightness, 'My files', '', true),
           for (var i = 0; i < parts.length; i++) ...[
-            const Icon(Icons.chevron_right_rounded, size: 16),
-            _crumb(context, parts[i], parts.sublist(0, i + 1).join('/'), i == parts.length - 1),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 16,
+              color: AppColors.textTertiaryFor(brightness),
+            ),
+            _crumb(
+              context,
+              brightness,
+              parts[i],
+              parts.sublist(0, i + 1).join('/'),
+              i == parts.length - 1,
+            ),
           ],
         ],
       ),
     );
   }
 
-  Widget _crumb(BuildContext context, String label, String value, bool last) {
-    return GestureDetector(
-      onTap: last ? null : () => onBreadcrumb(value),
-      child: Center(
+  Widget _crumb(
+    BuildContext context,
+    Brightness brightness,
+    String label,
+    String value,
+    bool last,
+  ) {
+    return Semantics(
+      button: !last,
+      label: last ? '$label, current folder' : 'Go to $label',
+      child: InkWell(
+        onTap: last ? null : () => onBreadcrumb(value),
+        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
         child: Container(
-          margin: EdgeInsets.zero,
           alignment: Alignment.center,
+          constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space8),
           child: Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyle.caption.copyWith(
-              color: last
-                  ? AppColors.textPrimaryFor(Theme.of(context).brightness)
-                  : accent,
+              color: last ? AppColors.textPrimaryFor(brightness) : accent,
               fontWeight: last ? FontWeight.w600 : FontWeight.w500,
             ),
           ),
@@ -909,28 +1089,92 @@ class _GroupHeader extends StatelessWidget {
   }
 }
 
-Future<void> showFilesMenuFor(
-  BuildContext context, {
-  required Api api,
-  required List<Map<String, dynamic>> files,
-}) async {
-  final entries = files.map(FileEntry.fromJson).toList();
-  if (entries.isEmpty) return;
-  // Used by shared-browse / multi-select flows to reuse the selection bar logic.
-  final first = entries.first;
-  if (entries.length == 1 && first.category == Category.image) {
-    final images = files.where((e) {
-      final f = FileEntry.fromJson(e);
-      return f.category == Category.image;
-    }).toList();
-    final index = images.indexWhere((e) => (e['path']) == first.path);
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PhotoViewer(
-          photos: images,
-          initialIndex: index < 0 ? 0 : index,
-          api: api,
+/// Modal progress for a multi-file download. Shows the file being saved, the
+/// completed count, and resolves with the batch outcome.
+class _BatchDownloadDialog extends StatefulWidget {
+  final List<BatchItem> items;
+  final String directory;
+  final DownloadService downloads;
+  final CancelToken cancel;
+
+  const _BatchDownloadDialog({
+    required this.items,
+    required this.directory,
+    required this.downloads,
+    required this.cancel,
+  });
+
+  @override
+  State<_BatchDownloadDialog> createState() => _BatchDownloadDialogState();
+}
+
+class _BatchDownloadDialogState extends State<_BatchDownloadDialog> {
+  int _completed = 0;
+  String _current = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _run();
+  }
+
+  Future<void> _run() async {
+    final result = await widget.downloads.saveAllToDirectory(
+      items: widget.items,
+      directory: widget.directory,
+      cancel: widget.cancel,
+      onProgress: (completed, total, name) {
+        if (!mounted) return;
+        setState(() {
+          _completed = completed;
+          _current = name;
+        });
+      },
+    );
+    if (!mounted) return;
+    Navigator.of(context).pop(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: const Text('Saving files'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${widget.items.length} files to ${widget.directory}',
+              style: AppTextStyle.caption.copyWith(
+                color: AppColors.textSecondaryFor(brightness),
+              ),
+            ),
+            const SizedBox(height: AppDimens.space16),
+            LinearProgressIndicator(
+              value: widget.items.isEmpty ? null : _completed / widget.items.length,
+            ),
+            const SizedBox(height: AppDimens.space12),
+            Text(
+              _current,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyle.rowSubtitle.copyWith(
+                color: AppColors.textPrimaryFor(brightness),
+              ),
+            ),
+          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              widget.cancel.cancel();
+            },
+            child: const Text('Cancel'),
+          ),
+        ],
       ),
     );
   }

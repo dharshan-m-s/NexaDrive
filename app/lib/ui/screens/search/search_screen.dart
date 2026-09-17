@@ -4,16 +4,11 @@ import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
-import '../../../core/utils/file_kind.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../widgets/one_ui_file_tile.dart';
 import '../../widgets/one_ui_search_field.dart';
-import '../media/audio_player_screen.dart';
-import '../media/video_player_screen.dart';
-import '../photos/photo_viewer.dart';
-import '../viewers/pdf_viewer_screen.dart';
-import '../viewers/text_viewer_screen.dart';
+import '../../navigation/file_opener.dart';
 
 /// Focused One UI search mode.
 ///
@@ -72,45 +67,15 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  /// Results open exactly like they do everywhere else in the app, including
+  /// folders (which previously did nothing when tapped from search).
   void _open(FileEntry entry) {
-    switch (entry.category) {
-      case Category.image:
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => PhotoViewer(
-              photos: [entry.toJson()],
-              initialIndex: 0,
-              api: widget.api,
-            ),
-          ),
-        );
-      case Category.video:
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => VideoPlayerScreen(file: entry, api: widget.api),
-          ),
-        );
-      case Category.audio:
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => AudioPlayerScreen(file: entry, api: widget.api),
-          ),
-        );
-      case Category.pdf:
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => PdfViewerScreen(file: entry, api: widget.api),
-          ),
-        );
-      case Category.text:
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => TextViewerScreen(file: entry, api: widget.api),
-          ),
-        );
-      default:
-        break;
-    }
+    FileOpener.open(
+      context,
+      api: widget.api,
+      entry: entry,
+      siblings: _results,
+    );
   }
 
   @override

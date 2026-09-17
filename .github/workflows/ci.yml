@@ -188,6 +188,15 @@ jobs:
           workspaces: server
       - run: cargo build --release --locked
         working-directory: server
+      # End-to-end proof that a high-resolution upload survives the whole
+      # pipeline: original bytes byte-for-byte, a genuinely smaller thumbnail,
+      # working range requests, and honest share revocation. Runs against its
+      # own throwaway server on a spare port.
+      - name: Verify image quality end to end
+        run: |
+          sudo apt-get update && sudo apt-get install -y imagemagick uuid-runtime
+          chmod +x scripts/verify-image-quality.sh
+          scripts/verify-image-quality.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.9.3
         with:
           name: nexadrive-server-x86_64

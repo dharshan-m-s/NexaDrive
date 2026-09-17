@@ -43,6 +43,9 @@ class Api {
   final Session session;
   final http.Client _client;
 
+  /// Direct access for streaming use-cases (download service, media players).
+  http.Client get rawClient => _client;
+
   /// Upper bound for control-plane requests (JSON list/metadata/actions).
   /// On a silent network failure these would otherwise wait forever.
   static const _controlTimeout = Duration(seconds: 30);
@@ -428,21 +431,35 @@ class Api {
     _check(response);
   }
 
-  Future<Map<String, dynamic>> syncManifest({String? deviceId, String? deviceName}) async {
+  Future<Map<String, dynamic>> syncManifest({
+    String? deviceId,
+    String? deviceName,
+    String? platform,
+  }) async {
     final response = await _client.get(
-      _uri('/api/sync/manifest', {if (deviceId != null) 'device_id': deviceId, if (deviceName != null) 'device_name': deviceName}),
+      _uri('/api/sync/manifest', {
+        if (deviceId != null) 'device_id': deviceId,
+        if (deviceName != null) 'device_name': deviceName,
+        if (platform != null) 'platform': platform,
+      }),
       headers: _headers,
     );
     _check(response);
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> syncDelta({required String since, String? deviceId, String? deviceName}) async {
+  Future<Map<String, dynamic>> syncDelta({
+    required String since,
+    String? deviceId,
+    String? deviceName,
+    String? platform,
+  }) async {
     final response = await _client.get(
       _uri('/api/sync/delta', {
         'since': since,
         if (deviceId != null) 'device_id': deviceId,
         if (deviceName != null) 'device_name': deviceName,
+        if (platform != null) 'platform': platform,
       }),
       headers: _headers,
     );
@@ -458,6 +475,15 @@ class Api {
 
   Future<void> revokeSyncDevice(String id) async {
     final response = await _client.delete(_uri('/api/sync/devices', {'id': id}), headers: _headers);
+    _check(response);
+  }
+
+  Future<void> renameSyncDevice(String id, String name) async {
+    final response = await _client.patch(
+      _uri('/api/sync/devices'),
+      headers: {..._headers, 'Content-Type': 'application/json'},
+      body: jsonEncode({'id': id, 'name': name}),
+    );
     _check(response);
   }
 
@@ -547,6 +573,16 @@ class Api {
   }
 
   String _messageFromBody(String body, int status) {
+    try {
+      return (jsonDecode(body) as Map)['error']?.toString() ?? 'Request failed';
+    } catch (_) {
+      return 'Request failed ($status)';
+    }
+  }
+
+  /// Public wrapper used by the download service to surface server error
+  /// messages from streamed (non-JSON-buffered) responses.
+  static String messageFromBody(String body, int status) {
     try {
       return (jsonDecode(body) as Map)['error']?.toString() ?? 'Request failed';
     } catch (_) {

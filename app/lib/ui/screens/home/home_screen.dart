@@ -68,7 +68,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<List<FileEntry>> _readRecent() async {
-    final raw = await widget.api.listFiles('/');
+    // The API root is '' — the server rejects '/' as an absolute path.
+    final raw = await widget.api.listFiles('');
     final entries = raw
         .map(FileEntry.fromJson)
         .where((e) => !e.isFolder && e.modified != null)

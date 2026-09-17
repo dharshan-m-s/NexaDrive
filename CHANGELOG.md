@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+### Image quality
+
+- **One image pipeline, two incompatible renditions.** Image handling now
+  lives in `app/lib/services/image_pipeline.dart`. `ImageRendition.original`
+  fetches `/api/files/download` and returns those bytes untouched;
+  `ImageRendition.thumbnail` fetches the server's generated preview. Every
+  cache key carries the rendition, so a thumbnail can no longer satisfy an
+  original request — the class of bug behind the blurred photo viewer is now
+  unrepresentable rather than merely fixed.
+- Both in-memory caches are bounded by entries *and* bytes (24 MB of
+  thumbnails, 96 MB of originals), and the grid decodes at tile size via
+  `cacheWidth`, so browsing a large library no longer grows memory without
+  limit.
+- On-disk caches are keyed by **account**, not just server: two users on one
+  server have identical relative paths, so the previous key let one account
+  read another's cached previews on a shared device.
+- Photo viewer: originals only, an explicit retryable error state instead of
+  a blank frame, previous/next controls, move-to-trash, and a dimmed
+  thumbnail placeholder that cannot be mistaken for the final image.
+- New `app/test/image_pipeline_test.dart` — 16 assertions covering JPEG, PNG
+  and WebP round-trips byte-for-byte, thumbnail/original key separation,
+  cache bounding, graceful failure for unrenderable formats, and a widget
+  test proving the viewer calls `/api/files/download` and never the
+  thumbnail endpoint.
+- New `scripts/verify-image-quality.sh` — 23 runtime assertions against a
+  throwaway server (real 4000x3000 photo, byte-for-byte download, smaller
+  thumbnail, range requests, share revocation). Now part of CI.
+
+### Server
+
+- Downloads return real MIME types, advertise `Accept-Ranges`, and honour a
+  single `Range` request with `206`, so video and audio seeking works. HTML,
+  SVG and JavaScript are always forced to `attachment`.
+- Thumbnails apply EXIF orientation, so phone photos no longer preview
+  sideways.
+- Sync devices record their platform; `PATCH /api/sync/devices` renames one,
+  and `DELETE` revokes it. A revoked device re-registers on its next sync
+  instead of failing forever.
+- **Sharing honesty**: a directory can no longer be turned into a public
+  link that could never resolve — the request is refused up front in favour
+  of sharing with a named user.
+
 ### Fixes & polish
 
 - **Folder navigation**: the server serializes file entries with a `kind`
