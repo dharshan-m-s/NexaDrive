@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/models/file_entry.dart';
 import '../../../services/api.dart';
 import '../../widgets/one_ui_empty_state.dart';
 
@@ -86,7 +87,7 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
   }
 
   void _open(Map<String, dynamic> item) {
-    final type = item['type'] as String? ?? 'file';
+    final type = FileEntry.kindOf(item);
     final name = item['name'] as String? ?? '';
     if (type != 'folder') {
       _download(item);
@@ -146,7 +147,7 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: AppDimens.space2),
                   itemBuilder: (context, i) {
                     final item = items[i];
-                    final type = item['type'] as String? ?? 'file';
+                    final type = FileEntry.kindOf(item);
                     final isFolder = type == 'folder';
                     final name = item['name'] as String? ?? '';
                     final size = (item['size'] as num?)?.toInt();

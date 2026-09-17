@@ -1,5 +1,6 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
-import 'dart:ui';
+import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../../../core/models/file_entry.dart';
@@ -141,13 +142,13 @@ class _PhotoViewerState extends State<PhotoViewer> {
               if (bytes == null) {
                 _ensureCached(i);
                 return const Center(
-                  child: CircularProgressIndicator(color: Colors.white54, strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                    color: Colors.white54,
+                    strokeWidth: 2,
+                  ),
                 );
               }
-              return InteractiveViewer(
-                maxScale: 5,
-                child: Center(child: Image.memory(bytes, fit: BoxFit.contain)),
-              );
+              return _ZoomablePhoto(bytes: bytes);
             },
           ),
           // Bottom bar (translucent — One UI photo viewer keeps controls low).
@@ -156,7 +157,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
             right: 0,
             bottom: 0,
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
               child: Container(
                 color: Colors.white.withValues(alpha: 0.06),
                 child: SafeArea(
@@ -167,11 +168,6 @@ class _PhotoViewerState extends State<PhotoViewer> {
                       IconButton(
                         tooltip: 'Download',
                         icon: const Icon(Icons.download_outlined, color: Colors.white),
-                        onPressed: _downloadCurrent,
-                      ),
-                      IconButton(
-                        tooltip: 'Save to My files',
-                        icon: const Icon(Icons.save_alt_rounded, color: Colors.white),
                         onPressed: _downloadCurrent,
                       ),
                       IconButton(
@@ -187,6 +183,167 @@ class _PhotoViewerState extends State<PhotoViewer> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Pans/zooms a photo while keeping its original pixels on screen.
+///
+/// The decoded [RawImage] lays out at *native* resolution and the
+/// [InteractiveViewer]'s own transform provides the initial "fit" scale, so
+/// pinching in reveals real texture instead of a re-scaled preview. The
+/// classic `FittedBox`-in-viewer approach collapses the image to screen size
+/// in the layer tree; here the transform is the only scale applied, which
+/// keeps 1:1 clarity all the way up.
+class _ZoomablePhoto extends StatefulWidget {
+  final Uint8List bytes;
+  const _ZoomablePhoto({required this.bytes});
+
+  @override
+  State<_ZoomablePhoto> createState() => _ZoomablePhotoState();
+}
+
+class _ZoomablePhotoState extends State<_ZoomablePhoto>
+    with SingleTickerProviderStateMixin {
+  final TransformationController _transform = TransformationController();
+  ui.Image? _image;
+  Size? _viewport;
+  double _fit = 1;
+  bool _fitted = false;
+  double? _pendingFit;
+
+  late final AnimationController _zoomAnim;
+  Matrix4Tween? _zoomTween;
+
+  @override
+  void initState() {
+    super.initState();
+    _decode();
+    _zoomAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+    _zoomAnim.addListener(() {
+      final tween = _zoomTween;
+      if (tween != null) _transform.value = tween.transform(_zoomAnim.value);
+    });
+    _zoomAnim.addStatusListener((status) {
+      if (status == AnimationStatus.completed) _zoomTween = null;
+    });
+  }
+
+  @override
+  void dispose() {
+    _zoomAnim.dispose();
+    _transform.dispose();
+    _image?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _decode() async {
+    ui.Image? decoded;
+    try {
+      final codec = await ui.instantiateImageCodec(widget.bytes);
+      final frame = await codec.getNextFrame();
+      decoded = frame.image;
+      codec.dispose();
+    } catch (_) {
+      return;
+    }
+    if (!mounted) {
+      decoded.dispose();
+      return;
+    }
+    setState(() => _image = decoded);
+  }
+
+  double _fitFor(Size viewport, Size photo) {
+    if (photo.width <= 0 || photo.height <= 0) return 1;
+    return math.min(
+          viewport.width / photo.width,
+          viewport.height / photo.height,
+        )
+        .clamp(0.02, 4.0);
+  }
+
+  /// Maps the image centre onto the viewport centre at [scale].
+  Matrix4 _matrixFor(double scale, Size viewport, Size photo) {
+    return Matrix4.identity()
+      ..translateByDouble(viewport.width / 2, viewport.height / 2, 0, 1)
+      ..scaleByDouble(scale, scale, 1, 1)
+      ..translateByDouble(-photo.width / 2, -photo.height / 2, 0, 1);
+  }
+
+  void _applyFit() {
+    final img = _image;
+    final vp = _viewport;
+    final fit = _pendingFit;
+    if (img == null || vp == null || fit == null) return;
+    // Never stomp an in-flight pinch or double-tap animation.
+    if (_fitted && !_zoomAnim.isAnimating) return;
+    _transform.value = _matrixFor(fit, vp, Size(img.width.toDouble(), img.height.toDouble()));
+    _fitted = true;
+  }
+
+  void _toggleZoom() {
+    final vp = _viewport;
+    final img = _image;
+    if (vp == null || img == null) return;
+    final nowScale = _transform.value.getMaxScaleOnAxis();
+    final target = nowScale > _fit * 1.25 ? _fit : _fit * 3.0;
+    final end = _matrixFor(
+      target,
+      vp,
+      Size(img.width.toDouble(), img.height.toDouble()),
+    );
+    _zoomTween = Matrix4Tween(begin: _transform.value.clone(), end: end);
+    _zoomAnim.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+        _viewport = viewport;
+        final img = _image;
+        if (img == null) {
+          return const Center(
+            child: CircularProgressIndicator(
+              color: Colors.white54,
+              strokeWidth: 2,
+            ),
+          );
+        }
+        final photo = Size(img.width.toDouble(), img.height.toDouble());
+        final fit = _fitFor(viewport, photo);
+        if ((_fit - fit).abs() > 0.0001) {
+          _fit = fit;
+          _pendingFit = fit;
+          WidgetsBinding.instance.addPostFrameCallback((_) => _applyFit());
+        } else if (!_fitted) {
+          _pendingFit ??= fit;
+          WidgetsBinding.instance.addPostFrameCallback((_) => _applyFit());
+        }
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onDoubleTap: _toggleZoom,
+          child: InteractiveViewer(
+            transformationController: _transform,
+            constrained: false,
+            minScale: math.max(_fit * 0.9, 0.5),
+            maxScale: math.max(_fit * 8, 1.4),
+            clipBehavior: Clip.none,
+            child: RawImage(
+              image: img,
+              fit: BoxFit.none,
+              filterQuality: FilterQuality.high,
+              isAntiAlias: true,
+            ),
+          ),
+        );
+      },
     );
   }
 }

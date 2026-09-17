@@ -380,4 +380,29 @@ class UpdateCache {
       } catch (_) {}
     }
   }
+
+  /// Deletes every file inside the update cache directory (installers,
+  /// `.part` partials, leftover ZIP/APK downloads).
+  ///
+  /// Called once the install is confirmed so nothing lingers on disk. All
+  /// operations are best-effort: a missing directory is not an error.
+  static Future<void> clearAll() async {
+    Directory dir;
+    try {
+      dir = await UpdateDownloader.cacheDirectory();
+    } catch (_) {
+      return;
+    }
+    if (!dir.existsSync()) return;
+    final entries = dir.listSync(followLinks: false);
+    for (final entry in entries) {
+      try {
+        if (entry is File) {
+          entry.deleteSync();
+        } else if (entry is Directory) {
+          entry.deleteSync(recursive: true);
+        }
+      } catch (_) {}
+    }
+  }
 }

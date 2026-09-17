@@ -378,8 +378,13 @@ class Api {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  Future<void> updateUser(String id, {String? displayName, String? role, bool? disabled, int? quotaBytes}) async {
-    final response = await _client.put(_uri('/api/admin/users/$id'), headers: {..._headers, 'Content-Type': 'application/json'}, body: jsonEncode({if (displayName != null) 'display_name': displayName, if (role != null) 'role': role, if (disabled != null) 'disabled': disabled, if (quotaBytes != null) 'quota_bytes': quotaBytes}));
+  Future<void> updateUser(String id, {String? displayName, String? role, bool? disabled, int? quotaBytes, String? password}) async {
+    final response = await _client.put(_uri('/api/admin/users/$id'), headers: {..._headers, 'Content-Type': 'application/json'}, body: jsonEncode({if (displayName != null) 'display_name': displayName, if (role != null) 'role': role, if (disabled != null) 'disabled': disabled, if (quotaBytes != null) 'quota_bytes': quotaBytes, if (password != null && password.isNotEmpty) 'password': password}));
+    _check(response);
+  }
+
+  Future<void> deleteUser(String id) async {
+    final response = await _client.delete(_uri('/api/admin/users/$id'), headers: _headers);
     _check(response);
   }
 

@@ -26,10 +26,16 @@ class FileEntry {
 
   DateTime? get modified => modifiedAt == null ? null : DateTime.tryParse(modifiedAt!);
 
+  /// The entry kind from raw API JSON. The server historically serialized
+  /// this as `kind`; clients made it `type`. Accept both so old and new server
+  /// builds behave identically.
+  static String kindOf(Map<String, dynamic> j) =>
+      (j['type'] ?? j['kind'] ?? 'file').toString();
+
   factory FileEntry.fromJson(Map<String, dynamic> j) => FileEntry(
         name: j['name']?.toString() ?? (j['path']?.toString() ?? '').split('/').last,
         path: j['path']?.toString() ?? '',
-        type: j['type']?.toString() ?? 'file',
+        type: kindOf(j),
         size: (j['size'] as num?)?.toInt(),
         modifiedAt: j['modified_at']?.toString(),
         pinned: j['pinned'] as bool?,

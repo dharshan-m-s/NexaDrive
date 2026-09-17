@@ -218,6 +218,10 @@ struct UpdateUserRequest {
     role: Option<String>,
     disabled: Option<bool>,
     quota_bytes: Option<i64>,
+    /// Optional new password. When present, the password is re-hashed and the
+    /// user's existing sessions are revoked (a password change invalidates
+    /// every active session as a security baseline).
+    password: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -490,7 +494,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/auth/logout", post(logout))
         .route("/api/me", get(me))
         .route("/api/admin/users", get(list_users).post(create_user))
-        .route("/api/admin/users/{id}", put(update_user))
+        .route(
+            "/api/admin/users/{id}",
+            put(update_user).delete(delete_user),
+        )
         .route("/api/admin/audit", get(list_audit))
         .route(
             "/api/shares",
@@ -1692,12 +1699,77 @@ async fn update_user(
     {
         return Err(AppError::BadRequest("Display name cannot be empty".into()));
     }
-    let result = sqlx::query("UPDATE users SET display_name=COALESCE($1,display_name), role=COALESCE($2,role), disabled=COALESCE($3,disabled), quota_bytes=COALESCE($4,quota_bytes) WHERE id=$5")
-        .bind(payload.display_name.map(|v| v.trim().to_string())).bind(payload.role).bind(payload.disabled).bind(payload.quota_bytes).bind(id).execute(&state.db).await?;
+    if payload
+        .password
+        .as_deref()
+        .is_some_and(|v| v.is_empty() || v.len() < 10)
+    {
+        return Err(AppError::BadRequest(
+            "Password must be at least 10 characters".into(),
+        ));
+    }
+    let new_hash = match payload.password.as_deref() {
+        Some(pw) => Some(hash_password(pw)?),
+        None => None,
+    };
+    let result = sqlx::query("UPDATE users SET display_name=COALESCE($1,display_name), role=COALESCE($2,role), disabled=COALESCE($3,disabled), quota_bytes=COALESCE($4,quota_bytes), password_hash=COALESCE($5,password_hash) WHERE id=$6")
+        .bind(payload.display_name.map(|v| v.trim().to_string())).bind(payload.role).bind(payload.disabled).bind(payload.quota_bytes).bind(new_hash).bind(id).execute(&state.db).await?;
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound);
     }
+    if payload.password.is_some() {
+        // A password change revokes every active session for that user.
+        sqlx::query("DELETE FROM sessions WHERE user_id=$1")
+            .bind(id)
+            .execute(&state.db)
+            .await?;
+    }
     audit(&state.db, admin_id, "update_user", Some(&id.to_string())).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Deletes a user and everything they own: their files on disk (root + trash
+/// folders), shares, trash metadata, sync fingerprints, sessions, and
+/// notifications. Cascades are handled by the schema (ON DELETE CASCADE); the
+/// on-disk folders are removed best-effort after the row is deleted.
+async fn delete_user(
+    State(state): State<AppState>,
+    axum::extract::Extension(admin_id): axum::extract::Extension<Uuid>,
+    axum::extract::Path(id): axum::extract::Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    require_admin(&state.db, admin_id).await?;
+    if id == admin_id {
+        return Err(AppError::BadRequest(
+            "You cannot delete your own account".into(),
+        ));
+    }
+    let row = sqlx::query("SELECT username FROM users WHERE id=$1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await?;
+    let Some(row) = row else {
+        return Err(AppError::NotFound);
+    };
+    let username: String = row.get("username");
+
+    sqlx::query("DELETE FROM users WHERE id=$1")
+        .bind(id)
+        .execute(&state.db)
+        .await?;
+
+    // Best-effort on-disk cleanup: files live in <storage>/<user_id> and
+    // trash in <storage>/.trash/<user_id>. A failure here must not fail the
+    // account deletion — orphaned directories are inert, and re-creating a
+    // user uses a fresh UUID so there is no accidental name collision.
+    for dir in [user_root(&state, id), trash_root(&state, id)] {
+        match fs::remove_dir_all(&dir).await {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => {}
+        }
+    }
+
+    audit(&state.db, admin_id, "delete_user", Some(&username)).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

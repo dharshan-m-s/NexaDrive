@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
+import '../../../core/models/file_entry.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../widgets/one_ui_empty_state.dart';
@@ -107,7 +108,7 @@ class _TrashScreenState extends State<TrashScreen> {
                     separatorBuilder: (_, __) => const SizedBox(height: AppDimens.space2),
                     itemBuilder: (context, i) {
                       final item = _items[i];
-                      final isFolder = (item['type'] as String? ?? 'file') == 'folder';
+                      final isFolder = FileEntry.kindOf(item) == 'folder';
                       final deletedAt =
                           Format.relTime(DateTime.tryParse(item['deleted_at']?.toString() ?? ''));
                       return OneUiSurface(

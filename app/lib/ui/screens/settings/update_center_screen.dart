@@ -12,6 +12,10 @@ import '../../widgets/one_ui_page.dart';
 
 /// The Update Center: checks GitHub Releases through the signed manifest,
 /// downloads a verified installer, and hands it to the platform's installer.
+///
+/// Layout is the standard One UI grouped-list rhythm: a "Status" list row
+/// answers `where am I`, one primary action moves the story forward, and
+/// "Release details" / "What's new" groups add context. No banner boxes.
 class UpdateCenterScreen extends StatelessWidget {
   final UpdateController controller;
 
@@ -32,11 +36,11 @@ class UpdateCenterScreen extends StatelessWidget {
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _StatusPanel(controller: controller),
+              _StatusGroup(controller: controller),
               const SizedBox(height: AppDimens.space20),
               _ActionArea(controller: controller),
               if (controller.hasUpdate && controller.selectedArtifact == null) ...[
-                const SizedBox(height: AppDimens.space16),
+                const SizedBox(height: AppDimens.space12),
                 _NoticePanel(
                   icon: Icons.unfold_more_rounded,
                   color: AppColors.warningFor(brightness),
@@ -48,12 +52,11 @@ class UpdateCenterScreen extends StatelessWidget {
               ],
               if (controller.resolvedPlatform == AppPlatform.linux &&
                   controller.hasUpdate &&
-                  (controller.installationKind ==
-                          null ||
+                  (controller.installationKind == null ||
                       controller.installationKind ==
                           InstallationKind.unknown) &&
                   controller.selectedArtifact == null) ...[
-                const SizedBox(height: AppDimens.space16),
+                const SizedBox(height: AppDimens.space12),
                 _NoticePanel(
                   icon: Icons.widgets_outlined,
                   color: AppColors.warningFor(brightness),
@@ -83,21 +86,21 @@ class UpdateCenterScreen extends StatelessWidget {
                 ),
               ],
               if (status == UpdateStatus.installingHandoff) ...[
-                const SizedBox(height: AppDimens.space16),
+                const SizedBox(height: AppDimens.space12),
                 _InstallHint(controller: controller),
               ],
               if (status == UpdateStatus.readyToInstall &&
                   controller.installerKind == 'deb') ...[
-                const SizedBox(height: AppDimens.space16),
+                const SizedBox(height: AppDimens.space12),
                 _DebActions(controller: controller),
               ],
               if (controller.manifest != null) ...[
-                const SizedBox(height: AppDimens.space28),
+                const SizedBox(height: AppDimens.space24),
                 _DetailsGroup(controller: controller),
               ],
               if (controller.manifest != null &&
                   !controller.manifest!.releaseNotes.isEmpty) ...[
-                const SizedBox(height: AppDimens.space28),
+                const SizedBox(height: AppDimens.space24),
                 _ReleaseNotesGroup(controller: controller),
               ],
               const SizedBox(height: AppDimens.space24),
@@ -148,190 +151,269 @@ class UpdateCenterScreen extends StatelessWidget {
   }
 }
 
-class _StatusPanel extends StatelessWidget {
+/// The status section: a normal One UI row shows the current decision, with a
+/// quiet progress bar below it while the controller is working.
+class _StatusGroup extends StatelessWidget {
   final UpdateController controller;
-  const _StatusPanel({required this.controller});
+  const _StatusGroup({required this.controller});
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final status = controller.status;
-    final (icon, label, color) = _statusVisual(status, brightness);
+    final (icon, headline, color) = _statusVisual(status, brightness);
+    final working = status == UpdateStatus.checking ||
+        status == UpdateStatus.downloading ||
+        status == UpdateStatus.verifying;
 
-    final containerColor = switch (status) {
-      UpdateStatus.completed => AppColors.successContainerFor(brightness),
-      UpdateStatus.failed ||
-      UpdateStatus.cancelled =>
-        AppColors.errorContainerFor(brightness),
-      UpdateStatus.offline ||
-      UpdateStatus.unsupported ||
-      UpdateStatus.needsUserAction =>
-        AppColors.warningContainerFor(brightness),
-      UpdateStatus.mandatory => AppColors.warningContainerFor(brightness),
-      _ => AppColors.accentContainerFor(brightness),
-    };
-    final onContainer = switch (status) {
-      UpdateStatus.completed => AppColors.onSuccessContainerFor(brightness),
-      UpdateStatus.failed ||
-      UpdateStatus.cancelled =>
-        AppColors.onErrorContainerFor(brightness),
-      UpdateStatus.offline ||
-      UpdateStatus.unsupported ||
-      UpdateStatus.needsUserAction =>
-        AppColors.onWarningContainerFor(brightness),
-      UpdateStatus.mandatory => AppColors.onWarningContainerFor(brightness),
-      _ => AppColors.onAccentContainerFor(brightness),
-    };
-
-    final current = controller.currentVersion?.toString() ?? '—';
-    final latest = controller.manifestVersionLabel ?? '—';
-
-    return Semantics(
-      container: true,
-      label: '$label. Current version $current. Latest version $latest.',
-      child: AnimatedContainer(
-        duration: AppMotion.resolve(context, AppMotion.fast),
-        curve: AppMotion.standard,
-        padding: const EdgeInsets.all(AppDimens.space16),
-        decoration: BoxDecoration(
-          color: containerColor,
-          borderRadius: BorderRadius.circular(AppDimens.radiusCard),
+    return OneUiGroupedList(
+      header: 'Status',
+      children: [
+        OneUiGroupTile(
+          icon: icon,
+          iconColor: color,
+          iconBackground: color.withValues(alpha: 0.14),
+          title: headline,
+          subtitle: _statusLine(controller),
+          showChevron: false,
+          onTap: null,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                AnimatedSwitcher(
-                  duration: AppMotion.resolve(context, AppMotion.fast),
-                  child: Icon(
-                    icon,
-                    key: ValueKey(icon),
-                    color: color,
-                    size: AppDimens.iconMedium,
-                  ),
-                ),
-                const SizedBox(width: AppDimens.space8),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: AppTextStyle.sectionHeader.copyWith(
-                      color: onContainer,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppDimens.space12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _VersionChip(label: 'Current', value: current, color: onContainer),
-                const SizedBox(width: AppDimens.space8),
-                _VersionChip(label: 'Latest', value: latest, color: onContainer),
-              ],
-            ),
-          ],
-        ),
-      ),
+        if (working)
+          _ProgressRow(
+            controller: controller,
+            color: color,
+            inProgress: status == UpdateStatus.downloading &&
+                controller.progress > 0,
+          ),
+      ],
     );
   }
 
-  (IconData, String, Color) _statusVisual(UpdateStatus status, Brightness b) {
-    final accent = AppColors.accentFor(b);
-    final success = AppColors.successFor(b);
-    final warning = AppColors.warningFor(b);
-    final error = AppColors.errorFor(b);
-    switch (status) {
+  /// A single-line summary of the current → latest versions.
+  String _statusLine(UpdateController c) {
+    final current = c.currentVersion?.toString();
+    final latest = c.manifestVersionLabel;
+    final versions = current != null && latest != null && current != latest
+        ? 'NexaDrive v$current \u2192 v$latest'
+        : current != null
+            ? 'NexaDrive v$current'
+            : 'NexaDrive';
+    switch (c.status) {
       case UpdateStatus.idle:
-        return (Icons.system_update_alt_rounded, 'Not checked yet', accent);
+        return c.latestKnownLabel != null
+            ? 'Latest known version ${c.latestKnownLabel}'
+            : 'Not checked yet';
       case UpdateStatus.checking:
-        return (Icons.cloud_sync_outlined, 'Checking for updates…', accent);
-      case UpdateStatus.upToDate:
-        return (Icons.check_circle_outline_rounded, 'Up to date', success);
-      case UpdateStatus.updateAvailable:
-        return (Icons.system_update_alt_rounded, 'Update available', accent);
-      case UpdateStatus.mandatory:
-        return (Icons.error_outline_rounded, 'Mandatory update', warning);
+        return 'Contacting the release server\u2026';
       case UpdateStatus.downloading:
-        return (Icons.download_rounded, 'Downloading', accent);
+        return 'Fetching the verified installer\u2026';
       case UpdateStatus.verifying:
-        return (Icons.verified_rounded, 'Verifying download', accent);
-      case UpdateStatus.readyToInstall:
-        return (Icons.inventory_2_outlined, 'Ready to install', accent);
-      case UpdateStatus.installingHandoff:
-        return (Icons.handyman_outlined, 'Continue in the installer', accent);
+        return 'Verifying checksums\u2026';
+      case UpdateStatus.upToDate:
+        return 'You are on the latest version';
+      case UpdateStatus.updateAvailable:
+        return latest != null ? 'v$latest is ready for your device' : versions;
+      case UpdateStatus.mandatory:
+        return latest != null ? 'v$latest is required to continue' : versions;
       case UpdateStatus.completed:
-        return (Icons.check_circle_rounded, 'Installed', success);
-      case UpdateStatus.failed:
-        return (Icons.error_rounded, 'Update failed', error);
+        return 'The update was installed successfully';
       case UpdateStatus.cancelled:
-        return (Icons.cancel_outlined, 'Cancelled', warning);
+        return 'The download was cancelled';
+      case UpdateStatus.failed:
+        return c.errorMessage ?? 'The update could not be completed';
       case UpdateStatus.offline:
-        return (Icons.cloud_off_rounded, 'Offline', warning);
+        return 'No internet connection';
+      case UpdateStatus.readyToInstall:
+        return 'The verified installer is ready';
+      case UpdateStatus.installingHandoff:
+        return 'Finish the installation in the system dialog';
       case UpdateStatus.unsupported:
-        return (Icons.priority_high_rounded, 'Unsupported', warning);
+        return c.errorMessage ?? 'Updates are not supported on this platform';
       case UpdateStatus.needsUserAction:
-        return (Icons.lock_outline_rounded, 'Permission needed', warning);
+        return 'Android needs permission to install the update';
     }
   }
 }
 
-class _VersionChip extends StatelessWidget {
-  final String label;
-  final String value;
+(IconData, String, Color) _statusVisual(UpdateStatus status, Brightness b) {
+  final accent = AppColors.accentFor(b);
+  final success = AppColors.successFor(b);
+  final warning = AppColors.warningFor(b);
+  final error = AppColors.errorFor(b);
+  // (icon, headline, color)
+  return switch (status) {
+    UpdateStatus.idle => (Icons.system_update_alt_rounded, 'Not checked yet', accent),
+    UpdateStatus.checking => (Icons.cloud_sync_outlined, 'Checking for updates', accent),
+    UpdateStatus.upToDate => (Icons.check_circle_rounded, 'Up to date', success),
+    UpdateStatus.updateAvailable => (Icons.system_update_alt_rounded, 'Update available', accent),
+    UpdateStatus.mandatory => (Icons.error_outline_rounded, 'Mandatory update', warning),
+    UpdateStatus.downloading => (Icons.download_rounded, 'Downloading', accent),
+    UpdateStatus.verifying => (Icons.verified_rounded, 'Verifying download', accent),
+    UpdateStatus.readyToInstall => (Icons.inventory_2_outlined, 'Ready to install', accent),
+    UpdateStatus.installingHandoff => (Icons.handyman_outlined, 'Continue in the installer', accent),
+    UpdateStatus.completed => (Icons.check_circle_rounded, 'Installed', success),
+    UpdateStatus.failed => (Icons.error_rounded, 'Update failed', error),
+    UpdateStatus.cancelled => (Icons.cancel_outlined, 'Cancelled', warning),
+    UpdateStatus.offline => (Icons.cloud_off_rounded, 'Offline', warning),
+    UpdateStatus.unsupported => (Icons.priority_high_rounded, 'Unsupported', warning),
+    UpdateStatus.needsUserAction => (Icons.lock_outline_rounded, 'Permission needed', warning),
+  };
+}
+
+/// A quiet progress bar that sits in the Status panel while work is in
+/// flight. Downloads show a quantifiable bar + bytes; check/verify phases
+/// show a gentle pulse so the surface never looks stuck.
+class _ProgressRow extends StatelessWidget {
+  final UpdateController controller;
   final Color color;
-  const _VersionChip({required this.label, required this.value, required this.color});
+  final bool inProgress;
+  const _ProgressRow({
+    required this.controller,
+    required this.color,
+    required this.inProgress,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space12, vertical: AppDimens.space6,
+    final received = controller.receivedBytes;
+    final total = controller.totalBytes;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppDimens.space16, AppDimens.space4, AppDimens.space16, AppDimens.space16,
       ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-      ),
-      child: Text(
-        '$label  $value',
-        style: AppTextStyle.chipLabel.copyWith(color: color),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            child: inProgress
+                ? TweenAnimationBuilder<double>(
+                    tween: Tween(
+                      begin: 0,
+                      end: controller.progress.clamp(0.0, 1.0),
+                    ),
+                    duration: AppMotion.resolve(context, AppMotion.normal),
+                    curve: AppMotion.standard,
+                    builder: (context, v, _) => LinearProgressIndicator(
+                      value: v,
+                      minHeight: 6,
+                      color: color,
+                      backgroundColor:
+                          color.withValues(alpha: 0.12),
+                    ),
+                  )
+                : LinearProgressIndicator(
+                    minHeight: 6,
+                    color: color,
+                    backgroundColor: color.withValues(alpha: 0.12),
+                  ),
+          ),
+          const SizedBox(height: AppDimens.space10),
+          Row(
+            children: [
+              Expanded(
+                child: Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    inProgress
+                        ? '${_bytes(received)}'
+                            '${total != null ? ' of ${_bytes(total)} Downloaded' : ' downloaded'}'
+                        : controller.status == UpdateStatus.downloading
+                            ? 'Almost done\u2026'
+                            : 'Checking, this usually takes a moment.',
+                    style: AppTextStyle.caption.copyWith(
+                      color: AppColors.textSecondaryFor(Theme.of(context).brightness),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+              if (controller.status == UpdateStatus.downloading) ...[
+                Text(
+                  '${(controller.progress.clamp(0.0, 1.0) * 100).round()}%',
+                  style: AppTextStyle.chipLabel.copyWith(
+                    color: AppColors.textPrimaryFor(Theme.of(context).brightness),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                TextButton(
+                  onPressed: controller.cancelDownload,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.accentFor(Theme.of(context).brightness),
+                    minimumSize: const Size(44, 40),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimens.space8,
+                    ),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
+/// One primary action that moves the current state forward.
 class _ActionArea extends StatelessWidget {
   final UpdateController controller;
   const _ActionArea({required this.controller});
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     final status = controller.status;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         switch (status) {
           UpdateStatus.idle =>
-            _PrimaryButton(onPressed: () => controller.checkForUpdates(manual: true), label: 'Check for updates'),
+            _PrimaryButton(
+              onPressed: () => controller.checkForUpdates(manual: true),
+              label: 'Check for updates',
+            ),
           UpdateStatus.checking ||
           UpdateStatus.verifying ||
           UpdateStatus.downloading =>
-            _DownloadProgress(controller: controller, cancellable: status == UpdateStatus.downloading),
+            const SizedBox.shrink(),
           UpdateStatus.upToDate =>
-            _PrimaryButton(onPressed: () => controller.checkForUpdates(manual: true), label: 'Check again'),
+            _PrimaryButton(
+              onPressed: () => controller.checkForUpdates(manual: true),
+              label: 'Check again',
+            ),
           UpdateStatus.updateAvailable ||
           UpdateStatus.cancelled =>
-            _PrimaryButton(onPressed: controller.selectedArtifact == null ? null : () => controller.download(), label: 'Download & install'),
+            _PrimaryButton(
+              onPressed: controller.selectedArtifact == null
+                  ? null
+                  : controller.download,
+              label: 'Download & install',
+            ),
           UpdateStatus.mandatory =>
-            _PrimaryButton(onPressed: controller.selectedArtifact == null ? null : () => controller.download(), label: 'Download now'),
+            _PrimaryButton(
+              onPressed: controller.selectedArtifact == null
+                  ? null
+                  : controller.download,
+              label: 'Download now',
+            ),
           UpdateStatus.readyToInstall =>
-            _PrimaryButton(onPressed: () => controller.install(), label: _installLabel(controller)),
+            _PrimaryButton(
+              onPressed: controller.install,
+              label: _installLabel(controller),
+            ),
           UpdateStatus.installingHandoff =>
-            _PrimaryButton(onPressed: () => controller.reconcileAfterResume(), label: 'I completed the install'),
+            _PrimaryButton(
+              onPressed: controller.reconcileAfterResume,
+              label: 'I completed the install',
+            ),
           UpdateStatus.completed =>
-            _PrimaryButton(onPressed: () => controller.checkForUpdates(manual: true), label: 'Check again'),
+            _PrimaryButton(
+              onPressed: () => controller.checkForUpdates(manual: true),
+              label: 'Check again',
+            ),
           UpdateStatus.offline ||
           UpdateStatus.unsupported =>
             _ErrorBody(controller: controller),
@@ -343,14 +425,14 @@ class _ActionArea extends StatelessWidget {
             status == UpdateStatus.idle ||
             status == UpdateStatus.completed ||
             status == UpdateStatus.offline) ...[
-          const SizedBox(height: AppDimens.space8),
+          const SizedBox(height: AppDimens.space10),
           Center(
             child: Text(
               controller.latestKnownLabel != null
                   ? 'Last checked: ${controller.lastCheckLabel}'
                   : 'Latest known version is shown automatically.',
               style: AppTextStyle.caption.copyWith(
-                color: AppColors.textTertiaryFor(Theme.of(context).brightness),
+                color: AppColors.textTertiaryFor(brightness),
               ),
             ),
           ),
@@ -388,57 +470,6 @@ class _PrimaryButton extends StatelessWidget {
         textStyle: AppTextStyle.button,
       ),
       child: Text(label),
-    );
-  }
-}
-
-class _DownloadProgress extends StatelessWidget {
-  final UpdateController controller;
-  final bool cancellable;
-  const _DownloadProgress({required this.controller, required this.cancellable});
-
-  @override
-  Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final progress = controller.progress.clamp(0.0, 1.0);
-    final received = controller.receivedBytes;
-    final total = controller.totalBytes;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Semantics(
-          liveRegion: true,
-          label:
-              'Downloading ${_bytes(received)} of ${total == null ? 'unknown size' : _bytes(total)}',
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 10,
-              color: AppColors.accentFor(brightness),
-              backgroundColor: AppColors.dividerFor(brightness),
-            ),
-          ),
-        ),
-        const SizedBox(height: AppDimens.space10),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '${_bytes(received)}${total != null ? ' / ${_bytes(total)}' : ''}',
-                style: AppTextStyle.caption.copyWith(
-                  color: AppColors.textSecondaryFor(brightness),
-                ),
-              ),
-            ),
-            if (cancellable)
-              TextButton(
-                onPressed: controller.cancelDownload,
-                child: const Text('Cancel'),
-              ),
-          ],
-        ),
-      ],
     );
   }
 }
@@ -493,7 +524,7 @@ class _UpdateFailedBody extends StatelessWidget {
         const SizedBox(height: AppDimens.space12),
         _PrimaryButton(
           onPressed: wasDownloading
-              ? () => controller.retryDownload()
+              ? controller.retryDownload
               : () => controller.checkForUpdates(manual: true),
           label: wasDownloading ? 'Retry download' : 'Try again',
         ),
@@ -522,12 +553,12 @@ class _InstallBlockedBody extends StatelessWidget {
         ),
         const SizedBox(height: AppDimens.space12),
         _PrimaryButton(
-          onPressed: () => controller.install(),
+          onPressed: controller.install,
           label: 'Install now',
         ),
         const SizedBox(height: AppDimens.space8),
         OutlinedButton.icon(
-          onPressed: () => controller.requestInstallPermission(),
+          onPressed: controller.requestInstallPermission,
           icon: const Icon(Icons.settings_rounded, size: AppDimens.iconSmall),
           label: const Text('Open install permission settings'),
           style: OutlinedButton.styleFrom(
@@ -647,7 +678,7 @@ class _DebActions extends StatelessWidget {
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => controller.openDebWithSystemInstaller(),
+                onPressed: controller.openDebWithSystemInstaller,
                 icon: const Icon(Icons.open_in_new_rounded, size: AppDimens.iconSmall),
                 label: const Text('Open package'),
               ),
@@ -706,25 +737,13 @@ class _DetailsGroup extends StatelessWidget {
                 : null,
           ),
           if (controller.serverIncompatibleWithManifest)
-            Container(
-              margin: const EdgeInsets.fromLTRB(
-                AppDimens.space16,
-                AppDimens.space16,
-                AppDimens.space16,
-                AppDimens.space8,
-              ),
-              padding: const EdgeInsets.all(AppDimens.space12),
-              decoration: BoxDecoration(
-                color: AppColors.errorFor(brightness).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppDimens.radiusInner),
-              ),
-              child: Text(
-                'This release needs a newer server. Update your server '
-                'installation before installing this app version.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.errorFor(brightness),
-                    ),
-              ),
+            OneUiGroupTile(
+              icon: Icons.sync_problem_rounded,
+              iconColor: AppColors.errorFor(brightness),
+              title: 'Server needs updating',
+              subtitle: 'This release needs a newer server. Update your server '
+                  'installation before installing this app version.',
+              showChevron: false,
             ),
         ],
       ],
@@ -762,29 +781,29 @@ class _ReleaseNotesGroup extends StatelessWidget {
               for (final item in entry.value)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
-                    AppDimens.space16, AppDimens.space2, AppDimens.space16, AppDimens.space2,
+                    AppDimens.space16, AppDimens.space4, AppDimens.space16, AppDimens.space4,
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.only(top: 6),
+                        padding: const EdgeInsets.only(top: 6.5),
                         child: Container(
-                          width: 4,
-                          height: 4,
+                          width: 6,
+                          height: 6,
                           decoration: BoxDecoration(
-                            color: AppColors.textTertiaryFor(brightness),
                             shape: BoxShape.circle,
+                            color: AppColors.accentFor(brightness).withValues(alpha: 0.55),
                           ),
                         ),
                       ),
-                      const SizedBox(width: AppDimens.space10),
+                      const SizedBox(width: AppDimens.space12),
                       Expanded(
                         child: Text(
                           item,
                           style: AppTextStyle.rowSubtitle.copyWith(
                             color: AppColors.textPrimaryFor(brightness),
-                            height: 1.4,
+                            height: 1.45,
                           ),
                         ),
                       ),

@@ -418,6 +418,7 @@ class _PhotoCell extends StatelessWidget {
                 : Image.memory(
                     bytes!,
                     fit: BoxFit.cover,
+                    filterQuality: FilterQuality.high,
                     gaplessPlayback: true,
                   ),
           ),

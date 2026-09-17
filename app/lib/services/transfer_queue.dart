@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'api.dart';
@@ -79,6 +80,115 @@ class TransferQueue {
     throw Exception('The local source file is no longer available');
   }
 
+  /// Automatic retry budget per item. Transient failures (network blips,
+  /// 5xx responses) are retried in-process with growing backoff before the
+  /// row is surfaced as needing attention — flaky Wi-Fi/mobile handoffs no
+  /// longer fail an upload on the first hiccup.
+  static const _maxRetries = 3;
+
+  /// Backoff delays, in seconds, for retries 1.._maxRetries.
+  static const _backoffSeconds = [2, 5, 10];
+
+  /// Whether [e] is worth retrying in-process rather than surfacing as a
+  /// permanent failure.
+  static bool _isTransient(Object e) {
+    if (e is SocketException || e is TimeoutException) return true;
+    if (e is http.ClientException) return true;
+    if (e is ApiException) {
+      const transient = {408, 429, 500, 502, 503, 504};
+      return transient.contains(e.status);
+    }
+    return false;
+  }
+
+  /// Uploads [item] end-to-end: reconcile against the server's recorded
+  /// progress, stream the remaining chunks, and persist every change through
+  /// [persist]. Transient failures retry in-place (resuming from the
+  /// server-reported offset) with exponential backoff; anything that survives
+  /// [TransferQueue._maxRetries] rethrows.
+  Future<TransferItem> _uploadItem(
+    TransferItem item, {
+    required Future<void> Function(TransferItem) persist,
+  }) async {
+    var last = item;
+    var retries = 0;
+
+    while (true) {
+      try {
+        final remote = await api.uploadStatus(last.id);
+        if (remote['status'] == 'completed') {
+          final done =
+              last.copyWith(status: 'completed', transferred: last.size, error: null);
+          await persist(done);
+          return done;
+        }
+        var offset = (remote['bytes_received'] as num?)?.toInt() ?? last.transferred;
+        if (offset < 0 || offset > last.size) offset = 0;
+        last = last.copyWith(status: 'uploading', transferred: offset, error: null);
+        await persist(last);
+
+        if (last.size == 0) {
+          final result = await api.uploadChunk(
+            uploadId: last.id,
+            folder: last.folder,
+            name: last.name,
+            offset: 0,
+            total: 0,
+            bytes: const Stream<List<int>>.empty(),
+            contentLength: 0,
+          );
+          final status = result['status'] == 'completed' ? 'completed' : 'uploading';
+          last = last.copyWith(status: status, transferred: 0, error: null);
+          await persist(last);
+          if (status == 'completed') return last;
+        }
+
+        while (offset < last.size) {
+          if (_paused.contains(last.id)) {
+            last = last.copyWith(status: 'queued', transferred: offset, error: 'Paused');
+            await persist(last);
+            return last;
+          }
+          final end =
+              (offset + chunkSize > last.size) ? last.size : offset + chunkSize;
+          final result = await api.uploadChunk(
+            uploadId: last.id,
+            folder: last.folder,
+            name: last.name,
+            offset: offset,
+            total: last.size,
+            bytes: _chunkStream(last, offset, end),
+            contentLength: end - offset,
+          );
+          offset = (result['offset'] as num?)?.toInt() ?? end;
+          final status =
+              result['status'] == 'completed' ? 'completed' : 'uploading';
+          last = last.copyWith(status: status, transferred: offset, error: null);
+          await persist(last);
+          if (status == 'completed') return last;
+        }
+
+        if (last.status != 'completed') {
+          last = last.copyWith(status: 'queued', error: null);
+          await persist(last);
+        }
+        return last;
+      } catch (e) {
+        if (_paused.contains(last.id)) {
+          last = last.copyWith(status: 'queued', error: 'Paused');
+          await persist(last);
+          return last;
+        }
+        if (!_isTransient(e) || retries >= _maxRetries) {
+          rethrow;
+        }
+        final delay = Duration(seconds: _backoffSeconds[retries]);
+        retries++;
+        await Future<void>.delayed(delay);
+      }
+    }
+  }
+
   Future<void> process({void Function(List<TransferItem>)? onChanged}) async {
     if (_processing) return;
     _processing = true;
@@ -94,45 +204,22 @@ class TransferQueue {
           continue;
         }
 
+        Future<void> persist(TransferItem updated) async {
+          list[i] = updated;
+          await _save(list);
+          onChanged?.call(List.unmodifiable(list));
+        }
+
         try {
-          final remote = await api.uploadStatus(item.id);
-          if (remote['status'] == 'completed') {
-            item = item.copyWith(status: 'completed', transferred: item.size, error: null);
-            list[i] = item; await _save(list); onChanged?.call(List.unmodifiable(list)); continue;
-          }
-          var offset = (remote['bytes_received'] as num?)?.toInt() ?? item.transferred;
-          if (offset < 0 || offset > item.size) offset = 0;
-          item = item.copyWith(status: 'uploading', transferred: offset, error: null);
-          list[i] = item; await _save(list); onChanged?.call(List.unmodifiable(list));
-
-          if (item.size == 0) {
-            final result = await api.uploadChunk(uploadId: item.id, folder: item.folder, name: item.name, offset: 0, total: 0, bytes: const Stream<List<int>>.empty(), contentLength: 0);
-            item = item.copyWith(status: result['status'] == 'completed' ? 'completed' : 'queued', transferred: 0, error: null);
-            list[i] = item; await _save(list); onChanged?.call(List.unmodifiable(list));
-          }
-
-          while (offset < item.size) {
-            if (_paused.contains(item.id)) {
-              item = item.copyWith(status: 'queued', transferred: offset, error: 'Paused');
-              list[i] = item; await _save(list); onChanged?.call(List.unmodifiable(list));
-              break;
-            }
-            final end = (offset + chunkSize > item.size) ? item.size : offset + chunkSize;
-            final result = await api.uploadChunk(
-              uploadId: item.id,
-              folder: item.folder,
-              name: item.name,
-              offset: offset,
-              total: item.size,
-              bytes: _chunkStream(item, offset, end),
-              contentLength: end - offset,
-            );
-            offset = (result['offset'] as num?)?.toInt() ?? end;
-            item = item.copyWith(status: result['status'] == 'completed' ? 'completed' : 'uploading', transferred: offset, error: null);
-            list[i] = item; await _save(list); onChanged?.call(List.unmodifiable(list));
-          }
+          final result = await _uploadItem(item, persist: persist);
+          list[i] = result;
+          await _save(list);
+          onChanged?.call(List.unmodifiable(list));
         } catch (e) {
-          list[i] = item.copyWith(status: 'queued', transferred: item.transferred, error: e.toString());
+          // Automatic retries are exhausted. Keep the row queued with the
+          // error attached so the Transfers screen can offer a manual retry,
+          // and a later process() pass will pick it up automatically.
+          list[i] = list[i].copyWith(status: 'queued', error: e.toString());
           await _save(list); onChanged?.call(List.unmodifiable(list));
         }
       }

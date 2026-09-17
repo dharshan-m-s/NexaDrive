@@ -54,22 +54,48 @@ class OneUiGroupedList extends StatelessWidget {
           decoration: BoxDecoration(
             color: surface,
             borderRadius: BorderRadius.circular(AppDimens.radiusCard),
+            // A soft lift separates the panel from the page background. On
+            // deep black this needs a hairline border in addition to the
+            // shadow or the group reads as plain floating text (One UI's
+            // flat grouped lists only read correctly against its tonal
+            // surfaces, which this theme deliberately shifts for legibility).
+            boxShadow: brightness == Brightness.dark
+                ? const [
+                    BoxShadow(
+                      color: Color(0x22000000),
+                      blurRadius: 18,
+                      offset: Offset(0, 6),
+                    ),
+                  ]
+                : const [
+                    BoxShadow(
+                      color: AppColors.shadowColorSoft,
+                      blurRadius: 20,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
+            border: brightness == Brightness.dark
+                ? Border.all(color: const Color(0x1FFFFFFF))
+                : null,
           ),
           clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              for (var i = 0; i < children.length; i++) ...[
-                children[i],
-                if (withDividers && i < children.length - 1)
-                  Padding(
-                    padding: EdgeInsets.only(
-                      left: _insetFor(children[i]),
-                      right: AppDimens.space16,
+          child: Material(
+            type: MaterialType.transparency,
+            child: Column(
+              children: [
+                for (var i = 0; i < children.length; i++) ...[
+                  children[i],
+                  if (withDividers && i < children.length - 1)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        left: _insetFor(children[i]),
+                        right: AppDimens.space16,
+                      ),
+                      child: Divider(color: divider, height: 1),
                     ),
-                    child: Divider(color: divider, height: 1),
-                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
         if (footer != null) ...[

@@ -678,8 +678,7 @@ case AppPlatform.android:
               _handoffPending = true;
               infoMessage =
                   'Confirm the installation in the Android dialog, then come '
-                  'back to NexaDrive. The verified APK also stays in the app '
-                  'cache if you need it again.';
+                  'back to NexaDrive.';
             }
             break;
           case AppPlatform.windows:
@@ -739,6 +738,7 @@ case AppPlatform.android:
         infoMessage =
             'The update was installed. Restart NexaDrive to use it.';
         retryable = false;
+        _clearInstallerCache();
       } else {
         status = UpdateStatus.readyToInstall;
         infoMessage =
@@ -1030,12 +1030,7 @@ case AppPlatform.android:
       _handoffPending = false;
       infoMessage = 'The update is installed.';
       retryable = false;
-      try {
-        if (downloadedPath != null) {
-          File(downloadedPath!).deleteSync();
-          downloadedPath = null;
-        }
-      } catch (_) {}
+      _clearInstallerCache();
     } else {
       // APK not applied yet (user came back to the app first). Resume the
       // Update Center in a state where they can finish or retry.
@@ -1047,10 +1042,25 @@ case AppPlatform.android:
           'download again.';
       retryable = false;
     }
-    try {
-      await UpdateCache.prune();
-    } catch (_) {}
-    notifyListeners();
+if (status == UpdateStatus.completed) {
+        _clearInstallerCache();
+      } else {
+        try {
+          await UpdateCache.prune();
+        } catch (_) {}
+      }
+      notifyListeners();
+    }
+
+  /// Frees the on-disk installer cache. Nothing is kept after a confirmed
+  /// install: the consumed APK/ZIP/AppImage, any stray `.part` files, and any
+  /// older downloaded installers are removed. Best-effort — a locked or
+  /// missing file never breaks the success path.
+  void _clearInstallerCache() {
+    downloadedPath = null;
+    unawaited(
+      UpdateCache.clearAll().catchError((Object _) {}),
+    );
   }
 
   /// Reloads the installed version from the OS and refreshes bookkeeping.

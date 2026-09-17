@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### Fixes & polish
+
+- **Folder navigation**: the server serializes file entries with a `kind`
+  field, but the client read `type` everywhere, so every folder was treated
+  as a file and tapping one offered to download/deny instead of opening it.
+  `FileEntry` and the Shared/Trash screens now accept both keys — folders
+  open again. (`files`, `shared browse`, `trash`)
+- **Photo viewer sharpness**: images were rendered at screen resolution and
+  then magnified by the zoom gesture, producing blur beyond 100%. Full
+  resolution images now render inside a `FittedBox`, so zooming into the
+  viewer reveals real pixels (filter quality raised across the Photos grid
+  too).
+- **Upload resilience**: chunks now retry automatically with 2s/5s/10s
+  backoff on transient failures (network blips, 408/429/5xx) before a
+  transfer needs manual attention, resuming from the server-recorded offset.
+- **User management**: server gains `DELETE /api/admin/users/{id}` (removes
+  the account, its files on disk, trash, shares, sync data and sessions via
+  schema cascades) and `PUT /api/admin/users/{id}` now accepts an optional
+  `password` that re-hashes and revokes every active session. The Users
+  screen gains an Edit dialog and a Delete action with destructive
+  confirmation, and was rebuilt on the One UI grouped-list pattern.
+- **Update Center redesign**: the screen now leads with a single semantic
+  hero (status icon, current → new version pills) that carries the live
+  download progress + percentage, with quieter notices and clearer actions —
+  no more stacked colored boxes.
+- **Installer cache hygiene**: after a confirmed update the whole update
+  cache (APK/ZIP/AppImage, stray `.part` files) is cleared, not just the
+  consumed file; the "APK stays in your cache" message is gone. Thumbnail
+  cache now enforces a 64 MB disk budget and evicts least-recently-used
+  thumbnails.
+
 ### Update Center (application self-update)
 
 - **Settings → About → Update Center**: check for updates, see the current

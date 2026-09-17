@@ -10,12 +10,19 @@ import 'package:path_provider/path_provider.dart';
 /// Thumbnails are cheap to regenerate server-side, so the cache only exists
 /// to avoid re-downloading the same preview bytes on every app launch. It is
 /// keyed by (server + path) so switching servers never leaks files. Entries
-/// older than [_maxAge] are pruned lazily, and on startup the cache is capped
-/// at [_maxEntries] newest files.
+/// older than [_maxAge] are pruned lazily, and on startup (and after every
+/// write) the cache is capped at [_maxEntries] newest files and [_maxBytes]
+/// total disk usage — a recently-viewed large album cannot balloon the app
+/// cache, and the heaviest thumbnails are dropped first when over budget.
 class ThumbnailCache {
   static const _cacheDirName = 'thumbnails';
   static const _maxAge = Duration(days: 7);
   static const _maxEntries = 512;
+
+  /// Hard ceiling on total thumbnail cache size. 64 MB fits the roughly
+  /// 256 KB server previews of several thousand photos, while bounding the
+  /// app's on-disk footprint regardless of library size.
+  static const _maxBytes = 64 * 1024 * 1024;
 
   ThumbnailCache._(this._dir);
 
@@ -40,7 +47,8 @@ class ThumbnailCache {
   }
 
   /// Synchronous read (called from build-time image resolution). Returns
-  /// null on miss, expiry, or IO error.
+  /// null on miss, expiry, or IO error. A hit refreshes the entry's modified
+  /// time so _shrink evicts least-recently-used thumbnails first.
   Uint8List? readSync(String serverUrl, String path) {
     final file = File(_fileFor(serverUrl, path));
     try {
@@ -49,7 +57,10 @@ class ThumbnailCache {
         unawaited(file.delete().catchError((_) => file));
         return null;
       }
-      return file.readAsBytesSync();
+      final bytes = file.readAsBytesSync();
+      // Touch to make _shrink's "oldest first" behave like LRU.
+      file.setLastModifiedSync(DateTime.now());
+      return bytes;
     } catch (_) {
       return null;
     }
@@ -60,21 +71,38 @@ class ThumbnailCache {
     try {
       await file.writeAsBytes(bytes, flush: true);
     } catch (_) {}
+    await _shrink();
   }
 
-  /// Keeps at most [_maxEntries] files by deleting oldest first.
+  /// Enforces [ThumbnailCache._maxBytes] and [ThumbnailCache._maxEntries] by
+  /// deleting the oldest entries first. Called on open and after every write,
+  /// so the budget can never slip for long.
   Future<void> _shrink() async {
     try {
       final entities = await _dir.list().toList();
       final files = <File>[];
+      var total = 0;
       for (final e in entities) {
-        if (e is File) files.add(e);
+        if (e is File) {
+          files.add(e);
+          try {
+            total += e.lengthSync();
+          } catch (_) {}
+        }
       }
-      if (files.length <= _maxEntries) return;
+      if (files.length <= _maxEntries && total <= _maxBytes) return;
+
       files.sort((a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()));
-      final excess = files.length - _maxEntries;
-      for (var i = 0; i < excess; i++) {
-        await files[i].delete();
+
+      var i = 0;
+      while (files.length - i > _maxEntries || total > _maxBytes) {
+        if (i >= files.length) break;
+        final f = files[i];
+        try {
+          total -= f.lengthSync();
+          await f.delete();
+        } catch (_) {}
+        i++;
       }
     } catch (_) {}
   }
