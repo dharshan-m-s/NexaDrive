@@ -347,6 +347,8 @@ class _UpdateCenterTile extends StatelessWidget {
           'Required for continued use',
           _badge(onWarning, warningBg, 'Required'),
         );
+      case UpdateStatus.paused:
+        return ('Download paused', null);
       case UpdateStatus.downloading:
         final pct = (controller.progress * 100).round();
         return ('Downloading… $pct%', _dot(accent));

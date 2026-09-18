@@ -7,6 +7,14 @@ import '../../core/design/app_typography.dart';
 ///
 /// Soft icon tile + title + one-line hint + optional primary action.
 /// Follows One UI's human writing: say what happened, then say what to do.
+///
+/// Placement is a design decision, not a default. An empty *list* belongs just
+/// below its header, the way Samsung My Files / Gallery show "no items" — so
+/// this widget is top-anchored by default and renders only as tall as its
+/// content. Passing [centered] opts into filling the whole viewport, which is
+/// only right for a full-bleed surface that has no other content (a media
+/// player, a document viewer) — never for a list body, where it produced a
+/// large dead void between the page header and a mid-screen message.
 class OneUiEmptyState extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -14,6 +22,15 @@ class OneUiEmptyState extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
   final Widget? secondary;
+
+  /// Fill the available height and centre the block inside it.
+  ///
+  /// Defaults to `false`: the block sits directly under the caller's header,
+  /// which is what list, gallery and dashboard bodies want.
+  final bool centered;
+
+  /// Leading icon for the action button. Defaults to a generic "add".
+  final IconData actionIcon;
 
   const OneUiEmptyState({
     super.key,
@@ -23,6 +40,8 @@ class OneUiEmptyState extends StatelessWidget {
     this.actionLabel,
     this.onAction,
     this.secondary,
+    this.centered = false,
+    this.actionIcon = Icons.add_rounded,
   });
 
   @override
@@ -30,57 +49,61 @@ class OneUiEmptyState extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     final accent = AppColors.accentFor(brightness);
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.space32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: brightness == Brightness.dark
-                    ? accent.withValues(alpha: 0.16)
-                    : accent.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(AppDimens.radiusCard),
-              ),
-              child: Icon(icon, size: 36, color: accent),
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.space32,
+        vertical: AppDimens.space24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: brightness == Brightness.dark
+                  ? accent.withValues(alpha: 0.16)
+                  : accent.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(AppDimens.radiusCard),
             ),
-            const SizedBox(height: AppDimens.space20),
+            child: Icon(icon, size: 30, color: accent),
+          ),
+          const SizedBox(height: AppDimens.space16),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: AppTextStyle.sectionHeader.copyWith(
+              color: AppColors.textPrimaryFor(brightness),
+            ),
+          ),
+          if (hint != null) ...[
+            const SizedBox(height: AppDimens.space8),
             Text(
-              title,
+              hint!,
               textAlign: TextAlign.center,
-              style: AppTextStyle.sectionHeader.copyWith(
-                color: AppColors.textPrimaryFor(brightness),
+              style: AppTextStyle.rowSubtitle.copyWith(
+                color: AppColors.textSecondaryFor(brightness),
               ),
             ),
-            if (hint != null) ...[
-              const SizedBox(height: AppDimens.space8),
-              Text(
-                hint!,
-                textAlign: TextAlign.center,
-                style: AppTextStyle.rowSubtitle.copyWith(
-                  color: AppColors.textSecondaryFor(brightness),
-                ),
-              ),
-            ],
-            if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: AppDimens.space20),
-              FilledButton.icon(
-                onPressed: onAction,
-                icon: const Icon(Icons.add_rounded, size: AppDimens.iconSmall),
-                label: Text(actionLabel!),
-              ),
-            ],
-            if (secondary != null) ...[
-              const SizedBox(height: AppDimens.space12),
-              secondary!,
-            ],
           ],
-        ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: AppDimens.space20),
+            FilledButton.icon(
+              onPressed: onAction,
+              icon: Icon(actionIcon, size: AppDimens.iconSmall),
+              label: Text(actionLabel!),
+            ),
+          ],
+          if (secondary != null) ...[
+            const SizedBox(height: AppDimens.space12),
+            secondary!,
+          ],
+        ],
       ),
     );
+
+    if (!centered) return content;
+    return Center(child: content);
   }
 }
 

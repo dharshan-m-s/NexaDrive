@@ -310,7 +310,13 @@ class UpdateManifest {
 class UpdateException implements Exception {
   final UpdateErrorKind kind;
   final String message;
-  const UpdateException(this.kind, this.message);
+
+  /// Bytes durably written to the `.part` file before this exception was
+  /// raised. Only meaningful for [UpdateErrorKind.paused], where it is the
+  /// checkpoint a later [UpdateDownloader.download] resumes from.
+  final int offset;
+
+  const UpdateException(this.kind, this.message, {this.offset = 0});
 
   @override
   String toString() => message;
@@ -330,4 +336,9 @@ enum UpdateErrorKind {
   installFailed,
   blocked,
   cancelled,
+
+  /// The user paused an in-flight download. Distinct from [cancelled]: a
+  /// paused download deliberately keeps its `.part` file so it can be resumed
+  /// from [UpdateException.offset] instead of starting over.
+  paused,
 }

@@ -123,7 +123,14 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
 
   FileEntry get _current => _queue[_index];
 
-  String get _serverUrl => widget.api.session.cacheNamespace;
+  /// Fraction of the track -> absolute position. Zero duration means the
+  /// backend has not reported a length yet, so the target stays at the start.
+  Duration _positionFor(double fraction) => Duration(
+        milliseconds:
+            (fraction.clamp(0.0, 1.0) * _duration.inMilliseconds).round(),
+      );
+
+  String get _namespace => widget.api.session.cacheNamespace;
 
   String _fingerprint(FileEntry entry) =>
       '${entry.modifiedAt ?? ''}|${entry.size ?? ''}';
@@ -145,7 +152,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
     try {
       final cache = _cache ??= await MediaCache.open(widget.api);
       final file = await cache.fetch(
-        namespace: _serverUrl,
+        namespace: _namespace,
         remotePath: entry.path,
         fingerprint: _fingerprint(entry),
         cancel: cancel,
@@ -224,7 +231,9 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
         fileName: entry.name,
       );
       if (!mounted) return;
-      _toast(result == null ? 'Download cancelled' : 'Saved to ${result.location}');
+      _toast(result == null
+          ? 'Download cancelled'
+          : 'Saved to ${result.location}');
     } on SaveCancelled {
       if (mounted) _toast('Download cancelled');
     } catch (e) {
@@ -347,14 +356,16 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                   onNext: () => _openTrack(_index + 1),
                   onSpeed: _setSpeed,
                   onDragStart: () => setState(() => _dragging = true),
-                  onDragChanged: (_) {},
+                  // Track the thumb live: the elapsed-time label is driven by
+                  // `_position`, so ignoring this leaves the label frozen while
+                  // the user scrubs.
+                  onDragChanged: (v) => setState(
+                    () => _position = _positionFor(v),
+                  ),
                   onDragEnd: (v) async {
                     setState(() => _dragging = false);
-                    final target = Duration(
-                      milliseconds: (v * _duration.inMilliseconds).round(),
-                    );
-                    setState(() => _position = target);
-                    await _player.seek(target);
+                    setState(() => _position = _positionFor(v));
+                    await _player.seek(_positionFor(v));
                   },
                 ),
               if (_queue.length > 1) ...[
@@ -381,7 +392,8 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                       for (var i = 0; i < _queue.length; i++)
                         ListTile(
                           selected: i == _index,
-                          selectedTileColor: AppColors.accentContainerFor(brightness),
+                          selectedTileColor:
+                              AppColors.accentContainerFor(brightness),
                           leading: Icon(
                             i == _index && _playing
                                 ? Icons.graphic_eq_rounded
@@ -429,7 +441,8 @@ class _Artwork extends StatelessWidget {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final hue = (seed.hashCode.abs() % 360).toDouble();
-    final base = HSLColor.fromAHSL(1, hue, 0.32, brightness == Brightness.dark ? 0.24 : 0.86)
+    final base = HSLColor.fromAHSL(
+            1, hue, 0.32, brightness == Brightness.dark ? 0.24 : 0.86)
         .toColor();
     final accent = HSLColor.fromAHSL(1, (hue + 28) % 360, 0.42,
             brightness == Brightness.dark ? 0.34 : 0.74)

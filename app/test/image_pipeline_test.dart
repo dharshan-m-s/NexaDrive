@@ -30,7 +30,8 @@ const String kNamespace = 'https://cloud.example.test#tester';
 
 /// A deterministic, high-entropy image. Real pixel variance matters: a flat
 /// colour would make a "blurry" bug invisible.
-img.Image buildTestImage({int width = kOriginalWidth, int height = kOriginalHeight}) {
+img.Image buildTestImage(
+    {int width = kOriginalWidth, int height = kOriginalHeight}) {
   final image = img.Image(width: width, height: height);
   for (var y = 0; y < height; y++) {
     for (var x = 0; x < width; x++) {
@@ -50,8 +51,10 @@ Uint8List serverThumbnail(Uint8List originalBytes) {
   final decoded = img.decodeImage(originalBytes);
   if (decoded == null) throw StateError('test fixture is not decodable');
   final thumb = decoded.width >= decoded.height
-      ? img.copyResize(decoded, width: kThumbnailMaxEdge, interpolation: img.Interpolation.average)
-      : img.copyResize(decoded, height: kThumbnailMaxEdge, interpolation: img.Interpolation.average);
+      ? img.copyResize(decoded,
+          width: kThumbnailMaxEdge, interpolation: img.Interpolation.average)
+      : img.copyResize(decoded,
+          height: kThumbnailMaxEdge, interpolation: img.Interpolation.average);
   return img.encodeJpg(thumb, quality: 84);
 }
 
@@ -106,7 +109,9 @@ class _RecordingApi {
   }
 }
 
-Map<String, dynamic> photoEntry({int size = 500000, String modified = '2026-09-16T10:00:00Z'}) => {
+Map<String, dynamic> photoEntry(
+        {int size = 500000, String modified = '2026-09-16T10:00:00Z'}) =>
+    {
       'name': 'photo.jpg',
       'path': 'Camera/photo.jpg',
       'type': 'file',
@@ -230,7 +235,8 @@ void main() {
       });
     }
 
-    test('a re-fetch after cache eviction still returns the original', () async {
+    test('a re-fetch after cache eviction still returns the original',
+        () async {
       final recorder = _RecordingApi();
       final api = recorder.build(originalBytes: jpegBytes);
       final repo = ImageRepository(api, maxOriginalEntries: 1);
@@ -246,6 +252,34 @@ void main() {
       final again = await repo.original(key);
       expect(again.bytes, equals(jpegBytes));
       expect(recorder.thumbnailCount, 0);
+    });
+  });
+
+  group('an explicit retry re-downloads instead of re-decoding stale bytes',
+      () {
+    test('forget drops the cached bytes and the failure record', () async {
+      final recorder = _RecordingApi();
+      final api = recorder.build(originalBytes: jpegBytes);
+      final repo = ImageRepository(api);
+      final key = ImageRepository.keyFor(
+        photoEntry(size: jpegBytes.length),
+        namespace: kNamespace,
+        rendition: ImageRendition.original,
+      );
+
+      await repo.original(key);
+      expect(repo.peekOriginal(key), isNotNull);
+      expect(recorder.downloadCount, 1);
+
+      repo.forget(key);
+      expect(repo.peekOriginal(key), isNull);
+      expect(repo.hasFailed(key), isFalse);
+      expect(repo.memoryBytes, 0, reason: 'eviction must return the bytes');
+
+      await repo.original(key);
+      expect(recorder.downloadCount, 2,
+          reason: 'the bytes came from the server again');
+      expect(repo.peekOriginal(key), equals(jpegBytes));
     });
   });
 
@@ -271,7 +305,8 @@ void main() {
       expect(recorder.downloadCount, 0);
     });
 
-    test('with BOTH renditions cached, the original request returns the '
+    test(
+        'with BOTH renditions cached, the original request returns the '
         'original bytes (the exact blur regression)', () async {
       final recorder = _RecordingApi();
       final api = recorder.build(
@@ -306,9 +341,11 @@ void main() {
       expect(repo.peekThumbnail(thumbKey), isNot(equals(jpegBytes)));
     });
 
-    test('an unsupported format fails gracefully instead of substituting', () async {
+    test('an unsupported format fails gracefully instead of substituting',
+        () async {
       final recorder = _RecordingApi();
-      final api = recorder.build(originalBytes: jpegBytes, thumbnailStatus: 415);
+      final api =
+          recorder.build(originalBytes: jpegBytes, thumbnailStatus: 415);
       final repo = ImageRepository(api);
       final key = ImageRepository.keyFor(
         photoEntry(),
@@ -373,7 +410,8 @@ void main() {
         maxThumbBytes: 64 * 1024 * 1024,
       );
       for (var i = 0; i < 10; i++) {
-        await repo.thumbnail(thumbKeyFor('Camera/$i.jpg'), max: kThumbnailMaxEdge);
+        await repo.thumbnail(thumbKeyFor('Camera/$i.jpg'),
+            max: kThumbnailMaxEdge);
       }
       var hits = 0;
       for (var i = 0; i < 10; i++) {
@@ -384,7 +422,8 @@ void main() {
   });
 
   group('the photo viewer requests originals, never thumbnails', () {
-    testWidgets('viewer fetches /api/files/download and not the thumbnail endpoint',
+    testWidgets(
+        'viewer fetches /api/files/download and not the thumbnail endpoint',
         (tester) async {
       final recorder = _RecordingApi();
       final api = recorder.build(

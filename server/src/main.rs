@@ -198,6 +198,11 @@ struct UserResponse {
 }
 
 #[derive(Serialize)]
+struct RevokeSessionsResponse {
+    revoked: u64,
+}
+
+#[derive(Serialize)]
 struct AdminUserResponse {
     id: Uuid,
     username: String,
@@ -514,6 +519,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/admin/users/{id}",
             put(update_user).delete(delete_user),
         )
+        .route(
+            "/api/admin/users/{id}/revoke-sessions",
+            post(revoke_user_sessions),
+        )
         .route("/api/admin/audit", get(list_audit))
         .route(
             "/api/shares",
@@ -676,44 +685,14 @@ async fn sync_manifest(
     // revocation never bricks a machine's sync permanently. The platform is
     // refreshed on every call, including for devices that predate the column.
     let platform = normalize_platform(query.platform.as_deref());
-    let device_id = if let Some(id) = query.device_id {
-        let exists: Option<Uuid> =
-            sqlx::query_scalar("SELECT id FROM sync_devices WHERE id=$1 AND user_id=$2")
-                .bind(id)
-                .bind(user_id)
-                .fetch_optional(&state.db)
-                .await?;
-        match exists {
-            Some(existing) => {
-                sqlx::query("UPDATE sync_devices SET last_seen_at=CURRENT_TIMESTAMP, name=$3, platform=COALESCE($4, platform) WHERE id=$1 AND user_id=$2")
-                    .bind(existing).bind(user_id).bind(&device_name).bind(platform.as_deref()).execute(&state.db).await?;
-                existing
-            }
-            None => {
-                let new_id = Uuid::new_v4();
-                sqlx::query(
-                    "INSERT INTO sync_devices(id,user_id,name,platform) VALUES($1,$2,$3,$4)",
-                )
-                .bind(new_id)
-                .bind(user_id)
-                .bind(&device_name)
-                .bind(platform.as_deref())
-                .execute(&state.db)
-                .await?;
-                new_id
-            }
-        }
-    } else {
-        let id = Uuid::new_v4();
-        sqlx::query("INSERT INTO sync_devices(id,user_id,name,platform) VALUES($1,$2,$3,$4)")
-            .bind(id)
-            .bind(user_id)
-            .bind(&device_name)
-            .bind(platform.as_deref())
-            .execute(&state.db)
-            .await?;
-        id
-    };
+    let device_id = resolve_sync_device(
+        &state.db,
+        user_id,
+        query.device_id,
+        &device_name,
+        platform.as_deref(),
+    )
+    .await?;
 
     let root = user_root(&state, user_id);
     fs::create_dir_all(&root).await?;
@@ -1180,6 +1159,125 @@ async fn create_notification(
     sqlx::query("INSERT INTO notifications(id,user_id,kind,title,message,severity) VALUES($1,$2,$3,$4,$5,$6)")
         .bind(Uuid::new_v4()).bind(user_id).bind(kind).bind(title).bind(message).bind(severity).execute(db).await?;
     Ok(())
+}
+
+/// How a sync request should be bound to a device row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeviceLink {
+    /// A known id owned by this account: refresh name/platform/last-seen.
+    Refresh(Uuid),
+    /// An id we have never seen but which is free: adopt it verbatim.
+    Adopt(Uuid),
+    /// No id supplied: reuse the newest row matching this name and platform.
+    AdoptExisting(Uuid),
+    /// Nothing to reuse: create a fresh row.
+    Mint,
+}
+
+/// The device-identity decision, as a pure function.
+///
+/// Extracted so the security-critical branch is unit-testable without a
+/// database: an id that belongs to *another account* is never adopted, no
+/// matter what the client asks for.
+///
+/// The motivating bug: `POST /api/sync/manifest` used to mint a brand-new
+/// random id whenever the supplied id was unknown. Two syncs starting together
+/// on a fresh install — the shell's startup sync and the Sync Center's manual
+/// sync — both sent `device_id: null` (neither had persisted the server's reply
+/// yet), so one machine registered two devices. The Sync Center then showed
+/// repeated, indistinguishable "NexaDrive desktop" rows. Adopting the client's
+/// id makes concurrent first syncs converge on one row, and the no-id path now
+/// adopts an existing name+platform row instead of appending another.
+fn plan_device_link(
+    requested: Option<Uuid>,
+    requested_owner: Option<Uuid>,
+    caller: Uuid,
+    same_name_platform: Option<Uuid>,
+) -> DeviceLink {
+    match requested {
+        Some(id) => match requested_owner {
+            Some(owner) if owner == caller => DeviceLink::Refresh(id),
+            // Registered to somebody else — never hijack it.
+            Some(_) => DeviceLink::Mint,
+            None => DeviceLink::Adopt(id),
+        },
+        None => match same_name_platform {
+            Some(id) => DeviceLink::AdoptExisting(id),
+            None => DeviceLink::Mint,
+        },
+    }
+}
+
+/// Binds a sync request to a device row, creating one only when there is
+/// genuinely nothing to reuse.
+async fn resolve_sync_device(
+    db: &SqlitePool,
+    user_id: Uuid,
+    requested: Option<Uuid>,
+    name: &str,
+    platform: Option<&str>,
+) -> Result<Uuid, AppError> {
+    let requested_owner: Option<Uuid> = match requested {
+        Some(id) => {
+            sqlx::query_scalar("SELECT user_id FROM sync_devices WHERE id=$1")
+                .bind(id)
+                .fetch_optional(db)
+                .await?
+        }
+        None => None,
+    };
+    let same_name_platform: Option<Uuid> = if requested.is_none() {
+        sqlx::query_scalar(
+            "SELECT id FROM sync_devices WHERE user_id=$1 AND name=$2 AND platform IS $3 \
+             ORDER BY last_seen_at DESC LIMIT 1",
+        )
+        .bind(user_id)
+        .bind(name)
+        .bind(platform)
+        .fetch_optional(db)
+        .await?
+    } else {
+        None
+    };
+
+    let link = plan_device_link(requested, requested_owner, user_id, same_name_platform);
+
+    let touch = |id: Uuid| async move {
+        sqlx::query("UPDATE sync_devices SET last_seen_at=CURRENT_TIMESTAMP, name=$3, platform=COALESCE($4, platform) WHERE id=$1 AND user_id=$2")
+            .bind(id)
+            .bind(user_id)
+            .bind(name)
+            .bind(platform)
+            .execute(db)
+            .await?;
+        Ok::<Uuid, AppError>(id)
+    };
+
+    let insert = |id: Uuid| async move {
+        sqlx::query("INSERT INTO sync_devices(id,user_id,name,platform) VALUES($1,$2,$3,$4)")
+            .bind(id)
+            .bind(user_id)
+            .bind(name)
+            .bind(platform)
+            .execute(db)
+            .await?;
+        Ok::<Uuid, AppError>(id)
+    };
+
+    match link {
+        DeviceLink::Refresh(id) | DeviceLink::AdoptExisting(id) => touch(id).await,
+        DeviceLink::Adopt(id) => match insert(id).await {
+            Ok(id) => Ok(id),
+            // A concurrent first sync from the same machine inserted this very
+            // id a moment ago. Same device, same id — that is success, not a
+            // conflict, so refresh it rather than reporting an error.
+            Err(AppError::Database(sqlx::Error::Database(e))) if e.is_unique_violation() => {
+                touch(id).await
+            }
+            Err(e) => Err(e),
+        },
+        DeviceLink::Mint => insert(Uuid::new_v4()).await,
+    }
 }
 
 async fn list_sync_devices(
@@ -1682,6 +1780,81 @@ async fn require_admin(db: &SqlitePool, user_id: Uuid) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Which privileged change is being attempted on an account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AccountAction {
+    Delete,
+    Demote,
+    Disable,
+}
+
+/// Why a privileged change to an account is refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AccountRefusal {
+    SelfDelete,
+    SelfDisable,
+    LastAdminDelete,
+    LastAdminDemote,
+}
+
+impl AccountRefusal {
+    fn message(self) -> &'static str {
+        match self {
+            AccountRefusal::SelfDelete => "You cannot delete your own account",
+            AccountRefusal::SelfDisable => "You cannot disable your own account",
+            AccountRefusal::LastAdminDelete => "The last administrator account cannot be deleted",
+            AccountRefusal::LastAdminDemote => {
+                "The last administrator account cannot be demoted or disabled"
+            }
+        }
+    }
+}
+
+/// The complete account-protection policy, as a pure function.
+///
+/// This is the single home of the rule "NexaDrive can never be left with no
+/// administrator". Keeping it dependency-free (the handler supplies the facts)
+/// means every branch is unit-testable without a database, and the client's
+/// `AdminUserRules` mirrors exactly these three rules:
+///
+///  1. you cannot delete the account you are signed in with;
+///  2. you cannot disable the account you are signed in with;
+///  3. the last *enabled* administrator can be neither deleted nor demoted nor
+///     disabled — any of which would make the instance permanently
+///     unmanageable.
+///
+/// Returns `None` when the change is allowed.
+fn protection_refusal(
+    action: AccountAction,
+    is_self: bool,
+    target_is_active_admin: bool,
+    active_admin_count: i64,
+) -> Option<AccountRefusal> {
+    let last_admin = target_is_active_admin && active_admin_count <= 1;
+    match action {
+        AccountAction::Delete if is_self => Some(AccountRefusal::SelfDelete),
+        AccountAction::Delete if last_admin => Some(AccountRefusal::LastAdminDelete),
+        AccountAction::Disable if is_self => Some(AccountRefusal::SelfDisable),
+        AccountAction::Disable | AccountAction::Demote if last_admin => {
+            Some(AccountRefusal::LastAdminDemote)
+        }
+        _ => None,
+    }
+}
+
+/// Maps a refusal onto the wire status the client expects: self-directed
+/// changes are a bad request, structural ones are a conflict.
+fn refusal_error(refusal: AccountRefusal) -> AppError {
+    match refusal {
+        AccountRefusal::SelfDelete | AccountRefusal::SelfDisable => {
+            AppError::BadRequest(refusal.message().into())
+        }
+        AccountRefusal::LastAdminDelete | AccountRefusal::LastAdminDemote => {
+            AppError::Conflict(refusal.message().into())
+        }
+    }
+}
+
 fn validate_role(role: &str) -> Result<&str, AppError> {
     match role {
         "admin" | "user" => Ok(role),
@@ -1754,30 +1927,37 @@ async fn update_user(
     Json(payload): Json<UpdateUserRequest>,
 ) -> Result<StatusCode, AppError> {
     require_admin(&state.db, admin_id).await?;
-    if id == admin_id && payload.disabled == Some(true) {
-        return Err(AppError::BadRequest(
-            "You cannot disable your own account".into(),
-        ));
-    }
-    // The last administrator must never be demoted or disabled — otherwise the
-    // instance becomes unmanageable. Enforced server-side, not by the client.
-    if payload.role.as_deref() == Some("user") || payload.disabled == Some(true) {
-        let admins: i64 =
+    // Only fetch protection facts when a change could trip a rule: demoting to
+    // a normal user, or disabling the account.
+    let disabling = payload.disabled == Some(true);
+    if disabling || payload.role.as_deref() == Some("user") {
+        let target: Option<(String, bool)> =
+            sqlx::query_as("SELECT role, disabled FROM users WHERE id=$1")
+                .bind(id)
+                .fetch_optional(&state.db)
+                .await?;
+        let Some((role, target_disabled)) = target else {
+            return Err(AppError::NotFound);
+        };
+        let target_is_active_admin = role == "admin" && !target_disabled;
+        let active_admins: i64 = if target_is_active_admin {
             sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE role='admin' AND disabled=FALSE")
                 .fetch_one(&state.db)
-                .await?;
-        if admins <= 1 {
-            let target_is_admin: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM users WHERE id=$1 AND role='admin' AND disabled=FALSE",
-            )
-            .bind(id)
-            .fetch_one(&state.db)
-            .await?;
-            if target_is_admin == 1 {
-                return Err(AppError::Conflict(
-                    "The last administrator account cannot be demoted or disabled".into(),
-                ));
-            }
+                .await?
+        } else {
+            0
+        };
+        if let Some(refusal) = protection_refusal(
+            if disabling {
+                AccountAction::Disable
+            } else {
+                AccountAction::Demote
+            },
+            id == admin_id,
+            target_is_active_admin,
+            active_admins,
+        ) {
+            return Err(refusal_error(refusal));
         }
     }
     if let Some(role) = payload.role.as_deref() {
@@ -1840,32 +2020,29 @@ async fn delete_user(
     axum::extract::Path(id): axum::extract::Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
     require_admin(&state.db, admin_id).await?;
-    if id == admin_id {
-        return Err(AppError::BadRequest(
-            "You cannot delete your own account".into(),
-        ));
-    }
-    // Never allow deleting the last active administrator. With only one admin
-    // left, deleting them (or deleting another admin that is the last enabled
-    // one) would leave the instance permanently unmanageable.
-    let target: Option<(String, String)> =
-        sqlx::query_as("SELECT username, role FROM users WHERE id=$1")
+    let target: Option<(String, String, bool)> =
+        sqlx::query_as("SELECT username, role, disabled FROM users WHERE id=$1")
             .bind(id)
             .fetch_optional(&state.db)
             .await?;
-    let Some((username, role)) = target else {
+    let Some((username, role, target_disabled)) = target else {
         return Err(AppError::NotFound);
     };
-    if role == "admin" {
-        let active_admins: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE role='admin' AND disabled=FALSE")
-                .fetch_one(&state.db)
-                .await?;
-        if active_admins <= 1 {
-            return Err(AppError::Conflict(
-                "The last administrator account cannot be deleted".into(),
-            ));
-        }
+    let target_is_active_admin = role == "admin" && !target_disabled;
+    let active_admins: i64 = if target_is_active_admin {
+        sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE role='admin' AND disabled=FALSE")
+            .fetch_one(&state.db)
+            .await?
+    } else {
+        0
+    };
+    if let Some(refusal) = protection_refusal(
+        AccountAction::Delete,
+        id == admin_id,
+        target_is_active_admin,
+        active_admins,
+    ) {
+        return Err(refusal_error(refusal));
     }
 
     sqlx::query("DELETE FROM users WHERE id=$1")
@@ -1887,6 +2064,42 @@ async fn delete_user(
 
     audit(&state.db, admin_id, "delete_user", Some(&username)).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Ends every session belonging to [id] without touching their credentials.
+///
+/// This is the "sign this account out everywhere" admin action — for a lost or
+/// shared device. The stored password hash is deliberately left alone so the
+/// user can sign back in. Administrators may revoke their own sessions too
+/// (that is just a remote sign-out), but the client does not offer it for the
+/// signed-in row to avoid an accidental self-lockout.
+async fn revoke_user_sessions(
+    State(state): State<AppState>,
+    axum::extract::Extension(admin_id): axum::extract::Extension<Uuid>,
+    axum::extract::Path(id): axum::extract::Path<Uuid>,
+) -> Result<Json<RevokeSessionsResponse>, AppError> {
+    require_admin(&state.db, admin_id).await?;
+    let exists: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE id=$1")
+        .bind(id)
+        .fetch_one(&state.db)
+        .await?;
+    if exists == 0 {
+        return Err(AppError::NotFound);
+    }
+    let removed = sqlx::query("DELETE FROM sessions WHERE user_id=$1")
+        .bind(id)
+        .execute(&state.db)
+        .await?;
+    audit(
+        &state.db,
+        admin_id,
+        "revoke_user_sessions",
+        Some(&id.to_string()),
+    )
+    .await?;
+    Ok(Json(RevokeSessionsResponse {
+        revoked: removed.rows_affected(),
+    }))
 }
 
 fn permission_allows(permission: &str, needed_write: bool) -> bool {
@@ -3956,6 +4169,195 @@ mod tests {
         let key1 = login_key(&HeaderMap::new(), "Admin");
         let key2 = login_key(&HeaderMap::new(), "admin");
         assert_eq!(key1, key2);
+    }
+
+    // ---------------------------------------------------------------- account
+    // The rule that NexaDrive can never be left without an administrator.
+    // These are the branches `delete_user` and `update_user` enforce.
+
+    #[test]
+    fn admin_cannot_delete_their_own_account() {
+        assert_eq!(
+            protection_refusal(AccountAction::Delete, true, true, 5),
+            Some(AccountRefusal::SelfDelete),
+        );
+        // Even a non-administrator cannot delete themselves.
+        assert_eq!(
+            protection_refusal(AccountAction::Delete, true, false, 0),
+            Some(AccountRefusal::SelfDelete),
+        );
+    }
+
+    #[test]
+    fn last_active_admin_cannot_be_deleted() {
+        assert_eq!(
+            protection_refusal(AccountAction::Delete, false, true, 1),
+            Some(AccountRefusal::LastAdminDelete),
+        );
+    }
+
+    #[test]
+    fn last_active_admin_cannot_be_demoted_or_disabled() {
+        assert_eq!(
+            protection_refusal(AccountAction::Demote, false, true, 1),
+            Some(AccountRefusal::LastAdminDemote),
+        );
+        assert_eq!(
+            protection_refusal(AccountAction::Disable, false, true, 1),
+            Some(AccountRefusal::LastAdminDemote),
+        );
+    }
+
+    #[test]
+    fn a_second_administrator_removes_the_structural_refusal() {
+        // With two enabled admins, either may be deleted/demoted/disabled.
+        assert_eq!(
+            protection_refusal(AccountAction::Delete, false, true, 2),
+            None,
+        );
+        assert_eq!(
+            protection_refusal(AccountAction::Demote, false, true, 2),
+            None,
+        );
+        assert_eq!(
+            protection_refusal(AccountAction::Disable, false, true, 2),
+            None,
+        );
+    }
+
+    #[test]
+    fn ordinary_accounts_are_never_structurally_protected() {
+        for action in [
+            AccountAction::Delete,
+            AccountAction::Demote,
+            AccountAction::Disable,
+        ] {
+            assert_eq!(
+                protection_refusal(action, false, false, 1),
+                None,
+                "a plain user must remain fully manageable"
+            );
+            assert_eq!(protection_refusal(action, false, false, 0), None);
+        }
+    }
+
+    #[test]
+    fn disabling_yourself_is_refused_but_demoting_yourself_is_not() {
+        // Mirrors the long-standing behaviour: an admin may step down while
+        // another admin exists, but may not lock themselves out.
+        assert_eq!(
+            protection_refusal(AccountAction::Disable, true, true, 3),
+            Some(AccountRefusal::SelfDisable),
+        );
+        assert_eq!(
+            protection_refusal(AccountAction::Demote, true, true, 3),
+            None,
+        );
+    }
+
+    #[test]
+    fn self_refusals_take_precedence_over_structural_ones() {
+        // The single remaining administrator deleting themselves gets the
+        // self message (400), not the structural one (409) — it is the more
+        // actionable explanation.
+        assert_eq!(
+            protection_refusal(AccountAction::Delete, true, true, 1),
+            Some(AccountRefusal::SelfDelete),
+        );
+    }
+
+    #[test]
+    fn self_refusals_are_bad_requests_and_structural_ones_conflict() {
+        assert!(matches!(
+            refusal_error(AccountRefusal::SelfDelete),
+            AppError::BadRequest(_)
+        ));
+        assert!(matches!(
+            refusal_error(AccountRefusal::SelfDisable),
+            AppError::BadRequest(_)
+        ));
+        assert!(matches!(
+            refusal_error(AccountRefusal::LastAdminDelete),
+            AppError::Conflict(_)
+        ));
+        assert!(matches!(
+            refusal_error(AccountRefusal::LastAdminDemote),
+            AppError::Conflict(_)
+        ));
+    }
+
+    #[test]
+    fn every_refusal_carries_an_explanation() {
+        for refusal in [
+            AccountRefusal::SelfDelete,
+            AccountRefusal::SelfDisable,
+            AccountRefusal::LastAdminDelete,
+            AccountRefusal::LastAdminDemote,
+        ] {
+            let message = refusal.message();
+            assert!(!message.is_empty());
+            assert!(!message.contains('\n'), "one-line messages only");
+        }
+    }
+
+    // ------------------------------------------------------------ sync devices
+    // Duplicate "NexaDrive desktop" rows came from two syncs racing on a fresh
+    // install. These pin the identity decision that replaced the race.
+
+    fn uid(n: u8) -> Uuid {
+        Uuid::from_bytes([n; 16])
+    }
+
+    #[test]
+    fn a_known_device_id_is_refreshed_in_place() {
+        assert_eq!(
+            plan_device_link(Some(uid(1)), Some(uid(7)), uid(7), None),
+            DeviceLink::Refresh(uid(1)),
+        );
+    }
+
+    #[test]
+    fn an_unknown_free_device_id_is_adopted_verbatim() {
+        // This is what makes two concurrent first syncs from one machine
+        // converge on a single row instead of registering it twice.
+        assert_eq!(
+            plan_device_link(Some(uid(1)), None, uid(7), None),
+            DeviceLink::Adopt(uid(1)),
+        );
+    }
+
+    #[test]
+    fn another_accounts_device_id_is_never_hijacked() {
+        let link = plan_device_link(Some(uid(1)), Some(uid(99)), uid(7), None);
+        assert_eq!(link, DeviceLink::Mint);
+        assert_ne!(
+            link,
+            DeviceLink::Adopt(uid(1)),
+            "adopting would hand another user's sync identity to this account"
+        );
+    }
+
+    #[test]
+    fn a_request_without_an_id_reuses_the_matching_row() {
+        assert_eq!(
+            plan_device_link(None, None, uid(7), Some(uid(2))),
+            DeviceLink::AdoptExisting(uid(2)),
+        );
+    }
+
+    #[test]
+    fn a_request_without_an_id_and_no_match_mints_once() {
+        assert_eq!(plan_device_link(None, None, uid(7), None), DeviceLink::Mint,);
+    }
+
+    #[test]
+    fn a_supplied_id_ignores_the_name_platform_fallback() {
+        // A client that sends an id owns its identity; it must not be folded
+        // into an unrelated row that merely shares its display name.
+        assert_ne!(
+            plan_device_link(Some(uid(1)), None, uid(7), Some(uid(2))),
+            DeviceLink::AdoptExisting(uid(2)),
+        );
     }
 
     #[test]

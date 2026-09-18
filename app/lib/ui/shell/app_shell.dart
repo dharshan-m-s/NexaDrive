@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/design/app_dimensions.dart';
-import '../../../core/design/app_motion.dart';
 import '../../../services/api.dart';
 import '../../../services/session.dart';
 import '../../../services/transfer_queue.dart';
@@ -37,7 +36,17 @@ import 'navigation.dart';
 class AppShell extends StatefulWidget {
   final Session session;
   final SharedPreferences prefs;
-  const AppShell({super.key, required this.session, required this.prefs});
+
+  /// Overrides the API client. Only used by tests, which need a deterministic
+  /// server without touching the network.
+  final Api? api;
+
+  const AppShell({
+    super.key,
+    required this.session,
+    required this.prefs,
+    this.api,
+  });
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -50,12 +59,45 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Timer? _queueTimer;
   bool _handlingExpiredSession = false;
 
+  /// Destinations the user has actually opened.
+  ///
+  /// The shell keeps visited pages alive so switching tabs preserves scroll
+  /// position, the open folder, and the loaded listing instead of re-fetching
+  /// everything. Pages are built on first visit so launch does not fire six
+  /// simultaneous requests.
+  final Set<int> _visited = <int>{0};
+
+  /// Number of destinations in the shell.
+  static const int _pageCount = 6;
+
+  void _goTo(int value) {
+    if (value < 0 || value >= _pageCount) return;
+    setState(() {
+      index = value;
+      _visited.add(value);
+    });
+  }
+
+  /// Opens My files and asks it to start [intent], so a Home shortcut performs
+  /// the action it names rather than just navigating.
+  void _openFiles(FilesIntent intent) {
+    setState(() {
+      _filesIntent = intent;
+      index = 1;
+      _visited.add(1);
+    });
+  }
+
+  /// Cleared as soon as My files has started the action.
+  FilesIntent? _filesIntent;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _queueTimer = Timer.periodic(const Duration(seconds: 30), (_) => _resumeQueue());
-    api = Api(widget.session);
+    _queueTimer =
+        Timer.periodic(const Duration(seconds: 30), (_) => _resumeQueue());
+    api = widget.api ?? Api(widget.session);
     api.onUnauthorized = _handleSessionExpired;
     updateController = UpdateController(
       source: UpdateSource(),
@@ -85,7 +127,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   bool _syncRunning = false;
 
   Future<void> _autoSync() async {
-    if (_syncRunning || (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS)) {
+    if (_syncRunning ||
+        (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS)) {
       return;
     }
     final manager = SyncManager(api);
@@ -95,7 +138,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       final result = await manager.sync();
       if (!mounted) return;
       if (result.conflicts > 0 || result.errors > 0) {
-        _toast('Sync needs attention: ${result.conflicts} conflict(s), ${result.errors} error(s).');
+        _toast(
+            'Sync needs attention: ${result.conflicts} conflict(s), ${result.errors} error(s).');
       }
     } finally {
       _syncRunning = false;
@@ -105,7 +149,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Future<void> _resumeQueue() async {
     try {
       final queue = TransferQueue(api);
-      final pending = (await queue.items()).where((x) => x.status != 'completed').toList();
+      final pending =
+          (await queue.items()).where((x) => x.status != 'completed').toList();
       if (pending.isNotEmpty) await queue.process(onChanged: (_) {});
     } catch (_) {}
   }
@@ -121,11 +166,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       final current = status['instance_id'] as String?;
       final previous = prefs.getString('nexadrive_server_instance');
       await prefs.setString('nexadrive_server_instance', current ?? '');
-      if (mounted && previous != null && current != null && previous.isNotEmpty && previous != current) {
-        _toast('The server restarted. Interrupted transfers are safe in the queue.');
+      if (mounted &&
+          previous != null &&
+          current != null &&
+          previous.isNotEmpty &&
+          previous != current) {
+        _toast(
+            'The server restarted. Interrupted transfers are safe in the queue.');
       }
       final queue = TransferQueue(api);
-      final pending = (await queue.items()).where((x) => x.status != 'completed').toList();
+      final pending =
+          (await queue.items()).where((x) => x.status != 'completed').toList();
       if (pending.isNotEmpty) {
         await queue.process(onChanged: (_) {});
         if (mounted) setState(() {});
@@ -225,7 +276,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               title: 'Trash',
               onTap: () {
                 Navigator.pop(sheetContext);
-                setState(() => index = 4);
+                _goTo(4);
               },
             ),
             OneUiSheetAction(
@@ -249,7 +300,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               title: 'Settings',
               onTap: () {
                 Navigator.pop(sheetContext);
-                setState(() => index = 5);
+                _goTo(5);
               },
             ),
           ],
@@ -292,27 +343,45 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  /// The shell's destinations, in navigation order.
+  ///
+  /// These are rebuilt on each shell frame rather than cached, because a
+  /// destination's parameters (My files' pending intent) must be able to
+  /// update. State is still preserved: each index always holds the same widget
+  /// type, so Flutter reuses the existing element instead of recreating it.
+  List<Widget> _buildPages() => <Widget>[
+        HomeScreen(
+          session: widget.session,
+          api: api,
+          onNavigate: _goTo,
+          onFilesIntent: _openFiles,
+        ),
+        FilesScreen(
+          api: api,
+          intent: _filesIntent,
+          onIntentHandled: () {
+            if (_filesIntent != null) setState(() => _filesIntent = null);
+          },
+        ),
+        SharedScreen(api: api),
+        PhotosScreen(api: api, session: widget.session),
+        TrashScreen(api: api),
+        SettingsScreen(
+          session: widget.session,
+          api: api,
+          updateController: updateController,
+          onLogout: logout,
+          onOpenSync: _openSyncCenter,
+          onOpenTransfers: _openTransfers,
+          onOpenNotifications: _openNotifications,
+        ),
+      ];
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final desktop = width >= 900;
-
-    final pages = <Widget>[
-      HomeScreen(session: widget.session, api: api, onNavigate: (value) => setState(() => index = value)),
-      FilesScreen(api: api),
-      SharedScreen(api: api),
-      PhotosScreen(api: api, session: widget.session),
-      TrashScreen(api: api),
-      SettingsScreen(
-        session: widget.session,
-        api: api,
-        updateController: updateController,
-        onLogout: logout,
-        onOpenSync: _openSyncCenter,
-        onOpenTransfers: _openTransfers,
-        onOpenNotifications: _openNotifications,
-      ),
-    ];
+    final pages = _buildPages();
 
     return Scaffold(
       body: desktop
@@ -320,7 +389,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               children: [
                 SideNavigation(
                   index: index,
-                  onSelected: (value) => setState(() => index = value),
+                  onSelected: _goTo,
                   onSync: _openSyncCenter,
                   onTransfers: _openTransfers,
                   onNotifications: _openNotifications,
@@ -328,18 +397,20 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 Expanded(
                   child: Center(
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: AppDimens.contentMaxWidth),
-                      child: _PageHost(key: ValueKey('page_$index'), child: pages[index]),
+                      constraints: const BoxConstraints(
+                        maxWidth: AppDimens.contentMaxWidth,
+                      ),
+                      child: _PageHost(
+                        index: index,
+                        visited: _visited,
+                        pages: pages,
+                      ),
                     ),
                   ),
                 ),
               ],
             )
-          : Stack(
-              children: [
-                Positioned.fill(child: _PageHost(key: ValueKey('page_$index'), child: pages[index])),
-              ],
-            ),
+          : _PageHost(index: index, visited: _visited, pages: pages),
       bottomNavigationBar: desktop
           ? null
           : OneUiBottomNav(
@@ -348,7 +419,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 if (value == 4) {
                   _showMoreSheet();
                 } else {
-                  setState(() => index = value);
+                  _goTo(value);
                 }
               },
             ),
@@ -356,17 +427,33 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 }
 
+/// Holds every visited destination in one [IndexedStack].
+///
+/// Navigation preserves each page's state: My files keeps the folder you were
+/// in, Photos keeps its scroll offset, and returning to a tab does not re-issue
+/// its request. Unvisited destinations render nothing, so they cost nothing
+/// until first opened.
 class _PageHost extends StatelessWidget {
-  final Widget child;
-  const _PageHost({super.key, required this.child});
+  final int index;
+  final Set<int> visited;
+  final List<Widget> pages;
+
+  const _PageHost({
+    required this.index,
+    required this.visited,
+    required this.pages,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: AppMotion.resolve(context, AppMotion.fast),
-      switchInCurve: AppMotion.enter,
-      switchOutCurve: AppMotion.exit,
-      child: SafeArea(child: child),
+    return SafeArea(
+      child: IndexedStack(
+        index: index,
+        children: [
+          for (var i = 0; i < pages.length; i++)
+            if (visited.contains(i)) pages[i] else const SizedBox.shrink(),
+        ],
+      ),
     );
   }
 }

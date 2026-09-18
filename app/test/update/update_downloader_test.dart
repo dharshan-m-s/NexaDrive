@@ -17,6 +17,47 @@ ArtifactInfo _info(String url, List<int> bytes) => ArtifactInfo(
       bytes.length,
     );
 
+/// Serves [payload] in two chunks and honours `Range` with a real `206`.
+///
+/// [ignoresRange] models a server that answers a ranged request with `200` and
+/// the whole body, which the downloader must detect and restart from.
+class _RangeServer extends http.BaseClient {
+  _RangeServer(this.payload, {this.ignoresRange = false});
+
+  final List<int> payload;
+  final bool ignoresRange;
+
+  /// Every `Range` header the downloader sent, in order (`null` when absent).
+  final List<String?> ranges = [];
+
+  late final int split = payload.length ~/ 2;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final range = request.headers['Range'];
+    ranges.add(range);
+    if (range != null && !ignoresRange) {
+      final start =
+          int.parse(range.replaceFirst('bytes=', '').split('-').first);
+      final body = payload.sublist(start);
+      return http.StreamedResponse(
+        Stream<List<int>>.value(body),
+        206,
+        contentLength: body.length,
+      );
+    }
+    // Two chunks, so a pause request has somewhere to land between them.
+    return http.StreamedResponse(
+      Stream<List<int>>.fromIterable([
+        payload.sublist(0, split),
+        payload.sublist(split),
+      ]),
+      200,
+      contentLength: payload.length,
+    );
+  }
+}
+
 /// Streams the first [emitThenStop] bytes then stalls forever — the classic
 /// half-download hang.
 class _StallingDownloadClient extends http.BaseClient {
@@ -316,6 +357,156 @@ void main() {
             .having((e) => e.kind, 'kind', UpdateErrorKind.network)),
       );
       // Nothing was committed, and the partial is cleaned up.
+      expect(cache.listSync(followLinks: false), isEmpty);
+    });
+  });
+
+  group('UpdateDownloader pause and resume', () {
+    final payload =
+        utf8.encode('NexaDrive resumable payload ' * 40); // ~1080 bytes
+    ArtifactInfo info() => _info(
+        'https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
+    const fileName = 'NexaDrive-1.2.0.apk';
+
+    test('pausing keeps the partial and reports a resumable offset', () async {
+      final client = _RangeServer(payload);
+      final downloader = UpdateDownloader(
+        client: client,
+        cacheProvider: () => cache,
+      );
+
+      var pause = false;
+      await expectLater(
+        downloader.download(
+          info(),
+          artifactFileName: fileName,
+          installerKind: 'apk',
+          // Flip the pause request once the first chunk has been counted, so
+          // the second chunk observes it.
+          onProgress: (received, _) => pause = received > 0,
+          isPaused: () => pause,
+        ),
+        throwsA(isA<UpdateException>()
+            .having((e) => e.kind, 'kind', UpdateErrorKind.paused)
+            .having((e) => e.offset, 'offset', client.split)),
+      );
+
+      // The partial survives a pause (unlike a cancel) and its length is
+      // exactly the reported checkpoint.
+      final part = File('${cache.path}/$fileName.part');
+      expect(part.existsSync(), isTrue);
+      expect(part.lengthSync(), client.split);
+      // Nothing was committed under the final name.
+      expect(File('${cache.path}/$fileName').existsSync(), isFalse);
+    });
+
+    test('resuming continues with a Range request and verifies the result',
+        () async {
+      final client = _RangeServer(payload);
+      final downloader = UpdateDownloader(
+        client: client,
+        cacheProvider: () => cache,
+      );
+
+      var pause = false;
+      UpdateException? paused;
+      try {
+        await downloader.download(
+          info(),
+          artifactFileName: fileName,
+          installerKind: 'apk',
+          onProgress: (received, _) => pause = received > 0,
+          isPaused: () => pause,
+        );
+      } on UpdateException catch (e) {
+        paused = e;
+      }
+      expect(paused?.kind, UpdateErrorKind.paused);
+
+      final result = await downloader.download(
+        info(),
+        artifactFileName: fileName,
+        installerKind: 'apk',
+        resumeFrom: paused!.offset,
+      );
+
+      // A real range request, continuing where the pause stopped.
+      expect(client.ranges, [null, 'bytes=${client.split}-']);
+      // And the reassembled file is byte-identical and checksum-valid.
+      expect(result.sha256Hex, info().sha256Hex);
+      expect(result.size, payload.length);
+      expect(await result.file.readAsBytes(), payload);
+      expect(File('${cache.path}/$fileName.part').existsSync(), isFalse);
+    });
+
+    test('a server that ignores Range is detected and restarted', () async {
+      final client = _RangeServer(payload, ignoresRange: true);
+      final downloader = UpdateDownloader(
+        client: client,
+        cacheProvider: () => cache,
+      );
+
+      // Pretend a valid partial is already on disk.
+      final part = File('${cache.path}/$fileName.part')
+        ..writeAsBytesSync(payload.sublist(0, 100));
+      expect(part.lengthSync(), 100);
+
+      final result = await downloader.download(
+        info(),
+        artifactFileName: fileName,
+        installerKind: 'apk',
+        resumeFrom: 100,
+      );
+
+      // Sent a range, got a 200, and still produced the complete correct file
+      // rather than appending a second copy.
+      expect(client.ranges, ['bytes=100-']);
+      expect(result.size, payload.length);
+      expect(await result.file.readAsBytes(), payload);
+      expect(result.sha256Hex, info().sha256Hex);
+    });
+
+    test('a checkpoint that does not match the partial restarts cleanly',
+        () async {
+      final client = _RangeServer(payload);
+      final downloader = UpdateDownloader(
+        client: client,
+        cacheProvider: () => cache,
+      );
+
+      // Claim 500 bytes are on disk when only 40 are.
+      File('${cache.path}/$fileName.part')
+          .writeAsBytesSync(payload.sublist(0, 40));
+
+      final result = await downloader.download(
+        info(),
+        artifactFileName: fileName,
+        installerKind: 'apk',
+        resumeFrom: 500,
+      );
+
+      expect(client.ranges, [null], reason: 'must not trust a bogus offset');
+      expect(await result.file.readAsBytes(), payload);
+      expect(result.sha256Hex, info().sha256Hex);
+    });
+
+    test('a cancelled download still discards its partial', () async {
+      final client = _RangeServer(payload);
+      final downloader = UpdateDownloader(
+        client: client,
+        cacheProvider: () => cache,
+      );
+
+      await expectLater(
+        downloader.download(
+          info(),
+          artifactFileName: fileName,
+          installerKind: 'apk',
+          isCancelled: () => true,
+        ),
+        throwsA(isA<UpdateException>()
+            .having((e) => e.kind, 'kind', UpdateErrorKind.cancelled)),
+      );
       expect(cache.listSync(followLinks: false), isEmpty);
     });
   });

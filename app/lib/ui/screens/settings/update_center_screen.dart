@@ -139,12 +139,16 @@ class UpdateCenterScreen extends StatelessWidget {
         return 'The update could not be completed.';
       case UpdateStatus.offline:
         return 'Offline — the release list is unavailable.';
+      case UpdateStatus.paused:
+        return 'Paused — your progress is kept, resume whenever you like.';
       case UpdateStatus.readyToInstall:
         return 'The verified installer is ready.';
       case UpdateStatus.installingHandoff:
         return 'Finish the installation in the system dialog.';
       case UpdateStatus.unsupported:
         return 'Updates are not supported on this platform.';
+      case UpdateStatus.paused:
+        return 'Paused — your progress is kept, resume whenever you like.';
       case UpdateStatus.needsUserAction:
         return 'Android needs permission to install the update.';
     }
@@ -229,6 +233,8 @@ class _StatusGroup extends StatelessWidget {
         return 'Finish the installation in the system dialog';
       case UpdateStatus.unsupported:
         return c.errorMessage ?? 'Updates are not supported on this platform';
+      case UpdateStatus.paused:
+        return 'Paused — your progress is kept, resume whenever you like.';
       case UpdateStatus.needsUserAction:
         return 'Android needs permission to install the update';
     }
@@ -248,12 +254,13 @@ class _StatusGroup extends StatelessWidget {
     UpdateStatus.updateAvailable => (Icons.system_update_alt_rounded, 'Update available', accent),
     UpdateStatus.mandatory => (Icons.error_outline_rounded, 'Mandatory update', warning),
     UpdateStatus.downloading => (Icons.download_rounded, 'Downloading', accent),
+    UpdateStatus.paused => (Icons.pause_circle_outline_rounded, 'Download paused', warning),
     UpdateStatus.verifying => (Icons.verified_rounded, 'Verifying download', accent),
     UpdateStatus.readyToInstall => (Icons.inventory_2_outlined, 'Ready to install', accent),
     UpdateStatus.installingHandoff => (Icons.handyman_outlined, 'Continue in the installer', accent),
     UpdateStatus.completed => (Icons.check_circle_rounded, 'Installed', success),
     UpdateStatus.failed => (Icons.error_rounded, 'Update failed', error),
-    UpdateStatus.cancelled => (Icons.cancel_outlined, 'Cancelled', warning),
+    UpdateStatus.cancelled => (Icons.cancel_outlined, 'Cancelled', warning),    UpdateStatus.cancelled => (Icons.cancel_outlined, 'Cancelled', warning),
     UpdateStatus.offline => (Icons.cloud_off_rounded, 'Offline', warning),
     UpdateStatus.unsupported => (Icons.priority_high_rounded, 'Unsupported', warning),
     UpdateStatus.needsUserAction => (Icons.lock_outline_rounded, 'Permission needed', warning),
@@ -414,10 +421,15 @@ class _ActionArea extends StatelessWidget {
               onPressed: () => controller.checkForUpdates(manual: true),
               label: 'Check again',
             ),
+          UpdateStatus.paused =>
+            _PrimaryButton(
+              onPressed: controller.resume,
+              label: 'Resume download',
+              icon: Icons.play_arrow_rounded,
+            ),
           UpdateStatus.offline ||
           UpdateStatus.unsupported =>
-            _ErrorBody(controller: controller),
-          UpdateStatus.failed => _UpdateFailedBody(controller: controller),
+            _ErrorBody(controller: controller),          UpdateStatus.failed => _UpdateFailedBody(controller: controller),
           UpdateStatus.needsUserAction =>
             _InstallBlockedBody(controller: controller),
         },
@@ -456,7 +468,12 @@ class _ActionArea extends StatelessWidget {
 class _PrimaryButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final String label;
-  const _PrimaryButton({required this.onPressed, required this.label});
+  final IconData? icon;
+  const _PrimaryButton({
+    required this.onPressed,
+    required this.label,
+    this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -469,7 +486,30 @@ class _PrimaryButton extends StatelessWidget {
         ),
         textStyle: AppTextStyle.button,
       ),
-      child: Text(label),
+      child: icon != null
+      ? FilledButton.icon(
+          onPressed: onPressed,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(AppDimens.touchTargetLarge),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            ),
+            textStyle: AppTextStyle.button,
+          ),
+          icon: Icon(icon, size: AppDimens.iconSmall),
+          label: Text(label),
+        )
+      : FilledButton(
+          onPressed: onPressed,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(AppDimens.touchTargetLarge),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            ),
+            textStyle: AppTextStyle.button,
+          ),
+          child: Text(label),
+        ),
     );
   }
 }

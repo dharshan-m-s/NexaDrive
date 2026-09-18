@@ -5,11 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:nexadrive/core/design/app_theme.dart';
 import 'package:nexadrive/core/models/file_entry.dart';
+import 'package:nexadrive/main.dart';
 import 'package:nexadrive/services/api.dart';
 import 'package:nexadrive/services/session.dart';
 import 'package:nexadrive/ui/screens/files/file_share_sheet.dart';
 import 'package:nexadrive/ui/screens/files/files_screen.dart';
 import 'package:nexadrive/ui/screens/trash/trash_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Layout and state regression tests for the redesigned screens.
 ///
@@ -161,6 +163,72 @@ void main() {
     });
   });
 
+  group('shell navigation keeps each tab alive', () {
+    /// Counts listing calls so a tab switch that re-fetches is visible.
+    late int fileListings;
+
+    Api shellApi() {
+      fileListings = 0;
+      return Api(
+        session(),
+        client: _ShellClient(() => fileListings++),
+      );
+    }
+
+    Future<void> pumpShell(WidgetTester tester, Api api) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.view.physicalSize = const Size(400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        NexaDriveApp(
+            session: session(),
+            prefs: await SharedPreferences.getInstance(),
+            api: api),
+      );
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
+    testWidgets('returning to My files does not re-list the folder',
+        (tester) async {
+      final api = shellApi();
+      await pumpShell(tester, api);
+
+      // Open My files for the first time: exactly one listing.
+      await tester.tap(find.text('Files'));
+      await tester.pumpAndSettle();
+      final afterFirstVisit = fileListings;
+      expect(afterFirstVisit, greaterThanOrEqualTo(1));
+
+      // Leave and come back. A shell that rebuilds the page from scratch would
+      // fetch again here, losing the folder the user was browsing.
+      await tester.tap(find.text('Home'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Files'));
+      await tester.pumpAndSettle();
+
+      expect(fileListings, afterFirstVisit);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        "Home's New folder shortcut opens the folder dialog on My files",
+        (tester) async {
+      final api = shellApi();
+      await pumpShell(tester, api);
+
+      await tester.tap(find.text('New folder'));
+      await tester.pumpAndSettle();
+
+      // The action really ran, rather than only switching tabs.
+      expect(find.text('Folder name'), findsOneWidget);
+      expect(find.text('Create'), findsOneWidget);
+    });
+  });
+
   group('dark mode', () {
     testWidgets('the shell screens render in dark mode without error',
         (tester) async {
@@ -199,6 +267,47 @@ class _TransportFailure implements Exception {
   const _TransportFailure();
   @override
   String toString() => 'Connection refused';
+}
+
+/// Answers every request the signed-in shell makes, so a widget test can drive
+/// real navigation. Counts file listing calls through [onListing].
+class _ShellClient extends http.BaseClient {
+  _ShellClient(this.onListing);
+  final void Function() onListing;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final path = request.url.path;
+    Object body;
+    switch (path) {
+      case '/api/files':
+        onListing();
+        body = [
+          {
+            'name': 'Photos',
+            'path': 'Photos',
+            'kind': 'folder',
+            'size': 0,
+            'modified_at': '2026-09-16T10:00:00Z',
+          },
+        ];
+      case '/api/storage':
+        body = {'used_bytes': 1024, 'file_count': 3};
+      case '/api/server/status':
+        body = {
+          'version': '1.1.0',
+          'api_version': '1.1.0',
+          'instance_id': 'test'
+        };
+      default:
+        body = <Object>[];
+    }
+    return http.StreamedResponse(
+      Stream.value(utf8.encode(jsonEncode(body))),
+      200,
+      headers: {'content-type': 'application/json'},
+    );
+  }
 }
 
 /// Returns a fixed JSON array for every GET.

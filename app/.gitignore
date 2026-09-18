@@ -46,3 +46,7 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# `flutter test` writes golden mismatches here (isolatedDiff/masterImage/...).
+# Transient test output, never committed.
+/test/failures/

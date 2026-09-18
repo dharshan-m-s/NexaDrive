@@ -35,6 +35,11 @@ enum UpdateStatus {
   /// Downloading with live progress.
   downloading,
 
+  /// The user suspended the download. The partial file is retained, so
+  /// [UpdateController.resume] continues from where it stopped instead of
+  /// starting over.
+  paused,
+
   /// Size + SHA-256 acceptance pass (post-download).
   verifying,
 
@@ -293,6 +298,13 @@ class UpdateController extends ChangeNotifier {
   bool _cancelRequested = false;
   bool _handoffPending = false;
 
+  /// Set by [pause]; observed by the downloader between chunks.
+  bool _pauseRequested = false;
+
+  /// Byte offset a paused download should continue from. Reset to zero whenever
+  /// the download reaches a terminal state or restarts from scratch.
+  int _resumeOffset = 0;
+
   UpdateController({
     required this.source,
     required this.downloader,
@@ -499,6 +511,9 @@ class UpdateController extends ChangeNotifier {
       UpdateErrorKind.sizeMismatch =>
         (UpdateStatus.failed, true),
       UpdateErrorKind.cancelled => (UpdateStatus.cancelled, false),
+      // Handled directly by `download()`, which keeps the progress figure and
+      // the resumable offset. Listed here so the switch stays exhaustive.
+      UpdateErrorKind.paused => (UpdateStatus.paused, false),
     };
     status = outcome.$1;
     retryable = outcome.$2;
@@ -509,7 +524,7 @@ class UpdateController extends ChangeNotifier {
   /// Downloads (and verifies) the selected artifact. Safe to call from
   /// `updateAvailable`, `mandatory`, `readyToInstall`, `failed` (retry), or
   /// `cancelled`.
-  Future<void> download() async {
+  Future<void> download({int resumeFrom = 0}) async {
     if (_busy) return;
     final artifact = selectedArtifact;
     final manifestVersion = manifest?.version;
@@ -530,14 +545,24 @@ class UpdateController extends ChangeNotifier {
 
     _busy = true;
     _cancelRequested = false;
-    progress = 0;
-    receivedBytes = 0;
-    totalBytes = null;
+    _pauseRequested = false;
+    // Cleared here so a checkpoint can never leak into a later, unrelated
+    // download; the value is re-set only if this run pauses again.
+    _resumeOffset = 0;
+    progress = resumeFrom > 0
+        ? (artifact.size > 0 ? resumeFrom / artifact.size : 0.0)
+        : 0.0;
+    receivedBytes = resumeFrom;
+    totalBytes = resumeFrom > 0 ? artifact.size : null;
     status = UpdateStatus.downloading;
     notifyListeners();
 
     final fileName = _fileNameFor(artifact, installerKind);
     var attempt = 0;
+    // Resume only the first attempt: a retry after a transport failure starts
+    // from a clean file, because the dropped connection may have left the
+    // partial short. An explicit pause is the one resumable path.
+    var offset = resumeFrom;
 
     try {
       while (true) {
@@ -556,13 +581,27 @@ class UpdateController extends ChangeNotifier {
               notifyListeners();
             },
             isCancelled: () => _cancelRequested,
+            isPaused: () => _pauseRequested,
+            resumeFrom: offset,
           );
           status = UpdateStatus.readyToInstall;
           downloadedPath = result.file.path;
           retryable = false;
+          _resumeOffset = 0;
           notifyListeners();
           return;
         } on UpdateException catch (e) {
+          if (e.kind == UpdateErrorKind.paused) {
+            // Keep the checkpoint and the progress figure so Resume can pick up
+            // exactly where this stopped.
+            _resumeOffset = e.offset;
+            receivedBytes = e.offset;
+            status = UpdateStatus.paused;
+            errorMessage = null;
+            notifyListeners();
+            return;
+          }
+          offset = 0;
           if (e.kind == UpdateErrorKind.cancelled) {
             // A cancelled mandatory download must not demote itself to a
             // normal optional update.
@@ -589,6 +628,28 @@ class UpdateController extends ChangeNotifier {
     } finally {
       _busy = false;
     }
+  }
+
+  /// True while a download is in flight and the user may suspend it.
+  bool get canPause => status == UpdateStatus.downloading;
+
+  /// Suspends an in-flight download. The partial file is kept, so [resume]
+  /// continues from the same byte instead of re-downloading it.
+  ///
+  /// Takes effect when the next chunk arrives; a fully stalled connection is
+  /// already handled by the downloader's idle watchdog.
+  void pause() {
+    if (status != UpdateStatus.downloading) return;
+    _pauseRequested = true;
+    notifyListeners();
+  }
+
+  /// Continues a download suspended by [pause].
+  Future<void> resume() async {
+    if (status != UpdateStatus.paused) return;
+    final offset = _resumeOffset;
+    _resumeOffset = 0;
+    await download(resumeFrom: offset);
   }
 
   /// A release is mandatory when it declares a [UpdateManifest
@@ -634,8 +695,35 @@ class UpdateController extends ChangeNotifier {
   }
 
   void cancelDownload() {
+    // A paused download has no request in flight to cancel — cancelling it
+    // means throwing the checkpoint away.
+    if (status == UpdateStatus.paused) {
+      unawaited(discardPausedDownload());
+      return;
+    }
     if (!_busy || status != UpdateStatus.downloading) return;
     _cancelRequested = true;
+  }
+
+  /// Throws away a paused download: the partial file is deleted and the state
+  /// returns to the one the user can start again from, with no stale progress
+  /// left on screen.
+  Future<void> discardPausedDownload() async {
+    _pauseRequested = false;
+    _resumeOffset = 0;
+    progress = 0;
+    receivedBytes = 0;
+    totalBytes = null;
+    downloadedPath = null;
+    status = manifest != null && _isMandatory(manifest!)
+        ? UpdateStatus.mandatory
+        : UpdateStatus.updateAvailable;
+    notifyListeners();
+    final artifact = selectedArtifact;
+    if (artifact == null) return;
+    await downloader.discardPartial(
+      artifactFileName: _fileNameFor(artifact, installerKind),
+    );
   }
 
   // ------------------------------------------------------------- install

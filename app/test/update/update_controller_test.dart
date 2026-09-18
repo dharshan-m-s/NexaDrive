@@ -368,6 +368,93 @@ void main() {
       expect(ctrl.status, UpdateStatus.mandatory);
       expect(ctrl.hasUpdate, isTrue);
     });
+
+    /// Waits until the download has actually produced bytes.
+    Future<void> waitForBytes(UpdateController ctrl) async {
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      while (ctrl.receivedBytes == 0 && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      expect(ctrl.receivedBytes, greaterThan(0),
+          reason: 'the download should have started');
+    }
+
+    test('pausing suspends the download and keeps its progress', () async {
+      final client = _StreamingClient('1.3.0');
+      final ctrl = await _controller(
+        client: client,
+        router: _FakeRouter(),
+        version: _MutableVersion('1.1.0'),
+      );
+      await ctrl.checkForUpdates();
+      expect(ctrl.status, UpdateStatus.updateAvailable);
+      expect(ctrl.canPause, isFalse);
+
+      final future = ctrl.download();
+      await waitForBytes(ctrl);
+      expect(ctrl.canPause, isTrue);
+      ctrl.pause();
+      await future;
+
+      // Suspended, not failed and not cancelled — and there is real progress to
+      // come back to rather than a reset to zero.
+      expect(ctrl.status, UpdateStatus.paused);
+      expect(ctrl.receivedBytes, greaterThan(0));
+      expect(ctrl.downloadedPath, isNull);
+      expect(ctrl.errorMessage, isNull);
+      expect(ctrl.canPause, isFalse);
+      expect(ctrl.retryable, isFalse);
+    });
+
+    test('resuming a paused download reaches readyToInstall', () async {
+      final client = _StreamingClient('1.3.0');
+      final ctrl = await _controller(
+        client: client,
+        router: _FakeRouter(),
+        version: _MutableVersion('1.1.0'),
+      );
+      await ctrl.checkForUpdates();
+
+      final future = ctrl.download();
+      await waitForBytes(ctrl);
+      ctrl.pause();
+      await future;
+      expect(ctrl.status, UpdateStatus.paused);
+      final pausedAt = ctrl.receivedBytes;
+
+      await ctrl.resume();
+
+      expect(ctrl.status, UpdateStatus.readyToInstall);
+      expect(ctrl.downloadedPath, isNotNull);
+      expect(ctrl.progress, 1.0);
+      expect(ctrl.receivedBytes, greaterThanOrEqualTo(pausedAt));
+    });
+
+    test('discarding a paused download resets to a restartable state',
+        () async {
+      final client = _StreamingClient('1.3.0');
+      final ctrl = await _controller(
+        client: client,
+        router: _FakeRouter(),
+        version: _MutableVersion('1.1.0'),
+      );
+      await ctrl.checkForUpdates();
+
+      final future = ctrl.download();
+      await waitForBytes(ctrl);
+      ctrl.pause();
+      await future;
+      expect(ctrl.status, UpdateStatus.paused);
+
+      // The paused row's "Discard" goes through cancelDownload.
+      ctrl.cancelDownload();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(ctrl.status, UpdateStatus.updateAvailable);
+      expect(ctrl.receivedBytes, 0);
+      expect(ctrl.progress, 0);
+      expect(ctrl.hasUpdate, isTrue);
+    });
   });
 
   group('install + reconcile', () {

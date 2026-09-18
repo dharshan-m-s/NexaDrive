@@ -91,7 +91,7 @@ class OneUiGroupedList extends StatelessWidget {
                         left: _insetFor(children[i]),
                         right: AppDimens.space16,
                       ),
-                      child: Divider(color: divider, height: 1),
+                      child: Divider(color: divider, height: 0.5),
                     ),
                 ],
               ],

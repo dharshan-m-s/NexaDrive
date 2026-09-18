@@ -110,7 +110,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     if (_controller?.value.isPlaying == true) _scheduleHide();
   }
 
-  void _scheduleHide() {
+  /// Arms the auto-hide countdown.
+  ///
+  /// `restart: false` (the default) is what the controller listener uses. The
+  /// listener fires on every playback tick, so restarting the timer there would
+  /// push the deadline back forever and the controls would never hide — which
+  /// is exactly what a "controls stay on screen" bug looks like. Only explicit
+  /// user interaction resets the countdown.
+  void _scheduleHide({bool restart = false}) {
+    if (!restart && (_hideTimer?.isActive ?? false)) return;
     _hideTimer?.cancel();
     if (!mounted) return;
     _hideTimer = Timer(const Duration(seconds: 3), () {
@@ -123,7 +131,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   void _toggleControls() {
     setState(() => _controlsVisible = !_controlsVisible);
-    if (_controlsVisible) _scheduleHide();
+    if (_controlsVisible) _scheduleHide(restart: true);
   }
 
   Future<void> _togglePlay() async {
@@ -135,7 +143,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       _hideTimer?.cancel();
     } else {
       await controller.play();
-      _scheduleHide();
+      _scheduleHide(restart: true);
     }
   }
 
@@ -165,7 +173,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         fileName: widget.file.name,
       );
       if (!mounted) return;
-      _toast(result == null ? 'Download cancelled' : 'Saved to ${result.location}');
+      _toast(result == null
+          ? 'Download cancelled'
+          : 'Saved to ${result.location}');
     } on SaveCancelled {
       if (mounted) _toast('Download cancelled');
     } catch (e) {
@@ -207,7 +217,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                   IconButton(
                     tooltip: 'Save to device',
                     onPressed: _saveToDevice,
-                    icon: const Icon(Icons.download_outlined, color: Colors.white),
+                    icon: const Icon(Icons.download_outlined,
+                        color: Colors.white),
                   ),
                 ],
               ),
@@ -215,7 +226,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           top: _fullscreen,
           child: _initializing
               ? const Center(
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2),
                 )
               : _error != null
                   ? Center(
@@ -235,7 +247,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
-  Widget _buildPlayer(VideoPlayerController controller, VideoPlayerValue value) {
+  Widget _buildPlayer(
+      VideoPlayerController controller, VideoPlayerValue value) {
     final aspect = value.aspectRatio > 0 ? value.aspectRatio : 16 / 9;
     final duration = value.duration;
     final fraction = _dragging
@@ -258,7 +271,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             VideoPlayer(controller),
             if (value.isBuffering && value.isPlaying)
               const Center(
-                child: CircularProgressIndicator(color: Colors.white70, strokeWidth: 2),
+                child: CircularProgressIndicator(
+                    color: Colors.white70, strokeWidth: 2),
               ),
             if (!value.isPlaying && !value.isBuffering)
               _PlayOverlay(onTap: _togglePlay),
@@ -309,7 +323,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           ),
                           Text(
                             Format.duration(shownPosition),
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 12),
                           ),
                           Expanded(
                             child: SliderTheme(
@@ -318,13 +333,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                 inactiveTrackColor: Colors.white24,
                                 thumbColor: AppColors.accentDark,
                                 trackHeight: 3,
-                                thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
+                                thumbShape: RoundSliderThumbShape(
+                                    enabledThumbRadius: 6),
                               ),
                               child: Slider(
                                 value: fraction,
                                 onChangeStart: (_) =>
                                     setState(() => _dragging = true),
-                                onChanged: (v) => setState(() => _dragFraction = v),
+                                onChanged: (v) =>
+                                    setState(() => _dragFraction = v),
                                 onChangeEnd: (v) async {
                                   setState(() => _dragging = false);
                                   final target = Duration(
@@ -332,6 +349,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                         (v * duration.inMilliseconds).round(),
                                   );
                                   await controller.seekTo(target);
+                                  _scheduleHide(restart: true);
                                 },
                               ),
                             ),
@@ -340,10 +358,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                             duration == Duration.zero
                                 ? '--:--'
                                 : Format.duration(duration),
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 12),
                           ),
                           IconButton(
-                            tooltip: _fullscreen ? 'Exit full screen' : 'Full screen',
+                            tooltip: _fullscreen
+                                ? 'Exit full screen'
+                                : 'Full screen',
                             onPressed: _toggleFullscreen,
                             color: Colors.white,
                             icon: Icon(
@@ -367,8 +388,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                             child: SliderTheme(
                               data: SliderTheme.of(context).copyWith(
                                 trackHeight: 2,
-                                thumbShape:
-                                    const RoundSliderThumbShape(enabledThumbRadius: 5),
+                                thumbShape: const RoundSliderThumbShape(
+                                    enabledThumbRadius: 5),
                                 activeTrackColor: Colors.white70,
                                 inactiveTrackColor: Colors.white24,
                                 thumbColor: Colors.white,
@@ -386,9 +407,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           for (final option in _speeds)
                             if (option == 1.0 || option == 1.5 || option == 2.0)
                               Padding(
-                                padding: const EdgeInsets.only(right: AppDimens.space4),
+                                padding: const EdgeInsets.only(
+                                    right: AppDimens.space4),
                                 child: ChoiceChip(
-                                  label: Text(option == 1.0 ? '1×' : '$option×'),
+                                  label:
+                                      Text(option == 1.0 ? '1×' : '$option×'),
                                   selected: (_speed - option).abs() < 0.001,
                                   onSelected: (_) async {
                                     setState(() => _speed = option);
@@ -430,7 +453,8 @@ class _PlayOverlay extends StatelessWidget {
             shape: BoxShape.circle,
             color: Color(0x99000000),
           ),
-          child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 44),
+          child: const Icon(Icons.play_arrow_rounded,
+              color: Colors.white, size: 44),
         ),
       ),
     );

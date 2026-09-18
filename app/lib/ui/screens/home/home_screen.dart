@@ -8,22 +8,30 @@ import '../../../../core/utils/file_kind.dart';
 import '../../../services/api.dart';
 import '../../../services/session.dart';
 import '../../../services/transfer_queue.dart';
+import '../../navigation/file_opener.dart';
 import '../../widgets/one_ui_empty_state.dart';
 import '../../widgets/one_ui_focus_block.dart';
 import '../../widgets/one_ui_hero.dart';
 import '../../widgets/one_ui_page.dart';
 import '../../widgets/one_ui_status_pod.dart';
+import '../files/files_screen.dart';
 import '../transfers/transfers_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final Session session;
   final Api api;
   final ValueChanged<int> onNavigate;
+
+  /// Opens My files and asks it to start an action, so "Upload" and
+  /// "New folder" do what they say.
+  final ValueChanged<FilesIntent>? onFilesIntent;
+
   const HomeScreen({
     super.key,
     required this.session,
     required this.api,
     required this.onNavigate,
+    this.onFilesIntent,
   });
 
   @override
@@ -33,6 +41,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   StorageInfo? _storage;
   bool _loading = true;
+  String? _error;
   int _pendingUploads = 0;
   List<FileEntry> _recent = const [];
 
@@ -43,6 +52,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final results = await Future.wait<Object>([
         widget.api.storage(),
@@ -56,8 +69,16 @@ class _HomeScreenState extends State<HomeScreen> {
         _recent = (results[2] as List<FileEntry>);
         _loading = false;
       });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (!mounted) return;
+      // A failed load must say so. Silently clearing the spinner leaves the
+      // hero area blank, which reads as a broken screen rather than an error.
+      setState(() {
+        _error = e is ApiException
+            ? e.message
+            : 'Your storage details could not be loaded.';
+        _loading = false;
+      });
     }
   }
 
@@ -119,13 +140,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
+            )
+          else
+            OneUiEmptyState(
+              icon: Icons.cloud_off_rounded,
+              title: 'Can\u2019t reach your server',
+              hint: _error ?? 'Check your connection and try again.',
+              actionLabel: 'Retry',
+              onAction: load,
             ),
           const SizedBox(height: AppDimens.space24),
 
           // ------------------------------------- quick actions (focus blocks)
           const _SectionTitle('Quick actions'),
           const SizedBox(height: AppDimens.space12),
-          _QuickActionsGrid(onNavigate: widget.onNavigate),
+          _QuickActionsGrid(
+            onNavigate: widget.onNavigate,
+            onFilesIntent: widget.onFilesIntent,
+          ),
           const SizedBox(height: AppDimens.space24),
 
           // ---------------------------------------- active transfer pod
@@ -133,12 +165,14 @@ class _HomeScreenState extends State<HomeScreen> {
             OneUiStatusPod(
               icon: Icons.cloud_upload_outlined,
               tint: AppColors.warningFor(Theme.of(context).brightness),
-              title: '${Format.count(_pendingUploads, 'item')} waiting to upload',
+              title:
+                  '${Format.count(_pendingUploads, 'item')} waiting to upload',
               subtitle: 'Queued safely; resumes when a connection is available',
               trailing: 'Paused',
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => TransfersScreen(api: widget.api)),
+                  MaterialPageRoute(
+                      builder: (_) => TransfersScreen(api: widget.api)),
                 );
               },
             ),
@@ -147,6 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // -------------------------------------------------- recent files
           _RecentSection(
+            api: widget.api,
             storage: storage,
             recent: _recent,
             onNavigate: widget.onNavigate,
@@ -187,9 +222,7 @@ class _StorageHero extends StatelessWidget {
     final hasQuota = quotaBytes != null && quotaBytes > 0;
     final (value, unit) = _decompose(usedBytes);
 
-    final secondary = hasQuota
-        ? 'of ${Format.bytes(quotaBytes)} used'
-        : null;
+    final secondary = hasQuota ? 'of ${Format.bytes(quotaBytes)} used' : null;
     final detail = hasQuota
         ? '${Format.bytes(storage.freeBytes)} free · '
             '${Format.count(storage.fileCount, 'file')}'
@@ -225,7 +258,18 @@ class _StorageHero extends StatelessWidget {
 /// screens. Each block is a comfortable interaction target.
 class _QuickActionsGrid extends StatelessWidget {
   final ValueChanged<int> onNavigate;
-  const _QuickActionsGrid({required this.onNavigate});
+  final ValueChanged<FilesIntent>? onFilesIntent;
+  const _QuickActionsGrid({required this.onNavigate, this.onFilesIntent});
+
+  /// Falls back to plain navigation if no intent handler was supplied.
+  void _request(FilesIntent intent) {
+    final handler = onFilesIntent;
+    if (handler != null) {
+      handler(intent);
+    } else {
+      onNavigate(1);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -234,13 +278,13 @@ class _QuickActionsGrid extends StatelessWidget {
         icon: Icons.cloud_upload_outlined,
         title: 'Upload',
         layout: OneUiFocusBlockLayout.vertical,
-        onTap: () => onNavigate(1),
+        onTap: () => _request(FilesIntent.upload),
       ),
       OneUiFocusBlock(
         icon: Icons.create_new_folder_outlined,
         title: 'New folder',
         layout: OneUiFocusBlockLayout.vertical,
-        onTap: () => onNavigate(1),
+        onTap: () => _request(FilesIntent.newFolder),
       ),
       OneUiFocusBlock(
         icon: Icons.photo_library_outlined,
@@ -249,10 +293,10 @@ class _QuickActionsGrid extends StatelessWidget {
         onTap: () => onNavigate(3),
       ),
       OneUiFocusBlock(
-        icon: Icons.folder_copy_outlined,
-        title: 'Folders',
+        icon: Icons.delete_outline_rounded,
+        title: 'Trash',
         layout: OneUiFocusBlockLayout.vertical,
-        onTap: () => onNavigate(1),
+        onTap: () => onNavigate(4),
       ),
     ];
 
@@ -261,14 +305,12 @@ class _QuickActionsGrid extends StatelessWidget {
         final maxWidth = constraints.maxWidth;
         final columns = maxWidth >= 800 ? 4 : 2;
         const spacing = AppDimens.space12;
-        final width =
-            (maxWidth - (columns - 1) * spacing) / columns;
+        final width = (maxWidth - (columns - 1) * spacing) / columns;
         return Wrap(
           spacing: spacing,
           runSpacing: spacing,
           children: [
-            for (final item in items)
-              SizedBox(width: width, child: item),
+            for (final item in items) SizedBox(width: width, child: item),
           ],
         );
       },
@@ -279,10 +321,12 @@ class _QuickActionsGrid extends StatelessWidget {
 /// Real recently-modified files from the root folder, with a friendly empty
 /// state that never pretends data is loading.
 class _RecentSection extends StatelessWidget {
+  final Api api;
   final StorageInfo? storage;
   final List<FileEntry> recent;
   final ValueChanged<int> onNavigate;
   const _RecentSection({
+    required this.api,
     required this.storage,
     required this.recent,
     required this.onNavigate,
@@ -300,7 +344,10 @@ class _RecentSection extends StatelessWidget {
         if (storage != null && storage!.fileCount == 0)
           Container(
             padding: const EdgeInsets.fromLTRB(
-              AppDimens.space20, AppDimens.space24, AppDimens.space20, AppDimens.space24,
+              AppDimens.space20,
+              AppDimens.space24,
+              AppDimens.space20,
+              AppDimens.space24,
             ),
             decoration: BoxDecoration(
               color: brightness == Brightness.dark
@@ -350,9 +397,17 @@ class _RecentSection extends StatelessWidget {
                     icon: FileKind.icon(entry.category),
                     tint: FileKind.tint(entry.category, brightness),
                     title: entry.name,
-                    subtitle: '${Format.relTime(entry.modified)} · ${Format.bytes(entry.size)}',
+                    subtitle:
+                        '${Format.relTime(entry.modified)} · ${Format.bytes(entry.size)}',
                     showChevron: true,
-                    onTap: () => onNavigate(1),
+                    // Open the actual file. Jumping to My files and leaving the
+                    // user to find it again is not "Recent".
+                    onTap: () => FileOpener.open(
+                      context,
+                      api: api,
+                      entry: entry,
+                      siblings: recent,
+                    ),
                   ),
                 ),
             ],

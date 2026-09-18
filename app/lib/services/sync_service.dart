@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 import 'api.dart';
 import 'transfer_queue.dart';
 
@@ -33,7 +36,52 @@ class SyncManager {
 
   Future<void> clearFolder() async => (await SharedPreferences.getInstance()).remove(_folderKey);
 
-  Future<String?> deviceId() async => (await SharedPreferences.getInstance()).getString(_deviceKey);
+  /// Memoised in-flight resolution, so concurrent callers cannot each generate
+  /// their own id. Reading `getString` and then writing is only safe because
+  /// everyone shares this one future.
+  static Future<String>? _deviceIdInFlight;
+
+  /// This machine's stable sync identity, generated locally on first use.
+  ///
+  /// Generated and persisted *before* any request is made, so two syncs that
+  /// start together on a fresh install both send the same id. Previously the id
+  /// only came into existence from the server's reply, so a concurrent
+  /// first-run pair both sent `device_id: null` and the server registered this
+  /// machine twice — which is why the Sync Center listed repeated, identical
+  /// "NexaDrive desktop" entries with no way to tell them apart.
+  static Future<String> ensureDeviceId() {
+    final running = _deviceIdInFlight;
+    if (running != null) return running;
+    final started = _loadOrCreateDeviceId();
+    _deviceIdInFlight = started;
+    return started;
+  }
+
+  static Future<String> _loadOrCreateDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final existing = prefs.getString(_deviceKey);
+    if (existing != null && existing.isNotEmpty) return existing;
+    final created = const Uuid().v4();
+    await prefs.setString(_deviceKey, created);
+    return created;
+  }
+
+  /// Records the id the server confirmed and re-points the memo at it, so every
+  /// later reader agrees with what is on disk.
+  static Future<void> _adoptDeviceId(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_deviceKey, id);
+    _deviceIdInFlight = Future<String>.value(id);
+  }
+
+  /// Drops the memo so a test can observe first-run behaviour again.
+  @visibleForTesting
+  static void resetDeviceIdCache() => _deviceIdInFlight = null;
+
+  /// The id the Sync Center uses to mark "this device".
+  ///
+  /// Delegates to [ensureDeviceId] so reading it is also what makes it stable.
+  Future<String> deviceId() => ensureDeviceId();
 
   Future<String> deviceDisplayName() => _deviceName();
 
@@ -147,20 +195,104 @@ class SyncManager {
     }
   }
 
+  /// Chunk size for sync-driven uploads, matching [TransferQueue.chunkSize] so
+  /// a file already partially staged by a manual transfer resumes on the same
+  /// boundaries.
+  static const _chunkSize = 8 * 1024 * 1024;
+
+  /// Total attempts per file (1 try + 3 retries) before the sync reports it.
+  static const _maxUploadAttempts = 4;
+
+  /// Streams [localPath] to [remotePath], resuming from the offset the server
+  /// reports and retrying transient failures with backoff.
+  ///
+  /// Deliberately does *not* go through [TransferQueue]. That queue is the
+  /// user's manual transfer list, and driving it from the sync had three
+  /// consequences: every synced file left a permanent "completed" row behind
+  /// (so the Transfers list grew without bound and was re-parsed on every
+  /// queue pass); `process()` operates on the whole queue, so a *failed* sync
+  /// upload was silently retried as a side effect of the next file's upload,
+  /// making a reported failure succeed behind the engine's back; and a
+  /// background sync could re-drive transfers the user had queued themselves.
   Future<void> _uploadFile(String localPath, String remotePath) async {
     final file = File(localPath);
-    final queue = TransferQueue(api);
     final parts = remotePath.split('/');
     final name = parts.removeLast();
     final folder = parts.join('/');
-    await queue.enqueueLocalPath(file.path, name: name, folder: folder);
-    await queue.process();
-    final items = await queue.items();
-    final item = items.where((x) => x.path == file.path && x.name == name && x.folder == folder).toList().last;
-    if (item.status != 'completed') throw Exception(item.error ?? 'Upload failed');
+    final size = await file.length();
+    final uploadId = const Uuid().v4();
+
+    for (var attempt = 1;; attempt++) {
+      try {
+        final remote = await api.uploadStatus(uploadId);
+        // A freshly minted id is only ever 'completed' if one of our own
+        // earlier attempts finished and the response was lost.
+        if (remote['status'] == 'completed') return;
+        var offset = (remote['bytes_received'] as num?)?.toInt() ?? 0;
+        if (offset < 0 || offset > size) offset = 0;
+
+        if (size == 0) {
+          await api.uploadChunk(
+            uploadId: uploadId,
+            folder: folder,
+            name: name,
+            offset: 0,
+            total: 0,
+            bytes: const Stream<List<int>>.empty(),
+            contentLength: 0,
+          );
+          return;
+        }
+
+        while (offset < size) {
+          final end = offset + _chunkSize > size ? size : offset + _chunkSize;
+          final result = await api.uploadChunk(
+            uploadId: uploadId,
+            folder: folder,
+            name: name,
+            offset: offset,
+            total: size,
+            // Streamed from disk, so a multi-gigabyte file never needs to be
+            // resident in memory.
+            bytes: file.openRead(offset, end),
+            contentLength: end - offset,
+          );
+          offset = (result['offset'] as num?)?.toInt() ?? end;
+        }
+        return;
+      } catch (e) {
+        if (!TransferQueue.isTransient(e) || attempt >= _maxUploadAttempts) {
+          rethrow;
+        }
+        await Future<void>.delayed(Duration(seconds: 2 * attempt));
+      }
+    }
   }
 
-  Future<SyncResult> sync({void Function(String)? onProgress}) async {
+  /// Only one sync may run at a time, process-wide.
+  ///
+  /// `sync()` is reached from the shell's startup path and from the Sync Center
+  /// on demand, and each call site constructs its own [SyncManager], so an
+  /// instance field would not be enough. A second caller joins the run already
+  /// in flight (and therefore uses the first caller's `onProgress`) rather than
+  /// starting a competing one.
+  static Future<SyncResult>? _inFlight;
+
+  /// Runs a sync, or joins the one already running.
+  Future<SyncResult> sync({void Function(String)? onProgress}) {
+    final running = _inFlight;
+    if (running != null) return running;
+    final started = _runSync(onProgress: onProgress);
+    _inFlight = started;
+    // Clear the guard on completion either way; swallow nothing, since
+    // `_runSync` reports failures through `SyncResult` instead of throwing.
+    unawaited(started.whenComplete(() {
+      _inFlight = null;
+    }));
+    return started;
+  }
+
+  Future<SyncResult> _runSync({void Function(String)? onProgress}) async {
     if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) {
       return const SyncResult(errors: 1, error: 'Desktop folder sync is available on Windows, Linux and macOS. Android photo backup remains a separate workflow.');
     }
@@ -173,8 +305,8 @@ class SyncManager {
       onProgress?.call('Reading the local sync folder…');
       final state = await _state();
       final local = await _scanLocal(root, state);
-      final prefs = await SharedPreferences.getInstance();
-      final existingDeviceId = prefs.getString(_deviceKey);
+      // Stable before the request, not after the reply — see [ensureDeviceId].
+      final existingDeviceId = await ensureDeviceId();
       final previousServerCursor = state['__meta__']?['lastServerSyncAt']?.toString();
       final deviceName = await _deviceName();
       final response = previousServerCursor == null
@@ -189,7 +321,12 @@ class SyncManager {
               deviceName: deviceName,
               platform: platformName(),
             );
-      await prefs.setString(_deviceKey, response['device_id'] as String);
+      // The server echoes the id we sent (or mints one if we somehow had none);
+      // adopt its answer so both sides agree on this machine's identity.
+      final confirmedId = response['device_id']?.toString();
+      if (confirmedId != null && confirmedId.isNotEmpty) {
+        await _adoptDeviceId(confirmedId);
+      }
 
       final remote = <String, Map<String, dynamic>>{};
       final isDelta = previousServerCursor != null;
@@ -300,12 +437,25 @@ class SyncManager {
           if (l != null && r == null) {
             final localChanged = baseLocal == null || localHash != baseLocal;
             final remoteWasSynced = baseRemote != null;
-            if (remoteWasSynced && !localChanged) {
-              // Do not delete a remote file just because a stale tombstone is present.
-              // The user deletion is explicit and comes through sync_delete, so propagate it only from a synced baseline.
-              await api.syncDelete(path);
+            if (remoteWasSynced && !localChanged && tombstones.contains(path)) {
+              // Another device deleted this file and the server confirmed it
+              // with a tombstone, so the unchanged local copy is stale: remove
+              // it. Leaving it in place dropped our baseline without deleting
+              // anything, and the next sync then re-uploaded the file, silently
+              // undoing the deletion.
+              try { await File(_localPath(root.path, path)).delete(); } catch (_) {}
               deleted++;
               state.remove(path);
+            } else if (remoteWasSynced && !localChanged) {
+              // The remote copy is gone without a tombstone — an incomplete
+              // delta view, or a row removed out of band. Keep the local file
+              // as the source of truth and restore it, rather than dropping our
+              // baseline: dropping it re-uploaded the file on the next run
+              // anyway, just without recording that it had.
+              onProgress?.call('Restoring $path');
+              await _uploadFile(_localPath(root.path, path), path);
+              uploaded++;
+              state[path] = {'kind':'file','localHash':localHash,'remoteHash':localHash,'localSize':l['size'] ?? 0,'remoteSize':l['size'] ?? 0,'localModifiedMs':l['modifiedMs'],'remoteModifiedAt':DateTime.now().toUtc().toIso8601String(),'localExists':true,'remoteExists':true};
             } else if (remoteWasSynced && tombstones.contains(path) && localChanged) {
               // Local edit wins over a prior remote tombstone: recreate the file.
               onProgress?.call('Re-uploading $path');

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/api.dart';
 import 'services/background_transfer_service.dart';
 import 'services/session.dart';
 import 'core/design/app_theme.dart';
@@ -32,7 +33,17 @@ Future<void> main() async {
 class NexaDriveApp extends StatefulWidget {
   final Session session;
   final SharedPreferences prefs;
-  const NexaDriveApp({super.key, required this.session, required this.prefs});
+
+  /// Test seam: lets a test drive the signed-in shell against a scripted
+  /// server. Null in production, where the shell builds its own client.
+  final Api? api;
+
+  const NexaDriveApp({
+    super.key,
+    required this.session,
+    required this.prefs,
+    this.api,
+  });
 
   @override
   State<NexaDriveApp> createState() => _NexaDriveAppState();
@@ -57,7 +68,11 @@ class _NexaDriveAppState extends State<NexaDriveApp> {
                   : ThemeMode.system,
           home: widget.session.token == null
               ? LoginScreen(session: widget.session)
-              : AppShell(session: widget.session, prefs: widget.prefs),
+              : AppShell(
+                  session: widget.session,
+                  prefs: widget.prefs,
+                  api: widget.api,
+                ),
         );
       },
     );

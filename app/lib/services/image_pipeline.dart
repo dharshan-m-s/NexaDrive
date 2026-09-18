@@ -202,6 +202,22 @@ class ImageRepository {
     _failedThumbs.remove(key);
   }
 
+  /// Fully forgets [key]: cached bytes *and* any recorded failure.
+  ///
+  /// This is what an explicit Retry must use. Re-decoding the same cached bytes
+  /// fails identically, so a Retry that only cleared the failure flag would be a
+  /// button that can never succeed — for instance when a transfer was truncated
+  /// in flight. Dropping the bytes forces a real re-download.
+  void forget(ImageKey key) {
+    _failedOriginals.remove(key);
+    _failedThumbs.remove(key);
+    if (key.rendition == ImageRendition.original) {
+      _originals.remove(key);
+    } else {
+      _thumbs.remove(key);
+    }
+  }
+
   /// Fetches the FULL-RESOLUTION original for [key].
   ///
   /// The returned bytes are exactly what the server stored; no client-side
@@ -322,11 +338,17 @@ class _LruByteCache {
     _bytes += value.length;
     // Evict least-recently-used first. Always keep at least one entry so a
     // single image larger than the budget is still usable.
-    while (_entries.length > maxEntries || (_bytes > maxBytes && _entries.length > 1)) {
+    while (_entries.length > maxEntries ||
+        (_bytes > maxBytes && _entries.length > 1)) {
       final oldest = _entries.keys.first;
       final removed = _entries.remove(oldest);
       if (removed != null) _bytes -= removed.length;
     }
+  }
+
+  void remove(ImageKey key) {
+    final removed = _entries.remove(key);
+    if (removed != null) _bytes -= removed.length;
   }
 
   void clear() {

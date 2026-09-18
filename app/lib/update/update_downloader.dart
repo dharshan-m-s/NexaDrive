@@ -99,30 +99,72 @@ class UpdateDownloader {
     return name;
   }
 
+  /// Deletes the `.part` file belonging to [artifactFileName], if one exists.
+  ///
+  /// This is how a *paused* download is thrown away: the checkpoint is
+  /// intentionally left on disk by a pause, so discarding it must be explicit.
+  /// Returns `true` when a file was actually removed.
+  Future<bool> discardPartial({required String artifactFileName}) async {
+    final dir = cacheProvider?.call() ?? await cacheDirectory();
+    final part = File('${dir.path}/${sanitizeFileName(artifactFileName)}.part');
+    if (!part.existsSync()) return false;
+    try {
+      await part.delete();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Downloads [info] and verifies size + SHA-256 before returning.
   ///
   /// [onProgress] reports signed 64-bit byte counts (0..total). Return true
   /// from [isCancelled] to abort mid-stream; a cancelled download cleans up its
   /// partial file and surfaces [UpdateErrorKind.cancelled].
+  ///
+  /// Return true from [isPaused] to *suspend* instead: the partial file is kept
+  /// intact and [UpdateErrorKind.paused] is raised carrying the checkpoint in
+  /// [UpdateException.offset]. Pass that value back as [resumeFrom] to continue
+  /// with an HTTP `Range` request rather than re-downloading from zero.
+  ///
+  /// A [resumeFrom] checkpoint is only honoured when it matches the byte length
+  /// actually on disk; anything else restarts cleanly, and a server that
+  /// ignores `Range` and answers `200` is detected and restarted rather than
+  /// appended to.
   Future<DownloadedArtifact> download(
     ArtifactInfo info, {
     required String artifactFileName,
     required String installerKind,
     void Function(int received, int? total)? onProgress,
     bool Function()? isCancelled,
+    bool Function()? isPaused,
+    int resumeFrom = 0,
   }) async {
     final uri = _source.resolveArtifact(info);
     final dir = cacheProvider?.call() ?? await cacheDirectory();
     final safeName = sanitizeFileName(artifactFileName);
     final part = File('${dir.path}/$safeName.part');
     final finalFile = File('${dir.path}/$safeName');
-    if (part.existsSync()) {
+
+    // Trust a checkpoint only when the bytes are really there, and only when it
+    // is a genuine prefix of the artifact. A truncated, oversized or unexpected
+    // partial restarts from zero instead of silently corrupting the result.
+    var received = 0;
+    if (resumeFrom > 0 &&
+        resumeFrom < info.size &&
+        part.existsSync() &&
+        part.lengthSync() == resumeFrom) {
+      received = resumeFrom;
+    }
+    if (received == 0 && part.existsSync()) {
       try {
         await part.delete();
       } catch (_) {}
     }
 
     final request = http.Request('GET', uri);
+    if (received > 0) request.headers['Range'] = 'bytes=$received-';
+
     final http.StreamedResponse response;
     try {
       response = await _client.send(request).timeout(timeout);
@@ -143,7 +185,19 @@ class UpdateDownloader {
       );
     }
 
-    if (response.statusCode != 200) {
+    final expected = info.size;
+
+    // 206 = the server honoured our Range request. 200 to a *ranged* request
+    // means it ignored the header and is resending the whole artifact, so the
+    // partial is discarded and the hash restarts from zero.
+    if (received > 0 && response.statusCode == 200) {
+      received = 0;
+      try {
+        if (part.existsSync()) await part.delete();
+      } catch (_) {}
+    }
+
+    if (response.statusCode != 200 && response.statusCode != 206) {
       await response.stream.drain<void>();
       throw UpdateException(
         UpdateErrorKind.http,
@@ -152,8 +206,8 @@ class UpdateDownloader {
     }
 
     final total = response.contentLength;
-    final expected = info.size;
-    if (total != null && total >= 0 && total != expected) {
+    final expectedBody = expected - received;
+    if (total != null && total >= 0 && total != expectedBody) {
       await response.stream.drain<void>();
       throw const UpdateException(
         UpdateErrorKind.sizeMismatch,
@@ -163,12 +217,21 @@ class UpdateDownloader {
 
     IOSink? sink;
     final accumulator = _DigestAccumulator();
-    var received = 0;
     var finished = false;
 
     try {
-      sink = part.openWrite();
       final conversion = sha256.startChunkedConversion(accumulator);
+      if (received > 0) {
+        // Re-hash the bytes already on disk so the final digest still covers
+        // the whole artifact. Streamed in chunks, so memory stays bounded
+        // regardless of how large the resumed file is.
+        await for (final chunk in part.openRead(0, received)) {
+          conversion.add(chunk);
+        }
+      }
+      sink = part.openWrite(
+        mode: received > 0 ? FileMode.append : FileMode.write,
+      );
       final completer = Completer<void>();
       var lastProgress = DateTime.now();
       Timer? watchdog;
@@ -194,6 +257,18 @@ class UpdateDownloader {
             ));
             subscription.cancel().ignore();
             sink!.close().ignore();
+            return;
+          }
+          if (isPaused?.call() == true) {
+            // Suspend, keeping the partial. The outer catch flushes and closes
+            // the sink so the file is exactly `received` bytes — the value
+            // reported as the resumable checkpoint.
+            fail(UpdateException(
+              UpdateErrorKind.paused,
+              'Download paused.',
+              offset: received,
+            ));
+            subscription.cancel().ignore();
             return;
           }
           sink!.add(chunk);
@@ -294,7 +369,18 @@ class UpdateDownloader {
         size: received,
         installerKind: installerKind,
       );
-    } on UpdateException {
+    } on UpdateException catch (e) {
+      if (e.kind == UpdateErrorKind.paused) {
+        // Deliberately keep the `.part` file: this is a resumable checkpoint,
+        // not a failure. Flush first so its length equals `e.offset`.
+        try {
+          await sink?.flush();
+        } catch (_) {}
+        try {
+          await sink?.close();
+        } catch (_) {}
+        rethrow;
+      }
       await _cleanup(part, sink);
       rethrow;
     } catch (_) {

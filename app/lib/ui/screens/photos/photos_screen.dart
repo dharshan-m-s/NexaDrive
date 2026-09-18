@@ -38,7 +38,6 @@ class _PhotosScreenState extends State<PhotosScreen> {
   List<Map<String, dynamic>> _photos = [];
   late final ImageRepository _images = ImageRepository(widget.api);
 
-
   /// Paths whose format the server cannot thumbnail (e.g. HEIC without a
   /// codec). The grid shows a graceful placeholder instead of pulling the
   /// full-resolution original into memory for every cell.
@@ -47,6 +46,17 @@ class _PhotosScreenState extends State<PhotosScreen> {
   final Set<String> _loadingThumbs = <String>{};
   bool _loading = true;
   String? _error;
+
+  /// Month buckets, newest first, computed once per listing.
+  ///
+  /// Grouping sorts every photo, and the grid rebuilds on each thumbnail that
+  /// arrives — recomputing it in `build` made scrolling a large library
+  /// O(n log n) per thumbnail. Cached here instead.
+  List<(String, List<int>)> _groups = const [];
+
+  /// `path -> index`, so the viewer's placeholder lookup is O(1) per build
+  /// instead of a linear scan of the whole library.
+  Map<String, int> _indexByPath = const {};
 
   bool _selecting = false;
   final Set<String> _selected = <String>{};
@@ -82,6 +92,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
       if (!mounted) return;
       setState(() {
         _photos = photos;
+        _reindex();
         _loading = false;
       });
       _prefetch();
@@ -92,6 +103,14 @@ class _PhotosScreenState extends State<PhotosScreen> {
         _loading = false;
       });
     }
+  }
+
+  /// Rebuilds the derived month buckets and the path index.
+  void _reindex() {
+    _indexByPath = {
+      for (var i = 0; i < _photos.length; i++) _pathAt(i): i,
+    };
+    _groups = _computeGroups();
   }
 
   void _prefetch() {
@@ -145,14 +164,19 @@ class _PhotosScreenState extends State<PhotosScreen> {
           initialIndex: index,
           api: widget.api,
           images: _images,
+          // The grid's own thumbnail is offered as the blurred loading
+          // backdrop only, so the viewer never has to fetch one.
           thumbnailLookup: (path) {
-            final i = _photos.indexWhere((p) => p['path'] == path);
-            if (i < 0) return null;
+            final i = _indexByPath[path];
+            if (i == null) return null;
             return _images.peekThumbnail(_thumbKey(i));
           },
           onDeleted: (path) {
             if (!mounted) return;
-            setState(() => _photos.removeWhere((p) => p['path'] == path));
+            setState(() {
+              _photos.removeWhere((p) => p['path'] == path);
+              _reindex();
+            });
           },
         ),
       ),
@@ -197,7 +221,9 @@ class _PhotosScreenState extends State<PhotosScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Move to Trash'),
         content: Text(
-          count == 1 ? 'Move 1 photo to trash?' : 'Move $count photos to trash?',
+          count == 1
+              ? 'Move 1 photo to trash?'
+              : 'Move $count photos to trash?',
         ),
         actions: [
           TextButton(
@@ -217,7 +243,10 @@ class _PhotosScreenState extends State<PhotosScreen> {
       await widget.api.batch(action: 'delete', paths: removed);
       _exitSelection();
       if (!mounted) return;
-      setState(() => _photos.removeWhere((p) => removed.contains(p['path'])));
+      setState(() {
+        _photos.removeWhere((p) => removed.contains(p['path']));
+        _reindex();
+      });
       _toast('${Format.count(removed.length, 'photo')} moved to Trash');
     } catch (e) {
       if (mounted) _toast(e.toString());
@@ -255,7 +284,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   // -------------------------------------------------------------- grouping
   /// Photos newest-first, grouped into month buckets.
-  List<(String, List<int>)> get _groups {
+  List<(String, List<int>)> _computeGroups() {
     final epoch = DateTime.fromMillisecondsSinceEpoch(0);
     final order = List<int>.generate(_photos.length, (i) => i);
     order.sort((a, b) {
@@ -277,8 +306,18 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   String _monthLabel(DateTime t) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return '${months[t.month - 1]} ${t.year}';
   }
@@ -304,7 +343,8 @@ class _PhotosScreenState extends State<PhotosScreen> {
           : IconButton(
               tooltip: 'Refresh photos',
               onPressed: load,
-              icon: Icon(Icons.refresh_rounded, color: AppColors.accentFor(brightness)),
+              icon: Icon(Icons.refresh_rounded,
+                  color: AppColors.accentFor(brightness)),
             ),
       body: _buildBody(),
     );
@@ -352,7 +392,8 @@ class _PhotosScreenState extends State<PhotosScreen> {
                       horizontal: AppDimens.space4,
                     ),
                     sliver: SliverGrid.builder(
-                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
                         maxCrossAxisExtent: _tileExtent,
                         mainAxisSpacing: AppDimens.space4,
                         crossAxisSpacing: AppDimens.space4,
@@ -365,6 +406,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
                           unavailable: _noThumbnail.contains(_pathAt(index)),
                           semanticLabel: _photos[index]['name']?.toString(),
                           selected: _selected.contains(_pathAt(index)),
+                          selecting: _selecting,
                           onTap: () => _onCellTap(index),
                           onLongPress: () => _onCellLongPress(index),
                           onVisible: () => _ensureThumb(_images, index),
@@ -460,6 +502,7 @@ class _PhotoCell extends StatelessWidget {
   final bool unavailable;
   final String? semanticLabel;
   final bool selected;
+  final bool selecting;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final VoidCallback onVisible;
@@ -469,6 +512,7 @@ class _PhotoCell extends StatelessWidget {
     required this.unavailable,
     required this.semanticLabel,
     required this.selected,
+    required this.selecting,
     required this.onTap,
     required this.onLongPress,
     required this.onVisible,
@@ -505,6 +549,10 @@ class _PhotoCell extends StatelessWidget {
       button: true,
       selected: selected,
       label: semanticLabel ?? 'Photo',
+      // Screen readers get the gesture vocabulary the touch user has.
+      hint: selecting
+          ? 'Activates selection for this photo'
+          : 'Opens the photo. Long press to select.',
       child: GestureDetector(
         onTap: onTap,
         onLongPress: onLongPress,
@@ -522,7 +570,8 @@ class _PhotoCell extends StatelessWidget {
     );
   }
 
-  Widget _placeholder(Brightness brightness, {IconData icon = Icons.photo_outlined}) {
+  Widget _placeholder(Brightness brightness,
+      {IconData icon = Icons.photo_outlined}) {
     return Container(
       color: brightness == Brightness.dark
           ? AppColors.surfaceAltDark

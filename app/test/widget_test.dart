@@ -21,7 +21,8 @@ void main() {
     return session;
   }
 
-  testWidgets('NexaDrive app starts signed out with a login screen', (tester) async {
+  testWidgets('NexaDrive app starts signed out with a login screen',
+      (tester) async {
     final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(NexaDriveApp(session: Session(), prefs: prefs));
     await tester.pumpAndSettle();
@@ -34,7 +35,8 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final prefs = await SharedPreferences.getInstance();
-    await tester.pumpWidget(NexaDriveApp(session: signedInSession(), prefs: prefs));
+    await tester
+        .pumpWidget(NexaDriveApp(session: signedInSession(), prefs: prefs));
     await tester.pumpAndSettle();
 
     expect(find.text('NexaDrive'), findsOneWidget);
@@ -44,13 +46,15 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
   });
 
-  testWidgets('signed-in narrow layout shows bottom navigation and More sheet', (tester) async {
+  testWidgets('signed-in narrow layout shows bottom navigation and More sheet',
+      (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final prefs = await SharedPreferences.getInstance();
-    await tester.pumpWidget(NexaDriveApp(session: signedInSession(), prefs: prefs));
+    await tester
+        .pumpWidget(NexaDriveApp(session: signedInSession(), prefs: prefs));
     await tester.pumpAndSettle();
 
     expect(find.byType(NavigationBar), findsOneWidget);
@@ -59,9 +63,17 @@ void main() {
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Trash'), findsOneWidget);
-    expect(find.text('Sync center'), findsOneWidget);
-    expect(find.text('Notifications'), findsOneWidget);
-    expect(find.text('Settings'), findsOneWidget);
+    // Scoped to the sheet: the destinations behind it (Home's shortcuts, the
+    // navigation bar) legitimately reuse some of these labels.
+    Finder inSheet(String label) => find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.text(label),
+        );
+    expect(inSheet('Scan document'), findsOneWidget);
+    expect(inSheet('Transfers'), findsOneWidget);
+    expect(inSheet('Trash'), findsOneWidget);
+    expect(inSheet('Sync center'), findsOneWidget);
+    expect(inSheet('Notifications'), findsOneWidget);
+    expect(inSheet('Settings'), findsOneWidget);
   });
 }

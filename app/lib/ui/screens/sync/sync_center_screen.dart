@@ -112,7 +112,7 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
       _lastResult = result;
       _conflicts = conflicts;
       _lastSyncAt = lastSync;
-      _thisDeviceId = deviceId ?? _thisDeviceId;
+      _thisDeviceId = deviceId;
       _devices = devices;
       _syncing = false;
       _progress = '';

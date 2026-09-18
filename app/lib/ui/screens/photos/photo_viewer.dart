@@ -10,6 +10,8 @@ import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
 import '../../../services/api.dart';
 import '../../../services/download_service.dart';
+import '../../../services/image_decode_policy.dart';
+import '../../../services/image_decoder.dart';
 import '../../../services/image_pipeline.dart';
 import '../files/file_share_sheet.dart';
 import '../../widgets/one_ui_sheet.dart';
@@ -17,23 +19,28 @@ import '../../widgets/one_ui_sheet.dart';
 /// Full-resolution photo viewer.
 ///
 /// ## IMAGE QUALITY CONTRACT
-/// (regression-tested in `test/image_pipeline_test.dart`)
+/// (regression-tested in `test/image_pipeline_test.dart` and
+/// `test/image_decode_policy_test.dart`)
 ///
 /// 1. Every displayed frame comes from [ImageRepository.original] — the
 ///    ORIGINAL bytes served by `/api/files/download`. The thumbnail endpoint is
-///    only ever called through [ImageRepository.thumbnail], never here.
+///    never called here.
 /// 2. Original and thumbnail requests use disjoint cache keys
 ///    ([ImageRendition] is part of [ImageKey]), so a thumbnail can never be
 ///    substituted for an original.
-/// 3. Decoding happens with `ui.instantiateImageCodec(widget.bytes)` at the
-///    image's natural size — no target width/height — so every original pixel
-///    is decoded.
-/// 4. The thumbnail is used ONLY as a low-cost placeholder behind the loading
-///    indicator, and is visually dimmed so it can never be mistaken for the
-///    final image. It is fetched from the separate thumbnail key space.
-/// 5. Zoom/pan transform the decoded full-resolution image directly; the fit
-///    scale is computed from the real pixel dimensions, so zooming in reveals
-///    genuine texture instead of an upscaled preview.
+/// 3. Decoding goes through [ImageDecoder], which decodes photos at their
+///    natural size so every original pixel reaches the GPU. Only genuinely
+///    huge photos — or a natural decode that failed on a memory-constrained
+///    device — fall back to a bounded size that is still at least 4K and at
+///    least twice the viewport, never a thumbnail.
+/// 4. Filter quality follows the current scale: mipmapped while minifying
+///    (bicubic without mipmaps aliases when downscaling a large photo by more
+///    than 2x) and bicubic once the image is at or above 1:1.
+/// 5. A decode failure is reported with a retry action. It is never swallowed,
+///    because a swallowed failure leaves the viewer sitting on the loading
+///    placeholder — which is exactly what "the photo looks blurry" means.
+/// 6. The thumbnail is used ONLY as a blurred, dimmed ambient backdrop behind
+///    the loading indicator, so it can never be mistaken for the final image.
 class PhotoViewer extends StatefulWidget {
   final List<Map<String, dynamic>> photos;
   final int initialIndex;
@@ -65,18 +72,20 @@ class PhotoViewer extends StatefulWidget {
 }
 
 class _PhotoViewerState extends State<PhotoViewer> {
+  static const _decoder = ImageDecoder();
+
+  /// How many pages either side of the current one may stay decoded.
+  static const _decodeWindow = 1;
+
   late PageController _controller;
   late List<Map<String, dynamic>> _photos;
   late int _current;
 
-  /// Decoded ORIGINAL frames for the visible neighbourhood. Bounded: the
-  /// current page plus one neighbour on each side, each disposed on eviction.
+  /// Decoded ORIGINAL frames. The visible page always stays; speculative
+  /// neighbours are dropped once the pixel budget is reached.
   final Map<String, ui.Image> _decoded = {};
   final Set<String> _inFlight = {};
   final Map<String, String> _errors = {};
-
-  /// How many pages either side of the current one stay decoded.
-  static const _decodeWindow = 1;
 
   late final DownloadService _downloads = DownloadService(widget.api);
 
@@ -86,7 +95,9 @@ class _PhotoViewerState extends State<PhotoViewer> {
     _photos = List<Map<String, dynamic>>.of(widget.photos);
     _current = widget.initialIndex.clamp(0, math.max(0, _photos.length - 1));
     _controller = PageController(initialPage: _current);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _prefetchAround(_current));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _prefetchAround(_current);
+    });
   }
 
   @override
@@ -107,17 +118,77 @@ class _PhotoViewerState extends State<PhotoViewer> {
         rendition: ImageRendition.original,
       );
 
-  /// Loads + decodes originals for the pages around [index], and releases the
-  /// frames that fell outside the window.
+  /// Loads the visible page, warms the byte cache for its neighbours, and
+  /// releases frames that no longer belong to the window.
   void _prefetchAround(int index) {
-    for (var i = index - _decodeWindow; i <= index + _decodeWindow; i++) {
-      if (i >= 0 && i < _photos.length) {
-        _ensureDecoded(i);
-      }
+    _ensureDecoded(index);
+    for (final offset in const [-1, 1]) {
+      final neighbour = index + offset;
+      if (neighbour < 0 || neighbour >= _photos.length) continue;
+      // Warm the bytes (bounded) without necessarily holding the pixels.
+      _warmBytes(neighbour);
+      _ensureDecoded(neighbour, speculative: true);
     }
     _evictOutsideWindow(index);
+    _enforcePixelBudget(index);
   }
 
+  void _warmBytes(int index) {
+    if (index < 0 || index >= _photos.length) return;
+    final key = _originalKey(index);
+    if (widget.images.peekOriginal(key) != null) return;
+    widget.images
+        .original(key)
+        .catchError((Object _) => ImageData(Uint8List(0), key: key));
+  }
+
+  Future<void> _ensureDecoded(int index, {bool speculative = false}) async {
+    if (index < 0 || index >= _photos.length) return;
+    final path = _pathAt(index);
+    if (_decoded.containsKey(path) || _inFlight.contains(path)) return;
+    _inFlight.add(path);
+    try {
+      // ORIGINAL bytes — never the thumbnail endpoint, never the thumbnail
+      // cache. This is the line that guarantees viewer sharpness.
+      final data = await widget.images.original(_originalKey(index));
+      if (!mounted) return;
+      final size = MediaQuery.sizeOf(context);
+      final image = await _decoder.decode(
+        data.bytes,
+        path: path,
+        viewportLongestEdge: math.max(size.width, size.height).round(),
+        devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+      );
+      if (!mounted) {
+        image.dispose();
+        return;
+      }
+      setState(() {
+        _errors.remove(path);
+        _decoded[path] = image;
+      });
+      _enforcePixelBudget(_current);
+    } on ImageDecodeException catch (e) {
+      // Report it. Swallowing this is what leaves the viewer stuck on the
+      // placeholder and looking blurry.
+      if (mounted) {
+        setState(() => _errors[path] = _decodeMessage(path, e));
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _errors[path] = _friendly(e));
+      }
+    } finally {
+      _inFlight.remove(path);
+    }
+  }
+
+  String _decodeMessage(String path, ImageDecodeException e) {
+    return 'This image could not be decoded on this device. '
+        'It may use a format or size this platform cannot render.';
+  }
+
+  /// Drops frames outside the `current ± _decodeWindow` range.
   void _evictOutsideWindow(int index) {
     final keep = <String>{
       for (var i = index - _decodeWindow; i <= index + _decodeWindow; i++)
@@ -130,52 +201,45 @@ class _PhotoViewerState extends State<PhotoViewer> {
     if (stale.isNotEmpty && mounted) setState(() {});
   }
 
-  Future<void> _ensureDecoded(int index) async {
-    if (index < 0 || index >= _photos.length) return;
-    final path = _pathAt(index);
-    if (_decoded.containsKey(path) || _inFlight.contains(path)) return;
-    _inFlight.add(path);
-    final key = _originalKey(index);
-    try {
-      // ORIGINAL bytes — never the thumbnail endpoint, never the thumbnail
-      // cache. This is the single line that guarantees viewer sharpness.
-      final data = await widget.images.original(key);
-      final image = await _decode(data.bytes);
-      if (!mounted) {
-        image?.dispose();
-        return;
+  /// Keeps decoded RGBA frames within [ImageDecodePolicy.decodedFramePixelBudget]
+  /// by releasing the neighbour furthest from the visible page.
+  void _enforcePixelBudget(int index) {
+    final currentPath = _pathAt(index);
+    var held = _decoded.values.fold<int>(
+      0,
+      (sum, image) => sum + image.width * image.height,
+    );
+    if (held <= ImageDecodePolicy.decodedFramePixelBudget) return;
+
+    final candidates = _decoded.keys.where((p) => p != currentPath).toList()
+      ..sort(
+          (a, b) => _distanceFrom(b, index).compareTo(_distanceFrom(a, index)));
+    for (final path in candidates) {
+      if (held <= ImageDecodePolicy.decodedFramePixelBudget) break;
+      final image = _decoded.remove(path);
+      if (image != null) {
+        held -= image.width * image.height;
+        image.dispose();
       }
-      setState(() {
-        _errors.remove(path);
-        if (image != null) _decoded[path] = image;
-      });
-    } catch (e) {
-      if (mounted) {
-        setState(() => _errors[path] = _friendly(e));
-      }
-    } finally {
-      _inFlight.remove(path);
     }
+    if (mounted) setState(() {});
   }
 
-  /// Decodes at natural size: no `targetWidth`/`targetHeight`, so the engine
-  /// produces every original pixel. Any resize here is the classic cause of a
-  /// blurry viewer.
-  Future<ui.Image?> _decode(Uint8List bytes) async {
-    try {
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      codec.dispose();
-      return frame.image;
-    } catch (_) {
-      return null;
-    }
+  int _distanceFrom(String path, int index) {
+    final at = _photos.indexWhere((p) => (p['path'] ?? '').toString() == path);
+    return at < 0 ? 1 << 30 : (at - index).abs();
   }
 
   void _retry(int index) {
     final path = _pathAt(index);
-    widget.images.clearFailure(_originalKey(index));
-    setState(() => _errors.remove(path));
+    // Drop the cached bytes too: re-decoding what we already hold would fail
+    // exactly the same way, so a Retry that only reset the error flag would be
+    // a button that can never succeed.
+    widget.images.forget(_originalKey(index));
+    setState(() {
+      _errors.remove(path);
+      _decoded.remove(path)?.dispose();
+    });
     _ensureDecoded(index);
   }
 
@@ -185,6 +249,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
       if (e.status == 401) return 'Your session expired. Sign in again.';
       return e.message;
     }
+    if (e is SaveException) return e.message;
     return 'The original photo could not be downloaded. Check your connection.';
   }
 
@@ -235,7 +300,8 @@ class _PhotoViewerState extends State<PhotoViewer> {
 
   Future<void> _deleteCurrent() async {
     final index = _current;
-    final name = _photos[index]['name']?.toString() ?? _pathAt(index).split('/').last;
+    final name =
+        _photos[index]['name']?.toString() ?? _pathAt(index).split('/').last;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -360,10 +426,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
                 final path = _pathAt(i);
                 final error = _errors[path];
                 if (error != null) {
-                  return _ViewerError(
-                    message: error,
-                    onRetry: () => _retry(i),
-                  );
+                  return _ViewerError(message: error, onRetry: () => _retry(i));
                 }
                 final image = _decoded[path];
                 if (image == null) {
@@ -395,36 +458,43 @@ class _PhotoViewerState extends State<PhotoViewer> {
   }
 }
 
-/// Placeholder shown while the ORIGINAL downloads. The grid thumbnail is
-/// heavily dimmed behind the spinner so it can never be mistaken for the
-/// final image.
+/// Placeholder shown while the ORIGINAL downloads.
+///
+/// The grid thumbnail, when available, is drawn strongly blurred and dimmed
+/// behind the spinner — the standard "progressive loading" treatment. That
+/// reads unambiguously as *loading*; showing a sharp but small preview instead
+/// reads as "the photo is broken and looks blurry".
 class _LoadingPage extends StatelessWidget {
   final Uint8List? thumbnail;
   const _LoadingPage({this.thumbnail});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          if (thumbnail != null)
-            Positioned.fill(
-              child: Opacity(
-                opacity: 0.28,
-                child: Image.memory(
-                  thumbnail!,
-                  fit: BoxFit.contain,
-                  filterQuality: FilterQuality.medium,
-                  gaplessPlayback: true,
-                  // Thumbnails are ~512px; never decode them larger.
-                  cacheWidth: 1024,
-                ),
+    final preview = thumbnail;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (preview != null)
+          ImageFiltered(
+            imageFilter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+            child: Opacity(
+              opacity: 0.45,
+              child: Image.memory(
+                preview,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.medium,
+                gaplessPlayback: true,
+                cacheWidth: 1024,
+                excludeFromSemantics: true,
               ),
             ),
-          const CircularProgressIndicator(color: Colors.white70, strokeWidth: 2),
-        ],
-      ),
+          ),
+        Container(color: Colors.black.withValues(alpha: 0.35)),
+        const Center(
+          child:
+              CircularProgressIndicator(color: Colors.white70, strokeWidth: 2),
+        ),
+      ],
     );
   }
 }
@@ -443,7 +513,11 @@ class _ViewerError extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 44),
+            const Icon(
+              Icons.broken_image_outlined,
+              color: Colors.white54,
+              size: 44,
+            ),
             const SizedBox(height: AppDimens.space16),
             Text(
               'Can\u2019t open this photo',
@@ -459,7 +533,8 @@ class _ViewerError extends StatelessWidget {
             const SizedBox(height: AppDimens.space20),
             FilledButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded, size: AppDimens.iconSmall),
+              icon:
+                  const Icon(Icons.refresh_rounded, size: AppDimens.iconSmall),
               label: const Text('Retry'),
             ),
           ],
@@ -544,11 +619,12 @@ class _BottomBar extends StatelessWidget {
   }
 }
 
-/// Pans/zooms a photo while keeping its original pixels on screen.
+/// Pans/zooms a decoded original while keeping its pixels sharp.
 ///
-/// The decoded [RawImage] lays out at *native* resolution and the
-/// [InteractiveViewer]'s own transform provides the initial "fit" scale, so
-/// pinching in reveals real texture instead of a re-scaled preview.
+/// The [RawImage] lays out at *native* resolution and the
+/// [InteractiveViewer]'s transform provides the scale, so the only resampling
+/// is the GPU present — and the sampler is chosen from the live scale
+/// (mipmapped while minifying, bicubic at 1:1 and beyond).
 class _ZoomablePhoto extends StatefulWidget {
   final ui.Image image;
   const _ZoomablePhoto({super.key, required this.image});
@@ -564,16 +640,17 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
   double _fit = 1;
   bool _fitted = false;
 
+  /// Live sampler choice, so minifying a large photo uses mipmaps.
+  ui.FilterQuality _quality = ui.FilterQuality.medium;
+
   late final AnimationController _zoomAnim;
   Matrix4Tween? _zoomTween;
 
   @override
   void initState() {
     super.initState();
-    _zoomAnim = AnimationController(
-      vsync: this,
-      duration: AppMotion.fast,
-    );
+    _transform.addListener(_onTransformChanged);
+    _zoomAnim = AnimationController(vsync: this, duration: AppMotion.fast);
     _zoomAnim.addListener(() {
       final tween = _zoomTween;
       if (tween != null) _transform.value = tween.transform(_zoomAnim.value);
@@ -594,9 +671,17 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
 
   @override
   void dispose() {
+    _transform.removeListener(_onTransformChanged);
     _zoomAnim.dispose();
     _transform.dispose();
     super.dispose();
+  }
+
+  void _onTransformChanged() {
+    final next = ImageDecodePolicy.filterQualityForScale(
+      _transform.value.getMaxScaleOnAxis(),
+    );
+    if (next != _quality && mounted) setState(() => _quality = next);
   }
 
   Size get _photo =>
@@ -604,7 +689,8 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
 
   double _fitFor(Size viewport, Size photo) {
     if (photo.width <= 0 || photo.height <= 0) return 1;
-    return math.min(viewport.width / photo.width, viewport.height / photo.height)
+    return math
+        .min(viewport.width / photo.width, viewport.height / photo.height)
         .clamp(0.02, 4.0);
   }
 
@@ -663,7 +749,7 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
             child: RawImage(
               image: widget.image,
               fit: BoxFit.none,
-              filterQuality: FilterQuality.high,
+              filterQuality: _quality,
               isAntiAlias: true,
             ),
           ),

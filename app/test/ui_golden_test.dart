@@ -140,6 +140,21 @@ void main() {
     );
   });
 
+  /// A suspended download: the progress that already happened plus the way out
+  /// of the state, rather than a blank page.
+  testWidgets('update center paused golden', (tester) async {
+    final controller = await buildController();
+    controller.status = UpdateStatus.paused;
+    controller.receivedBytes = 18874368;
+    controller.totalBytes = 52428800;
+    controller.progress = 18874368 / 52428800;
+    await pumpScreen(tester, UpdateCenterScreen(controller: controller));
+    await expectLater(
+      find.byType(UpdateCenterScreen),
+      matchesGoldenFile('goldens/update_center_paused_light.png'),
+    );
+  });
+
   testWidgets('users admin golden', (tester) async {
     await pumpScreen(tester, AdminUsersScreen(api: _FakeApi()));
     await expectLater(
@@ -156,6 +171,10 @@ class _FakeApi extends Api {
     final session = Session();
     session.serverUrl = 'https://example.com';
     session.token = 'tok';
+    // Signed in as `ada`, so the golden exercises the "You" marker, the
+    // protected-self delete path and the administrator chip together.
+    session.username = 'ada';
+    session.userId = '1';
     return session;
   }
 

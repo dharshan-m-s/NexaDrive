@@ -381,13 +381,50 @@ class Api {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  Future<void> updateUser(String id, {String? displayName, String? role, bool? disabled, int? quotaBytes, String? password}) async {
-    final response = await _client.put(_uri('/api/admin/users/$id'), headers: {..._headers, 'Content-Type': 'application/json'}, body: jsonEncode({if (displayName != null) 'display_name': displayName, if (role != null) 'role': role, if (disabled != null) 'disabled': disabled, if (quotaBytes != null) 'quota_bytes': quotaBytes, if (password != null && password.isNotEmpty) 'password': password}));
+  /// Partial update of an account.
+  ///
+  /// Omitted fields are left untouched by the server. Clearing a quota back to
+  /// "unlimited" is a distinct operation ([clearQuota]) because the server
+  /// treats an absent `quota_bytes` as "leave unchanged" — sending nothing (or
+  /// null) would silently keep the old limit.
+  Future<void> updateUser(
+    String id, {
+    String? displayName,
+    String? role,
+    bool? disabled,
+    int? quotaBytes,
+    bool clearQuota = false,
+    String? password,
+  }) async {
+    final response = await _client.put(
+      _uri('/api/admin/users/$id'),
+      headers: {..._headers, 'Content-Type': 'application/json'},
+      body: jsonEncode({
+        if (displayName != null) 'display_name': displayName,
+        if (role != null) 'role': role,
+        if (disabled != null) 'disabled': disabled,
+        if (quotaBytes != null) 'quota_bytes': quotaBytes,
+        if (clearQuota) 'clear_quota': true,
+        if (password != null && password.isNotEmpty) 'password': password,
+      }),
+    );
     _check(response);
   }
 
   Future<void> deleteUser(String id) async {
     final response = await _client.delete(_uri('/api/admin/users/$id'), headers: _headers);
+    _check(response);
+  }
+
+  /// Ends every active session for [id] without changing their password.
+  ///
+  /// Used when an administrator needs to force a sign-out (lost or shared
+  /// device). The password itself is untouched, so the user can sign back in.
+  Future<void> revokeUserSessions(String id) async {
+    final response = await _client.post(
+      _uri('/api/admin/users/$id/revoke-sessions'),
+      headers: _headers,
+    );
     _check(response);
   }
 

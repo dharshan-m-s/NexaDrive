@@ -27,13 +27,31 @@ import 'file_share_sheet.dart';
 
 enum _Sort { name, size, newOld, oldNew }
 
+/// A one-shot action another screen wants My files to perform, so a shortcut
+/// like Home's "New folder" really creates a folder instead of only switching
+/// tabs.
+enum FilesIntent { upload, newFolder }
+
 class FilesScreen extends StatefulWidget {
   final Api api;
 
   /// Folder to open at. Empty means the browser root.
   final String initialPath;
 
-  const FilesScreen({super.key, required this.api, this.initialPath = ''});
+  /// Set by the shell when another screen asked My files to do something.
+  final FilesIntent? intent;
+
+  /// Called once [intent] has been started, so the shell can clear it and the
+  /// same action can be requested again later.
+  final VoidCallback? onIntentHandled;
+
+  const FilesScreen({
+    super.key,
+    required this.api,
+    this.initialPath = '',
+    this.intent,
+    this.onIntentHandled,
+  });
 
   @override
   State<FilesScreen> createState() => _FilesScreenState();
@@ -51,6 +69,11 @@ class _FilesScreenState extends State<FilesScreen> {
   String? _error;
   _Sort _sort = _Sort.name;
 
+  /// Sorted view of [_items], invalidated whenever the listing or sort order
+  /// changes. Sorting in `build` re-ran on every thumbnail that arrived, which
+  /// made scrolling a large folder O(n log n) per preview.
+  List<FileEntry>? _sortedCache;
+
   /// Paths with a download in flight. A set (not a single flag) so starting
   /// one download never silently swallows another one's request.
   final Set<String> _busyDownloads = <String>{};
@@ -65,6 +88,30 @@ class _FilesScreenState extends State<FilesScreen> {
     super.initState();
     _attachDiskCache();
     load();
+    // The first time this tab is opened the widget is created rather than
+    // updated, so an initial intent has to be handled here too.
+    final intent = widget.intent;
+    if (intent != null) _scheduleIntent(intent);
+  }
+
+  @override
+  void didUpdateWidget(covariant FilesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final intent = widget.intent;
+    if (intent != null && intent != oldWidget.intent) _scheduleIntent(intent);
+  }
+
+  void _scheduleIntent(FilesIntent intent) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      switch (intent) {
+        case FilesIntent.upload:
+          _pickAndUpload();
+        case FilesIntent.newFolder:
+          _createFolder();
+      }
+      widget.onIntentHandled?.call();
+    });
   }
 
   /// Previews survive a restart; the cache is keyed by account + path so it
@@ -86,15 +133,15 @@ class _FilesScreenState extends State<FilesScreen> {
       if (!mounted) return;
       setState(() {
         _items = items.map(FileEntry.fromJson).toList();
+        _sortedCache = null;
         _loading = false;
       });
       _prefetchThumbnails();
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e is ApiException
-            ? e.message
-            : 'The folder could not be listed.';
+        _error =
+            e is ApiException ? e.message : 'The folder could not be listed.';
         _loading = false;
       });
     }
@@ -157,7 +204,9 @@ class _FilesScreenState extends State<FilesScreen> {
           onSubmitted: (v) => Navigator.pop(context, v),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
             child: const Text('Create'),
@@ -259,7 +308,9 @@ class _FilesScreenState extends State<FilesScreen> {
           onSubmitted: (v) => Navigator.pop(context, v),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
             child: const Text('Rename'),
@@ -334,7 +385,9 @@ class _FilesScreenState extends State<FilesScreen> {
             ? 'Move $names to trash?'
             : 'Move ${sourcePaths.length} items to trash?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Trash'),
@@ -370,13 +423,15 @@ class _FilesScreenState extends State<FilesScreen> {
                     size: AppDimens.iconSmall,
                     color: option == _sort
                         ? AppColors.accentFor(Theme.of(context).brightness)
-                        : AppColors.textTertiaryFor(Theme.of(context).brightness),
+                        : AppColors.textTertiaryFor(
+                            Theme.of(context).brightness),
                   ),
                   const SizedBox(width: AppDimens.space12),
                   Text(
                     _sortLabel(option),
                     style: AppTextStyle.rowTitle.copyWith(
-                      fontWeight: option == _sort ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight:
+                          option == _sort ? FontWeight.w600 : FontWeight.w400,
                     ),
                   ),
                 ],
@@ -386,7 +441,10 @@ class _FilesScreenState extends State<FilesScreen> {
       ),
     );
     if (selected != null && selected != _sort) {
-      setState(() => _sort = selected);
+      setState(() {
+        _sort = selected;
+        _sortedCache = null;
+      });
     }
   }
 
@@ -423,9 +481,10 @@ class _FilesScreenState extends State<FilesScreen> {
     }
   }
 
-
   // ---------------------------------------------------------- sorting
-  List<FileEntry> get _sorted {
+  List<FileEntry> get _sorted => _sortedCache ??= _computeSorted();
+
+  List<FileEntry> _computeSorted() {
     final folders = _items.where((e) => e.isFolder).toList();
     final files = _items.where((e) => !e.isFolder).toList();
     int Function(FileEntry, FileEntry) cmp;
@@ -481,19 +540,22 @@ class _FilesScreenState extends State<FilesScreen> {
           onSearch: _selecting
               ? null
               : () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => SearchScreen(api: widget.api)),
+                    MaterialPageRoute(
+                        builder: (_) => SearchScreen(api: widget.api)),
                   ),
           onSort: _selecting ? null : _pickSort,
           onScan: _selecting
               ? null
-              : () => Navigator.of(context).push(
+              : () => Navigator.of(context)
+                      .push(
                     MaterialPageRoute(
                       builder: (_) => ScannerScreen(
                         api: widget.api,
                         folder: _path,
                       ),
                     ),
-                  ).then((saved) {
+                  )
+                      .then((saved) {
                     if (saved == true) load();
                   }),
         ),
@@ -577,8 +639,7 @@ class _FilesScreenState extends State<FilesScreen> {
       barrierDismissible: false,
       builder: (_) => _BatchDownloadDialog(
         items: [
-          for (final e in entries)
-            (remotePath: e.path, fileName: e.name),
+          for (final e in entries) (remotePath: e.path, fileName: e.name),
         ],
         directory: destination,
         downloads: _downloads,
@@ -634,7 +695,9 @@ class _FilesScreenState extends State<FilesScreen> {
               icon: _path.isEmpty
                   ? Icons.cloud_upload_outlined
                   : Icons.folder_open_rounded,
-              title: _path.isEmpty ? 'Your cloud is empty' : 'This folder is empty',
+              title: _path.isEmpty
+                  ? 'Your cloud is empty'
+                  : 'This folder is empty',
               hint: _path.isEmpty
                   ? 'Upload files or create a folder to get started.'
                   : 'Upload something here, or move files in from another folder.',
@@ -655,7 +718,10 @@ class _FilesScreenState extends State<FilesScreen> {
       child: _grid
           ? GridView.builder(
               padding: const EdgeInsets.fromLTRB(
-                AppDimens.pageMargin, AppDimens.space12, AppDimens.pageMargin, AppDimens.space24,
+                AppDimens.pageMargin,
+                AppDimens.space12,
+                AppDimens.pageMargin,
+                AppDimens.space24,
               ),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                 maxCrossAxisExtent: 170,
@@ -678,7 +744,10 @@ class _FilesScreenState extends State<FilesScreen> {
             )
           : ListView.builder(
               padding: const EdgeInsets.fromLTRB(
-                AppDimens.pageMargin, AppDimens.space4, AppDimens.pageMargin, AppDimens.space24,
+                AppDimens.pageMargin,
+                AppDimens.space4,
+                AppDimens.pageMargin,
+                AppDimens.space24,
               ),
               itemCount: (folders.isEmpty ? 0 : folders.length + 1) +
                   (files.isEmpty ? 0 : files.length + 1),
@@ -748,7 +817,8 @@ class _FilesScreenState extends State<FilesScreen> {
           children: [
             OneUiSheetHeader(
               title: entry.name,
-              subtitle: '${FileKind.label(entry.category)} · ${Format.bytes(entry.size)}',
+              subtitle:
+                  '${FileKind.label(entry.category)} · ${Format.bytes(entry.size)}',
             ),
             OneUiSheetAction(
               icon: Icons.info_outline_rounded,
@@ -758,7 +828,8 @@ class _FilesScreenState extends State<FilesScreen> {
                 showOneUiSheet<void>(
                   context,
                   isScrollControlled: true,
-                  builder: (_) => FileDetailsSheet(file: entry, api: widget.api),
+                  builder: (_) =>
+                      FileDetailsSheet(file: entry, api: widget.api),
                 );
               },
             ),
@@ -770,7 +841,8 @@ class _FilesScreenState extends State<FilesScreen> {
                 showOneUiSheet<void>(
                   context,
                   isScrollControlled: true,
-                  builder: (_) => FileShareSheet(api: widget.api, files: [entry]),
+                  builder: (_) =>
+                      FileShareSheet(api: widget.api, files: [entry]),
                 );
               },
             ),
@@ -856,7 +928,10 @@ class _ViewArea extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppDimens.pageMargin, AppDimens.space20, AppDimens.pageMargin, AppDimens.space8,
+        AppDimens.pageMargin,
+        AppDimens.space20,
+        AppDimens.pageMargin,
+        AppDimens.space8,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -879,15 +954,16 @@ class _ViewArea extends StatelessWidget {
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyle.caption
-                        .copyWith(color: AppColors.textSecondaryFor(brightness)),
+                    style: AppTextStyle.caption.copyWith(
+                        color: AppColors.textSecondaryFor(brightness)),
                   ),
                 ],
                 if (selecting && onBackToRoot != null) ...[
                   const SizedBox(height: AppDimens.space6),
                   TextButton.icon(
                     onPressed: onBackToRoot,
-                    icon: const Icon(Icons.home_outlined, size: AppDimens.iconSmall),
+                    icon: const Icon(Icons.home_outlined,
+                        size: AppDimens.iconSmall),
                     label: const Text('Back to My files'),
                   ),
                 ],
@@ -968,7 +1044,9 @@ class _ViewArea extends StatelessWidget {
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(
-                      isGrid ? Icons.view_list_outlined : Icons.grid_view_outlined,
+                      isGrid
+                          ? Icons.view_list_outlined
+                          : Icons.grid_view_outlined,
                     ),
                     title: Text(isGrid ? 'List view' : 'Grid view'),
                   ),
@@ -1076,7 +1154,10 @@ class _GroupHeader extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppDimens.space4, AppDimens.space12, AppDimens.space4, AppDimens.space4,
+        AppDimens.space4,
+        AppDimens.space12,
+        AppDimens.space4,
+        AppDimens.space4,
       ),
       child: Text(
         title,
@@ -1154,7 +1235,9 @@ class _BatchDownloadDialogState extends State<_BatchDownloadDialog> {
             ),
             const SizedBox(height: AppDimens.space16),
             LinearProgressIndicator(
-              value: widget.items.isEmpty ? null : _completed / widget.items.length,
+              value: widget.items.isEmpty
+                  ? null
+                  : _completed / widget.items.length,
             ),
             const SizedBox(height: AppDimens.space12),
             Text(

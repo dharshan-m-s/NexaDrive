@@ -83,6 +83,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     }
     if (_error != null) {
       return OneUiEmptyState(
+        centered: true,
         icon: Icons.picture_as_pdf_outlined,
         title: 'Can\'t open this PDF',
         hint: _error,
@@ -96,6 +97,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         final supported = snapshot.data == true;
         if (!supported) {
           return OneUiEmptyState(
+            centered: true,
             icon: Icons.picture_as_pdf_outlined,
             title: 'PDF reader coming to this device',
             hint: 'Download the file and open it with your PDF app.',
@@ -117,6 +119,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
               pageLoaderBuilder: (_) =>
                   const Center(child: CircularProgressIndicator(strokeWidth: 2)),
               errorBuilder: (_, error) => OneUiEmptyState(
+                centered: true,
                 icon: Icons.error_outline_rounded,
                 title: 'Can\'t render this page',
                 hint: error.toString(),
@@ -127,6 +130,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           );
         } catch (e) {
           return OneUiEmptyState(
+            centered: true,
             icon: Icons.picture_as_pdf_outlined,
             title: 'Can\'t open this PDF',
             hint: e.toString(),

@@ -91,7 +91,10 @@ class TransferQueue {
 
   /// Whether [e] is worth retrying in-process rather than surfacing as a
   /// permanent failure.
-  static bool _isTransient(Object e) {
+  ///
+  /// Public so the sync engine can apply the same classification without
+  /// duplicating the list of retryable status codes.
+  static bool isTransient(Object e) {
     if (e is SocketException || e is TimeoutException) return true;
     if (e is http.ClientException) return true;
     if (e is ApiException) {
@@ -179,7 +182,7 @@ class TransferQueue {
           await persist(last);
           return last;
         }
-        if (!_isTransient(e) || retries >= _maxRetries) {
+        if (!isTransient(e) || retries >= _maxRetries) {
           rethrow;
         }
         final delay = Duration(seconds: _backoffSeconds[retries]);
