@@ -74,7 +74,8 @@ This repository is a complete runnable MVP foundation:
 
 **NexaDrive 1.1.0** is the finalized source baseline for the current project scope. It includes authentication, file management, trash, sharing, photos, resumable transfers, desktop sync, conflict handling, notifications, device management, Restic backup/restore, quota enforcement, appearance preferences and GitHub Actions release automation.
 
-For deployment and security requirements, see `docs/FINAL_RELEASE.md` and `docs/SECURITY.md`.
+For deployment and security requirements, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+and [`docs/SECURITY.md`](docs/SECURITY.md).
 
 ## Installation overview
 
@@ -218,10 +219,14 @@ flutter run -d <device-id>
 
 The login screen asks for:
 
-- Server URL (leave empty the first time — enter the address of *your* server;
-  it is remembered on later launches)
+- Server URL — the address of *your* server. It is remembered on later launches,
+  so you only type it once. A bare hostname is accepted and assumed HTTPS; an
+  HTTP-only LAN server must be typed with its scheme (`http://<lan-ip>:8080`).
 - Username
 - Password
+
+All three are validated on the device before anything is sent, so a mistyped
+address is reported as a form error rather than surfacing as a network failure.
 
 Example (a Tailscale tailnet; your name will differ):
 
@@ -271,52 +276,49 @@ Database stores metadata and security state; the filesystem stores the actual fi
 
 ## Recovery principle
 
-The storage directory is intentionally ordinary filesystem data. Do not manually rename user UUID directories while the server is running. Back it up with a filesystem-aware backup tool such as restic once the backup subsystem is implemented.
+The storage directory is intentionally ordinary filesystem data. Do not manually rename user UUID directories while the server is running. For backup, the server ships a Restic integration (`/api/backup/*`, driven from the app's Settings screen): configure `RESTIC_REPOSITORY` and `RESTIC_PASSWORD_FILE` and set `RESTIC_BIN` if `restic` is not on `PATH`.
 
 ## API
 
-Public:
+Every request is authenticated with a bearer session token except the health
+probe, the server status endpoint, login, and a public share link:
 
 ```text
 GET  /health
 GET  /api/server/status
 POST /api/auth/login
-```
+GET  /api/share/{token}/download
 
-Authenticated:
-
-```text
-POST   /api/auth/logout
-GET    /api/me
-GET    /api/files?path=
-POST   /api/folders
-POST   /api/files/upload
-GET    /api/files/download?path=
-GET    /api/files/thumbnail?path=&max= (server-generated JPEG previews)
-DELETE /api/files?path=
-GET    /api/storage
-```
-
-Authentication:
-
-```text
 Authorization: Bearer <session-token>
 ```
 
-## Development history
+The rest of the surface covers files and folders, resumable uploads, Trash,
+photos, sharing (named users and public links), desktop sync, notifications,
+account administration, audit logging and Restic backups.
 
-Incremental build logs live in `docs/PHASE3.md`–`docs/PHASE9.md`. The
-consolidated release engineering report is `docs/FINAL_RELEASE.md`.
+**The full endpoint contract — every route, its parameters, status codes and
+path-safety rules — is in [`docs/API.md`](docs/API.md).**
 
-## Related documentation
+## Documentation
 
-- `docs/UPDATE_SYSTEM.md` — updater architecture, manifest schema, security model.
-- `docs/PLATFORM_SUPPORT.md` — supported platforms, install types, per-platform update flows.
-- `docs/UPDATER_TROUBLESHOOTING.md` — updater error diagnosis and fixes.
-- `docs/RELEASE_PROCESS.md` — how releases are built, verified, and published.
+The current reference docs are:
+
+- [`docs/API.md`](docs/API.md) — the complete HTTP contract.
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — server deployment, storage layout, Tailscale Serve.
+- [`docs/SECURITY.md`](docs/SECURITY.md) — the security model and product rules.
+- [`docs/UPDATE_SYSTEM.md`](docs/UPDATE_SYSTEM.md) — updater architecture, manifest schema, security model.
+- [`docs/UPDATER_TROUBLESHOOTING.md`](docs/UPDATER_TROUBLESHOOTING.md) — updater error diagnosis and fixes.
+- [`docs/PLATFORM_SUPPORT.md`](docs/PLATFORM_SUPPORT.md) — supported platforms, install types, per-platform update flows.
+- [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) — how releases are built, verified, and published.
+- [`docs/GITHUB_ACTIONS.md`](docs/GITHUB_ACTIONS.md) — the CI/CD workflows.
+
+`docs/README.md` indexes the rest, including the historical build logs
+(`docs/PHASE*.md`) and the point-in-time audit snapshots, which are kept as a
+record of how the project got here rather than as current specifications.
 
 ## 1.1.0 release
 
 This tag is the finalized source baseline for the current feature scope.
-See `docs/FINAL_RELEASE.md` for deployment and security details and
-`docs/GITHUB_ACTIONS.md` for how CI/CD produces the release artifacts.
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for deployment and security
+details and [`docs/GITHUB_ACTIONS.md`](docs/GITHUB_ACTIONS.md) for how CI/CD
+produces the release artifacts.

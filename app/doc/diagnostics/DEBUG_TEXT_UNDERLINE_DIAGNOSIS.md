@@ -155,6 +155,47 @@ re-audited end to end:
 
 Still a session/DevTools overlay, not application typography.
 
+## Independently re-verified 2026-09-19 (third report)
+
+Every claim above was re-checked against this tree and against the Flutter SDK
+that actually builds it (3.47.2), rather than taken on trust:
+
+```
+$ grep -rn "TextDecoration" app/lib            # -> no matches
+$ grep -rn "debugPaint|debugRepaint" app/lib   # -> only main.dart setting them false
+```
+
+* `app/lib` still contains **zero** `TextDecoration` usage, so no underline is
+  authored anywhere in the design system, the theme, or any widget.
+* The only debug-paint references in `lib/` are the defensive resets in
+  `main.dart` (all assigned `false`), not an enabling site.
+* `debugPaintBaselines` in the local SDK is still `assert`-gated and still paints
+  `0xFFFFD000` (ideographic) and `0x00FF00` (alphabetic), and
+  `debugPaintBaselinesEnabled` still defaults to `false`:
+
+  ```
+  packages/flutter/lib/src/rendering/box.dart:3250: void debugPaintBaselines(...) { assert(() {
+  packages/flutter/lib/src/rendering/box.dart:3259:   paint.color = const Color(0xFFFFD000);
+  packages/flutter/lib/src/rendering/debug.dart:39:  bool debugPaintBaselinesEnabled = false;
+  ```
+
+* Colour-histogramming the freshly regenerated goldens for the exact screens in
+  the report (`update_center_light.png`, `update_center_paused_light.png`,
+  `admin_users_light.png`) finds **0** pixels from the green/amber
+  baseline-paint families. The rendered UI is clean in all three.
+
+So the lines remain a *debug-session* overlay, not application typography.
+
+### A real Update Center defect found during this pass
+
+The pass did surface a genuine visual defect on the same screen, in
+`UpdateCenterScreen`'s primary action: `_PrimaryButton` wrapped a
+`FilledButton.icon` / `FilledButton` **inside** an outer `FilledButton`. That
+painted two stacked pill surfaces and made the action 80px tall (56px button +
+the outer button's 24px of padding) instead of the design's 56px touch target.
+It is fixed, and `app/test/update_center_action_test.dart` now pins the action
+to exactly one non-nested button whose tap dispatches once.
+
 ## If you see the lines again
 
 They are a *session* setting on the running debug app, not stored in the repo:

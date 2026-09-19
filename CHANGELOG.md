@@ -393,6 +393,80 @@ both are now regression-tested.
 - Update-check requests no longer duplicate DNS lookups for artifacts
   (shared HTTP client, validated redirects).
 
+  ### Production-readiness pass: a button inside a button, and four other real defects
+
+  A full audit of the tree found five genuine defects that no existing test could
+  see, plus a class of metadata problems that only shows up in shipped artifacts.
+
+  - **A `FilledButton` was nested inside another `FilledButton` in the Update
+    Centre's primary action.** `_PrimaryButton` wrapped the caller's button in a
+    second `FilledButton`, so the action rendered with both the outer and inner
+    button's padding — 80 px tall instead of the design system's 56 px
+    (`touchTargetLarge`) — and every tap hit the inner button through the outer
+    one's hit-test area. The wrapper now applies its own sizing without stacking a
+    second button around an existing one. The change is confined to that
+    component: the `admin_users` golden is byte-identical, and in the
+    `update_center` golden nothing above the button moved while everything below
+    shifts up by exactly the 24 px the button lost.
+  - **`UpdateController.reconcileAfterResume` carried a duplicated cleanup tail.**
+    A previous edit had appended a second `if (status == UpdateStatus.completed)`
+    block *after* the method's real if/else, left at column zero. On the success
+    path it cleared the installer cache a second time, and in the other branch it
+    repeated the prune that the branch above already performed. The method is now
+    a single if/else with one exit path; the extra call is gone and the
+    behaviour is unchanged.
+  - **Login accepted malformed input and could report an unmounted error.** Sign-in
+    now validates the address shape and empty fields before the request, maps
+    credential failures to a message that does not leak whether the account
+    exists, and guards the post-await `setState` with `mounted`.
+  - **The Users screen leaked dialog controllers.** Each dialog built its own
+    `TextEditingController` that was never disposed, and edits made in the dialog
+    were not validated before the request. The screen now owns the controllers for
+    the lifetime of the dialog and validates username/e-mail before submitting.
+  - **Settings displayed a hardcoded `1.1.0`.** The version tile fell back to a
+    string literal instead of the package's real version, so it would have gone
+    stale on the next release. It now reads the version from the single source.
+
+  ### Platform identity: a half-finished rename, and boilerplate in shipped binaries
+
+  The Android `namespace`/`applicationId` had been migrated from Flutter's
+  `com.example.nexadrive` to `io.nexadrive.app`, but the migration stopped there.
+  The Linux runner still declared `APPLICATION_ID "com.example.nexadrive"`, and the
+  Windows resource file still shipped `VALUE "CompanyName", "com.example"` and a
+  `Copyright (C) 2026 com.example` line — all of which reach users through the
+  GTK application id, the Explorer *Properties → Details* tab, and Task Manager.
+  The native window titles and the Android launcher label also still read the
+  lowercase `nexadrive` while `MaterialApp` and the packaged `.desktop` entry said
+  `NexaDrive`.
+
+  Every platform now reports one identity — `io.nexadrive.app`, `NexaDrive` — and
+  CI enforces it: the version-consistency job fails if `com.example` reappears
+  anywhere under `app/android`, `app/linux` or `app/windows`, or if the Android
+  and Linux application ids drift apart. The built Linux bundle was inspected to
+  confirm `io.nexadrive.app` and `NexaDrive` are present in the executable and
+  `com.example.nexadrive` is not.
+
+  ### Whole-tree formatting, enforced
+
+  Every Dart file failed `dart format` — the tree had never been formatted with the
+  SDK's own formatter, so any future `dart format` run produced an unrelated
+  whitespace diff.  `lib`, `test` and `integration_test` are now formatted, and CI
+  gained a `Flutter format` job that fails on an unformatted tree. The reformat
+  also surfaced a handful of analyzer warnings that had been sitting unnoticed in
+  one-line `if` bodies — splitting those onto two lines re-triggered the "always
+  use curly braces in flow-control structures" lint. Each is now braced rather
+  than suppressed. No string literal changed
+  anywhere in the reformat, which was verified by diffing every literal in the
+  tree before and after.
+
+  ### Documentation
+
+  - `docs/API.md` was rewritten as the complete, current HTTP contract — it had
+    omitted several routes and was still organised around internal build phases.
+  - `docs/README.md` is a new index that separates current reference documentation
+    from the eight successive historical "final audit" snapshots, and states which
+    wins when the two disagree.
+
 ## 1.1.0
 
 - Replaced PostgreSQL with embedded SQLite.
