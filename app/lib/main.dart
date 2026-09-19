@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/api.dart';
 import 'services/background_transfer_service.dart';
@@ -9,6 +10,22 @@ import 'ui/shell/app_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Never start a normal app session with Flutter's rendering diagnostics
+  // enabled. DevTools can intentionally enable them for inspection, but these
+  // flags must not become part of the application's visual state.
+  assert(() {
+    debugPaintBaselinesEnabled = false;
+    debugPaintSizeEnabled = false;
+    debugPaintLayerBordersEnabled = false;
+    debugPaintPointersEnabled = false;
+    debugPaintTextLayoutBoxes = false;
+    debugRepaintRainbowEnabled = false;
+    debugRepaintTextRainbowEnabled = false;
+    debugDisableClipLayers = false;
+    debugDisablePhysicalShapeLayers = false;
+    return true;
+  }());
   // Cache management: decoded frames only. The raw thumbnail/original byte
   // caches live in ImageRepository (services/image_pipeline.dart) and are
   // bounded separately, so this budget covers decoded tiles plus the couple of
