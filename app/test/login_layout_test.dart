@@ -110,4 +110,97 @@ void main() {
       });
     }
   });
+
+  group('the on-screen keyboard never steals field focus', () {
+    // Android shrinks the body when the IME opens and grows it again when it
+    // closes. A layout that swaps between two different widget trees at that
+    // height boundary unmounts the focused field and drops focus; the single
+    // stable scrollable subtree must instead keep focus exactly where it is.
+    testWidgets('focus survives an IME-style viewport shrink', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final session = Session();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: LoginScreen(session: session),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final fields = find.byType(TextField);
+      await tester.tap(fields.at(2));
+      await tester.pump();
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(
+                of: fields.at(2),
+                matching: find.byType(EditableText),
+              ),
+            )
+            .focusNode
+            .hasPrimaryFocus,
+        isTrue,
+      );
+
+      final countBefore = tester
+          .widget<EditableText>(
+            find.descendant(
+              of: fields.at(2),
+              matching: find.byType(EditableText),
+            ),
+          )
+          .focusNode
+          .hashCode;
+
+      // The keyboard opens: the body shrinks below the centred-form threshold,
+      // as it would on a 640-height phone.
+      await tester.binding.setSurfaceSize(const Size(390, 400));
+      await tester.pumpAndSettle();
+
+      final nodeAfter = tester
+          .widget<EditableText>(
+            find.descendant(
+              of: fields.at(2),
+              matching: find.byType(EditableText),
+            ),
+          )
+          .focusNode;
+      expect(nodeAfter.hasFocus, isTrue,
+          reason: 'shrinking the viewport must not unmount the focused field');
+      expect(nodeAfter.hashCode, countBefore,
+          reason: 'the field must not be recreated by the resize');
+
+      // The keyboard closes again: the viewport grows back.
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('moving between login fields preserves focus', (tester) async {
+      await _pump(tester, const Size(390, 844));
+      final fields = find.byType(TextField);
+      await tester.tap(fields.at(1));
+      await tester.pump();
+      expect(tester.binding.focusManager.primaryFocus, isNotNull);
+
+      await tester.tap(fields.at(2));
+      await tester.pump();
+      expect(tester.binding.focusManager.primaryFocus, isNotNull);
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(
+                of: fields.at(2),
+                matching: find.byType(EditableText),
+              ),
+            )
+            .focusNode
+            .hasPrimaryFocus,
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

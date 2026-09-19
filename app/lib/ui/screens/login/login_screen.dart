@@ -16,7 +16,7 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
+class _LoginScreenState extends State<LoginScreen> {
   final server = TextEditingController();
   final username = TextEditingController();
   final password = TextEditingController();
@@ -24,19 +24,8 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   String? error;
   bool _obscure = true;
 
-  // ---- TS diagnosis (temporary) ----
-  static final String _ts = DateTime.now().toIso8601String();
-  final _fServer = FocusNode();
-  final _fUsername = FocusNode();
-  final _fPassword = FocusNode();
-  String _log(String s) {
-    debugPrint('[TS ${(DateTime.now().millisecondsSinceEpoch % 1000000)}] $s');
-    return s;
-  }
-  // ---- /TS diagnosis ----
-
-  /// Below this available height the centred composition no longer fits and the
-  /// layout switches to a pinned primary action.
+  /// Below this available height the form moves from centred to top-aligned
+  /// so that the primary action stays reachable without fighting the viewport.
   ///
   /// Chosen from measurement, not taste: the centred form is ~538px tall, so a
   /// 464px window (a small Linux window, a phone in landscape, or a phone with
@@ -47,46 +36,12 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    // ---- TS diagnosis (temporary) ----
-    _fServer.addListener(() => _log('FOCUS server=${_fServer.hasFocus} branch=${_ts}'));
-    _fUsername.addListener(() => _log('FOCUS username=${_fUsername.hasFocus}'));
-    _fPassword.addListener(() => _log('FOCUS password=${_fPassword.hasFocus}'));
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      Future<void> printPos(GlobalKey k, String name) async {
-        await WidgetsBinding.instance.endOfFrame;
-        final box = k.currentContext?.findRenderObject() as RenderBox?;
-        if (box != null) {
-          final o = box.localToGlobal(Offset.zero);
-          _log('POS $name x=${o.dx} y=${o.dy} w=${box.size.width} h=${box.size.height} (logical)');
-        }
-      }
-      printPos(_keyServer, 'server');
-      printPos(_keyUsername, 'username');
-      printPos(_keyPassword, 'password');
-    });
-    // ---- /TS diagnosis ----
     if (widget.session.serverUrl != null) {
       server.text = widget.session.serverUrl!;
     } else if (widget.session.username != null) {
       username.text = widget.session.username!;
     }
   }
-
-  // ---- TS diagnosis (temporary) ----
-  final GlobalKey _keyServer = GlobalKey();
-  final GlobalKey _keyUsername = GlobalKey();
-  final GlobalKey _keyPassword = GlobalKey();
-
-  @override
-  void didChangeMetrics() {
-    final mq = MediaQuery.maybeOf(context);
-    if (mq == null) return;
-    _log('METRICS size=${mq.size} viewInsets=${mq.viewInsets} '
-        'viewPadding=${mq.viewPadding} padding=${mq.padding}');
-  }
-  // ---- /TS diagnosis ----
 
   Future<void> submit() async {
     FocusManager.instance.primaryFocus?.unfocus();
@@ -145,12 +100,6 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    // ---- TS diagnosis (temporary) ----
-    WidgetsBinding.instance.removeObserver(this);
-    _fServer.dispose();
-    _fUsername.dispose();
-    _fPassword.dispose();
-    // ---- /TS diagnosis ----
     server.dispose();
     username.dispose();
     password.dispose();
@@ -160,7 +109,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   // --------------------------------------------------------------- fragments
 
   Widget _brand(Brightness brightness, {required bool compact}) {
-    final size = compact ? 44.0 : 62.0;
+    final size = compact ? 40.0 : 62.0;
     return Container(
       width: size,
       height: size,
@@ -174,65 +123,72 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
         color: brightness == Brightness.dark
             ? AppColors.textOnPrimaryDark
             : Colors.white,
-        size: compact ? 24 : 32,
+        size: compact ? 20 : 32,
       ),
     );
   }
 
-  Widget _heading(Brightness brightness, {required bool compact}) {
+  Widget _heading(Brightness brightness,
+      {required bool compact, required bool shortViewport}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Welcome to NexaDrive',
           style: (compact ? AppTextStyle.pageTitle : AppTextStyle.display)
-              .copyWith(color: AppColors.textPrimaryFor(brightness)),
-        ),
-        const SizedBox(height: AppDimens.space4),
-        Text(
-          'Your files. Your server. Your private cloud.',
-          style: AppTextStyle.rowSubtitle.copyWith(
-            color: AppColors.textSecondaryFor(brightness),
+              .copyWith(
+            color: AppColors.textPrimaryFor(brightness),
+            fontSize: shortViewport ? 22 : null,
           ),
         ),
+        if (!shortViewport) ...[
+          const SizedBox(height: AppDimens.space4),
+          Text(
+            'Your files. Your server. Your private cloud.',
+            style: AppTextStyle.rowSubtitle.copyWith(
+              color: AppColors.textSecondaryFor(brightness),
+            ),
+          ),
+        ],
       ],
     );
   }
 
-  Widget _fields(Brightness brightness, {required bool compact}) {
+  Widget _fields(Brightness brightness,
+      {required bool compact, required bool tight}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(
-          key: _keyServer,
-          focusNode: _fServer,
           controller: server,
           keyboardType: TextInputType.url,
           autofillHints: const [AutofillHints.url],
           decoration: InputDecoration(
             labelText: 'Server address',
+            isDense: tight,
             prefixIcon: const Icon(Icons.dns_outlined),
             hintText: compact
                 ? 'https://server.example.com'
                 : 'https://server.example.com or http://<lan-ip>:8080',
           ),
         ),
-        const SizedBox(height: AppDimens.space12),
+        SizedBox(
+          height: tight ? AppDimens.space6 : AppDimens.space12,
+        ),
         TextField(
-          key: _keyUsername,
-          focusNode: _fUsername,
           controller: username,
           textInputAction: TextInputAction.next,
           autofillHints: const [AutofillHints.username],
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Username',
-            prefixIcon: Icon(Icons.person_outline_rounded),
+            isDense: tight,
+            prefixIcon: const Icon(Icons.person_outline_rounded),
           ),
         ),
-        const SizedBox(height: AppDimens.space12),
+        SizedBox(
+          height: tight ? AppDimens.space6 : AppDimens.space12,
+        ),
         TextField(
-          key: _keyPassword,
-          focusNode: _fPassword,
           controller: password,
           obscureText: _obscure,
           textInputAction: TextInputAction.done,
@@ -240,6 +196,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
           autofillHints: const [AutofillHints.password],
           decoration: InputDecoration(
             labelText: 'Password',
+            isDense: tight,
             prefixIcon: const Icon(Icons.lock_outline_rounded),
             suffixIcon: IconButton(
               tooltip: _obscure ? 'Show password' : 'Hide password',
@@ -293,93 +250,66 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     final compact = size.width < 700;
 
     return Scaffold(
+      // Let Scaffold apply the normal Android IME inset handling. The login
+      // content remains one stable scrollable subtree while the keyboard opens;
+      // it never swaps between two different widget trees based on height.
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
+            final shortViewport = constraints.maxHeight < _shortViewport;
             final horizontal = compact
                 ? AppDimens.pageMargin
                 : AppDimens.pageMarginWide;
-            _log('LAYOUT maxHeight=${constraints.maxHeight} branch=${constraints.maxHeight >= _shortViewport ? 'tall' : 'short'}');
+            final vertical = shortViewport
+                ? AppDimens.space12
+                : AppDimens.space32;
+            final gap = shortViewport ? AppDimens.space8 : AppDimens.space12;
+            final sectionGap =
+                shortViewport ? AppDimens.space12 : AppDimens.space32;
 
-            // Tall viewport: the centred composition, which is the nicest
-            // reading of this screen and has room to breathe.
-            if (constraints.maxHeight >= _shortViewport) {
-              return Center(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: horizontal,
-                    vertical: AppDimens.space32,
-                  ),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 440),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: _brand(brightness, compact: false),
-                        ),
-                        const SizedBox(height: AppDimens.space28),
-                        _heading(brightness, compact: false),
-                        const SizedBox(height: AppDimens.space32),
-                        _fields(brightness, compact: false),
-                        const SizedBox(height: AppDimens.space24),
-                        _submitButton(),
-                        const SizedBox(height: AppDimens.space20),
-                        _caption(brightness),
-                      ],
-                    ),
-                  ),
+            return SingleChildScrollView(
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.symmetric(
+                horizontal: horizontal,
+                vertical: vertical,
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 440,
+                  minHeight: (constraints.maxHeight - vertical * 2)
+                      .clamp(0.0, double.infinity),
                 ),
-              );
-            }
-
-            // Short viewport: the fields scroll, the primary action is pinning
-            // to the bottom of the visible area so it is always reachable. This
-            // is also what keeps "Sign in" above the on-screen keyboard, since
-            // the Scaffold shrinks the body when the keyboard opens.
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(
-                      horizontal, AppDimens.space16, horizontal,
-                      AppDimens.space16,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisAlignment: shortViewport
+                      ? MainAxisAlignment.start
+                      : MainAxisAlignment.center,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: _brand(brightness, compact: shortViewport),
                     ),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 440),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: _brand(brightness, compact: true),
-                            ),
-                            const SizedBox(height: AppDimens.space12),
-                            _heading(brightness, compact: true),
-                            const SizedBox(height: AppDimens.space16),
-                            _fields(brightness, compact: true),
-                          ],
-                        ),
-                      ),
+                    SizedBox(height: gap),
+                    _heading(
+                      brightness,
+                      compact: shortViewport,
+                      shortViewport: shortViewport,
                     ),
-                  ),
+                    SizedBox(height: gap),
+                    _fields(
+                      brightness,
+                      compact: shortViewport,
+                      tight: shortViewport,
+                    ),
+                    SizedBox(height: sectionGap),
+                    _submitButton(),
+                    const SizedBox(height: AppDimens.space20),
+                    _caption(brightness),
+                  ],
                 ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    horizontal, AppDimens.space8, horizontal,
-                    AppDimens.space12,
-                  ),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 440),
-                      child: _submitButton(),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             );
           },
         ),
