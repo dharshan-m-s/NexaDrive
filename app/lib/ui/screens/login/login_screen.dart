@@ -311,6 +311,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
 class _ErrorBanner extends StatelessWidget {
   final String message;
   const _ErrorBanner({required this.message});
