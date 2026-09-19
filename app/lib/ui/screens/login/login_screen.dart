@@ -103,121 +103,147 @@ class _LoginScreenState extends State<LoginScreen> {
     final brightness = Theme.of(context).brightness;
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? AppDimens.pageMargin : AppDimens.pageMarginWide,
-              vertical: AppDimens.space32,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Brand mark
-                  Container(
-                    width: 62,
-                    height: 62,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppColors.accentFor(brightness),
-                      borderRadius: BorderRadius.circular(AppDimens.radiusCard),
-                    ),
-                    child: Icon(
-                      Icons.cloud_rounded,
-                      color: brightness == Brightness.dark
-                          ? AppColors.textOnPrimaryDark
-                          : Colors.white,
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.space28),
-                  Text(
-                    'Welcome to NexaDrive',
-                    style: AppTextStyle.display.copyWith(
-                      color: AppColors.textPrimaryFor(brightness),
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.space6),
-                  Text(
-                    'Your files. Your server. Your private cloud.',
-                    style: AppTextStyle.rowSubtitle.copyWith(
-                      color: AppColors.textSecondaryFor(brightness),
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.space32),
-                  TextField(
-                    controller: server,
-                    keyboardType: TextInputType.url,
-                    autofillHints: const [AutofillHints.url],
-                    decoration: InputDecoration(
-                      labelText: 'Server address',
-                      prefixIcon: const Icon(Icons.dns_outlined),
-                      hintText: compact
-                          ? 'https://server.example.com'
-                          : 'https://server.example.com or http://<lan-ip>:8080',
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.space12),
-                  TextField(
-                    controller: username,
-                    textInputAction: TextInputAction.next,
-                    autofillHints: const [AutofillHints.username],
-                    decoration: const InputDecoration(
-                      labelText: 'Username',
-                      prefixIcon: Icon(Icons.person_outline_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.space12),
-                  TextField(
-                    controller: password,
-                    obscureText: _obscure,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => submit(),
-                    autofillHints: const [AutofillHints.password],
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline_rounded),
-                      suffixIcon: IconButton(
-                        tooltip: _obscure ? 'Show password' : 'Hide password',
-                        onPressed: () => setState(() => _obscure = !_obscure),
-                        icon: Icon(
-                          _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: AppDimens.space16),
-                    _ErrorBanner(message: error!),
-                  ],
-                  const SizedBox(height: AppDimens.space24),
-                  SizedBox(
-                    height: AppDimens.touchTargetLarge,
-                    child: FilledButton(
-                      onPressed: loading ? null : submit,
-                      child: loading
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Sign in'),
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.space20),
-                  Text(
-                    'Private cloud on hardware you control. Enter the address of your NexaDrive server.',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyle.caption.copyWith(
-                      color: AppColors.textTertiaryFor(brightness),
-                    ),
-                  ),
-                ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+              padding: EdgeInsets.symmetric(
+                horizontal: compact
+                    ? AppDimens.pageMargin
+                    : AppDimens.pageMarginWide,
+                vertical: AppDimens.space32,
               ),
-            ),
-          ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight -
+                      (AppDimens.space32 * 2),
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Brand mark
+                        Container(
+                          width: 62,
+                          height: 62,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: AppColors.accentFor(brightness),
+                            borderRadius:
+                                BorderRadius.circular(AppDimens.radiusCard),
+                          ),
+                          child: Icon(
+                            Icons.cloud_rounded,
+                            color: brightness == Brightness.dark
+                                ? AppColors.textOnPrimaryDark
+                                : Colors.white,
+                            size: 32,
+                          ),
+                        ),
+                        const SizedBox(height: AppDimens.space28),
+                        Text(
+                          'Welcome to NexaDrive',
+                          style: AppTextStyle.display.copyWith(
+                            color: AppColors.textPrimaryFor(brightness),
+                          ),
+                        ),
+                        const SizedBox(height: AppDimens.space6),
+                        Text(
+                          'Your files. Your server. Your private cloud.',
+                          style: AppTextStyle.rowSubtitle.copyWith(
+                            color: AppColors.textSecondaryFor(brightness),
+                          ),
+                        ),
+                        const SizedBox(height: AppDimens.space32),
+                        TextField(
+                          controller: server,
+                          keyboardType: TextInputType.url,
+                          textInputAction: TextInputAction.next,
+                          autofillHints: const [AutofillHints.url],
+                          decoration: InputDecoration(
+                            labelText: 'Server address',
+                            prefixIcon: const Icon(Icons.dns_outlined),
+                            hintText: compact
+                                ? 'https://server.example.com'
+                                : 'https://server.example.com or http://<lan-ip>:8080',
+                          ),
+                        ),
+                        const SizedBox(height: AppDimens.space12),
+                        TextField(
+                          controller: username,
+                          textInputAction: TextInputAction.next,
+                          autofillHints: const [AutofillHints.username],
+                          decoration: const InputDecoration(
+                            labelText: 'Username',
+                            prefixIcon:
+                                Icon(Icons.person_outline_rounded),
+                          ),
+                        ),
+                        const SizedBox(height: AppDimens.space12),
+                        TextField(
+                          controller: password,
+                          obscureText: _obscure,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => submit(),
+                          autofillHints: const [AutofillHints.password],
+                          decoration: InputDecoration(
+                            labelText: 'Password',
+                            prefixIcon:
+                                const Icon(Icons.lock_outline_rounded),
+                            suffixIcon: IconButton(
+                              tooltip: _obscure
+                                  ? 'Show password'
+                                  : 'Hide password',
+                              onPressed: () =>
+                                  setState(() => _obscure = !_obscure),
+                              icon: Icon(
+                                _obscure
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (error != null) ...[
+                          const SizedBox(height: AppDimens.space16),
+                          _ErrorBanner(message: error!),
+                        ],
+                        const SizedBox(height: AppDimens.space24),
+                        SizedBox(
+                          height: AppDimens.touchTargetLarge,
+                          child: FilledButton(
+                            onPressed: loading ? null : submit,
+                            child: loading
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text('Sign in'),
+                          ),
+                        ),
+                        const SizedBox(height: AppDimens.space20),
+                        Text(
+                          'Private cloud on hardware you control. Enter the address of your NexaDrive server.',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyle.caption.copyWith(
+                            color: AppColors.textTertiaryFor(brightness),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
