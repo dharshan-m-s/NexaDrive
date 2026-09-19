@@ -427,7 +427,9 @@ class _ActionArea extends StatelessWidget {
             ),
           UpdateStatus.offline ||
           UpdateStatus.unsupported =>
-            _ErrorBody(controller: controller),          UpdateStatus.failed => _UpdateFailedBody(controller: controller),
+            _ErrorBody(controller: controller),
+          UpdateStatus.failed =>
+            _UpdateFailedBody(controller: controller),
           UpdateStatus.needsUserAction =>
             _InstallBlockedBody(controller: controller),
         },

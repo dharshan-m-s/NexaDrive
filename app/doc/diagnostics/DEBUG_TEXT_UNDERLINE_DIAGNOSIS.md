@@ -128,6 +128,33 @@ asserts that:
 3. no `TextStyle` reachable from the light or dark `ThemeData` carries an
    underline decoration.
 
+## Re-verified 2026-09-19 (second report)
+
+The report resurfaced for the same two screens. The current tree was
+re-audited end to end:
+
+1. **Source**: `rg -n "TextDecoration" app/lib` still returns nothing; the
+   shared typography (`AppTextStyle`), theme (`AppTheme`) and shared widgets
+   carry no text decoration.
+2. **Rendered pixels**: the committed goldens
+   (`update_center_light.png`, `update_center_paused_light.png`,
+   `admin_users_light.png`) were histogram-audited. They contain **zero**
+   `0x00FF00`/`0xFFFFD000` baseline-paint pixels — the only green-family
+   colors present are the "You" chip's muted accent (`#669363`). The rendered
+   UI is clean.
+3. **Regression guard**: `app/test/text_decoration_regression_test.dart` now
+   pumps Update center (idle / update available / paused / cancelled) and the
+   Users admin screen in light and dark themes and asserts that every rendered
+   `Text` resolves to a style with no underline or line-through decoration,
+   that `debugPaintBaselinesEnabled` is off while they render, and that every
+   `AppTextStyle` token is decoration-free. The Update-status switch in
+   `UpdateCenterScreen._ActionArea` (including `paused` and `cancelled`) was
+   re-verified to contain exactly one case per state; the collapsed
+   `failed`/`offline/unsupported` arms were re-formatted onto separate lines
+   so the switch reads unambiguously.
+
+Still a session/DevTools overlay, not application typography.
+
 ## If you see the lines again
 
 They are a *session* setting on the running debug app, not stored in the repo:
