@@ -147,8 +147,6 @@ class UpdateCenterScreen extends StatelessWidget {
         return 'Finish the installation in the system dialog.';
       case UpdateStatus.unsupported:
         return 'Updates are not supported on this platform.';
-      case UpdateStatus.paused:
-        return 'Paused — your progress is kept, resume whenever you like.';
       case UpdateStatus.needsUserAction:
         return 'Android needs permission to install the update.';
     }
@@ -260,7 +258,7 @@ class _StatusGroup extends StatelessWidget {
     UpdateStatus.installingHandoff => (Icons.handyman_outlined, 'Continue in the installer', accent),
     UpdateStatus.completed => (Icons.check_circle_rounded, 'Installed', success),
     UpdateStatus.failed => (Icons.error_rounded, 'Update failed', error),
-    UpdateStatus.cancelled => (Icons.cancel_outlined, 'Cancelled', warning),    UpdateStatus.cancelled => (Icons.cancel_outlined, 'Cancelled', warning),
+    UpdateStatus.cancelled => (Icons.cancel_outlined, 'Cancelled', warning),
     UpdateStatus.offline => (Icons.cloud_off_rounded, 'Offline', warning),
     UpdateStatus.unsupported => (Icons.priority_high_rounded, 'Unsupported', warning),
     UpdateStatus.needsUserAction => (Icons.lock_outline_rounded, 'Permission needed', warning),
