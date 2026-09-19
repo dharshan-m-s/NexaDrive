@@ -69,7 +69,8 @@ class _FileShareSheetState extends State<FileShareSheet> {
   Future<void> _create() async {
     final recipient = _recipient.text.trim();
     if (_mode == 'link' && _baseUrl.isEmpty) {
-      setState(() => _error = 'No server address is configured for this session.');
+      setState(
+          () => _error = 'No server address is configured for this session.');
       return;
     }
     if (_mode == 'person' && recipient.isEmpty) {
@@ -218,7 +219,8 @@ class _FileShareSheetState extends State<FileShareSheet> {
                           _mode == 'person'
                               ? 'Each file is shared with the same person'
                               : 'Each file gets its own link',
-                          style: AppTextStyle.caption.copyWith(color: secondary),
+                          style:
+                              AppTextStyle.caption.copyWith(color: secondary),
                         ),
                     ],
                   ),
@@ -226,7 +228,6 @@ class _FileShareSheetState extends State<FileShareSheet> {
               ],
             ),
             const SizedBox(height: AppDimens.space16),
-
             if (_links.isNotEmpty)
               _CreatedLinks(
                 links: _links,
@@ -252,9 +253,8 @@ class _FileShareSheetState extends State<FileShareSheet> {
                     ),
                   ],
                   selected: {_mode},
-                  onSelectionChanged: _busy
-                      ? null
-                      : (s) => setState(() => _mode = s.first),
+                  onSelectionChanged:
+                      _busy ? null : (s) => setState(() => _mode = s.first),
                 ),
                 const SizedBox(height: AppDimens.space12),
               ],
@@ -299,7 +299,6 @@ class _FileShareSheetState extends State<FileShareSheet> {
                     _busy ? null : (s) => setState(() => _permission = s.first),
               ),
             ],
-
             if (_busy && _createdCount > 0) ...[
               const SizedBox(height: AppDimens.space16),
               LinearProgressIndicator(
@@ -313,7 +312,6 @@ class _FileShareSheetState extends State<FileShareSheet> {
                 style: AppTextStyle.caption.copyWith(color: secondary),
               ),
             ],
-
             if (_failures.isNotEmpty && !_busy) ...[
               const SizedBox(height: AppDimens.space12),
               for (final entry in _failures.entries)
@@ -340,7 +338,6 @@ class _FileShareSheetState extends State<FileShareSheet> {
                   ),
                 ),
             ],
-
             if (_error != null) ...[
               const SizedBox(height: AppDimens.space12),
               Text(
@@ -349,7 +346,6 @@ class _FileShareSheetState extends State<FileShareSheet> {
                     .copyWith(color: AppColors.errorFor(brightness)),
               ),
             ],
-
             const SizedBox(height: AppDimens.space20),
             Row(
               children: [
@@ -361,7 +357,9 @@ class _FileShareSheetState extends State<FileShareSheet> {
                           size: AppDimens.iconSmall),
                       label: Text(
                         anyLink
-                            ? (_links.length == 1 ? 'Revoke link' : 'Revoke all')
+                            ? (_links.length == 1
+                                ? 'Revoke link'
+                                : 'Revoke all')
                             : 'Remove access',
                       ),
                     ),
@@ -387,7 +385,9 @@ class _FileShareSheetState extends State<FileShareSheet> {
                             ),
                       label: Text(
                         _mode == 'person'
-                            ? (single ? 'Share with person' : 'Share ${widget.files.length} files')
+                            ? (single
+                                ? 'Share with person'
+                                : 'Share ${widget.files.length} files')
                             : (single
                                 ? 'Create link'
                                 : 'Create ${widget.files.length} links'),
@@ -432,7 +432,8 @@ class _CreatedLinks extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(Icons.check_circle_rounded, color: success, size: AppDimens.iconSmall),
+            Icon(Icons.check_circle_rounded,
+                color: success, size: AppDimens.iconSmall),
             const SizedBox(width: AppDimens.space8),
             Expanded(
               child: Text(
@@ -450,7 +451,8 @@ class _CreatedLinks extends StatelessWidget {
             if (links.where((l) => l.isLink).length > 1)
               TextButton.icon(
                 onPressed: onCopyAll,
-                icon: const Icon(Icons.copy_all_rounded, size: AppDimens.iconSmall),
+                icon: const Icon(Icons.copy_all_rounded,
+                    size: AppDimens.iconSmall),
                 label: const Text('Copy all'),
               ),
           ],
@@ -510,7 +512,8 @@ class _CreatedLinks extends StatelessWidget {
                               link.url,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTextStyle.micro.copyWith(color: secondary),
+                              style:
+                                  AppTextStyle.micro.copyWith(color: secondary),
                             ),
                           ],
                         ),
@@ -524,7 +527,8 @@ class _CreatedLinks extends StatelessWidget {
                         )
                       else
                         const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: AppDimens.space8),
+                          padding: EdgeInsets.symmetric(
+                              horizontal: AppDimens.space8),
                           child: Icon(Icons.lock_outline_rounded,
                               size: AppDimens.iconSmall),
                         ),

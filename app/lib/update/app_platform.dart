@@ -122,7 +122,8 @@ class AppPlatformDetector {
     }
   }
 
-  String _executablePath() => resolvedExecutableOverride ?? Platform.resolvedExecutable;
+  String _executablePath() =>
+      resolvedExecutableOverride ?? Platform.resolvedExecutable;
 
   Future<String?> resolveArch() async {
     switch (platform) {
@@ -171,8 +172,9 @@ class AppPlatformDetector {
     if (installedRoots.any((root) {
       // Strip the \\?\ long-path prefix (UNC paths keep it and are handled by
       // the incoming-backslash check below).
-      final norm =
-          dir.startsWith(r'\\') ? dir : dir.replaceFirst(RegExp(r'^\\\?\\'), '');
+      final norm = dir.startsWith(r'\\')
+          ? dir
+          : dir.replaceFirst(RegExp(r'^\\\?\\'), '');
       return norm.startsWith('$root\\');
     })) {
       return InstallationKind.installed;
@@ -202,8 +204,8 @@ class AppPlatformDetector {
     }
     // A packaged .deb install places the binary under /usr (either as a symlink
     // in /usr/bin or the real file in /usr/lib/nexadrive).
-    final looksDeb =
-        exePath.startsWith('/usr/lib/nexadrive/') || exePath == '/usr/bin/nexadrive';
+    final looksDeb = exePath.startsWith('/usr/lib/nexadrive/') ||
+        exePath == '/usr/bin/nexadrive';
     if (looksDeb) {
       final probe = (runCmd ?? _realRun)(['dpkg', '-s', 'nexadrive']);
       final known = await probe;

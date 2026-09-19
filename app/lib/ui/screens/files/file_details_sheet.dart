@@ -22,7 +22,10 @@ class FileDetailsSheet extends StatelessWidget {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
-          AppDimens.pageMargin, AppDimens.space16, AppDimens.pageMargin, AppDimens.space16,
+          AppDimens.pageMargin,
+          AppDimens.space16,
+          AppDimens.pageMargin,
+          AppDimens.space16,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -59,8 +62,8 @@ class FileDetailsSheet extends StatelessWidget {
                       const SizedBox(height: AppDimens.space2),
                       Text(
                         FileKind.label(category),
-                        style: AppTextStyle.caption
-                            .copyWith(color: AppColors.textSecondaryFor(brightness)),
+                        style: AppTextStyle.caption.copyWith(
+                            color: AppColors.textSecondaryFor(brightness)),
                       ),
                     ],
                   ),
@@ -69,7 +72,8 @@ class FileDetailsSheet extends StatelessWidget {
             ),
             const SizedBox(height: AppDimens.space20),
             _InfoRow(label: 'Location', value: file.path),
-            if (file.size != null) _InfoRow(label: 'Size', value: Format.bytes(file.size!)),
+            if (file.size != null)
+              _InfoRow(label: 'Size', value: Format.bytes(file.size!)),
             if (file.modified != null)
               _InfoRow(
                 label: 'Modified',
@@ -104,7 +108,8 @@ class _InfoRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 90,
-            child: Text(label, style: AppTextStyle.caption.copyWith(color: secondary)),
+            child: Text(label,
+                style: AppTextStyle.caption.copyWith(color: secondary)),
           ),
           Expanded(
             child: Text(

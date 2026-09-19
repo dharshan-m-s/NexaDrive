@@ -129,7 +129,8 @@ void main() {
     thumbnailPng = await authorPng(kThumbWidth, kThumbHeight);
   });
 
-  testWidgets('the device decodes a large photo at its natural size', (tester) async {
+  testWidgets('the device decodes a large photo at its natural size',
+      (tester) async {
     const decoder = ImageDecoder();
     // A small viewport must NOT shrink the decode: zooming in has to reveal
     // real pixels, which is only possible if the frame keeps its full size.

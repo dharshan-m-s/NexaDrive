@@ -57,7 +57,7 @@ class RedirectGuardedClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     var current = request;
-    for (var hop = 0; ; hop++) {
+    for (var hop = 0;; hop++) {
       // The hop loop below owns redirect handling; keep the inner client from
       // following them on its own. Tests inject clients that ignore this flag
       // and return the raw 3xx, which is exactly what the loop expects.
@@ -131,11 +131,12 @@ class RedirectGuardedClient extends http.BaseClient {
   void close() => _inner.close();
 }
 
-/// Transport for the manifest, with HTTP conditional caching
-/// every redirect hop (see [RedirectGuardedClient]), and a strict host
-  /// allowlist. On a 304 Not Modified the caller keeps using its persisted copy
-  /// of the manifest (see [UpdateController]); on a network failure it presents
-  /// the offline state.
+/// Transport for the manifest, with HTTP conditional caching, a redirect guard
+/// on every hop (see [RedirectGuardedClient]), and a strict host allowlist.
+///
+/// On a 304 Not Modified the caller keeps using its persisted copy of the
+/// manifest (see [UpdateController]); on a network failure it presents the
+/// offline state.
 class UpdateSource {
   final http.Client _client;
   final Duration timeout;
@@ -216,9 +217,8 @@ class UpdateSource {
       // The whole body read is bounded by [timeout] too: a server that sends
       // headers and then stalls mid-body must not leave the Update Center in
       // an undetermined state forever (the classic "Preparing…" hang).
-      final body = await response.stream
-          .bytesToString()
-          .timeout(timeout, onTimeout: () {
+      final body =
+          await response.stream.bytesToString().timeout(timeout, onTimeout: () {
         throw const UpdateException(
           UpdateErrorKind.network,
           'The update check timed out while reading the response.',
@@ -263,7 +263,9 @@ class UpdateSource {
   }
 
   void _assertAllowed(Uri uri) {
-    if (uri.scheme != 'https' || uri.host.isEmpty || !UpdateConfig.allowsHost(uri.host)) {
+    if (uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        !UpdateConfig.allowsHost(uri.host)) {
       throw const UpdateException(
         UpdateErrorKind.malformedManifest,
         'Artifact or manifest URL must be HTTPS on an allowed host.',

@@ -124,7 +124,8 @@ class _ScanPagesScreenState extends State<ScanPagesScreen> {
       ),
       body: widget.pages.isEmpty
           ? const Center(
-              child: Text('No pages yet', style: TextStyle(color: Colors.white54)),
+              child:
+                  Text('No pages yet', style: TextStyle(color: Colors.white54)),
             )
           : GridView.builder(
               padding: const EdgeInsets.all(AppDimens.space12),
@@ -160,9 +161,11 @@ class _ScanPagesScreenState extends State<ScanPagesScreen> {
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
                   )
-                : const Icon(Icons.picture_as_pdf_outlined, color: Colors.white),
+                : const Icon(Icons.picture_as_pdf_outlined,
+                    color: Colors.white),
             label: Text(
               _saving ? 'Creating PDF…' : 'Save as PDF',
               style: AppTextStyle.rowTitle.copyWith(color: Colors.white),
@@ -221,7 +224,8 @@ class _PageCard extends StatelessWidget {
                     top: 8,
                     left: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.black54,
                         borderRadius: BorderRadius.circular(10),
@@ -242,7 +246,8 @@ class _PageCard extends StatelessWidget {
                     child: IconButton(
                       tooltip: 'Delete page',
                       onPressed: onDelete,
-                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 18),
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          color: Colors.white, size: 18),
                       style: IconButton.styleFrom(
                         backgroundColor: Colors.black45,
                       ),

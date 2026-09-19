@@ -18,11 +18,49 @@ class TransferItem {
   final String? error;
   final DateTime createdAt;
 
-  const TransferItem({required this.id, required this.path, required this.name, required this.folder, required this.size, required this.transferred, required this.status, required this.error, required this.createdAt});
+  const TransferItem(
+      {required this.id,
+      required this.path,
+      required this.name,
+      required this.folder,
+      required this.size,
+      required this.transferred,
+      required this.status,
+      required this.error,
+      required this.createdAt});
 
-  Map<String, dynamic> toJson() => {'id': id, 'path': path, 'name': name, 'folder': folder, 'size': size, 'transferred': transferred, 'status': status, 'error': error, 'createdAt': createdAt.toIso8601String()};
-  factory TransferItem.fromJson(Map<String, dynamic> j) => TransferItem(id: j['id'], path: j['path'], name: j['name'], folder: j['folder'] ?? '', size: (j['size'] as num?)?.toInt() ?? 0, transferred: (j['transferred'] as num?)?.toInt() ?? 0, status: j['status'] ?? 'queued', error: j['error'], createdAt: DateTime.tryParse(j['createdAt'] ?? '') ?? DateTime.now());
-  TransferItem copyWith({String? status, String? error, int? transferred}) => TransferItem(id: id, path: path, name: name, folder: folder, size: size, transferred: transferred ?? this.transferred, status: status ?? this.status, error: error, createdAt: createdAt);
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'path': path,
+        'name': name,
+        'folder': folder,
+        'size': size,
+        'transferred': transferred,
+        'status': status,
+        'error': error,
+        'createdAt': createdAt.toIso8601String()
+      };
+  factory TransferItem.fromJson(Map<String, dynamic> j) => TransferItem(
+      id: j['id'],
+      path: j['path'],
+      name: j['name'],
+      folder: j['folder'] ?? '',
+      size: (j['size'] as num?)?.toInt() ?? 0,
+      transferred: (j['transferred'] as num?)?.toInt() ?? 0,
+      status: j['status'] ?? 'queued',
+      error: j['error'],
+      createdAt: DateTime.tryParse(j['createdAt'] ?? '') ?? DateTime.now());
+  TransferItem copyWith({String? status, String? error, int? transferred}) =>
+      TransferItem(
+          id: id,
+          path: path,
+          name: name,
+          folder: folder,
+          size: size,
+          transferred: transferred ?? this.transferred,
+          status: status ?? this.status,
+          error: error,
+          createdAt: createdAt);
 }
 
 class TransferQueue {
@@ -37,7 +75,9 @@ class TransferQueue {
     final p = await SharedPreferences.getInstance();
     final raw = p.getString(_key);
     if (raw == null) return [];
-    return (jsonDecode(raw) as List).map((e) => TransferItem.fromJson(Map<String, dynamic>.from(e))).toList();
+    return (jsonDecode(raw) as List)
+        .map((e) => TransferItem.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 
   Future<void> _save(List<TransferItem> list) async {
@@ -48,23 +88,50 @@ class TransferQueue {
   Future<TransferItem> enqueue(PlatformFile file, String folder) async {
     final path = file.path;
     if (path == null) throw Exception('The selected file is not readable');
-    return enqueueLocalPath(path, name: file.name, folder: folder, size: file.lengthSync());
+    return enqueueLocalPath(path,
+        name: file.name, folder: folder, size: file.lengthSync());
   }
 
-  Future<TransferItem> enqueueLocalPath(String path, {required String name, required String folder, int? size}) async {
+  Future<TransferItem> enqueueLocalPath(String path,
+      {required String name, required String folder, int? size}) async {
     final actualSize = size ?? await File(path).length();
     final id = const Uuid().v4();
-    final item = TransferItem(id: id, path: path, name: name, folder: folder, size: actualSize, transferred: 0, status: 'queued', error: null, createdAt: DateTime.now());
+    final item = TransferItem(
+        id: id,
+        path: path,
+        name: name,
+        folder: folder,
+        size: actualSize,
+        transferred: 0,
+        status: 'queued',
+        error: null,
+        createdAt: DateTime.now());
     final list = await items();
     list.add(item);
     await _save(list);
     return item;
   }
 
-  Future<void> remove(String id) async { final list = await items(); list.removeWhere((e) => e.id == id); _paused.remove(id); await _save(list); }
-  Future<void> clearCompleted() async { final list = await items(); list.removeWhere((e) => e.status == 'completed'); await _save(list); }
-  Future<void> pause(String id) async { _paused.add(id); }
-  void resume(String id) { _paused.remove(id); }
+  Future<void> remove(String id) async {
+    final list = await items();
+    list.removeWhere((e) => e.id == id);
+    _paused.remove(id);
+    await _save(list);
+  }
+
+  Future<void> clearCompleted() async {
+    final list = await items();
+    list.removeWhere((e) => e.status == 'completed');
+    await _save(list);
+  }
+
+  Future<void> pause(String id) async {
+    _paused.add(id);
+  }
+
+  void resume(String id) {
+    _paused.remove(id);
+  }
 
   Future<void> reset(String id) async {
     final list = await items();
@@ -120,14 +187,16 @@ class TransferQueue {
       try {
         final remote = await api.uploadStatus(last.id);
         if (remote['status'] == 'completed') {
-          final done =
-              last.copyWith(status: 'completed', transferred: last.size, error: null);
+          final done = last.copyWith(
+              status: 'completed', transferred: last.size, error: null);
           await persist(done);
           return done;
         }
-        var offset = (remote['bytes_received'] as num?)?.toInt() ?? last.transferred;
+        var offset =
+            (remote['bytes_received'] as num?)?.toInt() ?? last.transferred;
         if (offset < 0 || offset > last.size) offset = 0;
-        last = last.copyWith(status: 'uploading', transferred: offset, error: null);
+        last = last.copyWith(
+            status: 'uploading', transferred: offset, error: null);
         await persist(last);
 
         if (last.size == 0) {
@@ -140,7 +209,8 @@ class TransferQueue {
             bytes: const Stream<List<int>>.empty(),
             contentLength: 0,
           );
-          final status = result['status'] == 'completed' ? 'completed' : 'uploading';
+          final status =
+              result['status'] == 'completed' ? 'completed' : 'uploading';
           last = last.copyWith(status: status, transferred: 0, error: null);
           await persist(last);
           if (status == 'completed') return last;
@@ -148,7 +218,8 @@ class TransferQueue {
 
         while (offset < last.size) {
           if (_paused.contains(last.id)) {
-            last = last.copyWith(status: 'queued', transferred: offset, error: 'Paused');
+            last = last.copyWith(
+                status: 'queued', transferred: offset, error: 'Paused');
             await persist(last);
             return last;
           }
@@ -166,7 +237,8 @@ class TransferQueue {
           offset = (result['offset'] as num?)?.toInt() ?? end;
           final status =
               result['status'] == 'completed' ? 'completed' : 'uploading';
-          last = last.copyWith(status: status, transferred: offset, error: null);
+          last =
+              last.copyWith(status: status, transferred: offset, error: null);
           await persist(last);
           if (status == 'completed') return last;
         }
@@ -202,8 +274,10 @@ class TransferQueue {
         if (item.status == 'completed') continue;
         if (_paused.contains(item.id)) continue;
         if (item.path.isEmpty) {
-          list[i] = item.copyWith(status: 'queued', error: 'Local file path is unavailable');
-          await _save(list); onChanged?.call(List.unmodifiable(list));
+          list[i] = item.copyWith(
+              status: 'queued', error: 'Local file path is unavailable');
+          await _save(list);
+          onChanged?.call(List.unmodifiable(list));
           continue;
         }
 
@@ -223,7 +297,8 @@ class TransferQueue {
           // error attached so the Transfers screen can offer a manual retry,
           // and a later process() pass will pick it up automatically.
           list[i] = list[i].copyWith(status: 'queued', error: e.toString());
-          await _save(list); onChanged?.call(List.unmodifiable(list));
+          await _save(list);
+          onChanged?.call(List.unmodifiable(list));
         }
       }
     } finally {

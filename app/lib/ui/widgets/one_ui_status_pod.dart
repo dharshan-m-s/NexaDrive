@@ -42,12 +42,9 @@ class OneUiStatusPod extends StatelessWidget {
       width: 48,
       height: 48,
       decoration: BoxDecoration(
-        color: gradient != null
-            ? null
-            : AppColors.accentSubtleFor(brightness),
-        gradient: gradient != null
-            ? AppGradients.soft(gradient!, brightness)
-            : null,
+        color: gradient != null ? null : AppColors.accentSubtleFor(brightness),
+        gradient:
+            gradient != null ? AppGradients.soft(gradient!, brightness) : null,
         borderRadius: BorderRadius.circular(AppDimens.radiusInner),
       ),
       child: Icon(icon, color: color, size: AppDimens.iconMedium),

@@ -51,7 +51,8 @@ String _manifestJson(String version,
         'linux': {
           'x64': {
             'appimage': {
-              'url': 'https://objects.githubusercontent.com/acme/app/app.AppImage',
+              'url':
+                  'https://objects.githubusercontent.com/acme/app/app.AppImage',
               'sha256': _payloadSha,
               'size': _payload.length,
             },
@@ -119,11 +120,14 @@ Future<UpdateController> _controller({
   );
 }
 
-MockClient _serve({required String version, String? minSupport, String? minServer}) {
+MockClient _serve(
+    {required String version, String? minSupport, String? minServer}) {
   return MockClient((request) async {
     if (request.url.path.contains('nexadrive-update-manifest.json')) {
       return http.Response.bytes(
-          utf8.encode(_manifestJson(version, minSupport: minSupport, minServer: minServer)), 200);
+          utf8.encode(_manifestJson(version,
+              minSupport: minSupport, minServer: minServer)),
+          200);
     }
     return http.Response.bytes(utf8.encode(_payload), 200);
   });
@@ -220,7 +224,7 @@ void main() {
     test('prerelease newer version still offered with label intact', () async {
       final client = MockClient((request) async {
         final body = jsonDecode(_manifestJson('1.2.0-rc.1'))
-            ..['prerelease'] = true;
+          ..['prerelease'] = true;
         return http.Response.bytes(utf8.encode(jsonEncode(body)), 200);
       });
       final ctrl = await _controller(
@@ -245,7 +249,8 @@ void main() {
 
     test('transport failure -> offline with retryable error', () async {
       final ctrl = await _controller(
-        client: MockClient((request) async => throw http.ClientException('down')),
+        client:
+            MockClient((request) async => throw http.ClientException('down')),
         router: _FakeRouter(),
         version: _MutableVersion('1.0.0'),
       );
@@ -257,7 +262,8 @@ void main() {
 
     test('404 -> offline, not retryable (no releases yet)', () async {
       final ctrl = await _controller(
-        client: MockClient((request) async => http.Response.bytes(utf8.encode('nope'), 404)),
+        client: MockClient(
+            (request) async => http.Response.bytes(utf8.encode('nope'), 404)),
         router: _FakeRouter(),
         version: _MutableVersion('1.0.0'),
       );
@@ -266,7 +272,8 @@ void main() {
       expect(ctrl.retryable, isFalse);
     });
 
-    test('silent check respects the 24h policy; auto check skips after', () async {
+    test('silent check respects the 24h policy; auto check skips after',
+        () async {
       final ctrl = await _controller(
         client: _serve(version: '1.2.0'),
         router: _FakeRouter(),
@@ -473,7 +480,8 @@ void main() {
       expect(ctrl.infoMessage, isNotNull);
     });
 
-    test('blocked android launch surfaces needsUserAction with recovery', () async {
+    test('blocked android launch surfaces needsUserAction with recovery',
+        () async {
       final router = _FakeRouter()..androidLaunchResult = false;
       final ctrl = await _controller(
         client: _serve(version: '1.2.0'),
@@ -559,8 +567,12 @@ void main() {
       final now = DateTime.now();
       expect(policy.shouldAutoCheck(null, now), isTrue);
       // A check happened 10s ago.
-      expect(policy.canManualCheck(now.subtract(const Duration(seconds: 10)), now), isFalse);
-      expect(policy.canManualCheck(now.subtract(const Duration(seconds: 30)), now), isTrue);
+      expect(
+          policy.canManualCheck(now.subtract(const Duration(seconds: 10)), now),
+          isFalse);
+      expect(
+          policy.canManualCheck(now.subtract(const Duration(seconds: 30)), now),
+          isTrue);
       expect(
         policy.shouldAutoCheck(now.subtract(const Duration(hours: 10)), now),
         isFalse,

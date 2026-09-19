@@ -53,7 +53,6 @@ abstract final class AppShadows {
         ),
       ];
 
-  static Color shadow(Brightness b,
-          {required int light, required int dark}) =>
+  static Color shadow(Brightness b, {required int light, required int dark}) =>
       Color(b == Brightness.dark ? (dark << 24) | 0xFFFFFF : (light << 24));
 }

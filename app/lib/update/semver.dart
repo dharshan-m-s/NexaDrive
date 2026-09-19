@@ -83,7 +83,9 @@ class SemVersion implements Comparable<SemVersion> {
     for (final part in parts) {
       if (!_identifierRe.hasMatch(part)) return false;
       // Numeric identifiers must not include leading zeroes.
-      if (_numericRe.hasMatch(part) && part.length > 1 && part.startsWith('0')) {
+      if (_numericRe.hasMatch(part) &&
+          part.length > 1 &&
+          part.startsWith('0')) {
         return false;
       }
     }

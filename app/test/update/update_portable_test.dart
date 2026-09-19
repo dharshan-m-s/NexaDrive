@@ -114,14 +114,17 @@ Future<UpdateController> _portableController(UpdateRouter router) async {
 }
 
 UpdateManifest _linuxManifest(String version) {
-  const sha = '0000000000000000000000000000000000000000000000000000000000000000';
+  const sha =
+      '0000000000000000000000000000000000000000000000000000000000000000';
   return UpdateManifest.fromJson({
     'version': version,
     'tag': 'v$version',
     'releaseDate': '2026-09-10T12:00:00Z',
     'prerelease': false,
     'minimumSupportedVersion': null,
-    'releaseNotes': {'What\u2019s new': ['Update']},
+    'releaseNotes': {
+      'What\u2019s new': ['Update']
+    },
     'artifacts': {
       'linux': {
         'x64': {
@@ -237,7 +240,8 @@ void main() {
       final zip = File('${appDir.path}${Platform.pathSeparator}update.zip');
       zip.writeAsBytesSync(_zipBytes());
 
-      final ctrl = await _portableController(_RouterProbe(exe.path, detachedResult: false));
+      final ctrl = await _portableController(
+          _RouterProbe(exe.path, detachedResult: false));
       ctrl.resolvedPlatform = AppPlatform.windows;
       ctrl.installationKind = InstallationKind.portable;
       ctrl.downloadedPath = zip.path;
@@ -258,7 +262,9 @@ void main() {
         'tag': 'v2.0.0',
         'releaseDate': '2026-09-10T12:00:00Z',
         'prerelease': false,
-        'releaseNotes': {'Section': ['Note']},
+        'releaseNotes': {
+          'Section': ['Note']
+        },
         'artifacts': {
           'windows': {
             'x64': {

@@ -430,8 +430,7 @@ class UpdateCache {
     // Stale partial downloads (>.part, older than 4 hours) are always removed.
     for (final p in files.where((f) => f.path.endsWith('.part'))) {
       try {
-        if (now.difference(p.statSync().modified) >
-            const Duration(hours: 4)) {
+        if (now.difference(p.statSync().modified) > const Duration(hours: 4)) {
           File(p.path).deleteSync();
         }
       } catch (_) {}
@@ -449,8 +448,8 @@ class UpdateCache {
       } catch (_) {}
     }
 
-    installers.sort((a, b) =>
-        b.statSync().modified.compareTo(a.statSync().modified));
+    installers
+        .sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
 
     for (final f in installers) {
       var expired = false;

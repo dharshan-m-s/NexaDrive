@@ -6,17 +6,98 @@ import 'package:flutter/material.dart';
 /// single neutral document icon with a category tint + label, instead of a
 /// colorful icon per extension.
 /// The One UI-neutral category for a file.
-enum Category { folder, image, video, audio, pdf, document, archive, text, unknown }
+enum Category {
+  folder,
+  image,
+  video,
+  audio,
+  pdf,
+  document,
+  archive,
+  text,
+  unknown
+}
 
 abstract final class FileKind {
-  static const Set<String> _images = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif', 'tif', 'tiff'};
-  static const Set<String> _video = {'mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', '3gp'};
-  static const Set<String> _audio = {'mp3', 'aac', 'm4a', 'wav', 'flac', 'ogg', 'opus', 'aiff', 'wma'};
+  static const Set<String> _images = {
+    'jpg',
+    'jpeg',
+    'png',
+    'gif',
+    'webp',
+    'bmp',
+    'heic',
+    'heif',
+    'tif',
+    'tiff'
+  };
+  static const Set<String> _video = {
+    'mp4',
+    'mov',
+    'mkv',
+    'webm',
+    'avi',
+    'm4v',
+    '3gp'
+  };
+  static const Set<String> _audio = {
+    'mp3',
+    'aac',
+    'm4a',
+    'wav',
+    'flac',
+    'ogg',
+    'opus',
+    'aiff',
+    'wma'
+  };
   static const Set<String> _doc = {'doc', 'docx', 'odt', 'rtf', 'pages'};
   static const Set<String> _sheet = {'xls', 'xlsx', 'ods', 'csv'};
   static const Set<String> _slides = {'ppt', 'pptx', 'odp', 'key'};
-  static const Set<String> _text = {'txt', 'md', 'markdown', 'log', 'json', 'xml', 'yaml', 'yml', 'conf', 'ini', 'cfg', 'toml', 'csv', 'html', 'htm', 'css', 'js', 'ts', 'dart', 'rs', 'py', 'rb', 'go', 'java', 'c', 'h', 'cpp', 'hpp', 'sh', 'sql', 'nfo'};
-  static const Set<String> _archive = {'zip', 'tar', 'gz', 'tgz', '7z', 'rar', 'bz2', 'xz', 'zst'};
+  static const Set<String> _text = {
+    'txt',
+    'md',
+    'markdown',
+    'log',
+    'json',
+    'xml',
+    'yaml',
+    'yml',
+    'conf',
+    'ini',
+    'cfg',
+    'toml',
+    'csv',
+    'html',
+    'htm',
+    'css',
+    'js',
+    'ts',
+    'dart',
+    'rs',
+    'py',
+    'rb',
+    'go',
+    'java',
+    'c',
+    'h',
+    'cpp',
+    'hpp',
+    'sh',
+    'sql',
+    'nfo'
+  };
+  static const Set<String> _archive = {
+    'zip',
+    'tar',
+    'gz',
+    'tgz',
+    '7z',
+    'rar',
+    'bz2',
+    'xz',
+    'zst'
+  };
 
   /// Returns the lowercase extension without the leading dot.
   static String ext(String filename) {
@@ -55,7 +136,9 @@ abstract final class FileKind {
     if (_video.contains(e)) return Category.video;
     if (_audio.contains(e)) return Category.audio;
     if (e == 'pdf') return Category.pdf;
-    if (_doc.contains(e) || _sheet.contains(e) || _slides.contains(e)) return Category.document;
+    if (_doc.contains(e) || _sheet.contains(e) || _slides.contains(e)) {
+      return Category.document;
+    }
     if (_archive.contains(e)) return Category.archive;
     if (_text.contains(e)) return Category.text;
     return Category.unknown;

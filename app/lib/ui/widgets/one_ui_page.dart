@@ -25,7 +25,10 @@ class OneUiPage extends StatelessWidget {
     required this.body,
     this.scrollable = false,
     this.padding = const EdgeInsets.fromLTRB(
-      AppDimens.pageMargin, 0, AppDimens.pageMargin, AppDimens.space24,
+      AppDimens.pageMargin,
+      0,
+      AppDimens.pageMargin,
+      AppDimens.space24,
     ),
     this.alignment = Alignment.topLeft,
   });
@@ -66,7 +69,10 @@ class _ViewingArea extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppDimens.pageMargin, AppDimens.space24, AppDimens.pageMargin, AppDimens.space12,
+        AppDimens.pageMargin,
+        AppDimens.space24,
+        AppDimens.pageMargin,
+        AppDimens.space12,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -84,8 +90,8 @@ class _ViewingArea extends StatelessWidget {
                   const SizedBox(height: AppDimens.space4),
                   Text(
                     subtitle!,
-                    style: AppTextStyle.rowSubtitle
-                        .copyWith(color: AppColors.textSecondaryFor(brightness)),
+                    style: AppTextStyle.rowSubtitle.copyWith(
+                        color: AppColors.textSecondaryFor(brightness)),
                   ),
                 ],
               ],
@@ -120,7 +126,8 @@ class OneUiBody extends StatelessWidget {
         ? child
         : Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: AppDimens.contentMaxWidth),
+              constraints:
+                  const BoxConstraints(maxWidth: AppDimens.contentMaxWidth),
               child: child,
             ),
           );

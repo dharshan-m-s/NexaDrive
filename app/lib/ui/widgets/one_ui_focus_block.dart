@@ -93,7 +93,8 @@ class OneUiFocusBlock extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: AppTextStyle.chipLabel.copyWith(
-                  color: enabled ? color : AppColors.textTertiaryFor(brightness),
+                  color:
+                      enabled ? color : AppColors.textTertiaryFor(brightness),
                 ),
               ),
             ],
@@ -134,7 +135,9 @@ class OneUiFocusBlock extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyle.rowTitle.copyWith(
-                        color: enabled ? color : AppColors.textTertiaryFor(brightness),
+                        color: enabled
+                            ? color
+                            : AppColors.textTertiaryFor(brightness),
                         fontWeight: FontWeight.w600,
                       ),
                     ),

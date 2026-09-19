@@ -310,7 +310,8 @@ void main() {
           reason: 'an unchanged file must not be re-uploaded');
       expect(server.downloadCalls, downloadsAfterFirst);
       expect(server.deltaCalls, 1,
-          reason: 'the second sync should use the delta cursor, not a manifest');
+          reason:
+              'the second sync should use the delta cursor, not a manifest');
     });
 
     test('an empty local folder is created remotely and stays a folder',
@@ -393,8 +394,9 @@ void main() {
       final result = await sync.sync();
 
       expect(result.errors, 0);
-      expect(Directory('${root.path}${Platform.pathSeparator}shared')
-          .existsSync(), isTrue);
+      expect(
+          Directory('${root.path}${Platform.pathSeparator}shared').existsSync(),
+          isTrue);
       expect(readLocal('shared/notes.txt'), 'hello');
     });
 
@@ -479,7 +481,8 @@ void main() {
       expect(readLocal('doc.txt'), 'local-edit-wins');
 
       final settled = await sync.sync();
-      expect(settled.conflicts, 0, reason: 'a resolved conflict must not recur');
+      expect(settled.conflicts, 0,
+          reason: 'a resolved conflict must not recur');
     });
 
     test('keep remote restores the remote version and clears the conflict',
@@ -603,7 +606,8 @@ void main() {
 
       expect(results, hasLength(2));
       expect(server.manifestCalls + server.deltaCalls, 1,
-          reason: 'the second caller must join the run, not start a second one');
+          reason:
+              'the second caller must join the run, not start a second one');
       expect(server.announcedDeviceIds.toSet(), hasLength(1));
       expect(server.contentAt('alpha.txt'), 'alpha');
     });

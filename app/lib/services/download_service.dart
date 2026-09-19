@@ -211,7 +211,8 @@ class DownloadService {
         'The chosen save location is not a local folder. Pick a folder on this device.',
       );
     }
-    await downloadToFile(remotePath, targetPath, timeout: timeout, onProgress: onProgress);
+    await downloadToFile(remotePath, targetPath,
+        timeout: timeout, onProgress: onProgress);
     return SaveResult(location: targetPath, userChosen: true);
   }
 
@@ -237,7 +238,8 @@ class DownloadService {
         dialogTitle: 'Save $fileName',
       );
       if (uri == null) return null;
-      return SaveResult(location: _describeAndroidUri(uri, fileName), userChosen: true);
+      return SaveResult(
+          location: _describeAndroidUri(uri, fileName), userChosen: true);
     }
 
     // Large file: streaming into a SAF document is not supported by the
@@ -254,7 +256,8 @@ class DownloadService {
     }
     await targetDir.create(recursive: true);
     final targetPath = '${targetDir.path}${Platform.pathSeparator}$fileName';
-    await downloadToFile(remotePath, targetPath, timeout: timeout, onProgress: onProgress);
+    await downloadToFile(remotePath, targetPath,
+        timeout: timeout, onProgress: onProgress);
     return SaveResult(location: targetPath, userChosen: false);
   }
 
@@ -304,9 +307,8 @@ class DownloadService {
     final request = http.Request('GET', api.fileDownloadUri(remotePath));
     request.headers.addAll(api.authHeaders);
 
-    final response = await api.rawClient
-        .send(request)
-        .timeout(timeout, onTimeout: () => throw const SaveException(
+    final response = await api.rawClient.send(request).timeout(timeout,
+        onTimeout: () => throw const SaveException(
               'The server took too long to respond. Check the connection and try again.',
             ));
 

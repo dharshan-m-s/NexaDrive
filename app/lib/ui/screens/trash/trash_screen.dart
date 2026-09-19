@@ -69,7 +69,8 @@ class _TrashScreenState extends State<TrashScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete forever?'),
-        content: const Text('This cannot be undone. The file will be permanently removed.'),
+        content: const Text(
+            'This cannot be undone. The file will be permanently removed.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -112,68 +113,77 @@ class _TrashScreenState extends State<TrashScreen> {
                   onAction: load,
                 )
               : _items.isEmpty
-              ? const OneUiEmptyState(
-                  icon: Icons.delete_outline_rounded,
-                  title: 'Trash is empty',
-                  hint: 'Deleted files and folders will show up here.',
-                )
-              : RefreshIndicator(
-                  onRefresh: load,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.only(bottom: AppDimens.space24),
-                    itemCount: _items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: AppDimens.space2),
-                    itemBuilder: (context, i) {
-                      final item = _items[i];
-                      final isFolder = FileEntry.kindOf(item) == 'folder';
-                      final deletedAt =
-                          Format.relTime(DateTime.tryParse(item['deleted_at']?.toString() ?? ''));
-                      return OneUiSurface(
-                        level: OneUiSurfaceLevel.surface,
-                        radius: AppDimens.radiusTile,
-                        child: Material(
-                          type: MaterialType.transparency,
-                          child: ListTile(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppDimens.radiusTile),
-                          ),
-                          leading: Icon(
-                            isFolder ? Icons.folder_rounded : Icons.insert_drive_file_rounded,
-                            size: AppDimens.iconMedium,
-                            color: isFolder
-                                ? AppColors.accentFor(brightness)
-                                : null,
-                          ),
-                          title: Text(
-                            item['name'] as String? ?? '',
-                            style: const TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                          subtitle: Text('Deleted $deletedAt'),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: 'Restore',
-                                icon: Icon(
-                                  Icons.restore_rounded,
-                                  color: AppColors.accentFor(brightness),
+                  ? const OneUiEmptyState(
+                      icon: Icons.delete_outline_rounded,
+                      title: 'Trash is empty',
+                      hint: 'Deleted files and folders will show up here.',
+                    )
+                  : RefreshIndicator(
+                      onRefresh: load,
+                      child: ListView.separated(
+                        padding:
+                            const EdgeInsets.only(bottom: AppDimens.space24),
+                        itemCount: _items.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: AppDimens.space2),
+                        itemBuilder: (context, i) {
+                          final item = _items[i];
+                          final isFolder = FileEntry.kindOf(item) == 'folder';
+                          final deletedAt = Format.relTime(DateTime.tryParse(
+                              item['deleted_at']?.toString() ?? ''));
+                          return OneUiSurface(
+                            level: OneUiSurfaceLevel.surface,
+                            radius: AppDimens.radiusTile,
+                            child: Material(
+                              type: MaterialType.transparency,
+                              child: ListTile(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                      AppDimens.radiusTile),
                                 ),
-                                onPressed: () => _restore(item['id'] as String),
+                                leading: Icon(
+                                  isFolder
+                                      ? Icons.folder_rounded
+                                      : Icons.insert_drive_file_rounded,
+                                  size: AppDimens.iconMedium,
+                                  color: isFolder
+                                      ? AppColors.accentFor(brightness)
+                                      : null,
+                                ),
+                                title: Text(
+                                  item['name'] as String? ?? '',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w500),
+                                ),
+                                subtitle: Text('Deleted $deletedAt'),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      tooltip: 'Restore',
+                                      icon: Icon(
+                                        Icons.restore_rounded,
+                                        color: AppColors.accentFor(brightness),
+                                      ),
+                                      onPressed: () =>
+                                          _restore(item['id'] as String),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Delete forever',
+                                      icon: const Icon(
+                                          Icons.delete_forever_outlined),
+                                      color: AppColors.errorFor(brightness),
+                                      onPressed: () =>
+                                          _delete(item['id'] as String),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              IconButton(
-                                tooltip: 'Delete forever',
-                                icon: const Icon(Icons.delete_forever_outlined),
-                                color: AppColors.errorFor(brightness),
-                                onPressed: () => _delete(item['id'] as String),
-                              ),
-                            ],
-                          ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
     );
   }
 }

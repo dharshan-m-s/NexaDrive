@@ -46,8 +46,8 @@ void main() {
     });
 
     test('assumes https:// when no scheme is given', () {
-      expect(Session.normalizeServerUrl('nas.lan:8080'),
-          'https://nas.lan:8080');
+      expect(
+          Session.normalizeServerUrl('nas.lan:8080'), 'https://nas.lan:8080');
     });
 
     test('preserves an explicit http:// scheme', () {
@@ -89,8 +89,8 @@ void main() {
       final result = await api.login(
           'https://server.example.com', 'alice', 'test-pass-123');
 
-      expect(capturedUri.toString(),
-          'https://server.example.com/api/auth/login');
+      expect(
+          capturedUri.toString(), 'https://server.example.com/api/auth/login');
       expect(capturedHeaders['Content-Type'], 'application/json');
       expect(jsonDecode(capturedBody),
           {'username': 'alice', 'password': 'test-pass-123'});
@@ -165,8 +165,7 @@ void main() {
       expect(capturedHeaders['Authorization'], 'Bearer secret-token');
     });
 
-    test('does not produce a double slash in the authenticated URL',
-        () async {
+    test('does not produce a double slash in the authenticated URL', () async {
       // Simulate a stored server URL with trailing slashes.
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('server_url', 'https://server.com//');
@@ -239,12 +238,10 @@ void main() {
       await prefs.setString('server_url', 'https://server.com');
     });
 
-    test('throws ApiException on non-2xx response with server error',
-        () async {
+    test('throws ApiException on non-2xx response with server error', () async {
       final session = await loadSession();
-      final client = MockClient(
-          (request) async => http.Response(jsonEncode({'error': 'Not found'}),
-              404));
+      final client = MockClient((request) async =>
+          http.Response(jsonEncode({'error': 'Not found'}), 404));
 
       final api = Api(session, client: client);
       await expectLater(
@@ -257,8 +254,8 @@ void main() {
 
     test('throws ApiException on server error status', () async {
       final session = await loadSession();
-      final client = MockClient((request) async => http.Response(
-          jsonEncode({'error': 'Internal server error'}), 500));
+      final client = MockClient((request) async =>
+          http.Response(jsonEncode({'error': 'Internal server error'}), 500));
 
       final api = Api(session, client: client);
       await expectLater(
@@ -269,17 +266,16 @@ void main() {
       );
     });
 
-    test('falls back to a generic message when the body is not JSON',
-        () async {
+    test('falls back to a generic message when the body is not JSON', () async {
       final session = await loadSession();
-      final client =
-          MockClient((request) async => http.Response('<html>oops</html>', 503));
+      final client = MockClient(
+          (request) async => http.Response('<html>oops</html>', 503));
 
       final api = Api(session, client: client);
       await expectLater(
         api.storage(),
-        throwsA(isA<ApiException>().having(
-            (e) => e.message, 'message', 'Request failed (503)')),
+        throwsA(isA<ApiException>()
+            .having((e) => e.message, 'message', 'Request failed (503)')),
       );
     });
 
@@ -292,8 +288,8 @@ void main() {
       final session = await loadSession();
 
       var unauthorizedFired = false;
-      final client = MockClient(
-          (request) async => http.Response(jsonEncode({'error': 'Unauthorized'}), 401));
+      final client = MockClient((request) async =>
+          http.Response(jsonEncode({'error': 'Unauthorized'}), 401));
 
       final api = Api(session, client: client);
       api.onUnauthorized = () async => unauthorizedFired = true;

@@ -103,7 +103,8 @@ void main() {
         }),
         cacheProvider: () => cache,
       );
-      final info = _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
+      final info =
+          _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
 
       final received = <(int, int?)>[];
       final result = await downloader.download(
@@ -131,7 +132,8 @@ void main() {
 
     test('rejects a checksum mismatch and cleans up the partial', () async {
       final downloader = UpdateDownloader(
-        client: MockClient((request) async => http.Response.bytes(payload, 200)),
+        client:
+            MockClient((request) async => http.Response.bytes(payload, 200)),
         cacheProvider: () => cache,
       );
       final info = ArtifactInfo(
@@ -157,7 +159,8 @@ void main() {
 
     test('rejects a size mismatch before writing', () async {
       final downloader = UpdateDownloader(
-        client: MockClient((request) async => http.Response.bytes(payload, 200)),
+        client:
+            MockClient((request) async => http.Response.bytes(payload, 200)),
         cacheProvider: () => cache,
       );
       final info = ArtifactInfo(
@@ -176,12 +179,15 @@ void main() {
       );
     });
 
-    test('cancellation surfaces UpdateErrorKind.cancelled and cleans up', () async {
+    test('cancellation surfaces UpdateErrorKind.cancelled and cleans up',
+        () async {
       final downloader = UpdateDownloader(
-        client: MockClient((request) async => http.Response.bytes(payload, 200)),
+        client:
+            MockClient((request) async => http.Response.bytes(payload, 200)),
         cacheProvider: () => cache,
       );
-      final info = _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
+      final info =
+          _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
       await expectLater(
         downloader.download(
           info,
@@ -203,7 +209,8 @@ void main() {
         client: MockClient((request) async => http.Response('oops', 500)),
         cacheProvider: () => cache,
       );
-      final info = _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
+      final info =
+          _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
       await expectLater(
         downloader.download(
           info,
@@ -219,12 +226,13 @@ void main() {
       final downloader = UpdateDownloader(
         client: MockClient(
           (request) async => http.Response('', 302, headers: {
-              'location': 'https://evil.example.com/NexaDrive-1.2.0.apk',
-            }),
+            'location': 'https://evil.example.com/NexaDrive-1.2.0.apk',
+          }),
         ),
         cacheProvider: () => cache,
       );
-      final info = _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
+      final info =
+          _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
       await expectLater(
         downloader.download(
           info,
@@ -245,12 +253,13 @@ void main() {
       final downloader = UpdateDownloader(
         client: MockClient(
           (request) async => http.Response('', 302, headers: {
-              'location': 'http://github.com/acme/app/NexaDrive-1.2.0.apk',
-            }),
+            'location': 'http://github.com/acme/app/NexaDrive-1.2.0.apk',
+          }),
         ),
         cacheProvider: () => cache,
       );
-      final info = _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
+      final info =
+          _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
       await expectLater(
         downloader.download(
           info,
@@ -281,7 +290,8 @@ void main() {
         }),
         cacheProvider: () => cache,
       );
-      final info = _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
+      final info =
+          _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
 
       final result = await downloader.download(
         info,
@@ -307,7 +317,8 @@ void main() {
         }),
         cacheProvider: () => cache,
       );
-      final info = _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
+      final info =
+          _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
 
       final result = await downloader.download(
         info,
@@ -324,7 +335,8 @@ void main() {
             })),
         cacheProvider: () => cache,
       );
-      final info = _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
+      final info =
+          _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
       await expectLater(
         downloader.download(
           info,
@@ -346,7 +358,8 @@ void main() {
         cacheProvider: () => cache,
         idleTimeout: const Duration(milliseconds: 300),
       );
-      final info = _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
+      final info =
+          _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
       await expectLater(
         downloader.download(
           info,
@@ -364,8 +377,8 @@ void main() {
   group('UpdateDownloader pause and resume', () {
     final payload =
         utf8.encode('NexaDrive resumable payload ' * 40); // ~1080 bytes
-    ArtifactInfo info() => _info(
-        'https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
+    ArtifactInfo info() =>
+        _info('https://github.com/acme/app/NexaDrive-1.2.0.apk', payload);
     const fileName = 'NexaDrive-1.2.0.apk';
 
     test('pausing keeps the partial and reports a resumable offset', () async {

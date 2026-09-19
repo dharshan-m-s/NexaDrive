@@ -131,11 +131,16 @@ abstract final class ScanProcessor {
     }
 
     final crop = page.crop;
-    if (applyCrop && crop != null && crop.width > 0.004 && crop.height > 0.004) {
+    if (applyCrop &&
+        crop != null &&
+        crop.width > 0.004 &&
+        crop.height > 0.004) {
       final x = (crop.left * image.width).round().clamp(0, image.width - 1);
       final y = (crop.top * image.height).round().clamp(0, image.height - 1);
-      final w = math.max(1, (crop.width * image.width).round().clamp(1, image.width - x));
-      final h = math.max(1, (crop.height * image.height).round().clamp(1, image.height - y));
+      final w = math.max(
+          1, (crop.width * image.width).round().clamp(1, image.width - x));
+      final h = math.max(
+          1, (crop.height * image.height).round().clamp(1, image.height - y));
       image = img.copyCrop(image, x: x, y: y, width: w, height: h);
     }
 

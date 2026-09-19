@@ -133,14 +133,20 @@ class OneUiProgressTile extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppDimens.space16, AppDimens.space16, AppDimens.space16, AppDimens.space20,
+        AppDimens.space16,
+        AppDimens.space16,
+        AppDimens.space16,
+        AppDimens.space20,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              if (leading != null) ...[leading!, const SizedBox(width: AppDimens.space12)],
+              if (leading != null) ...[
+                leading!,
+                const SizedBox(width: AppDimens.space12)
+              ],
               Expanded(
                 child: Text(
                   title,

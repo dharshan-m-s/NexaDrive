@@ -125,7 +125,8 @@ abstract final class FileOpener {
               'NexaDrive can\u2019t open ${FileKind.label(entry.category).toLowerCase()} '
               'files in the app. Share it, or save it and open it with another app.',
               style: AppTextStyle.rowSubtitle.copyWith(
-                color: AppColors.textSecondaryFor(Theme.of(sheetContext).brightness),
+                color: AppColors.textSecondaryFor(
+                    Theme.of(sheetContext).brightness),
               ),
             ),
             const SizedBox(height: AppDimens.space20),

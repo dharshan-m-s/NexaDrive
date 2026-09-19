@@ -29,16 +29,19 @@ class ArtifactInfo {
     final sha256 = json['sha256'];
     final size = json['size'];
     if (url is! String || url.isEmpty) {
-      throw ManifestParseException('$context: "url" must be a non-empty string');
+      throw ManifestParseException(
+          '$context: "url" must be a non-empty string');
     }
     if (!_uriLooksHttps(url)) {
       throw ManifestParseException('$context: "url" must be an https URL');
     }
     if (sha256 is! String || !RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(sha256)) {
-      throw ManifestParseException('$context: "sha256" must be a 64-char hex digest');
+      throw ManifestParseException(
+          '$context: "sha256" must be a 64-char hex digest');
     }
     if (size is! int || size <= 0) {
-      throw ManifestParseException('$context: "size" must be a positive integer');
+      throw ManifestParseException(
+          '$context: "size" must be a positive integer');
     }
     return ArtifactInfo(
       url.trim(),
@@ -66,8 +69,7 @@ class ReleaseNotes {
       sections.values.fold(0, (sum, items) => sum + items.length);
 
   Map<String, dynamic> toJson() => {
-        for (final entry in sections.entries)
-          entry.key: entry.value,
+        for (final entry in sections.entries) entry.key: entry.value,
       };
 
   static ReleaseNotes fromJson(Object? json) {
@@ -99,7 +101,8 @@ class ReleaseNotes {
   /// Keeps release notes as inert plain text: strip control characters and
   /// anything that could be interpreted as markdown links or HTML.
   static String _sanitizeText(String raw) {
-    final noControl = raw.replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F]'), '');
+    final noControl =
+        raw.replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F]'), '');
     final noHtml = noControl.replaceAll(RegExp(r'<[^>]*>'), '');
     return noHtml.trim();
   }
@@ -150,7 +153,11 @@ class UpdateManifest {
     return platformArtifacts[arch]?[kind];
   }
 
-  static const List<String> supportedPlatforms = ['android', 'windows', 'linux'];
+  static const List<String> supportedPlatforms = [
+    'android',
+    'windows',
+    'linux'
+  ];
 
   Map<String, dynamic> toJson() => {
         'version': version.toString(),
@@ -193,7 +200,8 @@ class UpdateManifest {
     }
     final version = SemVersion.tryParse(versionStr);
     if (version == null) {
-      throw ManifestParseException('"version" is not a valid SemVer: $versionStr');
+      throw ManifestParseException(
+          '"version" is not a valid SemVer: $versionStr');
     }
 
     final tag = json['tag'];
@@ -219,7 +227,8 @@ class UpdateManifest {
     final minStr = json['minimumSupportedVersion'];
     if (minStr != null) {
       if (minStr is! String) {
-        throw ManifestParseException('"minimumSupportedVersion" must be a string');
+        throw ManifestParseException(
+            '"minimumSupportedVersion" must be a string');
       }
       minimumSupported = SemVersion.tryParse(minStr);
       if (minimumSupported == null) {
@@ -302,7 +311,8 @@ class UpdateManifest {
   }
 
   @override
-  String toString() => 'UpdateManifest($version, $tag, ${artifacts.length} platforms)';
+  String toString() =>
+      'UpdateManifest($version, $tag, ${artifacts.length} platforms)';
 }
 
 /// Error kinds the controller understands (kept dependency-free so tests can

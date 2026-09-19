@@ -106,7 +106,9 @@ void main() {
       expect(
         AppPlatformDetector.linuxInstallationKind(
           exePath: '/usr/lib/nexadrive/nexadrive',
-          environment: const {'APPIMAGE': '/home/u/Downloads/NexaDrive.AppImage'},
+          environment: const {
+            'APPIMAGE': '/home/u/Downloads/NexaDrive.AppImage'
+          },
           runCmd: (cmd) async => 'Package: nexadrive\n',
         ),
         completion(InstallationKind.appimage),
@@ -118,13 +120,15 @@ void main() {
         AppPlatformDetector.linuxInstallationKind(
           exePath: '/usr/lib/nexadrive/nexadrive',
           environment: const {},
-          runCmd: (cmd) async => 'Package: nexadrive\nStatus: install ok installed\n',
+          runCmd: (cmd) async =>
+              'Package: nexadrive\nStatus: install ok installed\n',
         ),
         completion(InstallationKind.deb),
       );
     });
 
-    test('Linux: /usr/bin wrapper with dpkg unavailable falls back to installed',
+    test(
+        'Linux: /usr/bin wrapper with dpkg unavailable falls back to installed',
         () {
       expect(
         AppPlatformDetector.linuxInstallationKind(
@@ -139,7 +143,8 @@ void main() {
     test('Linux: a developer checkout is source (no self-replace path)', () {
       expect(
         AppPlatformDetector.linuxInstallationKind(
-          exePath: '/home/dev/nexadrive/build/linux/x64/release/bundle/nexadrive',
+          exePath:
+              '/home/dev/nexadrive/build/linux/x64/release/bundle/nexadrive',
           environment: const {},
         ),
         completion(InstallationKind.source),
@@ -175,9 +180,10 @@ void main() {
       expect(detector.platform, isNot(anyOf([null])));
       expect(detector.isSupported, isTrue,
           reason: 'update-capable host (one of android/windows/linux)');
-    }, skip: Platform.isAndroid || Platform.isWindows || Platform.isLinux
-        ? false
-        : 'requires an update-capable host');
+    },
+        skip: Platform.isAndroid || Platform.isWindows || Platform.isLinux
+            ? false
+            : 'requires an update-capable host');
 
     test('Linux override wiring: APPIMAGE env', () {
       final detector = AppPlatformDetector(
@@ -190,8 +196,7 @@ void main() {
     }, skip: !Platform.isLinux ? 'Linux host only' : false);
 
     test('Linux override wiring: dpkg probe decides deb vs installed', () {
-      Future<InstallationKind> resolve(String? dpkgOut) =>
-          AppPlatformDetector(
+      Future<InstallationKind> resolve(String? dpkgOut) => AppPlatformDetector(
             resolvedExecutableOverride: '/usr/lib/nexadrive/nexadrive',
             environmentOverride: () => const {},
             runCmdOverride: (cmd) async => dpkgOut,
@@ -235,14 +240,16 @@ void main() {
           'appimage');
       expect(selector.kindFor(AppPlatform.linux, InstallationKind.installed),
           'appimage');
-      expect(selector.kindFor(AppPlatform.linux, InstallationKind.source), isNull);
-      expect(selector.kindFor(AppPlatform.linux, InstallationKind.unknown), isNull);
+      expect(
+          selector.kindFor(AppPlatform.linux, InstallationKind.source), isNull);
+      expect(selector.kindFor(AppPlatform.linux, InstallationKind.unknown),
+          isNull);
     });
 
     test('select resolves the right artifact for every platform', () {
       final m = _fullManifest();
-      final android = selector.select(
-          m, AppPlatform.android, ArchNames.androidArm64, InstallationKind.installed)!;
+      final android = selector.select(m, AppPlatform.android,
+          ArchNames.androidArm64, InstallationKind.installed)!;
       expect(android.url.endsWith('.apk'), isTrue);
 
       final winInstalled = selector.select(m, AppPlatform.windows,
@@ -276,8 +283,8 @@ void main() {
 
     test('select defaults an unknown Linux install to AppImage', () {
       final m = _fullManifest();
-      final picked = selector.select(m, AppPlatform.linux,
-          ArchNames.desktopX64, InstallationKind.unknown)!;
+      final picked = selector.select(m, AppPlatform.linux, ArchNames.desktopX64,
+          InstallationKind.unknown)!;
       expect(picked.url.endsWith('.AppImage'), isTrue);
     });
 

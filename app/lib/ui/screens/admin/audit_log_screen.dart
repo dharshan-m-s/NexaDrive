@@ -56,7 +56,10 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
       appBar: AppBar(
         title: const Text('Audit log'),
         actions: [
-          IconButton(tooltip: 'Refresh', onPressed: load, icon: const Icon(Icons.refresh_rounded)),
+          IconButton(
+              tooltip: 'Refresh',
+              onPressed: load,
+              icon: const Icon(Icons.refresh_rounded)),
         ],
       ),
       body: _loading
@@ -69,11 +72,14 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                 )
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(
-                    AppDimens.pageMargin, AppDimens.space8, AppDimens.pageMargin, AppDimens.space24,
+                    AppDimens.pageMargin,
+                    AppDimens.space8,
+                    AppDimens.pageMargin,
+                    AppDimens.space24,
                   ),
                   itemCount: _entries.length,
-                  separatorBuilder: (_, __) =>
-                      Divider(height: 1, color: AppColors.dividerFor(brightness)),
+                  separatorBuilder: (_, __) => Divider(
+                      height: 1, color: AppColors.dividerFor(brightness)),
                   itemBuilder: (context, i) {
                     final entry = _entries[i];
                     final action = entry['action']?.toString() ?? '';
@@ -81,7 +87,8 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                       minVerticalPadding: AppDimens.space12,
                       leading: CircleAvatar(
                         radius: 16,
-                        backgroundColor: AppColors.accentFor(brightness).withValues(alpha: 0.14),
+                        backgroundColor: AppColors.accentFor(brightness)
+                            .withValues(alpha: 0.14),
                         child: Text(
                           _initial(entry['username']?.toString()),
                           style: AppTextStyle.micro.copyWith(

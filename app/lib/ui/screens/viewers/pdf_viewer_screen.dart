@@ -60,7 +60,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.file.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: Text(widget.file.name,
+            maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           if (_error == null && _bytes != null)
             IconButton(
@@ -114,10 +115,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             ),
             builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
               options: const DefaultBuilderOptions(),
-              documentLoaderBuilder: (_) =>
-                  const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-              pageLoaderBuilder: (_) =>
-                  const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              documentLoaderBuilder: (_) => const Center(
+                  child: CircularProgressIndicator(strokeWidth: 2)),
+              pageLoaderBuilder: (_) => const Center(
+                  child: CircularProgressIndicator(strokeWidth: 2)),
               errorBuilder: (_, error) => OneUiEmptyState(
                 centered: true,
                 icon: Icons.error_outline_rounded,

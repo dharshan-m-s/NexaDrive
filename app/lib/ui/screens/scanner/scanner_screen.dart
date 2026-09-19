@@ -267,8 +267,8 @@ class _ScannerScreenState extends State<ScannerScreen>
               Padding(
                 padding: const EdgeInsets.only(right: AppDimens.space8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(12),
@@ -313,8 +313,7 @@ class _ScannerScreenState extends State<ScannerScreen>
       height: 82,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding:
-            const EdgeInsets.symmetric(horizontal: AppDimens.space12),
+        padding: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
         itemCount: _pages.length,
         itemBuilder: (context, i) {
           final page = _pages[i];
@@ -322,8 +321,7 @@ class _ScannerScreenState extends State<ScannerScreen>
             onTap: () => _editPage(i),
             child: Container(
               width: 60,
-              margin:
-                  const EdgeInsets.symmetric(horizontal: AppDimens.space4),
+              margin: const EdgeInsets.symmetric(horizontal: AppDimens.space4),
               child: Column(
                 children: [
                   Expanded(
@@ -401,8 +399,7 @@ class _ScannerScreenState extends State<ScannerScreen>
     );
   }
 
-  Widget _circleBtn(
-      IconData icon, String label, VoidCallback onTap) {
+  Widget _circleBtn(IconData icon, String label, VoidCallback onTap) {
     return Semantics(
       button: true,
       label: label,
@@ -460,7 +457,7 @@ class _ScannerScreenState extends State<ScannerScreen>
                       color: Colors.white,
                       shape: BoxShape.circle,
                     ),
-                      child: Text(
+                    child: Text(
                       '$count',
                       style: const TextStyle(
                         color: AppColors.accent,
@@ -503,8 +500,8 @@ class _ScannerScreenState extends State<ScannerScreen>
                     const SizedBox(height: AppDimens.space6),
                     Text(
                       _error ?? 'Pick images from disk instead.',
-                      style: AppTextStyle.caption
-                          .copyWith(color: Colors.white54),
+                      style:
+                          AppTextStyle.caption.copyWith(color: Colors.white54),
                     ),
                     const SizedBox(height: AppDimens.space24),
                     FilledButton.tonal(

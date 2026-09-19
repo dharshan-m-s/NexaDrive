@@ -351,12 +351,14 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
                     const OneUiEmptyState(
                       icon: Icons.devices_other_rounded,
                       title: 'No linked devices yet',
-                      hint: 'Run a sync from a computer and it will appear here.',
+                      hint:
+                          'Run a sync from a computer and it will appear here.',
                     )
                   else
                     for (final device in _devices)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: AppDimens.space8),
+                        padding:
+                            const EdgeInsets.only(bottom: AppDimens.space8),
                         child: _DeviceRow(
                           device: device,
                           isThisDevice: device['id'] == _thisDeviceId,
@@ -767,8 +769,10 @@ class _DeviceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final (icon, platformLabel) = _platformVisual(device['platform']?.toString());
-    final lastSeen = DateTime.tryParse(device['last_seen_at']?.toString() ?? '');
+    final (icon, platformLabel) =
+        _platformVisual(device['platform']?.toString());
+    final lastSeen =
+        DateTime.tryParse(device['last_seen_at']?.toString() ?? '');
     final name = device['name']?.toString() ?? 'Device';
 
     return OneUiSurface(
@@ -818,7 +822,8 @@ class _DeviceRow extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.accentContainerFor(brightness),
-                          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                          borderRadius:
+                              BorderRadius.circular(AppDimens.radiusPill),
                         ),
                         child: Text(
                           'This device',
@@ -881,7 +886,8 @@ class _Notice extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: AppDimens.iconSmall,
+          Icon(icon,
+              size: AppDimens.iconSmall,
               color: AppColors.textSecondaryFor(brightness)),
           const SizedBox(width: AppDimens.space12),
           Expanded(

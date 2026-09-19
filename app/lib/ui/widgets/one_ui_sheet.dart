@@ -91,7 +91,10 @@ class OneUiSheetBody extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.fromLTRB(
-      AppDimens.pageMargin, 0, AppDimens.pageMargin, AppDimens.space16,
+      AppDimens.pageMargin,
+      0,
+      AppDimens.pageMargin,
+      AppDimens.space16,
     ),
   });
 

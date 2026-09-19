@@ -42,7 +42,8 @@ void main() {
     final config = LiveTestConfig.require();
     final session = Session();
 
-    await tester.pumpWidget(NexaDriveApp(session: session, prefs: await SharedPreferences.getInstance()));
+    await tester.pumpWidget(NexaDriveApp(
+        session: session, prefs: await SharedPreferences.getInstance()));
     await tester.pumpAndSettle();
 
     final fields = find.byType(TextField);
@@ -51,8 +52,10 @@ void main() {
     await tester.enterText(fields.at(1), config.username);
     await tester.enterText(fields.at(2), config.password);
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
-    await _pumpUntilFound(tester, find.byType(AppShell), timeout: const Duration(seconds: 45));
-    await _pumpUntilFound(tester, find.textContaining('Administrator'), timeout: const Duration(seconds: 30));
+    await _pumpUntilFound(tester, find.byType(AppShell),
+        timeout: const Duration(seconds: 45));
+    await _pumpUntilFound(tester, find.textContaining('Administrator'),
+        timeout: const Duration(seconds: 30));
 
     final api = Api(session);
     const name = 'upload-e2e-20mb.bin';
@@ -68,7 +71,8 @@ void main() {
     await writeSink.close();
     final size = src.lengthSync();
     expect(size, greaterThan(TransferQueue.chunkSize),
-        reason: 'file must span at least two chunks (TransferQueue.chunkSize = 8 MB)');
+        reason:
+            'file must span at least two chunks (TransferQueue.chunkSize = 8 MB)');
     final expectedDigest = (await _sha256File(src));
 
     // Drive the upload-progress dialog for a real multi-chunk upload to root.
@@ -80,14 +84,16 @@ void main() {
       folder: '',
     ));
 
-    await _pumpUntilFound(tester, find.byType(AlertDialog), timeout: const Duration(seconds: 15));
+    await _pumpUntilFound(tester, find.byType(AlertDialog),
+        timeout: const Duration(seconds: 15));
 
     // Watch progress advance: bytes text should move beyond 0 to confirm chunking.
     bool sawProgress = false;
     final doneText = find.byWidgetPredicate(
       (w) =>
           w is Text &&
-          (w.data == 'Upload complete' || w.data == 'Upload finished with issues'),
+          (w.data == 'Upload complete' ||
+              w.data == 'Upload finished with issues'),
     );
     bool terminal = false;
     final end = DateTime.now().add(const Duration(seconds: 120));
@@ -103,7 +109,8 @@ void main() {
       }
     }
 
-    debugPrint('=== DIALOG TEXTS @ terminal=$terminal sawProgress=$sawProgress ===');
+    debugPrint(
+        '=== DIALOG TEXTS @ terminal=$terminal sawProgress=$sawProgress ===');
     for (final e in find
         .descendant(of: find.byType(AlertDialog), matching: find.byType(Text))
         .evaluate()) {
@@ -112,11 +119,14 @@ void main() {
     final items = await TransferQueue(api).items();
     debugPrint('=== QUEUE ITEMS (${items.length}) ===');
     for (final item in items) {
-      debugPrint('${item.name} status=${item.status} err=${item.error} bytes=${item.transferred}/${item.size}');
+      debugPrint(
+          '${item.name} status=${item.status} err=${item.error} bytes=${item.transferred}/${item.size}');
     }
 
-    expect(sawProgress, isTrue, reason: 'progress text should be observed during a 20 MB upload');
-    expect(terminal, isTrue, reason: 'upload dialog must reach a terminal state');
+    expect(sawProgress, isTrue,
+        reason: 'progress text should be observed during a 20 MB upload');
+    expect(terminal, isTrue,
+        reason: 'upload dialog must reach a terminal state');
     expect(find.text('Upload complete'), findsOneWidget,
         reason: 'upload must succeed, not report issues');
     await tester.tap(find.text('Close'));
@@ -125,15 +135,18 @@ void main() {
     // The file must be listed remotely.
     final entries = await api.listFiles('');
     final names = entries.map((e) => (e['name'] ?? '').toString()).toList();
-    expect(names.contains(name), isTrue, reason: 'uploaded file should be listed at server root');
+    expect(names.contains(name), isTrue,
+        reason: 'uploaded file should be listed at server root');
 
     // Full download round-trip: bytes and SHA-256 must match the source.
     final dl = File('${tmpDir.path}/dl-$name');
     await api.downloadToFile(name, dl.path);
     final remoteDigest = (await _sha256File(dl));
-    expect(remoteDigest, expectedDigest, reason: 'downloaded file must be byte-identical');
+    expect(remoteDigest, expectedDigest,
+        reason: 'downloaded file must be byte-identical');
     // ignore: avoid_print
-    print('ROUND-TRIP OK: $size bytes, sha256=$remoteDigest, chunks=${(size / TransferQueue.chunkSize).ceil()}');
+    print(
+        'ROUND-TRIP OK: $size bytes, sha256=$remoteDigest, chunks=${(size / TransferQueue.chunkSize).ceil()}');
 
     // Clean up: trash + purge the test file.
     await api.delete(name);

@@ -30,7 +30,8 @@ class ThumbnailCache {
 
   static Future<ThumbnailCache> open() async {
     final base = await getApplicationCacheDirectory();
-    final dir = Directory('${base.path}${Platform.pathSeparator}$_cacheDirName');
+    final dir =
+        Directory('${base.path}${Platform.pathSeparator}$_cacheDirName');
     await dir.create(recursive: true);
     final cache = ThumbnailCache._(dir);
     await cache._shrink();
@@ -105,7 +106,8 @@ class ThumbnailCache {
       }
       if (files.length <= _maxEntries && total <= _maxBytes) return;
 
-      files.sort((a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()));
+      files
+          .sort((a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()));
 
       var i = 0;
       while (files.length - i > _maxEntries || total > _maxBytes) {

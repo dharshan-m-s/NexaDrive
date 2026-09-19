@@ -146,7 +146,8 @@ void main() {
         _ScriptedApi(usersError: ApiException(500, 'Internal error')),
       );
       await tester.pumpAndSettle();
-      expect(find.text('The server couldn\u2019t load accounts'), findsOneWidget);
+      expect(
+          find.text('The server couldn\u2019t load accounts'), findsOneWidget);
       expect(find.textContaining('Internal error'), findsOneWidget);
       _expectNoZeroCount();
     });
@@ -173,7 +174,8 @@ void main() {
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
       expect(api.calls.where((c) => c == 'users'), hasLength(2));
-      expect(find.text('The server couldn\u2019t load accounts'), findsOneWidget);
+      expect(
+          find.text('The server couldn\u2019t load accounts'), findsOneWidget);
       _expectNoZeroCount();
     });
   });
@@ -194,7 +196,8 @@ void main() {
         (tester) async {
       await _pump(tester, _ScriptedApi(usersResult: const []));
       await tester.pumpAndSettle();
-      final header = tester.getBottomLeft(find.text('Manage accounts and access'));
+      final header =
+          tester.getBottomLeft(find.text('Manage accounts and access'));
       final empty = tester.getTopLeft(find.text('No accounts yet'));
       // The empty-state panel starts within a header-height of the page title
       // rather than being pushed to the middle of an 844px screen.
@@ -217,7 +220,8 @@ void main() {
               username: 'grace',
               displayName: 'Grace Hopper',
             ),
-            _user(id: '3', username: 'alex', displayName: 'Alex', disabled: true),
+            _user(
+                id: '3', username: 'alex', displayName: 'Alex', disabled: true),
           ],
         );
 
@@ -418,7 +422,8 @@ void main() {
       // Regression: the client previously could not clear a quota at all —
       // an empty field sent no quota field, which the server reads as
       // "leave unchanged".
-      expect(api.calls, contains('updateUser:2:disabled=false:clearQuota=true'));
+      expect(
+          api.calls, contains('updateUser:2:disabled=false:clearQuota=true'));
     });
   });
 }

@@ -144,7 +144,8 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
                     AppDimens.space24,
                   ),
                   itemCount: items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: AppDimens.space2),
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(height: AppDimens.space2),
                   itemBuilder: (context, i) {
                     final item = items[i];
                     final type = FileEntry.kindOf(item);
@@ -153,7 +154,8 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
                     final size = (item['size'] as num?)?.toInt();
                     return ListTile(
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppDimens.radiusTile),
+                        borderRadius:
+                            BorderRadius.circular(AppDimens.radiusTile),
                       ),
                       leading: Container(
                         width: AppDimens.iconTileLarge,
@@ -162,10 +164,13 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
                           color: brightness == Brightness.dark
                               ? accent.withValues(alpha: 0.18)
                               : accent.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(AppDimens.radiusInner),
+                          borderRadius:
+                              BorderRadius.circular(AppDimens.radiusInner),
                         ),
                         child: Icon(
-                          isFolder ? Icons.folder_rounded : Icons.insert_drive_file_rounded,
+                          isFolder
+                              ? Icons.folder_rounded
+                              : Icons.insert_drive_file_rounded,
                           color: isFolder ? accent : null,
                           size: AppDimens.iconMedium,
                         ),

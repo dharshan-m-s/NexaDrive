@@ -58,7 +58,8 @@ void main() {
       final iconsFile = File('${fontDir.path}/MaterialIcons-Regular.otf');
       if (iconsFile.existsSync()) {
         final loader = FontLoader('MaterialIcons')
-          ..addFont(_font(iconsFile).then((value) => Future<ByteData>.value(value)));
+          ..addFont(
+              _font(iconsFile).then((value) => Future<ByteData>.value(value)));
         await loader.load();
       }
     }
@@ -85,7 +86,8 @@ void main() {
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       52428800,
     );
-    const sha = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const sha =
+        'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
     controller.manifest = UpdateManifest.fromJson(const {
       'version': '1.4.0',
       'tag': 'v1.4.0',
@@ -93,7 +95,10 @@ void main() {
       'prerelease': false,
       'minimumSupportedVersion': '1.0.0',
       'releaseNotes': {
-        'New features': ['Faster background sync', 'Folder navigation shortcuts'],
+        'New features': [
+          'Faster background sync',
+          'Folder navigation shortcuts'
+        ],
         'Fixes': [
           'Photos now open at full resolution',
           'Uploads retry automatically when the network drops',
@@ -133,7 +138,8 @@ void main() {
   }
 
   testWidgets('update center golden', (tester) async {
-    await pumpScreen(tester, UpdateCenterScreen(controller: await buildController()));
+    await pumpScreen(
+        tester, UpdateCenterScreen(controller: await buildController()));
     await expectLater(
       find.byType(UpdateCenterScreen),
       matchesGoldenFile('goldens/update_center_light.png'),

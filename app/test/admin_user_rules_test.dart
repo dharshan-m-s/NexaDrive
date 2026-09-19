@@ -33,7 +33,8 @@ void main() {
     test('matches on id when both sides know it', () {
       final s = session(id: 'u1', username: 'ada');
       expect(AdminUserRules.isSelf(s, user(id: 'u1', username: 'ada')), isTrue);
-      expect(AdminUserRules.isSelf(s, user(id: 'u2', username: 'grace')), isFalse);
+      expect(
+          AdminUserRules.isSelf(s, user(id: 'u2', username: 'grace')), isFalse);
     });
 
     test('id match wins even if the username differs (renamed account)', () {
@@ -49,12 +50,14 @@ void main() {
       final s = session(username: 'Ada');
       expect(AdminUserRules.isSelf(s, user(id: 'x', username: 'ada')), isTrue);
       expect(AdminUserRules.isSelf(s, user(id: 'x', username: 'ADA')), isTrue);
-      expect(AdminUserRules.isSelf(s, user(id: 'x', username: 'grace')), isFalse);
+      expect(
+          AdminUserRules.isSelf(s, user(id: 'x', username: 'grace')), isFalse);
     });
 
     test('is false when the session knows nothing to match on', () {
       final s = session();
-      expect(AdminUserRules.isSelf(s, user(id: 'u1', username: 'ada')), isFalse);
+      expect(
+          AdminUserRules.isSelf(s, user(id: 'u1', username: 'ada')), isFalse);
     });
 
     test('does not match an account with a missing username', () {
@@ -195,7 +198,8 @@ void main() {
 
   group('filter', () {
     final users = [
-      user(id: '1', username: 'ada', displayName: 'Ada Lovelace', role: 'admin'),
+      user(
+          id: '1', username: 'ada', displayName: 'Ada Lovelace', role: 'admin'),
       user(id: '2', username: 'grace', displayName: 'Grace Hopper'),
       user(id: '3', username: 'alex', displayName: 'Alex', disabled: true),
     ];

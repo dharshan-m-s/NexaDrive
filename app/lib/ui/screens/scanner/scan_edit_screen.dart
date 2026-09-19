@@ -12,7 +12,8 @@ class ScanEditScreen extends StatefulWidget {
   final ScanPage page;
   final int totalPages;
 
-  const ScanEditScreen({super.key, required this.page, required this.totalPages});
+  const ScanEditScreen(
+      {super.key, required this.page, required this.totalPages});
 
   @override
   State<ScanEditScreen> createState() => _ScanEditScreenState();
@@ -149,7 +150,8 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
               )
             : ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true),
+                child: Image.memory(bytes,
+                    fit: BoxFit.contain, gaplessPlayback: true),
               ),
       ),
     );
@@ -204,7 +206,8 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
           _actionBtn(Icons.rotate_right_rounded, 'Rotate right', _rotateRight),
           _actionBtn(Icons.center_focus_strong_rounded, 'Auto-crop', _autoCrop),
           if (_crop != null)
-            _actionBtn(Icons.restart_alt_rounded, 'Reset crop', () => setState(() => _crop = null)),
+            _actionBtn(Icons.restart_alt_rounded, 'Reset crop',
+                () => setState(() => _crop = null)),
           const Spacer(),
           FilledButton(
             onPressed: () {

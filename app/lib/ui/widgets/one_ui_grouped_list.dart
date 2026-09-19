@@ -38,7 +38,10 @@ class OneUiGroupedList extends StatelessWidget {
         if (header != null) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(
-              AppDimens.space4, AppDimens.space8, AppDimens.space4, AppDimens.space8,
+              AppDimens.space4,
+              AppDimens.space8,
+              AppDimens.space4,
+              AppDimens.space8,
             ),
             child: Text(
               header!.toUpperCase(),
@@ -50,7 +53,8 @@ class OneUiGroupedList extends StatelessWidget {
           ),
         ],
         Container(
-          padding: padding ?? const EdgeInsets.symmetric(vertical: AppDimens.space4),
+          padding:
+              padding ?? const EdgeInsets.symmetric(vertical: AppDimens.space4),
           decoration: BoxDecoration(
             color: surface,
             borderRadius: BorderRadius.circular(AppDimens.radiusCard),
@@ -255,11 +259,15 @@ class OneUiInfoRow extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     return Padding(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space16, vertical: AppDimens.space12,
+        horizontal: AppDimens.space16,
+        vertical: AppDimens.space12,
       ),
       child: Row(
         children: [
-          if (leading != null) ...[leading!, const SizedBox(width: AppDimens.space12)],
+          if (leading != null) ...[
+            leading!,
+            const SizedBox(width: AppDimens.space12)
+          ],
           Expanded(
             child: Text(
               label,

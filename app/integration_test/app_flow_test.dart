@@ -54,18 +54,24 @@ void main() {
 
     // Wait for the app shell to replace the login screen and Home to render
     // the signed-in account name from /api/me + /api/storage.
-    await _pumpUntilFound(tester, find.byType(AppShell), timeout: const Duration(seconds: 45));
-    await _pumpUntilFound(tester, find.textContaining(config.username == 'admin' ? 'Administrator' : config.username),
+    await _pumpUntilFound(tester, find.byType(AppShell),
+        timeout: const Duration(seconds: 45));
+    await _pumpUntilFound(
+        tester,
+        find.textContaining(
+            config.username == 'admin' ? 'Administrator' : config.username),
         timeout: const Duration(seconds: 30));
 
     // Desktop sidebar -> Settings, then Sign out. This performs a real
     // authenticated POST /api/auth/logout and returns to the login screen.
     await tester.tap(find.text('Settings'));
-    await _pumpUntilFound(tester, find.text('Sign out'), timeout: const Duration(seconds: 30));
+    await _pumpUntilFound(tester, find.text('Sign out'),
+        timeout: const Duration(seconds: 30));
     await tester.tap(find.widgetWithText(OutlinedButton, 'Sign out'));
     await _pumpUntilFound(tester, find.byKey(const Key('signout_confirm')),
         timeout: const Duration(seconds: 30));
     await tester.tap(find.byKey(const Key('signout_confirm')));
-    await _pumpUntilFound(tester, find.text('Welcome to NexaDrive'), timeout: const Duration(seconds: 45));
+    await _pumpUntilFound(tester, find.text('Welcome to NexaDrive'),
+        timeout: const Duration(seconds: 45));
   });
 }

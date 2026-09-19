@@ -52,7 +52,8 @@ class OneUiActionBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: barSurface,
         borderRadius: BorderRadius.vertical(
-          top: Radius.circular(floating ? AppDimens.radiusCard : AppDimens.radiusSheet),
+          top: Radius.circular(
+              floating ? AppDimens.radiusCard : AppDimens.radiusSheet),
         ),
         boxShadow: const [
           BoxShadow(
@@ -93,7 +94,8 @@ class OneUiActionBar extends StatelessWidget {
                   children: [
                     for (final action in actions) ...[
                       _Action(action: action),
-                      if (action != actions.last) const SizedBox(width: AppDimens.space8),
+                      if (action != actions.last)
+                        const SizedBox(width: AppDimens.space8),
                     ],
                   ],
                 ),
@@ -108,7 +110,10 @@ class OneUiActionBar extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppDimens.space16, 0, AppDimens.space16, AppDimens.space12,
+        AppDimens.space16,
+        0,
+        AppDimens.space16,
+        AppDimens.space12,
       ),
       child: Center(
         child: ConstrainedBox(
@@ -128,7 +133,8 @@ class _Action extends StatelessWidget {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final tint = action.color ?? AppColors.accentTextFor(brightness);
-    final onColor = action.enabled ? tint : AppColors.textTertiaryFor(brightness);
+    final onColor =
+        action.enabled ? tint : AppColors.textTertiaryFor(brightness);
     final pillBg = (action.color ?? AppColors.accentSubtleFor(brightness))
         .withValues(alpha: action.color == null ? 1.0 : 0.16);
 

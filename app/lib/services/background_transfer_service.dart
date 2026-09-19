@@ -19,7 +19,9 @@ void nexadriveBackgroundDispatcher() {
       await session.load();
       if (session.serverUrl == null || session.token == null) return true;
       final queue = TransferQueue(Api(session));
-      final pending = (await queue.items()).where((item) => item.status != 'completed').toList();
+      final pending = (await queue.items())
+          .where((item) => item.status != 'completed')
+          .toList();
       if (pending.isEmpty) return true;
       await queue.process();
       return true;

@@ -127,32 +127,41 @@ class _TransfersScreenState extends State<TransfersScreen> {
       );
     }
     final active = _items
-        .where((e) => e.status != 'completed' && !(e.status == 'queued' && e.error != null))
+        .where((e) =>
+            e.status != 'completed' &&
+            !(e.status == 'queued' && e.error != null))
         .toList();
     final completed = _items.where((e) => e.status == 'completed').toList();
-    final failed = _items
-        .where((e) => e.status == 'queued' && e.error != null)
-        .toList();
+    final failed =
+        _items.where((e) => e.status == 'queued' && e.error != null).toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
-        AppDimens.pageMargin, AppDimens.space8, AppDimens.pageMargin, AppDimens.space24,
+        AppDimens.pageMargin,
+        AppDimens.space8,
+        AppDimens.pageMargin,
+        AppDimens.space24,
       ),
       children: [
         if (active.isNotEmpty)
-          _Section('Uploading',
+          _Section(
+              'Uploading',
               '${Format.bytes(active.fold<int>(0, (s, e) => s + e.transferred))} '
-              'of ${Format.bytes(active.fold<int>(0, (s, e) => s + e.size))}'),
-        for (final item in active) _TransferRow(item: item, onToggle: _resumeOrPause, onRemove: _remove),
+                  'of ${Format.bytes(active.fold<int>(0, (s, e) => s + e.size))}'),
+        for (final item in active)
+          _TransferRow(item: item, onToggle: _resumeOrPause, onRemove: _remove),
         if (failed.isNotEmpty) ...[
           const SizedBox(height: AppDimens.space16),
           _Section('Needs attention', '${failed.length} failed'),
-          for (final item in failed) _TransferRow(item: item, onToggle: _resumeOrPause, onRemove: _remove),
+          for (final item in failed)
+            _TransferRow(
+                item: item, onToggle: _resumeOrPause, onRemove: _remove),
         ],
         if (completed.isNotEmpty) ...[
           const SizedBox(height: AppDimens.space16),
           _Section('Completed', '${completed.length} done'),
-          for (final item in completed) _TransferRow(item: item, onToggle: null, onRemove: null),
+          for (final item in completed)
+            _TransferRow(item: item, onToggle: null, onRemove: null),
         ],
       ],
     );
@@ -169,7 +178,10 @@ class _Section extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppDimens.space4, AppDimens.space12, AppDimens.space4, AppDimens.space8,
+        AppDimens.space4,
+        AppDimens.space12,
+        AppDimens.space4,
+        AppDimens.space8,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -206,7 +218,8 @@ class _TransferRow extends StatelessWidget {
     final completed = item.status == 'completed';
     final failed = item.status == 'queued' && item.error != null;
     final uploading = item.status == 'uploading';
-    final frac = item.size == 0 ? 0.0 : (item.transferred / item.size).clamp(0.0, 1.0);
+    final frac =
+        item.size == 0 ? 0.0 : (item.transferred / item.size).clamp(0.0, 1.0);
 
     final accent = AppColors.accentFor(brightness);
     final Color statusColor;
@@ -248,7 +261,10 @@ class _TransferRow extends StatelessWidget {
       level: OneUiSurfaceLevel.surface,
       margin: const EdgeInsets.only(bottom: AppDimens.space8),
       padding: const EdgeInsets.fromLTRB(
-        AppDimens.space16, AppDimens.space12, AppDimens.space8, AppDimens.space12,
+        AppDimens.space16,
+        AppDimens.space12,
+        AppDimens.space8,
+        AppDimens.space12,
       ),
       child: Row(
         children: [
@@ -295,7 +311,9 @@ class _TransferRow extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyle.caption.copyWith(
-                    color: failed ? statusColor : AppColors.textSecondaryFor(brightness),
+                    color: failed
+                        ? statusColor
+                        : AppColors.textSecondaryFor(brightness),
                   ),
                 ),
                 if (uploading) ...[

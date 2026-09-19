@@ -47,7 +47,8 @@ void main() {
     test('allows github.com and *.githubusercontent.com only', () {
       expect(UpdateConfig.allowsHost('github.com'), isTrue);
       expect(UpdateConfig.allowsHost('objects.githubusercontent.com'), isTrue);
-      expect(UpdateConfig.allowsHost('release-assets.githubusercontent.com'), isTrue);
+      expect(UpdateConfig.allowsHost('release-assets.githubusercontent.com'),
+          isTrue);
       expect(UpdateConfig.allowsHost('api.github.com'), isFalse);
       expect(UpdateConfig.allowsHost('evil.example.com'), isFalse);
     });
@@ -57,9 +58,10 @@ void main() {
         client: MockClient((_) async => http.Response(_manifestBody, 200)),
         baseUrl: 'http://github.com/dharshan-m-s/NexaDrive/x',
       );
-      expect(() => source.fetchLatest(),
-          throwsA(isA<UpdateException>()
-              .having((e) => e.kind, 'kind', UpdateErrorKind.malformedManifest)));
+      expect(
+          () => source.fetchLatest(),
+          throwsA(isA<UpdateException>().having(
+              (e) => e.kind, 'kind', UpdateErrorKind.malformedManifest)));
     });
 
     test('rejects an off-allowlist source host', () {
@@ -67,9 +69,10 @@ void main() {
         client: MockClient((_) async => http.Response(_manifestBody, 200)),
         baseUrl: 'https://evil.example.com/NexaDrive/manifest.json',
       );
-      expect(() => source.fetchLatest(),
-          throwsA(isA<UpdateException>()
-              .having((e) => e.kind, 'kind', UpdateErrorKind.malformedManifest)));
+      expect(
+          () => source.fetchLatest(),
+          throwsA(isA<UpdateException>().having(
+              (e) => e.kind, 'kind', UpdateErrorKind.malformedManifest)));
     });
   });
 
@@ -202,7 +205,8 @@ void main() {
 
   group('UpdateSource.resolveArtifact', () {
     test('accepts allowed hosts', () {
-      final source = sourceReturning(MockClient((_) async => http.Response('', 200)));
+      final source =
+          sourceReturning(MockClient((_) async => http.Response('', 200)));
       final uri = source.resolveArtifact(ArtifactInfo(
         'https://objects.githubusercontent.com/acme/app/NexaDrive-1.2.0.apk',
         'a' * 64,
@@ -212,7 +216,8 @@ void main() {
     });
 
     test('rejects disallowed hosts', () {
-      final source = sourceReturning(MockClient((_) async => http.Response('', 200)));
+      final source =
+          sourceReturning(MockClient((_) async => http.Response('', 200)));
       expect(
         () => source.resolveArtifact(ArtifactInfo(
           'https://files.example.com/app.apk',
@@ -225,7 +230,8 @@ void main() {
     });
   });
 
-  test('manifest cache JSON round-trips through prefs-backed storage', () async {
+  test('manifest cache JSON round-trips through prefs-backed storage',
+      () async {
     final m = UpdateManifest.fromJsonString(_manifestBody);
     final jsonStr = jsonEncode(m.toJson());
     final back = UpdateManifest.fromJsonString(jsonStr);

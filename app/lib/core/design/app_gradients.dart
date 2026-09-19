@@ -85,7 +85,10 @@ abstract final class AppGradients {
     final (beginColor, endColor) = _pairs[family]!;
     final colors = alpha == null
         ? [beginColor, endColor]
-        : [beginColor.withValues(alpha: alpha), endColor.withValues(alpha: alpha)];
+        : [
+            beginColor.withValues(alpha: alpha),
+            endColor.withValues(alpha: alpha)
+          ];
     return LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,

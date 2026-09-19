@@ -57,8 +57,8 @@ void main() {
             controller.totalBytes = 52428800;
             controller.progress = 18874368 / 52428800;
           }
-          await pump(tester, theme.value,
-              UpdateCenterScreen(controller: controller));
+          await pump(
+              tester, theme.value, UpdateCenterScreen(controller: controller));
           expect(debugPaintBaselinesEnabled, isFalse,
               reason: 'The debug baseline overlay paints a line under every '
                   'line of text and must not be on during a normal render.');
@@ -70,8 +70,8 @@ void main() {
           (tester) async {
         final controller = await buildController();
         controller.status = UpdateStatus.updateAvailable;
-        await pump(tester, theme.value,
-            UpdateCenterScreen(controller: controller));
+        await pump(
+            tester, theme.value, UpdateCenterScreen(controller: controller));
         for (final label in const [
           'Update center',
           'Current version',
@@ -162,7 +162,8 @@ Future<UpdateController> buildController() async {
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     52428800,
   );
-  const sha = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+  const sha =
+      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
   controller.manifest = UpdateManifest.fromJson(const {
     'version': '1.4.0',
     'tag': 'v1.4.0',

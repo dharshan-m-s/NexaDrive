@@ -5,8 +5,7 @@ import 'package:nexadrive/update/update_manifest.dart';
 
 Map<String, dynamic> artifact(String url, {String? sha256, int? size}) => {
       'url': url,
-      'sha256': sha256 ??
-          'a' * 63 + 'b',
+      'sha256': sha256 ?? 'a' * 63 + 'b',
       'size': size ?? 1000,
     };
 
@@ -23,19 +22,24 @@ Map<String, dynamic> sampleManifest() => {
       'artifacts': {
         'android': {
           'arm64-v8a': {
-            'apk': artifact('https://github.com/acme/app/releases/download/v1.2.0/NexaDrive-1.2.0.apk'),
+            'apk': artifact(
+                'https://github.com/acme/app/releases/download/v1.2.0/NexaDrive-1.2.0.apk'),
           },
         },
         'windows': {
           'x64': {
-            'installer': artifact('https://objects.githubusercontent.com/acme/app/setup.exe'),
-            'zip': artifact('https://objects.githubusercontent.com/acme/app/app.zip'),
+            'installer': artifact(
+                'https://objects.githubusercontent.com/acme/app/setup.exe'),
+            'zip': artifact(
+                'https://objects.githubusercontent.com/acme/app/app.zip'),
           },
         },
         'linux': {
           'x64': {
-            'appimage': artifact('https://objects.githubusercontent.com/acme/app/app.AppImage'),
-            'deb': artifact('https://objects.githubusercontent.com/acme/app/app.deb'),
+            'appimage': artifact(
+                'https://objects.githubusercontent.com/acme/app/app.AppImage'),
+            'deb': artifact(
+                'https://objects.githubusercontent.com/acme/app/app.deb'),
           },
         },
       },
@@ -108,8 +112,7 @@ void main() {
     });
 
     test('rejects minimumSupportedVersion newer than version', () {
-      final json = sampleManifest()
-        ..['minimumSupportedVersion'] = '2.0.0';
+      final json = sampleManifest()..['minimumSupportedVersion'] = '2.0.0';
       expect(() => UpdateManifest.fromJson(json),
           throwsA(isA<ManifestParseException>()));
     });
@@ -171,8 +174,11 @@ void main() {
     test('hasValidSha256', () {
       const url = 'https://github.com/a/b';
       expect(
-        const ArtifactInfo(url, 'deadbeefdeadbeefdeadbeefdeadbeef'
-            'deadbeefdeadbeefdeadbeefdeadbeef', 1)
+        const ArtifactInfo(
+                url,
+                'deadbeefdeadbeefdeadbeefdeadbeef'
+                'deadbeefdeadbeefdeadbeefdeadbeef',
+                1)
             .hasValidSha256,
         isTrue,
       );

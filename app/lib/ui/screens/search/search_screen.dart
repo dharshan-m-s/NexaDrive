@@ -95,7 +95,10 @@ class _SearchScreenState extends State<SearchScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppDimens.space4, AppDimens.space8, AppDimens.space12, AppDimens.space8,
+                AppDimens.space4,
+                AppDimens.space8,
+                AppDimens.space12,
+                AppDimens.space8,
               ),
               child: Row(
                 children: [
@@ -186,7 +189,10 @@ class _SearchScreenState extends State<SearchScreen> {
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
-        AppDimens.pageMargin, AppDimens.space4, AppDimens.pageMargin, AppDimens.space24,
+        AppDimens.pageMargin,
+        AppDimens.space4,
+        AppDimens.pageMargin,
+        AppDimens.space24,
       ),
       children: [
         if (folders.isNotEmpty) ...[
@@ -223,7 +229,10 @@ class _SearchHeader extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppDimens.space4, AppDimens.space8, AppDimens.space4, AppDimens.space4,
+        AppDimens.space4,
+        AppDimens.space8,
+        AppDimens.space4,
+        AppDimens.space4,
       ),
       child: Text(
         title,

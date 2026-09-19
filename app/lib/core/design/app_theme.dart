@@ -23,10 +23,13 @@ abstract final class AppTheme {
   static ThemeData _build(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
 
-    final background = isDark ? AppColors.backgroundDark : AppColors.backgroundLight;
+    final background =
+        isDark ? AppColors.backgroundDark : AppColors.backgroundLight;
     final surface = isDark ? AppColors.surfaceDark : AppColors.surfaceLight;
-    final surfaceAlt = isDark ? AppColors.surfaceAltDark : AppColors.surfaceAltLight;
-    final onSurface = isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+    final surfaceAlt =
+        isDark ? AppColors.surfaceAltDark : AppColors.surfaceAltLight;
+    final onSurface =
+        isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
     final accent = AppColors.accentFor(brightness);
     final accentContainer = AppColors.accentContainerFor(brightness);
     final onAccentContainer = AppColors.onAccentContainerFor(brightness);
@@ -39,15 +42,18 @@ abstract final class AppTheme {
     final colorScheme = scheme.copyWith(
       brightness: brightness,
       primary: accent,
-      onPrimary: isDark ? AppColors.textOnPrimaryDark : AppColors.textOnPrimaryLight,
+      onPrimary:
+          isDark ? AppColors.textOnPrimaryDark : AppColors.textOnPrimaryLight,
       primaryContainer: accentContainer,
       onPrimaryContainer: onAccentContainer,
       secondary: accent,
-      onSecondary: isDark ? AppColors.textOnPrimaryDark : AppColors.textOnPrimaryLight,
+      onSecondary:
+          isDark ? AppColors.textOnPrimaryDark : AppColors.textOnPrimaryLight,
       secondaryContainer: accentContainer,
       onSecondaryContainer: onAccentContainer,
       tertiary: accent,
-      onTertiary: isDark ? AppColors.textOnPrimaryDark : AppColors.textOnPrimaryLight,
+      onTertiary:
+          isDark ? AppColors.textOnPrimaryDark : AppColors.textOnPrimaryLight,
       // ------------------------------------------------- surface hierarchy
       // L0 page background -> L1 surface -> L2 grouped alt -> L3 bars.
       surface: surface,
@@ -55,9 +61,8 @@ abstract final class AppTheme {
       surfaceContainerLowest: background,
       surfaceContainerLow: surface,
       surfaceContainer: surfaceAlt,
-      surfaceContainerHigh: isDark
-          ? AppColors.surfacePressedDark
-          : AppColors.surfacePressedLight,
+      surfaceContainerHigh:
+          isDark ? AppColors.surfacePressedDark : AppColors.surfacePressedLight,
       surfaceContainerHighest: surfaceAlt,
       onSurfaceVariant: textSecondary,
       outline: textTertiary,
@@ -81,7 +86,8 @@ abstract final class AppTheme {
     );
 
     return base.copyWith(
-      textTheme: _textTheme(base.textTheme, onSurface, textSecondary, textTertiary),
+      textTheme:
+          _textTheme(base.textTheme, onSurface, textSecondary, textTertiary),
       // -------------------------------------------------- component themes
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
@@ -173,7 +179,8 @@ abstract final class AppTheme {
         selectedColor: accentContainer,
         disabledColor: surfaceAlt,
         labelStyle: AppTextStyle.chipLabel.copyWith(color: textSecondary),
-        secondaryLabelStyle: AppTextStyle.chipLabel.copyWith(color: onAccentContainer),
+        secondaryLabelStyle:
+            AppTextStyle.chipLabel.copyWith(color: onAccentContainer),
         side: const BorderSide(color: Colors.transparent),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppDimens.radiusPill),
@@ -199,7 +206,9 @@ abstract final class AppTheme {
         ),
       ),
       bottomAppBarTheme: BottomAppBarThemeData(
-        color: isDark ? AppColors.surfaceElevatedDark : AppColors.surfaceElevatedLight,
+        color: isDark
+            ? AppColors.surfaceElevatedDark
+            : AppColors.surfaceElevatedLight,
         elevation: AppDimens.elevationNone,
         surfaceTintColor: Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
@@ -213,8 +222,10 @@ abstract final class AppTheme {
           vertical: AppDimens.space16,
         ),
         hintStyle: TextStyle(color: textTertiary, fontWeight: FontWeight.w400),
-        labelStyle: TextStyle(color: textSecondary, fontWeight: FontWeight.w400),
-        floatingLabelStyle: TextStyle(color: accent, fontWeight: FontWeight.w600),
+        labelStyle:
+            TextStyle(color: textSecondary, fontWeight: FontWeight.w400),
+        floatingLabelStyle:
+            TextStyle(color: accent, fontWeight: FontWeight.w600),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppDimens.radiusInner),
           borderSide: BorderSide.none,
@@ -240,14 +251,16 @@ abstract final class AppTheme {
           borderRadius: BorderRadius.circular(AppDimens.radiusDialog),
         ),
         titleTextStyle: AppTextStyle.dialogTitle.copyWith(color: onSurface),
-        contentTextStyle: AppTextStyle.rowSubtitle.copyWith(color: textSecondary),
+        contentTextStyle:
+            AppTextStyle.rowSubtitle.copyWith(color: textSecondary),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
         elevation: AppDimens.elevationSheet,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimens.radiusSheet)),
+          borderRadius: BorderRadius.vertical(
+              top: Radius.circular(AppDimens.radiusSheet)),
         ),
         showDragHandle: true,
         dragHandleColor: divider,
@@ -255,7 +268,8 @@ abstract final class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: isDark ? const Color(0xFF2D2E30) : const Color(0xFF1A1C1E),
+        backgroundColor:
+            isDark ? const Color(0xFF2D2E30) : const Color(0xFF1A1C1E),
         contentTextStyle: const TextStyle(fontSize: 14, color: Colors.white),
         actionTextColor: AppColors.accentDark,
         shape: RoundedRectangleBorder(

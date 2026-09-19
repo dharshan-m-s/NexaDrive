@@ -112,7 +112,8 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
     super.initState();
     _refresh();
     _startProcessing();
-    _poll = Timer.periodic(const Duration(milliseconds: 700), (_) => _refresh());
+    _poll =
+        Timer.periodic(const Duration(milliseconds: 700), (_) => _refresh());
   }
 
   @override
@@ -122,7 +123,9 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
   }
 
   bool _isDone(List<TransferItem> items) => items.every(
-        (e) => e.status == 'completed' || (e.status == 'queued' && e.error != null),
+        (e) =>
+            e.status == 'completed' ||
+            (e.status == 'queued' && e.error != null),
       );
 
   Future<void> _startProcessing() async {
@@ -167,13 +170,19 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
     final total = _items.fold<int>(0, (sum, e) => sum + e.size);
     final done = _items.fold<int>(0, (sum, e) => sum + e.transferred);
     final completed = _items.where((e) => e.status == 'completed').length;
-    final failed = _items.where((e) => e.status == 'queued' && e.error != null).length;
-    final active = _items.where(
-      (e) => e.status != 'completed' && !(e.status == 'queued' && e.error != null),
-    ).length;
+    final failed =
+        _items.where((e) => e.status == 'queued' && e.error != null).length;
+    final active = _items
+        .where(
+          (e) =>
+              e.status != 'completed' &&
+              !(e.status == 'queued' && e.error != null),
+        )
+        .length;
     final isActive = !_finished && active > 0;
     final progress = total == 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
-    final allSucceeded = _items.isNotEmpty && _items.every((e) => e.status == 'completed');
+    final allSucceeded =
+        _items.isNotEmpty && _items.every((e) => e.status == 'completed');
 
     final Widget statusIcon;
     final String statusTitle;
@@ -185,12 +194,15 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
       );
       statusTitle = 'Uploading…';
     } else if (allSucceeded) {
-      statusIcon = Icon(Icons.check_circle_rounded, color: successFor(brightness));
+      statusIcon =
+          Icon(Icons.check_circle_rounded, color: successFor(brightness));
       statusTitle = 'Upload complete';
     } else {
       statusIcon = Icon(
         Icons.error_outline_rounded,
-        color: brightness == Brightness.dark ? AppColors.errorDark : AppColors.errorLight,
+        color: brightness == Brightness.dark
+            ? AppColors.errorDark
+            : AppColors.errorLight,
       );
       statusTitle = 'Upload finished with issues';
     }
@@ -250,8 +262,10 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
                   child: ListView.separated(
                     shrinkWrap: true,
                     itemCount: _items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: AppDimens.space2),
-                    itemBuilder: (_, index) => _buildRow(context, _items[index]),
+                    separatorBuilder: (_, __) =>
+                        const SizedBox(height: AppDimens.space2),
+                    itemBuilder: (_, index) =>
+                        _buildRow(context, _items[index]),
                   ),
                 ),
             ],
@@ -270,7 +284,8 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
     );
   }
 
-  Color successFor(Brightness b) => b == Brightness.dark ? AppColors.successDark : AppColors.successLight;
+  Color successFor(Brightness b) =>
+      b == Brightness.dark ? AppColors.successDark : AppColors.successLight;
 
   Widget _buildRow(BuildContext context, TransferItem item) {
     final theme = Theme.of(context);
@@ -278,7 +293,8 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
     final failed = item.status == 'queued' && item.error != null;
     final doneStatus = item.status == 'completed';
     final uploading = item.status == 'uploading';
-    final frac = item.size == 0 ? 0.0 : (item.transferred / item.size).clamp(0.0, 1.0);
+    final frac =
+        item.size == 0 ? 0.0 : (item.transferred / item.size).clamp(0.0, 1.0);
 
     final IconData icon;
     final Color color;
@@ -289,7 +305,9 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
       label = 'Uploaded';
     } else if (failed) {
       icon = Icons.error_outline_rounded;
-      color = brightness == Brightness.dark ? AppColors.errorDark : AppColors.errorLight;
+      color = brightness == Brightness.dark
+          ? AppColors.errorDark
+          : AppColors.errorLight;
       label = item.error ?? 'Failed';
     } else if (uploading) {
       icon = Icons.cloud_upload_outlined;
@@ -334,7 +352,9 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyle.micro.copyWith(
                       color: failed
-                          ? (brightness == Brightness.dark ? AppColors.errorDark : AppColors.errorLight)
+                          ? (brightness == Brightness.dark
+                              ? AppColors.errorDark
+                              : AppColors.errorLight)
                           : secondaryFor(brightness),
                     ),
                   ),
@@ -346,8 +366,11 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
             IconButton(
               tooltip: 'Retry',
               onPressed: () => _retry(item),
-              icon: const Icon(Icons.refresh_rounded, size: AppDimens.iconSmall),
-              color: brightness == Brightness.dark ? AppColors.errorDark : AppColors.errorLight,
+              icon:
+                  const Icon(Icons.refresh_rounded, size: AppDimens.iconSmall),
+              color: brightness == Brightness.dark
+                  ? AppColors.errorDark
+                  : AppColors.errorLight,
             ),
         ],
       ),

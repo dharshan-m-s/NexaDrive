@@ -90,7 +90,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(
-              AppDimens.pageMargin, AppDimens.space8, AppDimens.pageMargin, AppDimens.space4,
+              AppDimens.pageMargin,
+              AppDimens.space8,
+              AppDimens.pageMargin,
+              AppDimens.space4,
             ),
             child: Row(
               children: [
@@ -128,14 +131,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           AppDimens.space24,
                         ),
                         itemCount: _items.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: AppDimens.space2),
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: AppDimens.space2),
                         itemBuilder: (context, i) {
                           final item = _items[i];
                           final read = item['read'] == true;
                           final kind = item['kind']?.toString();
                           final surfaceColor = brightness == Brightness.dark
-                              ? (read ? AppColors.surfaceDark : AppColors.surfaceAltDark)
-                              : (read ? AppColors.surfaceLight : AppColors.accentContainerLight);
+                              ? (read
+                                  ? AppColors.surfaceDark
+                                  : AppColors.surfaceAltDark)
+                              : (read
+                                  ? AppColors.surfaceLight
+                                  : AppColors.accentContainerLight);
                           return OneUiSurface(
                             level: OneUiSurfaceLevel.surface,
                             radius: AppDimens.radiusTile,
@@ -143,42 +151,48 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             child: Material(
                               type: MaterialType.transparency,
                               child: ListTile(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(AppDimens.radiusTile),
-                              ),
-                              leading: Icon(
-                                _icon(kind),
-                                color: read
-                                    ? AppColors.textTertiaryFor(brightness)
-                                    : AppColors.accentFor(brightness),
-                              ),
-                              title: Text(
-                                item['title']?.toString() ?? '',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyle.rowTitle.copyWith(
-                                  color: AppColors.textPrimaryFor(brightness),
-                                  fontWeight: read ? FontWeight.w400 : FontWeight.w600,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                      AppDimens.radiusTile),
                                 ),
-                              ),
-                              subtitle: Text(
-                                '${item['message']?.toString() ?? ''} · ${Format.relTime(DateTime.tryParse(item['created_at']?.toString() ?? ''))}',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyle.caption.copyWith(
-                                  color: AppColors.textSecondaryFor(brightness),
+                                leading: Icon(
+                                  _icon(kind),
+                                  color: read
+                                      ? AppColors.textTertiaryFor(brightness)
+                                      : AppColors.accentFor(brightness),
                                 ),
-                              ),
-                              trailing: read
-                                  ? null
-                                  : IconButton(
-                                      tooltip: 'Mark read',
-                                      icon: Icon(
-                                        Icons.mark_email_read_outlined,
-                                        color: AppColors.accentFor(brightness),
+                                title: Text(
+                                  item['title']?.toString() ?? '',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyle.rowTitle.copyWith(
+                                    color: AppColors.textPrimaryFor(brightness),
+                                    fontWeight: read
+                                        ? FontWeight.w400
+                                        : FontWeight.w600,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  '${item['message']?.toString() ?? ''} · ${Format.relTime(DateTime.tryParse(item['created_at']?.toString() ?? ''))}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyle.caption.copyWith(
+                                    color:
+                                        AppColors.textSecondaryFor(brightness),
+                                  ),
+                                ),
+                                trailing: read
+                                    ? null
+                                    : IconButton(
+                                        tooltip: 'Mark read',
+                                        icon: Icon(
+                                          Icons.mark_email_read_outlined,
+                                          color:
+                                              AppColors.accentFor(brightness),
+                                        ),
+                                        onPressed: () =>
+                                            _markRead(item['id'] as String),
                                       ),
-                                      onPressed: () => _markRead(item['id'] as String),
-                                    ),
                               ),
                             ),
                           );

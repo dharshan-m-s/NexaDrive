@@ -55,12 +55,15 @@ void main() {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1.0;
       await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull, reason: '$label: initial login shell');
+      expect(tester.takeException(), isNull,
+          reason: '$label: initial login shell');
 
       final desktop = size.width >= 900;
 
       // Home
-      if (find.text('Home').evaluate().isNotEmpty) await tester.tap(find.text('Home').first);
+      if (find.text('Home').evaluate().isNotEmpty) {
+        await tester.tap(find.text('Home').first);
+      }
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: '$label Home');
 
@@ -70,7 +73,8 @@ void main() {
       } else {
         await tester.tap(find.text('Files').first);
       }
-      await _pumpUntilFound(tester, find.text('My files'), timeout: const Duration(seconds: 15));
+      await _pumpUntilFound(tester, find.text('My files'),
+          timeout: const Duration(seconds: 15));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: '$label Files');
 

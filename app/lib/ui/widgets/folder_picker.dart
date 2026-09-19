@@ -86,10 +86,8 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
       final items = await widget.api.listFiles(_path);
       if (!mounted) return;
       setState(() {
-        _folders = items
-            .map(FileEntry.fromJson)
-            .where((e) => e.isFolder)
-            .toList();
+        _folders =
+            items.map(FileEntry.fromJson).where((e) => e.isFolder).toList();
         _loading = false;
       });
     } catch (e) {
@@ -122,23 +120,28 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppDimens.pageMargin, AppDimens.space8,
-                AppDimens.pageMargin, AppDimens.space4,
+                AppDimens.pageMargin,
+                AppDimens.space8,
+                AppDimens.pageMargin,
+                AppDimens.space4,
               ),
               child: Row(
                 children: [
                   if (_path.isNotEmpty)
                     IconButton(
                       tooltip: 'Up one level',
-                      onPressed: _path.isEmpty ? null : () {
-                        final p = _path;
-                        final idx = p.lastIndexOf('/');
-                        _navigateTo(idx < 0 ? '' : p.substring(0, idx));
-                      },
+                      onPressed: _path.isEmpty
+                          ? null
+                          : () {
+                              final p = _path;
+                              final idx = p.lastIndexOf('/');
+                              _navigateTo(idx < 0 ? '' : p.substring(0, idx));
+                            },
                       icon: const Icon(Icons.arrow_upward_rounded),
                     )
                   else
-                    const Icon(Icons.folder_outlined, size: AppDimens.iconMedium),
+                    const Icon(Icons.folder_outlined,
+                        size: AppDimens.iconMedium),
                   const SizedBox(width: AppDimens.space8),
                   Expanded(
                     child: Text(
@@ -163,7 +166,8 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
             ),
             if (_path.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppDimens.pageMargin),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.pageMargin),
                 child: Text(
                   'Moving here keeps your files on this server path.',
                   style: AppTextStyle.caption.copyWith(color: secondary),
@@ -176,14 +180,16 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
             const SizedBox(height: AppDimens.space8),
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppDimens.pageMargin, 0, AppDimens.pageMargin, AppDimens.space12,
+                AppDimens.pageMargin,
+                0,
+                AppDimens.pageMargin,
+                AppDimens.space12,
               ),
               child: SizedBox(
                 height: 48,
                 child: FilledButton(
-                  onPressed: _loading
-                      ? null
-                      : () => Navigator.of(context).pop(_path),
+                  onPressed:
+                      _loading ? null : () => Navigator.of(context).pop(_path),
                   child: Text('Move to $titleText'),
                 ),
               ),
@@ -237,7 +243,8 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
           onTap: () => _navigateTo(folder.path),
           child: Padding(
             padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.space4, vertical: AppDimens.space10,
+              horizontal: AppDimens.space4,
+              vertical: AppDimens.space10,
             ),
             child: Row(
               children: [

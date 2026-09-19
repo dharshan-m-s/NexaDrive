@@ -27,10 +27,12 @@ Future<void> _pumpUntilFound(
 
 Future<void> _snap(GlobalKey boundaryKey, String name) async {
   await Future<void>.delayed(const Duration(milliseconds: 600));
-  final boundary = boundaryKey.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+  final boundary =
+      boundaryKey.currentContext!.findRenderObject()! as RenderRepaintBoundary;
   final image = await boundary.toImage(pixelRatio: 1.0);
   final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-  final dir = Platform.environment['NEXADRIVE_TEST_SCREENSHOT_DIR'] ?? 'screenshots';
+  final dir =
+      Platform.environment['NEXADRIVE_TEST_SCREENSHOT_DIR'] ?? 'screenshots';
   final out = File('$dir/$name.png');
   out.parent.createSync(recursive: true);
   out.writeAsBytesSync(byteData!.buffer.asUint8List());
@@ -46,7 +48,8 @@ void main() {
     final config = LiveTestConfig.require();
     final session = Session();
     final prefs = await SharedPreferences.getInstance();
-    await tester.pumpWidget(RepaintBoundary(key: boundaryKey, child: NexaDriveApp(session: session, prefs: prefs)));
+    await tester.pumpWidget(RepaintBoundary(
+        key: boundaryKey, child: NexaDriveApp(session: session, prefs: prefs)));
     await tester.pumpAndSettle();
     await _snap(boundaryKey, '01_login');
 
@@ -56,13 +59,18 @@ void main() {
     await tester.enterText(fields.at(1), config.username);
     await tester.enterText(fields.at(2), config.password);
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
-    await _pumpUntilFound(tester, find.byType(AppShell), timeout: const Duration(seconds: 45));
-    await _pumpUntilFound(tester, find.textContaining(config.username == 'admin' ? 'Administrator' : config.username),
+    await _pumpUntilFound(tester, find.byType(AppShell),
+        timeout: const Duration(seconds: 45));
+    await _pumpUntilFound(
+        tester,
+        find.textContaining(
+            config.username == 'admin' ? 'Administrator' : config.username),
         timeout: const Duration(seconds: 30));
     await _snap(boundaryKey, '02_home');
 
     await tester.tap(find.text('My files'));
-    await _pumpUntilFound(tester, find.text('My files').last, timeout: const Duration(seconds: 15));
+    await _pumpUntilFound(tester, find.text('My files').last,
+        timeout: const Duration(seconds: 15));
     await _snap(boundaryKey, '03_files');
 
     await tester.tap(find.text('Shared'));
@@ -70,7 +78,8 @@ void main() {
     await _snap(boundaryKey, '04_shared');
 
     await tester.tap(find.text('Photos'));
-    await _pumpUntilFound(tester, find.text('My files').last, timeout: const Duration(seconds: 15));
+    await _pumpUntilFound(tester, find.text('My files').last,
+        timeout: const Duration(seconds: 15));
     await Future<void>.delayed(const Duration(seconds: 2));
     await _snap(boundaryKey, '05_photos');
 
@@ -79,7 +88,8 @@ void main() {
     await _snap(boundaryKey, '06_trash');
 
     await tester.tap(find.text('Settings'));
-    await _pumpUntilFound(tester, find.text('Sign out'), timeout: const Duration(seconds: 15));
+    await _pumpUntilFound(tester, find.text('Sign out'),
+        timeout: const Duration(seconds: 15));
     await _snap(boundaryKey, '07_settings');
   });
 }

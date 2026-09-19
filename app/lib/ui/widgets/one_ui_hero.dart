@@ -44,11 +44,11 @@ class OneUiHero extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: Ink(
-        decoration: BoxDecoration(
-          gradient: g,
-          borderRadius: BorderRadius.circular(AppDimens.radiusHero),
-        ),
-        child: InkWell(
+          decoration: BoxDecoration(
+            gradient: g,
+            borderRadius: BorderRadius.circular(AppDimens.radiusHero),
+          ),
+          child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(AppDimens.radiusHero),
             child: Container(

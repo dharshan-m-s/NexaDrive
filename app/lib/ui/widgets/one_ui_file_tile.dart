@@ -83,9 +83,7 @@ class OneUiFileTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: AppTextStyle.rowTitle.copyWith(
-          color: selected
-              ? onAccent
-              : AppColors.textPrimaryFor(brightness),
+          color: selected ? onAccent : AppColors.textPrimaryFor(brightness),
           fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
         ),
       ),
@@ -202,8 +200,12 @@ class _SelectionBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Icon(
-      selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-      color: selected ? accent : AppColors.textTertiaryFor(Theme.of(context).brightness),
+      selected
+          ? Icons.check_circle_rounded
+          : Icons.radio_button_unchecked_rounded,
+      color: selected
+          ? accent
+          : AppColors.textTertiaryFor(Theme.of(context).brightness),
       size: 22,
     );
   }
@@ -254,7 +256,9 @@ class OneUiFileGridTile extends StatelessWidget {
                 : AppColors.surfaceLight,
             borderRadius: BorderRadius.circular(AppDimens.radiusTile),
             border: selected
-                ? Border.all(color: AppColors.onAccentContainerFor(brightness), width: 1.8)
+                ? Border.all(
+                    color: AppColors.onAccentContainerFor(brightness),
+                    width: 1.8)
                 : Border.all(color: Colors.transparent, width: 1.8),
           ),
           padding: const EdgeInsets.all(AppDimens.space12),

@@ -16,7 +16,13 @@ class SyncResult {
   final int conflicts;
   final int errors;
   final String? error;
-  const SyncResult({this.uploaded = 0, this.downloaded = 0, this.deleted = 0, this.conflicts = 0, this.errors = 0, this.error});
+  const SyncResult(
+      {this.uploaded = 0,
+      this.downloaded = 0,
+      this.deleted = 0,
+      this.conflicts = 0,
+      this.errors = 0,
+      this.error});
 }
 
 class SyncManager {
@@ -27,14 +33,16 @@ class SyncManager {
   final Api api;
   SyncManager(this.api);
 
-  Future<String?> folder() async => (await SharedPreferences.getInstance()).getString(_folderKey);
+  Future<String?> folder() async =>
+      (await SharedPreferences.getInstance()).getString(_folderKey);
 
   Future<void> setFolder(String path) async {
     final p = await SharedPreferences.getInstance();
     await p.setString(_folderKey, path);
   }
 
-  Future<void> clearFolder() async => (await SharedPreferences.getInstance()).remove(_folderKey);
+  Future<void> clearFolder() async =>
+      (await SharedPreferences.getInstance()).remove(_folderKey);
 
   /// Memoised in-flight resolution, so concurrent callers cannot each generate
   /// their own id. Reading `getString` and then writing is only safe because
@@ -117,7 +125,8 @@ class SyncManager {
     final raw = p.getString(_stateKey);
     if (raw == null) return {};
     final decoded = jsonDecode(raw) as Map<String, dynamic>;
-    return decoded.map((k, v) => MapEntry(k, Map<String, dynamic>.from(v as Map)));
+    return decoded
+        .map((k, v) => MapEntry(k, Map<String, dynamic>.from(v as Map)));
   }
 
   Future<void> _saveState(Map<String, Map<String, dynamic>> state) async {
@@ -125,20 +134,22 @@ class SyncManager {
     await p.setString(_stateKey, jsonEncode(state));
   }
 
-
   Future<String> _deviceName() async {
     final prefs = await SharedPreferences.getInstance();
     final existing = prefs.getString(_deviceNameKey);
     if (existing != null && existing.trim().isNotEmpty) return existing;
     var name = 'NexaDrive desktop';
     try {
-      name = Platform.localHostname.trim().isEmpty ? name : Platform.localHostname.trim();
+      name = Platform.localHostname.trim().isEmpty
+          ? name
+          : Platform.localHostname.trim();
     } catch (_) {}
     await prefs.setString(_deviceNameKey, name);
     return name;
   }
 
-  Future<Map<String, Map<String, dynamic>>> _scanLocal(Directory root, Map<String, Map<String, dynamic>> state) async {
+  Future<Map<String, Map<String, dynamic>>> _scanLocal(
+      Directory root, Map<String, Map<String, dynamic>> state) async {
     final result = <String, Map<String, dynamic>>{};
     final pending = <Directory>[root];
     while (pending.isNotEmpty) {
@@ -156,10 +167,17 @@ class SyncManager {
           final cachedHash = base?['localHash']?.toString();
           final cachedSize = (base?['localSize'] as num?)?.toInt();
           final cachedModifiedMs = (base?['localModifiedMs'] as num?)?.toInt();
-          final hash = cachedHash != null && cachedSize == stat.size && cachedModifiedMs == modifiedMs
+          final hash = cachedHash != null &&
+                  cachedSize == stat.size &&
+                  cachedModifiedMs == modifiedMs
               ? cachedHash
               : await _sha256(entity);
-          result[rel] = {'kind': 'file', 'size': stat.size, 'sha256': hash, 'modifiedMs': modifiedMs};
+          result[rel] = {
+            'kind': 'file',
+            'size': stat.size,
+            'sha256': hash,
+            'modifiedMs': modifiedMs
+          };
         }
       }
     }
@@ -172,18 +190,21 @@ class SyncManager {
     return out.replaceAll('\\', '/');
   }
 
-  String _localPath(String root, String rel) => [root, ...rel.split('/')].join(Platform.pathSeparator);
+  String _localPath(String root, String rel) =>
+      [root, ...rel.split('/')].join(Platform.pathSeparator);
 
   Future<String> _sha256(File file) async {
     final digest = await sha256.bind(file.openRead()).first;
     return digest.toString();
   }
 
-  Future<void> _ensureParent(String path) async => Directory(File(path).parent.path).create(recursive: true);
+  Future<void> _ensureParent(String path) async =>
+      Directory(File(path).parent.path).create(recursive: true);
 
   Future<void> _download(String remotePath, String target) async {
     await _ensureParent(target);
-    final temp = '$target.nexadrive-sync-${DateTime.now().microsecondsSinceEpoch}.tmp';
+    final temp =
+        '$target.nexadrive-sync-${DateTime.now().microsecondsSinceEpoch}.tmp';
     try {
       await api.downloadToFile(remotePath, temp);
       final file = File(temp);
@@ -191,7 +212,9 @@ class SyncManager {
       if (await destination.exists()) await destination.delete();
       await file.rename(target);
     } finally {
-      try { await File(temp).delete(); } catch (_) {}
+      try {
+        await File(temp).delete();
+      } catch (_) {}
     }
   }
 
@@ -294,12 +317,25 @@ class SyncManager {
 
   Future<SyncResult> _runSync({void Function(String)? onProgress}) async {
     if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) {
-      return const SyncResult(errors: 1, error: 'Desktop folder sync is available on Windows, Linux and macOS. Android photo backup remains a separate workflow.');
+      return const SyncResult(
+          errors: 1,
+          error:
+              'Desktop folder sync is available on Windows, Linux and macOS. Android photo backup remains a separate workflow.');
     }
     final folderPath = await folder();
-    if (folderPath == null || folderPath.isEmpty) return const SyncResult(errors: 1, error: 'Choose a local sync folder first.');
+    if (folderPath == null || folderPath.isEmpty) {
+      return const SyncResult(
+        errors: 1,
+        error: 'Choose a local sync folder first.',
+      );
+    }
     final root = Directory(folderPath);
-    if (!await root.exists()) return const SyncResult(errors: 1, error: 'The selected sync folder no longer exists.');
+    if (!await root.exists()) {
+      return const SyncResult(
+        errors: 1,
+        error: 'The selected sync folder no longer exists.',
+      );
+    }
 
     try {
       onProgress?.call('Reading the local sync folder…');
@@ -307,7 +343,8 @@ class SyncManager {
       final local = await _scanLocal(root, state);
       // Stable before the request, not after the reply — see [ensureDeviceId].
       final existingDeviceId = await ensureDeviceId();
-      final previousServerCursor = state['__meta__']?['lastServerSyncAt']?.toString();
+      final previousServerCursor =
+          state['__meta__']?['lastServerSyncAt']?.toString();
       final deviceName = await _deviceName();
       final response = previousServerCursor == null
           ? await api.syncManifest(
@@ -333,7 +370,9 @@ class SyncManager {
       if (isDelta) {
         // Reconstruct the last-known remote view from the durable sync baseline.
         for (final entry in state.entries) {
-          if (entry.key == '__meta__' || entry.value['remoteExists'] != true) continue;
+          if (entry.key == '__meta__' || entry.value['remoteExists'] != true) {
+            continue;
+          }
           remote[entry.key] = {
             'path': entry.key,
             'kind': entry.value['kind'] ?? 'file',
@@ -343,9 +382,12 @@ class SyncManager {
           };
         }
       }
-      final tombstones = Set<String>.from(((response['tombstones'] as List?) ?? const []).map((e) => e.toString()));
+      final tombstones = Set<String>.from(
+          ((response['tombstones'] as List?) ?? const [])
+              .map((e) => e.toString()));
       for (final tombstone in tombstones.toList()) {
-        remote.removeWhere((path, _) => path == tombstone || path.startsWith('$tombstone/'));
+        remote.removeWhere(
+            (path, _) => path == tombstone || path.startsWith('$tombstone/'));
       }
       for (final e in (response['entries'] as List)) {
         final m = Map<String, dynamic>.from(e as Map);
@@ -355,8 +397,12 @@ class SyncManager {
       final paths = <String>{...local.keys, ...remote.keys, ...state.keys};
 
       // Folders first. Deletion is propagated only when the folder was previously synced.
-      final folders = paths.where((p) => (local[p]?['kind'] ?? remote[p]?['kind'] ?? state[p]?['kind']) == 'folder').toList()
-        ..sort((a,b) => a.length.compareTo(b.length));
+      final folders = paths
+          .where((p) =>
+              (local[p]?['kind'] ?? remote[p]?['kind'] ?? state[p]?['kind']) ==
+              'folder')
+          .toList()
+        ..sort((a, b) => a.length.compareTo(b.length));
       for (final path in folders) {
         final l = local[path];
         final r = remote[path];
@@ -364,12 +410,16 @@ class SyncManager {
         try {
           if (l != null && r == null) {
             final localChanged = base == null || base['localExists'] != true;
-            final remoteWasSynced = base != null && base['remoteExists'] == true;
+            final remoteWasSynced =
+                base != null && base['remoteExists'] == true;
             if (remoteWasSynced && !tombstones.contains(path) && localChanged) {
               await api.createFolder(path);
               uploaded++;
-            } else if (remoteWasSynced && !localChanged && tombstones.contains(path)) {
-              await Directory(_localPath(root.path, path)).delete(recursive: true);
+            } else if (remoteWasSynced &&
+                !localChanged &&
+                tombstones.contains(path)) {
+              await Directory(_localPath(root.path, path))
+                  .delete(recursive: true);
               deleted++;
               state.remove(path);
             } else if (remoteWasSynced && !localChanged) {
@@ -388,19 +438,26 @@ class SyncManager {
               deleted++;
               state.remove(path);
             } else {
-              await Directory(_localPath(root.path, path)).create(recursive: true);
+              await Directory(_localPath(root.path, path))
+                  .create(recursive: true);
               downloaded++;
             }
           }
           if (local.containsKey(path) || remote.containsKey(path)) {
-            state[path] = {'kind':'folder','localExists': local.containsKey(path),'remoteExists': remote.containsKey(path)};
+            state[path] = {
+              'kind': 'folder',
+              'localExists': local.containsKey(path),
+              'remoteExists': remote.containsKey(path)
+            };
           }
         } catch (e) {
           if (!e.toString().contains('already exists')) errors++;
         }
       }
 
-      for (final path in paths.where((p) => (local[p]?['kind'] ?? remote[p]?['kind'] ?? state[p]?['kind']) == 'file')) {
+      for (final path in paths.where((p) =>
+          (local[p]?['kind'] ?? remote[p]?['kind'] ?? state[p]?['kind']) ==
+          'file')) {
         final l = local[path];
         final r = remote[path];
         final base = state[path];
@@ -415,11 +472,14 @@ class SyncManager {
             continue;
           }
           if (l == null && r != null) {
-            final remoteChanged = baseRemote == null || remoteHash != baseRemote;
+            final remoteChanged =
+                baseRemote == null || remoteHash != baseRemote;
             final localWasSynced = baseLocal != null;
             if (localWasSynced && !remoteChanged && tombstones.contains(path)) {
               // Remote deletion is already recorded; remove the unchanged local copy.
-              try { await File(_localPath(root.path, path)).delete(); } catch (_) {}
+              try {
+                await File(_localPath(root.path, path)).delete();
+              } catch (_) {}
               deleted++;
               state.remove(path);
             } else if (localWasSynced && !remoteChanged) {
@@ -430,7 +490,19 @@ class SyncManager {
               onProgress?.call('Downloading $path');
               await _download(path, _localPath(root.path, path));
               downloaded++;
-              state[path] = {'kind':'file','localHash':remoteHash,'remoteHash':remoteHash,'localSize':r['size'] ?? 0,'remoteSize':r['size'] ?? 0,'localModifiedMs':DateTime.tryParse(r['modified_at']?.toString() ?? '')?.millisecondsSinceEpoch,'remoteModifiedAt':r['modified_at'],'localExists':true,'remoteExists':true};
+              state[path] = {
+                'kind': 'file',
+                'localHash': remoteHash,
+                'remoteHash': remoteHash,
+                'localSize': r['size'] ?? 0,
+                'remoteSize': r['size'] ?? 0,
+                'localModifiedMs':
+                    DateTime.tryParse(r['modified_at']?.toString() ?? '')
+                        ?.millisecondsSinceEpoch,
+                'remoteModifiedAt': r['modified_at'],
+                'localExists': true,
+                'remoteExists': true
+              };
             }
             continue;
           }
@@ -443,7 +515,9 @@ class SyncManager {
               // it. Leaving it in place dropped our baseline without deleting
               // anything, and the next sync then re-uploaded the file, silently
               // undoing the deletion.
-              try { await File(_localPath(root.path, path)).delete(); } catch (_) {}
+              try {
+                await File(_localPath(root.path, path)).delete();
+              } catch (_) {}
               deleted++;
               state.remove(path);
             } else if (remoteWasSynced && !localChanged) {
@@ -455,18 +529,50 @@ class SyncManager {
               onProgress?.call('Restoring $path');
               await _uploadFile(_localPath(root.path, path), path);
               uploaded++;
-              state[path] = {'kind':'file','localHash':localHash,'remoteHash':localHash,'localSize':l['size'] ?? 0,'remoteSize':l['size'] ?? 0,'localModifiedMs':l['modifiedMs'],'remoteModifiedAt':DateTime.now().toUtc().toIso8601String(),'localExists':true,'remoteExists':true};
-            } else if (remoteWasSynced && tombstones.contains(path) && localChanged) {
+              state[path] = {
+                'kind': 'file',
+                'localHash': localHash,
+                'remoteHash': localHash,
+                'localSize': l['size'] ?? 0,
+                'remoteSize': l['size'] ?? 0,
+                'localModifiedMs': l['modifiedMs'],
+                'remoteModifiedAt': DateTime.now().toUtc().toIso8601String(),
+                'localExists': true,
+                'remoteExists': true
+              };
+            } else if (remoteWasSynced &&
+                tombstones.contains(path) &&
+                localChanged) {
               // Local edit wins over a prior remote tombstone: recreate the file.
               onProgress?.call('Re-uploading $path');
               await _uploadFile(_localPath(root.path, path), path);
               uploaded++;
-              state[path] = {'kind':'file','localHash':localHash,'remoteHash':localHash,'localSize':l['size'] ?? 0,'remoteSize':l['size'] ?? 0,'localModifiedMs':l['modifiedMs'],'remoteModifiedAt':DateTime.now().toUtc().toIso8601String(),'localExists':true,'remoteExists':true};
+              state[path] = {
+                'kind': 'file',
+                'localHash': localHash,
+                'remoteHash': localHash,
+                'localSize': l['size'] ?? 0,
+                'remoteSize': l['size'] ?? 0,
+                'localModifiedMs': l['modifiedMs'],
+                'remoteModifiedAt': DateTime.now().toUtc().toIso8601String(),
+                'localExists': true,
+                'remoteExists': true
+              };
             } else {
               onProgress?.call('Uploading $path');
               await _uploadFile(_localPath(root.path, path), path);
               uploaded++;
-              state[path] = {'kind':'file','localHash':localHash,'remoteHash':localHash,'localSize':l['size'] ?? 0,'remoteSize':l['size'] ?? 0,'localModifiedMs':l['modifiedMs'],'remoteModifiedAt':DateTime.now().toUtc().toIso8601String(),'localExists':true,'remoteExists':true};
+              state[path] = {
+                'kind': 'file',
+                'localHash': localHash,
+                'remoteHash': localHash,
+                'localSize': l['size'] ?? 0,
+                'remoteSize': l['size'] ?? 0,
+                'localModifiedMs': l['modifiedMs'],
+                'remoteModifiedAt': DateTime.now().toUtc().toIso8601String(),
+                'localExists': true,
+                'remoteExists': true
+              };
             }
             continue;
           }
@@ -476,35 +582,90 @@ class SyncManager {
             continue;
           }
           if (localHash == remoteHash) {
-            state[path] = {'kind':'file','localHash':localHash,'remoteHash':remoteHash,'localSize':l['size'] ?? 0,'localModifiedMs':l['modifiedMs'],'remoteSize':r['size'] ?? 0,'remoteModifiedAt':r['modified_at'],'localExists':true,'remoteExists':true};
+            state[path] = {
+              'kind': 'file',
+              'localHash': localHash,
+              'remoteHash': remoteHash,
+              'localSize': l['size'] ?? 0,
+              'localModifiedMs': l['modifiedMs'],
+              'remoteSize': r['size'] ?? 0,
+              'remoteModifiedAt': r['modified_at'],
+              'localExists': true,
+              'remoteExists': true
+            };
             continue;
           }
           final localChanged = baseLocal == null || localHash != baseLocal;
           final remoteChanged = baseRemote == null || remoteHash != baseRemote;
           if (localChanged && remoteChanged) {
             conflicts++;
-            final conflict = '${_localPath(root.path, path)}.conflict-${DateTime.now().millisecondsSinceEpoch}';
+            final conflict =
+                '${_localPath(root.path, path)}.conflict-${DateTime.now().millisecondsSinceEpoch}';
             onProgress?.call('Conflict: $path');
             await _download(path, conflict);
-            state[path] = {'kind':'file','localHash':localHash,'remoteHash':remoteHash,'localSize':l['size'] ?? 0,'localModifiedMs':l['modifiedMs'],'remoteSize':r['size'] ?? 0,'remoteModifiedAt':r['modified_at'],'localExists':true,'remoteExists':true,'conflict':true,'conflictPath':conflict};
+            state[path] = {
+              'kind': 'file',
+              'localHash': localHash,
+              'remoteHash': remoteHash,
+              'localSize': l['size'] ?? 0,
+              'localModifiedMs': l['modifiedMs'],
+              'remoteSize': r['size'] ?? 0,
+              'remoteModifiedAt': r['modified_at'],
+              'localExists': true,
+              'remoteExists': true,
+              'conflict': true,
+              'conflictPath': conflict
+            };
           } else if (localChanged) {
             onProgress?.call('Uploading $path');
             await _uploadFile(_localPath(root.path, path), path);
             uploaded++;
-            state[path] = {'kind':'file','localHash':localHash,'remoteHash':localHash,'localSize':l['size'] ?? 0,'remoteSize':l['size'] ?? 0,'localModifiedMs':l['modifiedMs'],'remoteModifiedAt':DateTime.now().toUtc().toIso8601String(),'localExists':true,'remoteExists':true};
+            state[path] = {
+              'kind': 'file',
+              'localHash': localHash,
+              'remoteHash': localHash,
+              'localSize': l['size'] ?? 0,
+              'remoteSize': l['size'] ?? 0,
+              'localModifiedMs': l['modifiedMs'],
+              'remoteModifiedAt': DateTime.now().toUtc().toIso8601String(),
+              'localExists': true,
+              'remoteExists': true
+            };
           } else {
             onProgress?.call('Downloading $path');
             await _download(path, _localPath(root.path, path));
             downloaded++;
-            state[path] = {'kind':'file','localHash':remoteHash,'remoteHash':remoteHash,'localSize':r['size'] ?? 0,'remoteSize':r['size'] ?? 0,'localModifiedMs':DateTime.tryParse(r['modified_at']?.toString() ?? '')?.millisecondsSinceEpoch,'remoteModifiedAt':r['modified_at'],'localExists':true,'remoteExists':true};
+            state[path] = {
+              'kind': 'file',
+              'localHash': remoteHash,
+              'remoteHash': remoteHash,
+              'localSize': r['size'] ?? 0,
+              'remoteSize': r['size'] ?? 0,
+              'localModifiedMs':
+                  DateTime.tryParse(r['modified_at']?.toString() ?? '')
+                      ?.millisecondsSinceEpoch,
+              'remoteModifiedAt': r['modified_at'],
+              'localExists': true,
+              'remoteExists': true
+            };
           }
         } catch (_) {
           errors++;
         }
       }
-      state['__meta__'] = {...?state['__meta__'], 'lastSyncAt': DateTime.now().toUtc().toIso8601String(), 'lastServerSyncAt': response['server_time']?.toString() ?? DateTime.now().toUtc().toIso8601String()};
+      state['__meta__'] = {
+        ...?state['__meta__'],
+        'lastSyncAt': DateTime.now().toUtc().toIso8601String(),
+        'lastServerSyncAt': response['server_time']?.toString() ??
+            DateTime.now().toUtc().toIso8601String()
+      };
       await _saveState(state);
-      return SyncResult(uploaded: uploaded, downloaded: downloaded, deleted: deleted, conflicts: conflicts, errors: errors);
+      return SyncResult(
+          uploaded: uploaded,
+          downloaded: downloaded,
+          deleted: deleted,
+          conflicts: conflicts,
+          errors: errors);
     } catch (e) {
       return SyncResult(errors: 1, error: e.toString());
     }
@@ -539,10 +700,16 @@ class SyncManager {
     final state = await _state();
     final item = state[path];
     final folderPath = await folder();
-    if (item == null || folderPath == null) throw Exception('Conflict is no longer available');
+    if (item == null || folderPath == null) {
+      throw Exception('Conflict is no longer available');
+    }
     await _uploadFile(_localPath(folderPath, path), path);
     final conflictPath = item['conflictPath']?.toString();
-    if (conflictPath != null && conflictPath.isNotEmpty) { try { await File(conflictPath).delete(); } catch (_) {} }
+    if (conflictPath != null && conflictPath.isNotEmpty) {
+      try {
+        await File(conflictPath).delete();
+      } catch (_) {}
+    }
     final hash = await _sha256(File(_localPath(folderPath, path)));
     item['localHash'] = hash;
     item['remoteHash'] = hash;
@@ -553,7 +720,8 @@ class SyncManager {
     item['remoteModifiedAt'] = DateTime.now().toUtc().toIso8601String();
     item['localExists'] = true;
     item['remoteExists'] = true;
-    item.remove('conflict'); item.remove('conflictPath');
+    item.remove('conflict');
+    item.remove('conflictPath');
     state[path] = item;
     await _saveState(state);
   }
@@ -562,10 +730,16 @@ class SyncManager {
     final state = await _state();
     final item = state[path];
     final folderPath = await folder();
-    if (item == null || folderPath == null) throw Exception('Conflict is no longer available');
+    if (item == null || folderPath == null) {
+      throw Exception('Conflict is no longer available');
+    }
     await _download(path, _localPath(folderPath, path));
     final conflictPath = item['conflictPath']?.toString();
-    if (conflictPath != null && conflictPath.isNotEmpty) { try { await File(conflictPath).delete(); } catch (_) {} }
+    if (conflictPath != null && conflictPath.isNotEmpty) {
+      try {
+        await File(conflictPath).delete();
+      } catch (_) {}
+    }
     final hash = await _sha256(File(_localPath(folderPath, path)));
     item['localHash'] = hash;
     item['remoteHash'] = hash;
@@ -576,7 +750,8 @@ class SyncManager {
     item['remoteModifiedAt'] = DateTime.now().toUtc().toIso8601String();
     item['localExists'] = true;
     item['remoteExists'] = true;
-    item.remove('conflict'); item.remove('conflictPath');
+    item.remove('conflict');
+    item.remove('conflictPath');
     state[path] = item;
     await _saveState(state);
   }
@@ -585,7 +760,9 @@ class SyncManager {
     final state = await _state();
     final item = state[path];
     final folderPath = await folder();
-    if (item == null || folderPath == null) throw Exception('Conflict is no longer available');
+    if (item == null || folderPath == null) {
+      throw Exception('Conflict is no longer available');
+    }
     // Keep the current local file as the canonical remote version; the existing
     // conflict copy already preserves the remote version locally.
     await _uploadFile(_localPath(folderPath, path), path);
