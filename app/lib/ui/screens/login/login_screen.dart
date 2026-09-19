@@ -117,8 +117,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight -
-                      (AppDimens.space32 * 2),
+                  minHeight: (constraints.maxHeight -
+                          (AppDimens.space32 * 2))
+                      .clamp(0.0, double.infinity),
                 ),
                 child: Center(
                   child: ConstrainedBox(
