@@ -39,13 +39,13 @@ class UpdateCenterScreen extends StatelessWidget {
               _StatusGroup(controller: controller),
               const SizedBox(height: AppDimens.space20),
               _ActionArea(controller: controller),
-              if (controller.hasUpdate && controller.selectedArtifact == null) ...[
+              if (controller.hasUpdate &&
+                  controller.selectedArtifact == null) ...[
                 const SizedBox(height: AppDimens.space12),
                 _NoticePanel(
                   icon: Icons.unfold_more_rounded,
                   color: AppColors.warningFor(brightness),
-                  text:
-                      'No installer is published for this device yet '
+                  text: 'No installer is published for this device yet '
                       '(${controller.archLabel ?? 'your system'}). Let the '
                       'developer know you need a build for this platform.',
                 ),
@@ -60,8 +60,7 @@ class UpdateCenterScreen extends StatelessWidget {
                 _NoticePanel(
                   icon: Icons.widgets_outlined,
                   color: AppColors.warningFor(brightness),
-                  text:
-                      'We could not tell how NexaDrive is installed here. '
+                  text: 'We could not tell how NexaDrive is installed here. '
                       'Choose your Linux package to continue.',
                 ),
                 const SizedBox(height: AppDimens.space10),
@@ -69,7 +68,8 @@ class UpdateCenterScreen extends StatelessWidget {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () => controller.chooseLinuxPackage('appimage'),
+                        onPressed: () =>
+                            controller.chooseLinuxPackage('appimage'),
                         icon: const Icon(Icons.rocket_launch_rounded),
                         label: const Text('AppImage'),
                       ),
@@ -184,8 +184,8 @@ class _StatusGroup extends StatelessWidget {
           _ProgressRow(
             controller: controller,
             color: color,
-            inProgress: status == UpdateStatus.downloading &&
-                controller.progress > 0,
+            inProgress:
+                status == UpdateStatus.downloading && controller.progress > 0,
           ),
       ],
     );
@@ -246,22 +246,70 @@ class _StatusGroup extends StatelessWidget {
   final error = AppColors.errorFor(b);
   // (icon, headline, color)
   return switch (status) {
-    UpdateStatus.idle => (Icons.system_update_alt_rounded, 'Not checked yet', accent),
-    UpdateStatus.checking => (Icons.cloud_sync_outlined, 'Checking for updates', accent),
-    UpdateStatus.upToDate => (Icons.check_circle_rounded, 'Up to date', success),
-    UpdateStatus.updateAvailable => (Icons.system_update_alt_rounded, 'Update available', accent),
-    UpdateStatus.mandatory => (Icons.error_outline_rounded, 'Mandatory update', warning),
+    UpdateStatus.idle => (
+        Icons.system_update_alt_rounded,
+        'Not checked yet',
+        accent
+      ),
+    UpdateStatus.checking => (
+        Icons.cloud_sync_outlined,
+        'Checking for updates',
+        accent
+      ),
+    UpdateStatus.upToDate => (
+        Icons.check_circle_rounded,
+        'Up to date',
+        success
+      ),
+    UpdateStatus.updateAvailable => (
+        Icons.system_update_alt_rounded,
+        'Update available',
+        accent
+      ),
+    UpdateStatus.mandatory => (
+        Icons.error_outline_rounded,
+        'Mandatory update',
+        warning
+      ),
     UpdateStatus.downloading => (Icons.download_rounded, 'Downloading', accent),
-    UpdateStatus.paused => (Icons.pause_circle_outline_rounded, 'Download paused', warning),
-    UpdateStatus.verifying => (Icons.verified_rounded, 'Verifying download', accent),
-    UpdateStatus.readyToInstall => (Icons.inventory_2_outlined, 'Ready to install', accent),
-    UpdateStatus.installingHandoff => (Icons.handyman_outlined, 'Continue in the installer', accent),
-    UpdateStatus.completed => (Icons.check_circle_rounded, 'Installed', success),
+    UpdateStatus.paused => (
+        Icons.pause_circle_outline_rounded,
+        'Download paused',
+        warning
+      ),
+    UpdateStatus.verifying => (
+        Icons.verified_rounded,
+        'Verifying download',
+        accent
+      ),
+    UpdateStatus.readyToInstall => (
+        Icons.inventory_2_outlined,
+        'Ready to install',
+        accent
+      ),
+    UpdateStatus.installingHandoff => (
+        Icons.handyman_outlined,
+        'Continue in the installer',
+        accent
+      ),
+    UpdateStatus.completed => (
+        Icons.check_circle_rounded,
+        'Installed',
+        success
+      ),
     UpdateStatus.failed => (Icons.error_rounded, 'Update failed', error),
     UpdateStatus.cancelled => (Icons.cancel_outlined, 'Cancelled', warning),
     UpdateStatus.offline => (Icons.cloud_off_rounded, 'Offline', warning),
-    UpdateStatus.unsupported => (Icons.priority_high_rounded, 'Unsupported', warning),
-    UpdateStatus.needsUserAction => (Icons.lock_outline_rounded, 'Permission needed', warning),
+    UpdateStatus.unsupported => (
+        Icons.priority_high_rounded,
+        'Unsupported',
+        warning
+      ),
+    UpdateStatus.needsUserAction => (
+        Icons.lock_outline_rounded,
+        'Permission needed',
+        warning
+      ),
   };
 }
 
@@ -285,7 +333,10 @@ class _ProgressRow extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppDimens.space16, AppDimens.space4, AppDimens.space16, AppDimens.space16,
+        AppDimens.space16,
+        AppDimens.space4,
+        AppDimens.space16,
+        AppDimens.space16,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -304,8 +355,7 @@ class _ProgressRow extends StatelessWidget {
                       value: v,
                       minHeight: 6,
                       color: color,
-                      backgroundColor:
-                          color.withValues(alpha: 0.12),
+                      backgroundColor: color.withValues(alpha: 0.12),
                     ),
                   )
                 : LinearProgressIndicator(
@@ -328,7 +378,8 @@ class _ProgressRow extends StatelessWidget {
                             ? 'Almost done\u2026'
                             : 'Checking, this usually takes a moment.',
                     style: AppTextStyle.caption.copyWith(
-                      color: AppColors.textSecondaryFor(Theme.of(context).brightness),
+                      color: AppColors.textSecondaryFor(
+                          Theme.of(context).brightness),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -338,14 +389,16 @@ class _ProgressRow extends StatelessWidget {
                 Text(
                   '${(controller.progress.clamp(0.0, 1.0) * 100).round()}%',
                   style: AppTextStyle.chipLabel.copyWith(
-                    color: AppColors.textPrimaryFor(Theme.of(context).brightness),
+                    color:
+                        AppColors.textPrimaryFor(Theme.of(context).brightness),
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 TextButton(
                   onPressed: controller.cancelDownload,
                   style: TextButton.styleFrom(
-                    foregroundColor: AppColors.accentFor(Theme.of(context).brightness),
+                    foregroundColor:
+                        AppColors.accentFor(Theme.of(context).brightness),
                     minimumSize: const Size(44, 40),
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppDimens.space8,
@@ -375,8 +428,7 @@ class _ActionArea extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         switch (status) {
-          UpdateStatus.idle =>
-            _PrimaryButton(
+          UpdateStatus.idle => _PrimaryButton(
               onPressed: () => controller.checkForUpdates(manual: true),
               label: 'Check for updates',
             ),
@@ -384,8 +436,7 @@ class _ActionArea extends StatelessWidget {
           UpdateStatus.verifying ||
           UpdateStatus.downloading =>
             const SizedBox.shrink(),
-          UpdateStatus.upToDate =>
-            _PrimaryButton(
+          UpdateStatus.upToDate => _PrimaryButton(
               onPressed: () => controller.checkForUpdates(manual: true),
               label: 'Check again',
             ),
@@ -397,30 +448,25 @@ class _ActionArea extends StatelessWidget {
                   : controller.download,
               label: 'Download & install',
             ),
-          UpdateStatus.mandatory =>
-            _PrimaryButton(
+          UpdateStatus.mandatory => _PrimaryButton(
               onPressed: controller.selectedArtifact == null
                   ? null
                   : controller.download,
               label: 'Download now',
             ),
-          UpdateStatus.readyToInstall =>
-            _PrimaryButton(
+          UpdateStatus.readyToInstall => _PrimaryButton(
               onPressed: controller.install,
               label: _installLabel(controller),
             ),
-          UpdateStatus.installingHandoff =>
-            _PrimaryButton(
+          UpdateStatus.installingHandoff => _PrimaryButton(
               onPressed: controller.reconcileAfterResume,
               label: 'I completed the install',
             ),
-          UpdateStatus.completed =>
-            _PrimaryButton(
+          UpdateStatus.completed => _PrimaryButton(
               onPressed: () => controller.checkForUpdates(manual: true),
               label: 'Check again',
             ),
-          UpdateStatus.paused =>
-            _PrimaryButton(
+          UpdateStatus.paused => _PrimaryButton(
               onPressed: controller.resume,
               label: 'Resume download',
               icon: Icons.play_arrow_rounded,
@@ -428,8 +474,7 @@ class _ActionArea extends StatelessWidget {
           UpdateStatus.offline ||
           UpdateStatus.unsupported =>
             _ErrorBody(controller: controller),
-          UpdateStatus.failed =>
-            _UpdateFailedBody(controller: controller),
+          UpdateStatus.failed => _UpdateFailedBody(controller: controller),
           UpdateStatus.needsUserAction =>
             _InstallBlockedBody(controller: controller),
         },
@@ -475,41 +520,33 @@ class _PrimaryButton extends StatelessWidget {
     this.icon,
   });
 
+  /// Shared by both shapes so the icon and text variants stay pixel-identical.
+  static final ButtonStyle _style = FilledButton.styleFrom(
+    minimumSize: const Size.fromHeight(AppDimens.touchTargetLarge),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+    ),
+    textStyle: AppTextStyle.button,
+  );
+
   @override
   Widget build(BuildContext context) {
-    return FilledButton(
+    // Exactly one button per action. Wrapping [FilledButton] inside another
+    // [FilledButton] painted two stacked pill surfaces and gave the same tap
+    // two claimants, so the icon variant builds the button directly.
+    final icon = this.icon;
+    if (icon == null) {
+      return FilledButton(
+        onPressed: onPressed,
+        style: _style,
+        child: Text(label),
+      );
+    }
+    return FilledButton.icon(
       onPressed: onPressed,
-      style: FilledButton.styleFrom(
-        minimumSize: const Size.fromHeight(AppDimens.touchTargetLarge),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        ),
-        textStyle: AppTextStyle.button,
-      ),
-      child: icon != null
-      ? FilledButton.icon(
-          onPressed: onPressed,
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(AppDimens.touchTargetLarge),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            ),
-            textStyle: AppTextStyle.button,
-          ),
-          icon: Icon(icon, size: AppDimens.iconSmall),
-          label: Text(label),
-        )
-      : FilledButton(
-          onPressed: onPressed,
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(AppDimens.touchTargetLarge),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            ),
-            textStyle: AppTextStyle.button,
-          ),
-          child: Text(label),
-        ),
+      style: _style,
+      icon: Icon(icon, size: AppDimens.iconSmall),
+      label: Text(label),
     );
   }
 }
@@ -614,7 +651,8 @@ class _NoticePanel extends StatelessWidget {
   final IconData icon;
   final Color color;
   final String text;
-  const _NoticePanel({required this.icon, required this.color, required this.text});
+  const _NoticePanel(
+      {required this.icon, required this.color, required this.text});
 
   @override
   Widget build(BuildContext context) {
@@ -652,8 +690,9 @@ class _InstallHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final platform =
-        controller.resolvedPlatform == AppPlatform.linux ? 'Linux' : 'your device';
+    final platform = controller.resolvedPlatform == AppPlatform.linux
+        ? 'Linux'
+        : 'your device';
     final text = controller.infoMessage ??
         'Follow the prompts and come back to NexaDrive when the update is done.';
     return Container(
@@ -719,7 +758,8 @@ class _DebActions extends StatelessWidget {
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: controller.openDebWithSystemInstaller,
-                icon: const Icon(Icons.open_in_new_rounded, size: AppDimens.iconSmall),
+                icon: const Icon(Icons.open_in_new_rounded,
+                    size: AppDimens.iconSmall),
                 label: const Text('Open package'),
               ),
             ),
@@ -760,8 +800,11 @@ class _DetailsGroup extends StatelessWidget {
               '${manifest.prerelease ? 'Pre-release' : 'Release'} · Published ${_dateLabel(date)}',
           showChevron: false,
         ),
-        OneUiInfoRow(label: 'Current version', value: controller.currentVersion?.toString() ?? '—'),
-        OneUiInfoRow(label: 'Latest version', value: manifest.version.toString()),
+        OneUiInfoRow(
+            label: 'Current version',
+            value: controller.currentVersion?.toString() ?? '—'),
+        OneUiInfoRow(
+            label: 'Latest version', value: manifest.version.toString()),
         OneUiInfoRow(label: 'Released', value: _dateLabel(date)),
         OneUiInfoRow(
           label: 'Size',
@@ -808,7 +851,10 @@ class _ReleaseNotesGroup extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(
-                  AppDimens.space16, AppDimens.space12, AppDimens.space16, AppDimens.space6,
+                  AppDimens.space16,
+                  AppDimens.space12,
+                  AppDimens.space16,
+                  AppDimens.space6,
                 ),
                 child: Text(
                   entry.key,
@@ -821,7 +867,10 @@ class _ReleaseNotesGroup extends StatelessWidget {
               for (final item in entry.value)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
-                    AppDimens.space16, AppDimens.space4, AppDimens.space16, AppDimens.space4,
+                    AppDimens.space16,
+                    AppDimens.space4,
+                    AppDimens.space16,
+                    AppDimens.space4,
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -833,7 +882,8 @@ class _ReleaseNotesGroup extends StatelessWidget {
                           height: 6,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: AppColors.accentFor(brightness).withValues(alpha: 0.55),
+                            color: AppColors.accentFor(brightness)
+                                .withValues(alpha: 0.55),
                           ),
                         ),
                       ),
@@ -858,8 +908,18 @@ class _ReleaseNotesGroup extends StatelessWidget {
   }
 
   static const _monthNames = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 }
 

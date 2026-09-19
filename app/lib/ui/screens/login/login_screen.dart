@@ -43,9 +43,43 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Client-side validation, run before any request leaves the device.
+  ///
+  /// Without it an empty form was posted verbatim and the user saw whatever
+  /// transport exception the address produced, which reads as a server fault
+  /// rather than "you have not filled the form in yet".
+  String? _validationError() {
+    const badAddress = 'That does not look like a server address. '
+        'Try https://server.example.com';
+    final address = server.text.trim();
+    if (address.isEmpty) return 'Enter the address of your NexaDrive server.';
+    // The address is normalised the same way [Session] normalises it, so a
+    // bare hostname (no scheme) is still accepted and defaults to HTTPS.
+    final normalized = Session.normalizeServerUrl(address);
+    // Whitespace anywhere is rejected up front: Uri.tryParse is lenient enough
+    // to read "not a url" as host "not" plus a path, which would sail past a
+    // host-only check and become a real request to the wrong origin.
+    if (normalized.contains(RegExp(r'\s'))) return badAddress;
+    final uri = Uri.tryParse(normalized);
+    if (uri == null || uri.host.isEmpty) return badAddress;
+    if (username.text.trim().isEmpty) return 'Enter your username.';
+    if (password.text.isEmpty) return 'Enter your password.';
+    return null;
+  }
+
   Future<void> submit() async {
     FocusManager.instance.primaryFocus?.unfocus();
     if (loading) return;
+
+    final invalid = _validationError();
+    if (invalid != null) {
+      setState(() {
+        error = invalid;
+        loading = false;
+      });
+      return;
+    }
+
     setState(() {
       loading = true;
       error = null;
@@ -78,6 +112,9 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     } catch (e) {
+      // The screen can be popped while the request is in flight; calling
+      // setState on a disposed State throws.
+      if (!mounted) return;
       setState(() {
         error = _friendlyError(e);
         loading = false;
@@ -85,17 +122,35 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Turns a failure into one actionable sentence. Server-authored messages
+  /// are surfaced as-is; transport failures become a network hint rather than
+  /// a raw exception string.
   String _friendlyError(Object e) {
-    final text = e.toString();
-    if (text.toLowerCase().contains('timeout') ||
-        text.toLowerCase().contains('connection')) {
-      return 'Can\'t reach that server. Check the address and your network connection.';
+    if (e is ApiException) {
+      switch (e.status) {
+        case 401:
+          return 'Username or password is incorrect.';
+        case 403:
+          return 'This account is blocked. Ask an administrator to unblock it.';
+        case 429:
+          return 'Too many sign-in attempts. Wait a few minutes and try again.';
+        default:
+          if (e.status >= 500) {
+            return 'The server could not sign you in. Try again in a moment.';
+          }
+          return e.message;
+      }
     }
-    if (text.toLowerCase().contains('401') ||
-        text.toLowerCase().contains('invalid')) {
-      return 'Username or password is incorrect.';
+    final text = e.toString().toLowerCase();
+    if (text.contains('timeout') ||
+        text.contains('connection') ||
+        text.contains('socket') ||
+        text.contains('host lookup') ||
+        text.contains('network')) {
+      return "Can't reach that server. Check the address and your network "
+          'connection.';
     }
-    return text;
+    return 'Sign-in failed. Check the server address and try again.';
   }
 
   @override
@@ -258,19 +313,16 @@ class _LoginScreenState extends State<LoginScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final shortViewport = constraints.maxHeight < _shortViewport;
-            final horizontal = compact
-                ? AppDimens.pageMargin
-                : AppDimens.pageMarginWide;
-            final vertical = shortViewport
-                ? AppDimens.space12
-                : AppDimens.space32;
+            final horizontal =
+                compact ? AppDimens.pageMargin : AppDimens.pageMarginWide;
+            final vertical =
+                shortViewport ? AppDimens.space12 : AppDimens.space32;
             final gap = shortViewport ? AppDimens.space8 : AppDimens.space12;
             final sectionGap =
                 shortViewport ? AppDimens.space12 : AppDimens.space32;
 
             return SingleChildScrollView(
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.onDrag,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: EdgeInsets.symmetric(
                 horizontal: horizontal,
                 vertical: vertical,
@@ -328,7 +380,9 @@ class _ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppDimens.space12),
       decoration: BoxDecoration(
-        color: (brightness == Brightness.dark ? AppColors.errorDark : AppColors.errorLight)
+        color: (brightness == Brightness.dark
+                ? AppColors.errorDark
+                : AppColors.errorLight)
             .withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(AppDimens.radiusInner),
       ),
@@ -338,7 +392,9 @@ class _ErrorBanner extends StatelessWidget {
           Icon(
             Icons.error_outline_rounded,
             size: AppDimens.iconSmall,
-            color: brightness == Brightness.dark ? AppColors.errorDark : AppColors.errorLight,
+            color: brightness == Brightness.dark
+                ? AppColors.errorDark
+                : AppColors.errorLight,
           ),
           const SizedBox(width: AppDimens.space8),
           Expanded(

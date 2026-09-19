@@ -78,7 +78,8 @@ class UpdatePreferences {
   static const _latestKnown = 'nexadrive_update_latest_version';
   static const _manifestJson = 'nexadrive_update_manifest_json';
   static const _manifestEtag = 'nexadrive_update_manifest_etag';
-  static const _manifestLastModified = 'nexadrive_update_manifest_last_modified';
+  static const _manifestLastModified =
+      'nexadrive_update_manifest_last_modified';
 
   final SharedPreferences _prefs;
   UpdatePreferences(this._prefs);
@@ -319,8 +320,8 @@ class UpdateController extends ChangeNotifier {
 
   static Future<String> _loadVersionFromPackages() async {
     try {
-      final info = await PackageInfo.fromPlatform()
-          .timeout(const Duration(seconds: 5));
+      final info =
+          await PackageInfo.fromPlatform().timeout(const Duration(seconds: 5));
       return info.version;
     } catch (_) {
       return '0.0.0';
@@ -330,7 +331,8 @@ class UpdateController extends ChangeNotifier {
   bool get busy => _busy;
 
   bool get hasUpdate =>
-      status == UpdateStatus.updateAvailable || status == UpdateStatus.mandatory;
+      status == UpdateStatus.updateAvailable ||
+      status == UpdateStatus.mandatory;
 
   bool get isBackgroundEligible =>
       status == UpdateStatus.idle || status == UpdateStatus.upToDate;
@@ -374,7 +376,8 @@ class UpdateController extends ChangeNotifier {
     if (_busy) return;
     if (!manual) {
       if (!await shouldAutoCheck()) return;
-    } else if (!policy.canManualCheck(preferences.lastCheckAt, DateTime.now())) {
+    } else if (!policy.canManualCheck(
+        preferences.lastCheckAt, DateTime.now())) {
       return;
     }
 
@@ -389,8 +392,7 @@ class UpdateController extends ChangeNotifier {
     try {
       if (!detector.isSupported) {
         status = UpdateStatus.unsupported;
-        errorMessage =
-            'Updates are supported on Android, Windows, and Linux.';
+        errorMessage = 'Updates are supported on Android, Windows, and Linux.';
         return;
       }
       resolvedPlatform = detector.platform;
@@ -499,9 +501,10 @@ class UpdateController extends ChangeNotifier {
       UpdateErrorKind.network => (UpdateStatus.offline, true),
       UpdateErrorKind.notFound => (UpdateStatus.offline, false),
       UpdateErrorKind.http => (UpdateStatus.failed, true),
-      UpdateErrorKind.malformedManifest ||
-      UpdateErrorKind.manifestRejected =>
-        (UpdateStatus.failed, false),
+      UpdateErrorKind.malformedManifest || UpdateErrorKind.manifestRejected => (
+          UpdateStatus.failed,
+          false
+        ),
       UpdateErrorKind.unsupportedPlatform ||
       UpdateErrorKind.unsupportedArchitecture ||
       UpdateErrorKind.noArtifact ||
@@ -575,9 +578,7 @@ class UpdateController extends ChangeNotifier {
             onProgress: (received, total) {
               receivedBytes = received;
               totalBytes = total;
-              progress = total == null || total <= 0
-                  ? 0.0
-                  : received / total;
+              progress = total == null || total <= 0 ? 0.0 : received / total;
               notifyListeners();
             },
             isCancelled: () => _cancelRequested,
@@ -749,53 +750,53 @@ class UpdateController extends ChangeNotifier {
 
     _busy = true;
     try {
-switch (platform) {
-case AppPlatform.android:
-            final launched = await router.launchAndroidInstaller(path);
-            if (!launched) {
-              // Most commonly the "install unknown apps" consent for this
-              // source is missing. Offer the exact system settings screen.
-              status = UpdateStatus.needsUserAction;
-              infoMessage =
-                  'Android needs your permission to install this update from '
-                  'NexaDrive. Grant "Install unknown apps" once in Settings, '
-                  'then come back and tap Install again.';
-              retryable = false;
-            } else {
-              status = UpdateStatus.installingHandoff;
-              _handoffPending = true;
-              infoMessage =
-                  'Confirm the installation in the Android dialog, then come '
-                  'back to NexaDrive.';
-            }
+      switch (platform) {
+        case AppPlatform.android:
+          final launched = await router.launchAndroidInstaller(path);
+          if (!launched) {
+            // Most commonly the "install unknown apps" consent for this
+            // source is missing. Offer the exact system settings screen.
+            status = UpdateStatus.needsUserAction;
+            infoMessage =
+                'Android needs your permission to install this update from '
+                'NexaDrive. Grant "Install unknown apps" once in Settings, '
+                'then come back and tap Install again.';
+            retryable = false;
+          } else {
+            status = UpdateStatus.installingHandoff;
+            _handoffPending = true;
+            infoMessage =
+                'Confirm the installation in the Android dialog, then come '
+                'back to NexaDrive.';
+          }
+          break;
+        case AppPlatform.windows:
+          if (installationKind == InstallationKind.portable) {
+            await _installPortableWindows(path);
             break;
-          case AppPlatform.windows:
-            if (installationKind == InstallationKind.portable) {
-              await _installPortableWindows(path);
-              break;
-            }
-            final launched = await router.launchWindowsInstaller(path);
-            if (!launched) {
-              status = UpdateStatus.failed;
-              errorMessage =
-                  'The installer could not be started. Open the downloaded file '
-                  'manually to continue.';
-              retryable = false;
-            } else {
-              status = UpdateStatus.installingHandoff;
-              _handoffPending = true;
-              infoMessage =
-                  'The installer is starting. Follow the Windows prompts, then '
-                  'launch Nexusdrive again.';
-            }
-            break;
-          case AppPlatform.linux:
-            await _installOnLinux(path);
-            break;
-          default:
-            status = UpdateStatus.unsupported;
-            errorMessage = 'Updates are not supported on this platform.';
-        }
+          }
+          final launched = await router.launchWindowsInstaller(path);
+          if (!launched) {
+            status = UpdateStatus.failed;
+            errorMessage =
+                'The installer could not be started. Open the downloaded file '
+                'manually to continue.';
+            retryable = false;
+          } else {
+            status = UpdateStatus.installingHandoff;
+            _handoffPending = true;
+            infoMessage =
+                'The installer is starting. Follow the Windows prompts, then '
+                'launch Nexusdrive again.';
+          }
+          break;
+        case AppPlatform.linux:
+          await _installOnLinux(path);
+          break;
+        default:
+          status = UpdateStatus.unsupported;
+          errorMessage = 'Updates are not supported on this platform.';
+      }
     } finally {
       _busy = false;
       notifyListeners();
@@ -823,8 +824,7 @@ case AppPlatform.android:
       }
       if (await _replaceAppImage(path, appImage)) {
         status = UpdateStatus.completed;
-        infoMessage =
-            'The update was installed. Restart NexaDrive to use it.';
+        infoMessage = 'The update was installed. Restart NexaDrive to use it.';
         retryable = false;
         _clearInstallerCache();
       } else {
@@ -1109,10 +1109,9 @@ case AppPlatform.android:
       return;
     }
 
-    final installed =
-        SemVersion.tryParse(await loadCurrentVersion()) ??
-            currentVersion ??
-            const SemVersion(0, 0, 0);
+    final installed = SemVersion.tryParse(await loadCurrentVersion()) ??
+        currentVersion ??
+        const SemVersion(0, 0, 0);
     if (installed.compareTo(target) >= 0) {
       status = UpdateStatus.completed;
       _handoffPending = false;
@@ -1129,16 +1128,14 @@ case AppPlatform.android:
           'The update is not installed yet. Please finish the setup, or '
           'download again.';
       retryable = false;
+      // Nothing was installed, so the downloaded installer is still the one
+      // worth keeping; only stale partials and expired downloads are pruned.
+      try {
+        await UpdateCache.prune();
+      } catch (_) {}
     }
-if (status == UpdateStatus.completed) {
-        _clearInstallerCache();
-      } else {
-        try {
-          await UpdateCache.prune();
-        } catch (_) {}
-      }
-      notifyListeners();
-    }
+    notifyListeners();
+  }
 
   /// Frees the on-disk installer cache. Nothing is kept after a confirmed
   /// install: the consumed APK/ZIP/AppImage, any stray `.part` files, and any

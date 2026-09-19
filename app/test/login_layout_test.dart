@@ -23,6 +23,7 @@ Future<void> _pump(
   double textScale = 1.0,
 }) async {
   await tester.binding.setSurfaceSize(size);
+  addTearDown(() => tester.binding.setSurfaceSize(null));
   final session = Session();
   await tester.pumpWidget(
     MaterialApp(
@@ -85,10 +86,35 @@ void main() {
     testWidgets('scrolling reaches the button when the viewport is tiny',
         (tester) async {
       // 240px tall: shorter than the form's intrinsic height, so the form must
-      // scroll rather than clip.
+      // scroll rather than clip the primary action away.
       const size = Size(1280, 240);
+      // A tap that misses the target only warns by default. Missing is exactly
+      // the failure this test exists to catch, so make it fatal: otherwise the
+      // assertion below passes whether or not the button is reachable.
+      WidgetController.hitTestWarningShouldBeFatal = true;
+      addTearDown(() => WidgetController.hitTestWarningShouldBeFatal = false);
+
       await _pump(tester, size);
-      await tester.tap(_signIn); // drags into view if needed
+      expect(tester.takeException(), isNull,
+          reason: 'the form must scroll, not overflow');
+
+      // Sanity check: the form really is taller than this viewport, so the
+      // action genuinely starts below the fold.
+      expect(tester.getRect(_signIn).top, greaterThan(size.height),
+          reason: 'the button should start out of view on a 240px viewport');
+
+      // Bring it into view, then let the real gesture pipeline prove the tap
+      // lands on the button.
+      await tester.ensureVisible(_signIn);
+      await tester.pumpAndSettle();
+
+      final rect = tester.getRect(_signIn);
+      expect(rect.top, greaterThanOrEqualTo(0),
+          reason: 'scrolling must reveal the whole button');
+      expect(rect.bottom, lessThanOrEqualTo(size.height),
+          reason: 'scrolling must reveal the whole button');
+
+      await tester.tap(_signIn);
       await tester.pump();
       expect(tester.takeException(), isNull);
     });
@@ -200,6 +226,109 @@ void main() {
             .hasPrimaryFocus,
         isTrue,
       );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('the sign-in form validates before it calls the server', () {
+    // Every case here would otherwise become a request to an empty or garbage
+    // address, and the user would see a transport exception instead of the
+    // field they forgot to fill in.
+    Future<void> signInWith(
+      WidgetTester tester, {
+      String server = '',
+      String username = '',
+      String password = '',
+    }) async {
+      await _pump(tester, const Size(390, 844));
+      final fields = find.byType(TextField);
+      expect(fields, findsNWidgets(3));
+      if (server.isNotEmpty) await tester.enterText(fields.at(0), server);
+      if (username.isNotEmpty) await tester.enterText(fields.at(1), username);
+      if (password.isNotEmpty) await tester.enterText(fields.at(2), password);
+      await tester.pump();
+
+      await tester.tap(_signIn);
+      await tester.pump();
+    }
+
+    testWidgets('an empty form asks for the server address', (tester) async {
+      await signInWith(tester);
+      expect(find.text('Enter the address of your NexaDrive server.'),
+          findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a missing username is named explicitly', (tester) async {
+      await signInWith(tester, server: 'https://example.test', password: 'pw');
+      expect(find.text('Enter your username.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a missing password is named explicitly', (tester) async {
+      await signInWith(
+        tester,
+        server: 'https://example.test',
+        username: 'ada',
+      );
+      expect(find.text('Enter your password.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a malformed address is rejected with a usable hint',
+        (tester) async {
+      await signInWith(tester,
+          server: 'not a url', username: 'ada', password: 'pw');
+      expect(
+        find.textContaining('does not look like a server address'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a bare hostname is accepted, so no error is shown for it',
+        (tester) async {
+      // `Session.normalizeServerUrl` assumes HTTPS for a bare host, so the form
+      // must not demand an explicit scheme before it will try.
+      await signInWith(
+        tester,
+        server: 'nexadrive.example.test',
+        username: 'ada',
+        password: 'pw',
+      );
+      expect(find.textContaining('does not look like a server address'),
+          findsNothing);
+      expect(find.text('Enter your password.'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the validation message stays visible on a short viewport',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final session = Session();
+      await tester.pumpWidget(
+        MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light(),
+          home: LoginScreen(session: session),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final error = find.text('Enter the address of your NexaDrive server.');
+      await tester.ensureVisible(_signIn);
+      await tester.pumpAndSettle();
+      await tester.tap(_signIn);
+      await tester.pumpAndSettle();
+
+      // The message must be on screen after the tap, not scrolled away.
+      expect(error, findsOneWidget);
+      await tester.ensureVisible(error);
+      await tester.pumpAndSettle();
+      final rect = tester.getRect(error);
+      expect(rect.top, greaterThanOrEqualTo(0));
+      expect(rect.bottom, lessThanOrEqualTo(400));
       expect(tester.takeException(), isNull);
     });
   });

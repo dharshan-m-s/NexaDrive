@@ -261,12 +261,17 @@ class SettingsScreen extends StatelessWidget {
                 title: 'About NexaDrive',
                 subtitle: 'Your files. Your server. Your private cloud.',
                 onTap: () {
+                  // Only state a version when the controller actually knows it.
+                  // A hardcoded fallback here was a release literal that went
+                  // stale at the next release; `showAboutDialog` omits the
+                  // version line entirely when it is null.
                   showAboutDialog(
                     context: context,
                     applicationName: 'NexaDrive',
                     applicationVersion:
-                        updateController.currentVersion?.toString() ?? '1.1.0',
-                    applicationLegalese: 'Your files. Your server. Your private cloud.',
+                        updateController.currentVersion?.toString(),
+                    applicationLegalese:
+                        'Your files. Your server. Your private cloud.',
                   );
                 },
               ),
@@ -384,7 +389,8 @@ class _UpdateCenterTile extends StatelessWidget {
   Widget _badge(Color fg, Color bg, String label) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space10, vertical: AppDimens.space4,
+        horizontal: AppDimens.space10,
+        vertical: AppDimens.space4,
       ),
       decoration: BoxDecoration(
         color: bg,

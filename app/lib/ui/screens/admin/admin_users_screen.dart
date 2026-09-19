@@ -27,6 +27,16 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   final TextEditingController _search = TextEditingController();
   String _query = '';
 
+  // Field controllers for the account dialogs, owned by the screen so they are
+  // disposed exactly once, with the screen. Creating them inside the dialog and
+  // releasing them when `showDialog` resolved threw "A TextEditingController
+  // was used after being disposed": the route keeps building its fields while
+  // it animates out, which is after the future completes.
+  final _dialogUsername = TextEditingController();
+  final _dialogDisplayName = TextEditingController();
+  final _dialogPassword = TextEditingController();
+  final _dialogQuota = TextEditingController();
+
   static const double _gib = 1024 * 1024 * 1024;
 
   @override
@@ -38,7 +48,20 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   @override
   void dispose() {
     _search.dispose();
+    _dialogUsername.dispose();
+    _dialogDisplayName.dispose();
+    _dialogPassword.dispose();
+    _dialogQuota.dispose();
     super.dispose();
+  }
+
+  /// Resets the shared dialog fields for [user] (null for a new account) so a
+  /// previously opened dialog never bleeds into the next one.
+  void _prepareDialogFields(Map<String, dynamic>? user) {
+    _dialogUsername.text = user?['username']?.toString() ?? '';
+    _dialogDisplayName.text = user?['display_name']?.toString() ?? '';
+    _dialogPassword.clear();
+    _dialogQuota.text = _quotaLabel(user?['quota_bytes'] as num?);
   }
 
   Future<void> load() async {
@@ -246,86 +269,110 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   }
 
   Future<void> _createUser() async {
-    final username = TextEditingController();
-    final displayName = TextEditingController();
-    final password = TextEditingController();
-    final quota = TextEditingController();
+    _prepareDialogFields(null);
+    // Aliases onto the screen-owned controllers, so the dialog body below reads
+    // like a locally-created field set.
+    final username = _dialogUsername;
+    final displayName = _dialogDisplayName;
+    final password = _dialogPassword;
+    final quota = _dialogQuota;
     String role = 'user';
+    String? validationError;
 
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('New account'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: username,
-                  decoration: const InputDecoration(labelText: 'Username'),
-                ),
-                const SizedBox(height: AppDimens.space12),
-                TextField(
-                  controller: displayName,
-                  decoration: const InputDecoration(labelText: 'Display name'),
-                ),
-                const SizedBox(height: AppDimens.space12),
-                TextField(
-                  controller: password,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    helperText: 'At least 10 characters',
-                  ),
-                ),
-                const SizedBox(height: AppDimens.space12),
-                DropdownButtonFormField<String>(
-                  initialValue: role,
-                  items: const [
-                    DropdownMenuItem(value: 'user', child: Text('User')),
-                    DropdownMenuItem(value: 'admin', child: Text('Admin')),
-                  ],
-                  onChanged: (v) => setDialogState(() => role = v!),
-                  decoration: const InputDecoration(labelText: 'Role'),
-                ),
-                const SizedBox(height: AppDimens.space12),
-                TextField(
-                  controller: quota,
-                  keyboardType: TextInputType.number,
-                  decoration:
-                      const InputDecoration(labelText: 'Quota (GB, optional)'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Create'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (ok != true) return;
-    if (password.text.trim().length < 10) {
-      _toast('Password must be at least 10 characters');
-      return;
-    }
     try {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('New account'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: username,
+                    decoration: const InputDecoration(labelText: 'Username'),
+                  ),
+                  const SizedBox(height: AppDimens.space12),
+                  TextField(
+                    controller: displayName,
+                    decoration:
+                        const InputDecoration(labelText: 'Display name'),
+                  ),
+                  const SizedBox(height: AppDimens.space12),
+                  TextField(
+                    controller: password,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Password',
+                      helperText: 'At least 10 characters',
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space12),
+                  DropdownButtonFormField<String>(
+                    initialValue: role,
+                    items: const [
+                      DropdownMenuItem(value: 'user', child: Text('User')),
+                      DropdownMenuItem(value: 'admin', child: Text('Admin')),
+                    ],
+                    onChanged: (v) => setDialogState(() => role = v!),
+                    decoration: const InputDecoration(labelText: 'Role'),
+                  ),
+                  const SizedBox(height: AppDimens.space12),
+                  TextField(
+                    controller: quota,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                        labelText: 'Quota (GB, optional)'),
+                  ),
+                  if (validationError != null) ...[
+                    const SizedBox(height: AppDimens.space12),
+                    Text(
+                      validationError!,
+                      style: AppTextStyle.caption.copyWith(
+                        color: AppColors.errorFor(Theme.of(context).brightness),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => setDialogState(() {
+                  validationError = _validateCreate(
+                    username.text,
+                    displayName.text,
+                    password.text,
+                  );
+                  if (validationError == null) {
+                    Navigator.pop(context, true);
+                  }
+                }),
+                child: const Text('Create'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (ok != true) return;
+
       final raw = quota.text.trim();
       int? quotaBytes;
       if (raw.isNotEmpty) {
         final gb = double.tryParse(raw);
-        if (gb != null && gb > 0) {
-          quotaBytes = (gb * _gib).round();
+        if (gb == null || gb <= 0) {
+          if (mounted) {
+            _toast('Quota must be a number of GB, or leave it empty');
+          }
+          return;
         }
+        quotaBytes = (gb * _gib).round();
       }
       await widget.api.createUser(
         username: username.text.trim(),
@@ -340,15 +387,26 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     }
   }
 
+  /// Validated inside the dialog so the fields the message refers to are still
+  /// on screen; reporting after the dialog had already closed forced the user
+  /// to reopen it and retype everything.
+  String? _validateCreate(
+    String username,
+    String displayName,
+    String password,
+  ) {
+    if (username.trim().isEmpty) return 'Enter a username.';
+    if (displayName.trim().isEmpty) return 'Enter a display name.';
+    if (password.length < 10) return 'Password must be at least 10 characters';
+    return null;
+  }
+
   Future<void> _editUser(Map<String, dynamic> user) async {
     final brightness = Theme.of(context).brightness;
-    final displayName = TextEditingController(
-      text: user['display_name']?.toString() ?? '',
-    );
-    final password = TextEditingController();
-    final quota = TextEditingController(
-      text: _quotaLabel(user['quota_bytes'] as num?),
-    );
+    _prepareDialogFields(user);
+    final displayName = _dialogDisplayName;
+    final password = _dialogPassword;
+    final quota = _dialogQuota;
     final username = user['username']?.toString() ?? '';
     String role = user['role'] == 'admin' ? 'admin' : 'user';
     var disabled = user['disabled'] == true;
@@ -389,8 +447,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 const SizedBox(height: AppDimens.space4),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Block account',
-                      style: AppTextStyle.rowTitle),
+                  title:
+                      const Text('Block account', style: AppTextStyle.rowTitle),
                   subtitle: const Text('Prevents this user from '
                       'logging in without deleting their files.'),
                   value: disabled,
@@ -592,7 +650,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   static String _quotaLabel(num? quotaBytes) {
     if (quotaBytes == null) return '';
     final gb = quotaBytes / _gib;
-    return gb == gb.roundToDouble() ? gb.toStringAsFixed(0) : gb.toStringAsFixed(1);
+    return gb == gb.roundToDouble()
+        ? gb.toStringAsFixed(0)
+        : gb.toStringAsFixed(1);
   }
 
   void _toast(String message) {
@@ -617,7 +677,8 @@ class _RoleCount extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space16, vertical: AppDimens.space10,
+        horizontal: AppDimens.space16,
+        vertical: AppDimens.space10,
       ),
       child: Row(
         children: [
@@ -712,9 +773,8 @@ class _UserTile extends StatelessWidget {
         backgroundColor: disabled
             ? AppColors.surfaceAltLight
             : accent.withValues(alpha: 0.14),
-        foregroundColor: disabled
-            ? AppColors.textTertiaryFor(brightness)
-            : accent,
+        foregroundColor:
+            disabled ? AppColors.textTertiaryFor(brightness) : accent,
         child: Text(
           _initial(displayName),
           style: AppTextStyle.buttonSmall,
@@ -736,13 +796,15 @@ class _UserTile extends StatelessWidget {
           if (disabled)
             _RoleChip(
               label: 'Blocked',
-              background: AppColors.errorFor(brightness).withValues(alpha: 0.12),
+              background:
+                  AppColors.errorFor(brightness).withValues(alpha: 0.12),
               foreground: AppColors.errorFor(brightness),
             ),
           if (isSelf)
             _RoleChip(
               label: 'You',
-              background: AppColors.successFor(brightness).withValues(alpha: 0.14),
+              background:
+                  AppColors.successFor(brightness).withValues(alpha: 0.14),
               foreground: AppColors.successFor(brightness),
             ),
           PopupMenuButton<String>(
@@ -821,7 +883,8 @@ class _RoleChip extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(right: AppDimens.space6),
       padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space8, vertical: AppDimens.space4,
+        horizontal: AppDimens.space8,
+        vertical: AppDimens.space4,
       ),
       decoration: BoxDecoration(
         color: background,
@@ -852,18 +915,24 @@ class _ErrorPanel extends StatelessWidget {
         case 401:
           return ('Your session expired', 'Sign in again to continue.');
         case 403:
-          return ('Administrator access required',
-              'You need administrator access to manage accounts.');
+          return (
+            'Administrator access required',
+            'You need administrator access to manage accounts.'
+          );
         default:
           if (status >= 500) {
-            return ('The server couldn’t load accounts',
-                (error as ApiException).message);
+            return (
+              'The server couldn’t load accounts',
+              (error as ApiException).message
+            );
           }
           return ('Couldn’t load accounts', (error as ApiException).message);
       }
     }
-    return ('Can’t reach the server',
-        'Check your connection and that the server is on this network.');
+    return (
+      'Can’t reach the server',
+      'Check your connection and that the server is on this network.'
+    );
   }
 
   @override
