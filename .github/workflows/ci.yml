@@ -38,6 +38,26 @@ jobs:
             exit 1
           }
           echo "Versions match."
+      - name: Check application identity metadata is consistent
+        run: |
+          set -euo pipefail
+          # Every platform must agree on one application identity, and no
+          # unreplaced Flutter boilerplate may ship in production metadata.
+          if grep -rn 'com\\.example' app/android app/linux app/windows 2>/dev/null; then
+            echo "::error::Unreplaced 'com.example' placeholder in platform metadata."
+            exit 1
+          fi
+
+          android_id=$(sed -n 's/^ *applicationId = "\\(.*\\)"/\\1/p' app/android/app/build.gradle.kts)
+          linux_id=$(sed -n 's/^set(APPLICATION_ID "\\(.*\\)")/\\1/p' app/linux/CMakeLists.txt)
+          echo "Android applicationId:      $android_id"
+          echo "Linux APPLICATION_ID:       $linux_id"
+          [ -n "$android_id" ] || { echo "::error::Could not read Android applicationId."; exit 1; }
+          [ "$android_id" = "$linux_id" ] || {
+            echo "::error::Application identity mismatch: Android ($android_id) != Linux ($linux_id)"
+            exit 1
+          }
+          echo "Application identity matches: $android_id"
 
   secret-scan:
     name: Secret scanning
@@ -79,6 +99,23 @@ jobs:
           fi
           echo "No live ADMIN_PASSWORD values in tracked source."
 
+  flutter-format:
+    name: Flutter format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.19.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - run: flutter pub get
+        working-directory: app
+      # Whitespace-only check: keeps the tree formatted with the SDK's own
+      # formatter so `dart format` never turns into an unrelated diff in a later
+      # change. Fails with the list of files that need formatting.
+      - run: dart format --output=none --set-exit-if-changed lib test integration_test
+        working-directory: app
+
   flutter-analyze:
     name: Flutter analyze
     runs-on: ubuntu-latest
@@ -110,7 +147,7 @@ jobs:
   flutter-windows:
     name: Flutter Windows build
     runs-on: windows-latest
-    needs: [flutter-analyze, flutter-test]
+    needs: [flutter-format, flutter-analyze, flutter-test]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.19.0
@@ -125,7 +162,7 @@ jobs:
   flutter-linux:
     name: Flutter Linux build
     runs-on: ubuntu-latest
-    needs: [flutter-analyze, flutter-test]
+    needs: [flutter-format, flutter-analyze, flutter-test]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.19.0
@@ -141,7 +178,7 @@ jobs:
   flutter-android:
     name: Flutter Android build
     runs-on: ubuntu-latest
-    needs: [flutter-analyze, flutter-test]
+    needs: [flutter-format, flutter-analyze, flutter-test]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.7.1
