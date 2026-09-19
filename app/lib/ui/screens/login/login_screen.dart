@@ -16,7 +16,7 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
+class _LoginScreenState extends State<LoginScreen> {
   final server = TextEditingController();
   final username = TextEditingController();
   final password = TextEditingController();
@@ -47,46 +47,12 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    // ---- TS diagnosis (temporary) ----
-    _fServer.addListener(() => _log('FOCUS server=${_fServer.hasFocus} branch=${_ts}'));
-    _fUsername.addListener(() => _log('FOCUS username=${_fUsername.hasFocus}'));
-    _fPassword.addListener(() => _log('FOCUS password=${_fPassword.hasFocus}'));
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      Future<void> printPos(GlobalKey k, String name) async {
-        await WidgetsBinding.instance.endOfFrame;
-        final box = k.currentContext?.findRenderObject() as RenderBox?;
-        if (box != null) {
-          final o = box.localToGlobal(Offset.zero);
-          _log('POS $name x=${o.dx} y=${o.dy} w=${box.size.width} h=${box.size.height} (logical)');
-        }
-      }
-      printPos(_keyServer, 'server');
-      printPos(_keyUsername, 'username');
-      printPos(_keyPassword, 'password');
-    });
-    // ---- /TS diagnosis ----
     if (widget.session.serverUrl != null) {
       server.text = widget.session.serverUrl!;
     } else if (widget.session.username != null) {
       username.text = widget.session.username!;
     }
   }
-
-  // ---- TS diagnosis (temporary) ----
-  final GlobalKey _keyServer = GlobalKey();
-  final GlobalKey _keyUsername = GlobalKey();
-  final GlobalKey _keyPassword = GlobalKey();
-
-  @override
-  void didChangeMetrics() {
-    final mq = MediaQuery.maybeOf(context);
-    if (mq == null) return;
-    _log('METRICS size=${mq.size} viewInsets=${mq.viewInsets} '
-        'viewPadding=${mq.viewPadding} padding=${mq.padding}');
-  }
-  // ---- /TS diagnosis ----
 
   Future<void> submit() async {
     FocusManager.instance.primaryFocus?.unfocus();
@@ -145,12 +111,6 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    // ---- TS diagnosis (temporary) ----
-    WidgetsBinding.instance.removeObserver(this);
-    _fServer.dispose();
-    _fUsername.dispose();
-    _fPassword.dispose();
-    // ---- /TS diagnosis ----
     server.dispose();
     username.dispose();
     password.dispose();
@@ -204,8 +164,6 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(
-          key: _keyServer,
-          focusNode: _fServer,
           controller: server,
           keyboardType: TextInputType.url,
           autofillHints: const [AutofillHints.url],
@@ -219,8 +177,6 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
         ),
         const SizedBox(height: AppDimens.space12),
         TextField(
-          key: _keyUsername,
-          focusNode: _fUsername,
           controller: username,
           textInputAction: TextInputAction.next,
           autofillHints: const [AutofillHints.username],
@@ -231,8 +187,6 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
         ),
         const SizedBox(height: AppDimens.space12),
         TextField(
-          key: _keyPassword,
-          focusNode: _fPassword,
           controller: password,
           obscureText: _obscure,
           textInputAction: TextInputAction.done,
@@ -293,93 +247,63 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     final compact = size.width < 700;
 
     return Scaffold(
+      // Let Scaffold apply the normal Android IME inset handling. The login
+      // content remains one stable scrollable subtree while the keyboard opens;
+      // it never swaps between two different widget trees based on height.
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
+            final shortViewport = constraints.maxHeight < _shortViewport;
             final horizontal = compact
                 ? AppDimens.pageMargin
                 : AppDimens.pageMarginWide;
-            _log('LAYOUT maxHeight=${constraints.maxHeight} branch=${constraints.maxHeight >= _shortViewport ? 'tall' : 'short'}');
+            final vertical = shortViewport
+                ? AppDimens.space16
+                : AppDimens.space32;
 
-            // Tall viewport: the centred composition, which is the nicest
-            // reading of this screen and has room to breathe.
-            if (constraints.maxHeight >= _shortViewport) {
-              return Center(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: horizontal,
-                    vertical: AppDimens.space32,
-                  ),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 440),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: _brand(brightness, compact: false),
-                        ),
-                        const SizedBox(height: AppDimens.space28),
-                        _heading(brightness, compact: false),
-                        const SizedBox(height: AppDimens.space32),
-                        _fields(brightness, compact: false),
-                        const SizedBox(height: AppDimens.space24),
-                        _submitButton(),
-                        const SizedBox(height: AppDimens.space20),
-                        _caption(brightness),
-                      ],
-                    ),
-                  ),
+            return SingleChildScrollView(
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.symmetric(
+                horizontal: horizontal,
+                vertical: vertical,
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 440,
+                  minHeight: (constraints.maxHeight - vertical * 2)
+                      .clamp(0.0, double.infinity),
                 ),
-              );
-            }
-
-            // Short viewport: the fields scroll, the primary action is pinning
-            // to the bottom of the visible area so it is always reachable. This
-            // is also what keeps "Sign in" above the on-screen keyboard, since
-            // the Scaffold shrinks the body when the keyboard opens.
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(
-                      horizontal, AppDimens.space16, horizontal,
-                      AppDimens.space16,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisAlignment: shortViewport
+                      ? MainAxisAlignment.start
+                      : MainAxisAlignment.center,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: _brand(brightness, compact: shortViewport),
                     ),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 440),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: _brand(brightness, compact: true),
-                            ),
-                            const SizedBox(height: AppDimens.space12),
-                            _heading(brightness, compact: true),
-                            const SizedBox(height: AppDimens.space16),
-                            _fields(brightness, compact: true),
-                          ],
-                        ),
-                      ),
+                    SizedBox(
+                      height: shortViewport
+                          ? AppDimens.space12
+                          : AppDimens.space28,
                     ),
-                  ),
+                    _heading(brightness, compact: shortViewport),
+                    SizedBox(
+                      height: shortViewport
+                          ? AppDimens.space16
+                          : AppDimens.space32,
+                    ),
+                    _fields(brightness, compact: shortViewport),
+                    const SizedBox(height: AppDimens.space24),
+                    _submitButton(),
+                    const SizedBox(height: AppDimens.space20),
+                    _caption(brightness),
+                  ],
                 ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    horizontal, AppDimens.space8, horizontal,
-                    AppDimens.space12,
-                  ),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 440),
-                      child: _submitButton(),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             );
           },
         ),
@@ -387,7 +311,6 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     );
   }
 }
-
 class _ErrorBanner extends StatelessWidget {
   final String message;
   const _ErrorBanner({required this.message});
