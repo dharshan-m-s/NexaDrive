@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
+import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
+import '../../widgets/one_ui_controls.dart';
 import '../../widgets/one_ui_empty_state.dart';
 import '../../widgets/one_ui_page.dart';
 import '../../widgets/one_ui_surface.dart';
@@ -103,7 +105,7 @@ class _TrashScreenState extends State<TrashScreen> {
       title: 'Trash',
       subtitle: 'Deleted items are kept for 30 days',
       body: _loading
-          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+          ? const OneUiLoadingBlock()
           : _error != null
               ? OneUiEmptyState(
                   icon: Icons.cloud_off_rounded,
@@ -126,64 +128,88 @@ class _TrashScreenState extends State<TrashScreen> {
                         itemCount: _items.length,
                         separatorBuilder: (_, __) =>
                             const SizedBox(height: AppDimens.space2),
-                        itemBuilder: (context, i) {
-                          final item = _items[i];
-                          final isFolder = FileEntry.kindOf(item) == 'folder';
-                          final deletedAt = Format.relTime(DateTime.tryParse(
-                              item['deleted_at']?.toString() ?? ''));
-                          return OneUiSurface(
-                            level: OneUiSurfaceLevel.surface,
-                            radius: AppDimens.radiusTile,
-                            child: Material(
-                              type: MaterialType.transparency,
-                              child: ListTile(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(
-                                      AppDimens.radiusTile),
-                                ),
-                                leading: Icon(
-                                  isFolder
-                                      ? Icons.folder_rounded
-                                      : Icons.insert_drive_file_rounded,
-                                  size: AppDimens.iconMedium,
-                                  color: isFolder
-                                      ? AppColors.accentFor(brightness)
-                                      : null,
-                                ),
-                                title: Text(
-                                  item['name'] as String? ?? '',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w500),
-                                ),
-                                subtitle: Text('Deleted $deletedAt'),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      tooltip: 'Restore',
-                                      icon: Icon(
-                                        Icons.restore_rounded,
-                                        color: AppColors.accentFor(brightness),
-                                      ),
-                                      onPressed: () =>
-                                          _restore(item['id'] as String),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Delete forever',
-                                      icon: const Icon(
-                                          Icons.delete_forever_outlined),
-                                      color: AppColors.errorFor(brightness),
-                                      onPressed: () =>
-                                          _delete(item['id'] as String),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                        itemBuilder: (context, i) => _TrashRow(
+                              item: _items[i],
+                              brightness: brightness,
+                              onRestore: () => _restore(_items[i]['id'] as String),
+                              onDelete: () => _delete(_items[i]['id'] as String),
                             ),
-                          );
-                        },
                       ),
                     ),
+    );
+  }
+}
+
+/// One trashed entry as a standard One UI surface row.
+class _TrashRow extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final Brightness brightness;
+  final VoidCallback onRestore;
+  final VoidCallback onDelete;
+
+  const _TrashRow({
+    required this.item,
+    required this.brightness,
+    required this.onRestore,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isFolder = FileEntry.kindOf(item) == 'folder';
+    final deletedAt = Format.relTime(
+        DateTime.tryParse(item['deleted_at']?.toString() ?? ''));
+
+    return OneUiSurface(
+      level: OneUiSurfaceLevel.surface,
+      radius: AppDimens.radiusTile,
+      child: Material(
+        type: MaterialType.transparency,
+        child: ListTile(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimens.radiusTile),
+          ),
+          leading: Icon(
+            isFolder ? Icons.folder_rounded : Icons.insert_drive_file_rounded,
+            size: AppDimens.iconMedium,
+            color:
+                isFolder ? AppColors.accentFor(brightness) : null,
+          ),
+          title: Text(
+            item['name'] as String? ?? '',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyle.rowTitle.copyWith(
+              color: AppColors.textPrimaryFor(brightness),
+            ),
+          ),
+          subtitle: Text(
+            'Deleted $deletedAt',
+            style: AppTextStyle.caption.copyWith(
+              color: AppColors.textSecondaryFor(brightness),
+            ),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'Restore',
+                icon: Icon(
+                  Icons.restore_rounded,
+                  color: AppColors.accentFor(brightness),
+                ),
+                onPressed: onRestore,
+              ),
+              IconButton(
+                tooltip: 'Delete forever',
+                icon: const Icon(Icons.delete_forever_outlined),
+                color: AppColors.errorFor(brightness),
+                onPressed: onDelete,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
