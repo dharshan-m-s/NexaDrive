@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/api.dart';
+import 'services/app_lock.dart';
 import 'services/background_transfer_service.dart';
 import 'services/session.dart';
 import 'core/design/app_theme.dart';
@@ -12,20 +13,24 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Never start a normal app session with Flutter's rendering diagnostics
-  // enabled. DevTools can intentionally enable them for inspection, but these
-  // flags must not become part of the application's visual state.
-  assert(() {
-    debugPaintBaselinesEnabled = false;
-    debugPaintSizeEnabled = false;
-    debugPaintLayerBordersEnabled = false;
-    debugPaintPointersEnabled = false;
-    debugPaintTextLayoutBoxes = false;
-    debugRepaintRainbowEnabled = false;
-    debugRepaintTextRainbowEnabled = false;
-    debugDisableClipLayers = false;
-    debugDisablePhysicalShapeLayers = false;
-    return true;
-  }());
+  // enabled. The flags themselves are plain runtime bools, but every paint
+  // site that honours them is wrapped in `assert(() { ... }())`, so a release
+  // build cannot draw these overlays. Clearing them unconditionally (rather
+  // than inside an assert, which release strips) simply guarantees a clean
+  // debug/profile session and costs nothing in production.
+  //
+  // These are NOT the cause of the "yellow double underline" that affected the
+  // routed Update Center / Users pages. That was Flutter's `_errorTextStyle`
+  // fallback for text outside a Material; see `OneUiPage`.
+  debugPaintBaselinesEnabled = false;
+  debugPaintSizeEnabled = false;
+  debugPaintLayerBordersEnabled = false;
+  debugPaintPointersEnabled = false;
+  debugPaintTextLayoutBoxes = false;
+  debugRepaintRainbowEnabled = false;
+  debugRepaintTextRainbowEnabled = false;
+  debugDisableClipLayers = false;
+  debugDisablePhysicalShapeLayers = false;
   // Cache management: decoded frames only. The raw thumbnail/original byte
   // caches live in ImageRepository (services/image_pipeline.dart) and are
   // bounded separately, so this budget covers decoded tiles plus the couple of
@@ -55,11 +60,16 @@ class NexaDriveApp extends StatefulWidget {
   /// server. Null in production, where the shell builds its own client.
   final Api? api;
 
+  /// Test seam: replaces the App Lock platform adapter. Null in production,
+  /// where the gate talks to the Android host over its method channel.
+  final AppLockService? appLock;
+
   const NexaDriveApp({
     super.key,
     required this.session,
     required this.prefs,
     this.api,
+    this.appLock,
   });
 
   @override
@@ -83,12 +93,18 @@ class _NexaDriveAppState extends State<NexaDriveApp> {
               : mode == 'dark'
                   ? ThemeMode.dark
                   : ThemeMode.system,
+          // The gate sits above every signed-in screen so App Lock covers
+          // all of them at once; when the setting is off (or the platform has
+          // no implementation) it renders the child untouched.
           home: widget.session.token == null
               ? LoginScreen(session: widget.session)
-              : AppShell(
-                  session: widget.session,
-                  prefs: widget.prefs,
-                  api: widget.api,
+              : AppLockGate(
+                  service: widget.appLock ?? AppLockService(),
+                  child: AppShell(
+                    session: widget.session,
+                    prefs: widget.prefs,
+                    api: widget.api,
+                  ),
                 ),
         );
       },

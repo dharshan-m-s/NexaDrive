@@ -327,39 +327,52 @@ class _LoginScreenState extends State<LoginScreen> {
                 horizontal: horizontal,
                 vertical: vertical,
               ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: 440,
-                  minHeight: (constraints.maxHeight - vertical * 2)
-                      .clamp(0.0, double.infinity),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisAlignment: shortViewport
-                      ? MainAxisAlignment.start
-                      : MainAxisAlignment.center,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: _brand(brightness, compact: shortViewport),
+              // A scroll view hands its child an unbounded width, so the
+              // 440-wide column below would be laid out against the left edge
+              // and leave the whole right half of a desktop window empty — the
+              // layout spec calls for the form to be centred. Bound the width
+              // to the content area first, then centre inside it, which is the
+              // same Center + ConstrainedBox pattern OneUiPage and AppShell
+              // use for their content columns.
+              child: SizedBox(
+                width: (constraints.maxWidth - horizontal * 2)
+                    .clamp(0.0, double.infinity),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: 440,
+                      minHeight: (constraints.maxHeight - vertical * 2)
+                          .clamp(0.0, double.infinity),
                     ),
-                    SizedBox(height: gap),
-                    _heading(
-                      brightness,
-                      compact: shortViewport,
-                      shortViewport: shortViewport,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisAlignment: shortViewport
+                          ? MainAxisAlignment.start
+                          : MainAxisAlignment.center,
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: _brand(brightness, compact: shortViewport),
+                        ),
+                        SizedBox(height: gap),
+                        _heading(
+                          brightness,
+                          compact: shortViewport,
+                          shortViewport: shortViewport,
+                        ),
+                        SizedBox(height: gap),
+                        _fields(
+                          brightness,
+                          compact: shortViewport,
+                          tight: shortViewport,
+                        ),
+                        SizedBox(height: sectionGap),
+                        _submitButton(),
+                        const SizedBox(height: AppDimens.space20),
+                        _caption(brightness),
+                      ],
                     ),
-                    SizedBox(height: gap),
-                    _fields(
-                      brightness,
-                      compact: shortViewport,
-                      tight: shortViewport,
-                    ),
-                    SizedBox(height: sectionGap),
-                    _submitButton(),
-                    const SizedBox(height: AppDimens.space20),
-                    _caption(brightness),
-                  ],
+                  ),
                 ),
               ),
             );

@@ -1,18 +1,21 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../services/api.dart';
+import '../../../services/app_lock.dart';
 import '../../../services/session.dart';
 import '../../../update/update_controller.dart';
 import '../../widgets/one_ui_grouped_list.dart';
 import '../../widgets/one_ui_page.dart';
-import '../admin/admin_users_screen.dart';
 import '../admin/audit_log_screen.dart';
+import '../admin/users_screen.dart';
 import 'update_center_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   final Session session;
   final Api api;
   final UpdateController updateController;
@@ -32,15 +35,35 @@ class SettingsScreen extends StatelessWidget {
     required this.onOpenNotifications,
   });
 
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  final AppLockService _appLock = AppLockService();
+  bool? _appLockEnabled;
+
+  @override
+  void initState() {
+    super.initState();
+    // Only Android implements App Lock (device credential); the setting is
+    // meaningless elsewhere and would only promise something it cannot do.
+    if (Platform.isAndroid) {
+      _appLock.isEnabled().then((value) {
+        if (mounted) setState(() => _appLockEnabled = value);
+      });
+    }
+  }
+
   String get _initial {
-    final name = session.displayName?.trim().isNotEmpty == true
-        ? session.displayName!
-        : (session.username ?? 'N');
+    final name = widget.session.displayName?.trim().isNotEmpty == true
+        ? widget.session.displayName!
+        : (widget.session.username ?? 'N');
     return name.characters.first.toUpperCase();
   }
 
   Future<void> _changeTheme(BuildContext context) async {
-    final current = session.themeMode;
+    final current = widget.session.themeMode;
     final value = await showDialog<String>(
       context: context,
       builder: (context) => SimpleDialog(
@@ -67,7 +90,38 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
     if (value == null || value == current) return;
-    await session.setThemeMode(value);
+    await widget.session.setThemeMode(value);
+  }
+
+  /// Toggles App Lock. Turning it on asks the device once whether it actually
+  /// has a secure lock; a device without one refuses, and the user is told why
+  /// instead of being given a switch that silently does nothing.
+  Future<void> _toggleAppLock(bool value) async {
+    final ok = await _appLock.setEnabled(value);
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'This device has no screen lock. Set a PIN, pattern or '
+              'biometric in Android settings first.',
+            ),
+          ),
+        );
+      return;
+    }
+    setState(() => _appLockEnabled = value);
+    if (value) {
+      // Immediate proof the lock works, instead of a surprise at next launch.
+      final result = await _appLock.authenticate();
+      if (!mounted) return;
+      if (result != AppLockResult.unlocked) {
+        await _appLock.setEnabled(false);
+        if (mounted) setState(() => _appLockEnabled = false);
+      }
+    }
   }
 
   Future<void> _confirmLogout(BuildContext context) async {
@@ -89,11 +143,11 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
     );
-    if (confirm == true) onLogout();
+    if (confirm == true) widget.onLogout();
   }
 
   Future<void> _showServerDialog(BuildContext context) async {
-    final serverUrl = session.serverUrl ?? '';
+    final serverUrl = widget.session.serverUrl ?? '';
     final snack = ScaffoldMessenger.of(context);
     showDialog<void>(
       context: context,
@@ -127,9 +181,10 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final isAdmin = session.role == 'admin';
+    final isAdmin = widget.session.role == 'admin';
     final accent = AppColors.accentFor(brightness);
     final secondary = AppColors.textSecondaryFor(brightness);
+    final session = widget.session;
 
     return OneUiPage(
       title: 'Settings',
@@ -187,23 +242,36 @@ class SettingsScreen extends StatelessWidget {
                 subtitle: _themeLabel(session.themeMode),
                 onTap: () => _changeTheme(context),
               ),
+              if (Platform.isAndroid && _appLockEnabled != null)
+                OneUiGroupTile(
+                  icon: Icons.lock_outline_rounded,
+                  title: 'App Lock',
+                  subtitle: _appLockEnabled == true
+                      ? 'Locked with your device screen lock'
+                      : 'Off',
+                  showChevron: false,
+                  trailing: Switch(
+                    value: _appLockEnabled == true,
+                    onChanged: _toggleAppLock,
+                  ),
+                ),
               OneUiGroupTile(
                 icon: Icons.sync_rounded,
                 title: 'Sync center',
                 subtitle: 'Keep a local folder in step with the cloud',
-                onTap: onOpenSync,
+                onTap: widget.onOpenSync,
               ),
               OneUiGroupTile(
                 icon: Icons.cloud_upload_outlined,
                 title: 'Transfers',
                 subtitle: 'Offline upload queue and progress',
-                onTap: onOpenTransfers,
+                onTap: widget.onOpenTransfers,
               ),
               OneUiGroupTile(
                 icon: Icons.notifications_outlined,
                 title: 'Notifications',
                 subtitle: 'Backup and account alerts',
-                onTap: onOpenNotifications,
+                onTap: widget.onOpenNotifications,
               ),
             ],
           ),
@@ -231,7 +299,7 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => AdminUsersScreen(api: api),
+                        builder: (_) => UsersScreen(api: widget.api),
                       ),
                     );
                   },
@@ -243,7 +311,7 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => AuditLogScreen(api: api),
+                        builder: (_) => AuditLogScreen(api: widget.api),
                       ),
                     );
                   },
@@ -255,7 +323,7 @@ class SettingsScreen extends StatelessWidget {
           OneUiGroupedList(
             header: 'About',
             children: [
-              _UpdateCenterTile(controller: updateController),
+              _UpdateCenterTile(controller: widget.updateController),
               OneUiGroupTile(
                 icon: Icons.info_outline_rounded,
                 title: 'About NexaDrive',
@@ -269,7 +337,7 @@ class SettingsScreen extends StatelessWidget {
                     context: context,
                     applicationName: 'NexaDrive',
                     applicationVersion:
-                        updateController.currentVersion?.toString(),
+                        widget.updateController.currentVersion?.toString(),
                     applicationLegalese:
                         'Your files. Your server. Your private cloud.',
                   );

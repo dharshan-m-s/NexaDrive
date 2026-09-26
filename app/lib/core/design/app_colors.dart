@@ -150,6 +150,10 @@ abstract final class AppColors {
   static Color textPrimaryFor(Brightness b) =>
       b == Brightness.dark ? textPrimaryDark : textPrimaryLight;
 
+  /// Primary interactive surface (cards, panels) for the given brightness.
+  static Color surfaceFor(Brightness b) =>
+      b == Brightness.dark ? surfaceDark : surfaceLight;
+
   static Color textSecondaryFor(Brightness b) =>
       b == Brightness.dark ? textSecondaryDark : textSecondaryLight;
 

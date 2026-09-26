@@ -68,6 +68,15 @@ android {
     }
 }
 
+dependencies {
+    // App Lock asks Android itself to authenticate the user (device screen
+    // lock or biometrics) through androidx.biometric; no NexaDrive password
+    // exists anywhere in this feature.
+    implementation("androidx.biometric:biometric:1.1.0")
+    // FlutterFragmentActivity host required by androidx.biometric's prompt.
+    implementation("androidx.fragment:fragment-ktx:1.8.2")
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexadrive/core/design/app_theme.dart';
 import 'package:nexadrive/services/session.dart';
@@ -332,4 +333,128 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('the sign-in column is centred rather than pinned to one edge', () {
+    // The layout spec for this screen is a *centered* scroll view with a
+    // 440px column. A scroll view hands its child an unbounded width, so
+    // without an explicit centring wrapper the column sat against the left
+    // edge: on a 951px-wide window the form's centre was measured 224px left
+    // of the window centre. These tests pin both halves of that behaviour.
+    testWidgets('the form is horizontally centred on a wide viewport',
+        (tester) async {
+      const size = Size(1280, 800);
+      await _pump(tester, size);
+      final button = tester.getRect(_signIn);
+      expect((button.center.dx - size.width / 2).abs(), lessThanOrEqualTo(1.0),
+          reason: 'the sign-in column must be centred on a desktop window, '
+              'not left-aligned');
+      expect(button.width, lessThanOrEqualTo(440.0),
+          reason: 'centring must not stretch the column past its 440px cap');
+    });
+
+    testWidgets('the brand block and the fields share the same centred column',
+        (tester) async {
+      await _pump(tester, const Size(1280, 800));
+      final button = tester.getRect(_signIn);
+      final fields = tester.getRect(find.byType(TextField).first);
+      expect(fields.center.dx, closeTo(button.center.dx, 1.0),
+          reason: 'every element of the form must sit in the centred column');
+    });
+
+    testWidgets('a narrow viewport still uses the full width', (tester) async {
+      const size = Size(360, 640);
+      await _pump(tester, size);
+      final button = tester.getRect(_signIn);
+      // The phone layout has no 440px cap to hit, so the column should fill
+      // almost the whole width (minus the page gutter).
+      expect(button.width, greaterThan(size.width * 0.8),
+          reason: 'on a phone the form should fill the content area');
+      expect((button.center.dx - size.width / 2).abs(), lessThanOrEqualTo(1.0),
+          reason: 'and still be centred');
+    });
+  });
+
+  group('the sign-in fields can be driven from a keyboard', () {
+    // Sign-in is the first screen on desktop, where there is no touch keyboard
+    // and Tab is how a user moves between fields. If traversal does not work, a
+    // keyboard-only user can never reach the username and password fields at
+    // all, so this is an accessibility requirement rather than a nicety.
+    testWidgets('Tab advances focus through all three fields in order',
+        (tester) async {
+      await _pump(tester, const Size(1280, 800));
+      final fields = find.byType(TextField);
+      expect(fields, findsNWidgets(3));
+
+      await tester.tap(fields.at(0));
+      await tester.pumpAndSettle();
+      expect(_focusedField(tester), 0,
+          reason: 'tapping the server-address field must focus it');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(_focusedField(tester), 1,
+          reason: 'Tab must advance from the server address to the username');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(_focusedField(tester), 2,
+          reason: 'Tab must advance from the username to the password');
+    });
+
+    testWidgets('a tap focuses the field it lands on, not the first one',
+        (tester) async {
+      await _pump(tester, const Size(1280, 800));
+      final fields = find.byType(TextField);
+      await tester.tap(fields.at(1));
+      await tester.pumpAndSettle();
+      expect(_focusedField(tester), 1,
+          reason: 'a click on the username field must focus the username '
+              'field; otherwise typed input lands in the server address');
+    });
+
+    testWidgets('text typed after focusing a field lands in that field',
+        (tester) async {
+      await _pump(tester, const Size(1280, 800));
+      final fields = find.byType(TextField);
+      await tester.tap(fields.at(1));
+      await tester.pumpAndSettle();
+      await tester.enterText(fields.at(1), 'ada');
+      await tester.pumpAndSettle();
+
+      final server = tester.widget<TextField>(fields.at(0)).controller!;
+      final username = tester.widget<TextField>(fields.at(1)).controller!;
+      expect(username.text, 'ada');
+      expect(server.text, isEmpty,
+          reason: 'the username text must not end up in the server address');
+    });
+
+    testWidgets('the password field\'s done action submits the form',
+        (tester) async {
+      await _pump(tester, const Size(1280, 800));
+      final fields = find.byType(TextField);
+      await tester.tap(fields.at(2));
+      await tester.pumpAndSettle();
+      await tester.enterText(fields.at(2), 'pw');
+      // The password field is `textInputAction: done` with `onSubmitted:
+      // submit`, so the platform's done action — not a raw Enter key — is what
+      // signs the user in.
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      // An empty server address fails validation, which proves submit ran.
+      expect(find.text('Enter the address of your NexaDrive server.'),
+          findsOneWidget);
+    });
+  });
+}
+
+/// Index of the [TextField] that currently holds the primary focus, or -1.
+int _focusedField(WidgetTester tester) {
+  final fields = find.byType(TextField);
+  for (var i = 0; i < fields.evaluate().length; i++) {
+    final editable = tester.widget<EditableText>(
+      find.descendant(of: fields.at(i), matching: find.byType(EditableText)),
+    );
+    if (editable.focusNode.hasPrimaryFocus) return i;
+  }
+  return -1;
 }

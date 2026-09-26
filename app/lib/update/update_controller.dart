@@ -957,6 +957,12 @@ class UpdateController extends ChangeNotifier {
   /// quotes and every literal `%` is doubled (batch expands `%VAR%` at parse
   /// time), so a path such as `C:\Users\50%Tax` cannot corrupt or escape the
   /// script.
+  ///
+  /// The swap is rollback-safe: the current app folder is copied to a backup
+  /// first, and a failed copy of the new build restores that backup before
+  /// relaunching. The old version is only removed once the new one is fully
+  /// in place, so a crash or power loss mid-swap can never leave the app
+  /// missing files.
   static String _portableSwapScript({
     required String staging,
     required String appDir,
@@ -967,20 +973,42 @@ class UpdateController extends ChangeNotifier {
     final dir = batchEscape(appDir);
     final appExe = batchEscape('$appDir$Platform.pathSeparator$exeName');
     return '@echo off\r\n'
-        'REM NexaDrive portable updater: waits for the app to exit, swaps the\r\n'
-        'REM staged build into place, relaunches, then removes itself.\r\n'
+        'REM NexaDrive portable updater: waits for the app to exit, backs up\r\n'
+        'REM the current version, swaps the staged build in, restores the\r\n'
+        'REM backup if the swap fails, relaunches, then removes itself.\r\n'
         'setlocal\r\n'
         'set "UPDATE_SRC=$src"\r\n'
         'set "APP_DIR=$dir"\r\n'
         'set "APP_EXE=$appExe"\r\n'
+        'set "BACKUP=%APP_DIR%\\nexadrive-backup"\r\n'
         ':wait\r\n'
         'tasklist /FI "IMAGENAME eq $exeName" 2>NUL | find /I "$exeName" >NUL\r\n'
         'if not errorlevel 1 (\r\n'
         '  timeout /t 2 /nobreak >NUL\r\n'
         '  goto wait\r\n'
         ')\r\n'
-        'xcopy "%UPDATE_SRC%\\*" "%APP_DIR%\\" /y /e /q /h /r /i >NUL\r\n'
+        'REM 1. Back up the working version before anything is touched.\r\n'
+        'robocopy "%APP_DIR%" "%BACKUP%" /e /r:1 /w:1 /xd "%BACKUP%" /nfl /ndl /njh /njs >NUL\r\n'
+        'if errorlevel 8 (\r\n'
+        '  rmdir /s /q "%BACKUP%" 2>NUL\r\n'
+        '  start "" "%APP_EXE%"\r\n'
+        '  del "%~f0" 2>NUL\r\n'
+        '  exit /b 1\r\n'
+        ')\r\n'
+        'REM 2. Swap the staged build into place. The backup folder is excluded\r\n'
+        'REM    so the rollback anchor survives the mirroring.\r\n'
+        'robocopy "%UPDATE_SRC%" "%APP_DIR%" /mir /r:1 /w:1 /xd "%BACKUP%" /nfl /ndl /njh /njs >NUL\r\n'
+        'if errorlevel 8 (\r\n'
+        '  robocopy "%BACKUP%" "%APP_DIR%" /e /r:1 /w:1 /nfl /ndl /njh /njs >NUL\r\n'
+        '  rmdir /s /q "%BACKUP%" 2>NUL\r\n'
+        '  rmdir /s /q "%UPDATE_SRC%" 2>NUL\r\n'
+        '  start "" "%APP_EXE%"\r\n'
+        '  del "%~f0" 2>NUL\r\n'
+        '  exit /b 1\r\n'
+        ')\r\n'
+        'REM 3. Success: drop the staging copy and the backup, then relaunch.\r\n'
         'rmdir /s /q "%UPDATE_SRC%" 2>NUL\r\n'
+        'rmdir /s /q "%BACKUP%" 2>NUL\r\n'
         'start "" "%APP_EXE%"\r\n'
         'del "%~f0" 2>NUL\r\n';
   }

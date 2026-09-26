@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nexadrive/core/design/app_theme.dart';
 import 'package:nexadrive/services/api.dart';
 import 'package:nexadrive/services/session.dart';
-import 'package:nexadrive/ui/screens/admin/admin_users_screen.dart';
+import 'package:nexadrive/ui/screens/admin/users_screen.dart';
 
 /// A scripted [Api] so the screen can be driven through every state without a
 /// server. Only the account methods are overridden.
@@ -56,10 +56,6 @@ class _ScriptedApi extends Api {
 
   @override
   Future<void> deleteUser(String id) async => calls.add('deleteUser:$id');
-
-  @override
-  Future<void> revokeUserSessions(String id) async =>
-      calls.add('revokeUserSessions:$id');
 }
 
 Map<String, dynamic> _user({
@@ -83,12 +79,21 @@ const _gib = 1024 * 1024 * 1024;
 
 Future<void> _pump(WidgetTester tester, _ScriptedApi api) async {
   await tester.binding.setSurfaceSize(const Size(390, 844));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(MaterialApp(
     debugShowCheckedModeBanner: false,
     theme: AppTheme.light(),
-    home: Scaffold(body: AdminUsersScreen(api: api)),
+    home: Scaffold(body: UsersScreen(api: api)),
   ));
+  // Bounded settle: a never-completing load shows an indeterminate spinner,
+  // which would make an unconditional pumpAndSettle time out.
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
 }
+
+/// Settles animations after an interaction; only for tests whose surface has
+/// no perpetual animation running.
+Future<void> _settle(WidgetTester tester) => tester.pumpAndSettle();
 
 /// The failure the screen must never present as "0 accounts".
 void _expectNoZeroCount() {
@@ -100,7 +105,6 @@ void main() {
   group('the page always states what it is for', () {
     testWidgets('header shows its purpose', (tester) async {
       await _pump(tester, _ScriptedApi(usersResult: const []));
-      await tester.pumpAndSettle();
       expect(find.text('Users'), findsOneWidget);
       expect(find.text('Manage accounts and access'), findsOneWidget);
     });
@@ -163,14 +167,13 @@ void main() {
       _expectNoZeroCount();
     });
 
-    testWidgets('retry re-requests and recovers', (tester) async {
+    testWidgets('retry re-requests and stays failing while the server fails',
+        (tester) async {
       final api = _ScriptedApi(usersError: ApiException(500, 'boom'));
       await _pump(tester, api);
       await tester.pumpAndSettle();
       expect(api.calls.where((c) => c == 'users'), hasLength(1));
 
-      // Retry — the scripted api keeps failing, so it must stay in the failed
-      // state rather than flip to an empty list.
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
       expect(api.calls.where((c) => c == 'users'), hasLength(2));
@@ -184,23 +187,16 @@ void main() {
     testWidgets('offers a first-account action instead of a void',
         (tester) async {
       await _pump(tester, _ScriptedApi(usersResult: const []));
-      await tester.pumpAndSettle();
       expect(find.text('No accounts yet'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Add user'), findsOneWidget);
-      // Grouped-list headers are rendered as uppercase micro-labels.
-      expect(find.text('ROLES'), findsOneWidget);
-      expect(find.text('ACCOUNTS'), findsOneWidget);
     });
 
     testWidgets('is anchored under the header, not centred in the viewport',
         (tester) async {
       await _pump(tester, _ScriptedApi(usersResult: const []));
-      await tester.pumpAndSettle();
       final header =
           tester.getBottomLeft(find.text('Manage accounts and access'));
       final empty = tester.getTopLeft(find.text('No accounts yet'));
-      // The empty-state panel starts within a header-height of the page title
-      // rather than being pushed to the middle of an 844px screen.
       expect(empty.dy - header.dy, lessThan(96));
     });
   });
@@ -227,7 +223,6 @@ void main() {
 
     testWidgets('summarises counts by kind', (tester) async {
       await _pump(tester, scripted());
-      await tester.pumpAndSettle();
       expect(find.textContaining('3 accounts'), findsOneWidget);
       expect(find.textContaining('1 administrator'), findsOneWidget);
       expect(find.textContaining('1 blocked'), findsOneWidget);
@@ -235,7 +230,6 @@ void main() {
 
     testWidgets('shows identity, role and storage per row', (tester) async {
       await _pump(tester, scripted());
-      await tester.pumpAndSettle();
       expect(find.text('Grace Hopper'), findsOneWidget);
       expect(find.textContaining('@grace'), findsOneWidget);
       expect(find.textContaining('Unlimited storage'), findsWidgets);
@@ -246,7 +240,6 @@ void main() {
 
     testWidgets('marks the signed-in account', (tester) async {
       await _pump(tester, scripted());
-      await tester.pumpAndSettle();
       expect(find.text('You'), findsOneWidget);
     });
 
@@ -254,7 +247,6 @@ void main() {
       // Regression: blocked rows used to lose every action, making a blocked
       // account impossible to unblock, edit or delete from the app.
       await _pump(tester, scripted());
-      await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Account actions').at(2));
       await tester.pumpAndSettle();
@@ -265,7 +257,6 @@ void main() {
 
     testWidgets('search narrows the list and can be cleared', (tester) async {
       await _pump(tester, scripted());
-      await tester.pumpAndSettle();
       await tester.enterText(find.byType(SearchBar), 'grace');
       await tester.pumpAndSettle();
       expect(find.text('Grace Hopper'), findsOneWidget);
@@ -274,6 +265,31 @@ void main() {
       await tester.enterText(find.byType(SearchBar), 'nobody');
       await tester.pumpAndSettle();
       expect(find.textContaining('No accounts match'), findsOneWidget);
+    });
+
+    testWidgets('opens with existing values loaded', (tester) async {
+      await _pump(
+        tester,
+        _ScriptedApi(
+          usersResult: [
+            _user(id: 'self', username: 'root', role: 'admin'),
+            _user(
+              id: '2',
+              username: 'grace',
+              displayName: 'Grace Hopper',
+              quotaBytes: 10 * _gib,
+            ),
+          ],
+        ),
+      );
+      await tester.tap(find.text('Grace Hopper'));
+      await _settle(tester);
+
+      expect(find.text('Edit account'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Grace Hopper'), findsOneWidget);
+      expect(find.widgetWithText(TextField, '10'), findsOneWidget);
+      // The username is immutable, so it is shown disabled rather than edited.
+      expect(find.widgetWithText(TextField, 'grace'), findsOneWidget);
     });
   });
 
@@ -287,19 +303,18 @@ void main() {
         ],
       );
       await _pump(tester, api);
-      await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Account actions').at(0));
       await tester.pumpAndSettle();
-      // The reason is stated in the menu before anything is tapped.
+      // The reason is stated in the sheet before anything is tapped.
       expect(find.textContaining('signed in'), findsWidgets);
 
       await tester.tap(find.text('Delete account'));
       await tester.pumpAndSettle();
-      expect(find.text('This account is protected'), findsOneWidget);
+      expect(find.text('This account is protected'), findsNothing,
+          reason: 'the destructive action is disabled, not offered-then-'
+              'refused');
       expect(api.calls.where((c) => c.startsWith('deleteUser')), isEmpty);
-      await tester.tap(find.text('Got it'));
-      await tester.pumpAndSettle();
     });
 
     testWidgets('the last administrator cannot be deleted', (tester) async {
@@ -312,11 +327,8 @@ void main() {
         selfUsername: 'ops',
       );
       await _pump(tester, api);
-      await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Account actions').at(1));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete account'));
       await tester.pumpAndSettle();
       expect(find.textContaining('only administrator'), findsWidgets);
       expect(api.calls.where((c) => c.startsWith('deleteUser')), isEmpty);
@@ -331,7 +343,6 @@ void main() {
         ],
       );
       await _pump(tester, api);
-      await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Account actions').at(1));
       await tester.pumpAndSettle();
@@ -349,33 +360,6 @@ void main() {
   });
 
   group('account editing', () {
-    testWidgets('opens with existing values loaded', (tester) async {
-      await _pump(
-        tester,
-        _ScriptedApi(
-          usersResult: [
-            _user(id: 'self', username: 'root', role: 'admin'),
-            _user(
-              id: '2',
-              username: 'grace',
-              displayName: 'Grace Hopper',
-              quotaBytes: 10 * _gib,
-            ),
-          ],
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Grace Hopper'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Edit account'), findsOneWidget);
-      expect(find.widgetWithText(TextField, 'Grace Hopper'), findsOneWidget);
-      expect(find.widgetWithText(TextField, '10'), findsOneWidget);
-      // The username is immutable, so it is shown rather than edited.
-      expect(find.text('grace'), findsOneWidget);
-      expect(find.text('Save changes'), findsOneWidget);
-    });
-
     testWidgets('validation happens before any request', (tester) async {
       final api = _ScriptedApi(
         usersResult: [
@@ -384,7 +368,6 @@ void main() {
         ],
       );
       await _pump(tester, api);
-      await tester.pumpAndSettle();
       await tester.tap(find.text('Grace Hopper'));
       await tester.pumpAndSettle();
 
@@ -393,7 +376,7 @@ void main() {
       await tester.tap(find.text('Save changes'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Enter a display name'), findsOneWidget);
+      expect(find.text('Enter a display name.'), findsOneWidget);
       expect(api.calls.where((c) => c.startsWith('updateUser')), isEmpty);
     });
 
@@ -411,7 +394,6 @@ void main() {
         ],
       );
       await _pump(tester, api);
-      await tester.pumpAndSettle();
       await tester.tap(find.text('Grace Hopper'));
       await tester.pumpAndSettle();
 

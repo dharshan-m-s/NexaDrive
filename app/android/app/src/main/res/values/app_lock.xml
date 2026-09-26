@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- System authentication prompt (App Lock). BiometricPrompt renders these
+         itself; there is no NexaDrive password anywhere in this feature. -->
+    <string name="app_lock_prompt_title">Unlock NexaDrive</string>
+    <string name="app_lock_prompt_subtitle">NexaDrive is locked</string>
+</resources>
