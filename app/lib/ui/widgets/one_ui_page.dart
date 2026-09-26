@@ -35,23 +35,33 @@ class OneUiPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _ViewingArea(
-          title: title,
-          subtitle: subtitle,
-          action: headerAction,
-        ),
-        Expanded(
-          child: scrollable
-              ? SingleChildScrollView(
-                  padding: padding,
-                  child: Align(alignment: alignment, child: body),
-                )
-              : Padding(padding: padding, child: body),
-        ),
-      ],
+    // Every page must sit inside a Material. Without one, MaterialApp falls
+    // back to its diagnostic `_errorTextStyle` (monospace, 48px, pure-yellow
+    // *double* underline) as the ambient DefaultTextStyle. Any Text here that
+    // does not set `decoration` itself inherits that fallback, which is how
+    // the title on the routed (Scaffold-less) pages grew a yellow double
+    // underline. A transparent Material supplies the real bodyMedium style
+    // without painting a background, and is a no-op visually.
+    return Material(
+      type: MaterialType.transparency,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ViewingArea(
+            title: title,
+            subtitle: subtitle,
+            action: headerAction,
+          ),
+          Expanded(
+            child: scrollable
+                ? SingleChildScrollView(
+                    padding: padding,
+                    child: Align(alignment: alignment, child: body),
+                  )
+                : Padding(padding: padding, child: body),
+          ),
+        ],
+      ),
     );
   }
 }

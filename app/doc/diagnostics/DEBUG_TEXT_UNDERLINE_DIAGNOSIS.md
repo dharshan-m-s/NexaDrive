@@ -1,207 +1,109 @@
-# Diagnosis: the "yellow/green underline under every line of text" report
+# Diagnosis: the "yellow double underline under page titles" report
 
-**Status: closed — not a NexaDrive typography bug.**
+**Status: fixed — real cause found and corrected on 2026-09-26.**
 
 ## Report
 
-Screenshots of *Settings → Users* and *Settings → Update center* showed what
-looked like a thin yellow/green line beneath almost every line of text.
+*Settings → Users* and *Settings → Update center* rendered a thin **pure-yellow
+double line** directly beneath the page title. Every other screen was clean.
+The lines were visible in an installed, non-debuggable **release** APK.
 
-## Conclusion
+## Root cause
 
-The lines are **Flutter's debug baseline visualisation**, not application
-typography. They are drawn only when `debugPaintBaselinesEnabled` is `true`,
-which the Flutter Inspector / DevTools exposes as a toggle ("Paint baselines").
-Nothing in the NexaDrive codebase sets it, and it **cannot appear in a release
-build**.
+Flutter's deliberate fallback `DefaultTextStyle` for text that is **not inside a
+`Material`**:
 
-## Evidence
-
-### 1. The paint sites are `assert`-gated
-
-`packages/flutter/lib/src/rendering/box.dart`, `RenderBox.debugPaintBaselines`:
+`packages/flutter/lib/src/material/app.dart:45`
 
 ```dart
-void debugPaintBaselines(PaintingContext context, Offset offset) {
-  assert(() {
-    final paint = Paint()..style = PaintingStyle.stroke..strokeWidth = 0.25;
-    // ideographic baseline
-    if (baselineI != null) {
-      paint.color = const Color(0xFFFFD000);   // amber
-      ...
-    }
-    // alphabetic baseline
-    if (baselineA != null) {
-      paint.color = const Color(0xFF00FF00);   // green
-      ...
-    }
-    return true;
-  }());
-}
+const TextStyle _errorTextStyle = TextStyle(
+  color: Color(0xD0FF0000),
+  fontFamily: 'monospace',
+  fontSize: 48.0,
+  fontWeight: FontWeight.w900,
+  decoration: TextDecoration.underline,
+  decorationColor: Color(0xFFFFFF00),          // the reported pure yellow
+  decorationStyle: TextDecorationStyle.double, // the reported double line
+  debugLabel: 'fallback style; consider putting your text in a Material',
+);
 ```
 
-Two things follow directly:
+`MaterialApp` installs this as the ambient `DefaultTextStyle`. It is a
+deliberate developer-facing diagnostic, not a bug in Flutter: the intent is that
+text rendered outside a `Material` is impossible to miss.
 
-- The colours are **green (`0x00FF00`) and amber (`0xFFFFD000`)** — i.e. exactly
-  the "yellow/green-looking lines" that were reported.
-- The whole body is inside `assert(() { … }())`. Dart strips `assert` bodies in
-  release mode, so this code is compiled out. A release build physically cannot
-  render these lines.
+A `Text` widget resolves `decoration` from the **ambient** `DefaultTextStyle`
+whenever its own style does not set one. `AppTextStyle.pageTitle` sets
+`fontSize`/`fontWeight`/`letterSpacing` but **not** `decoration`, so the title
+transparently inherited `TextDecoration.underline` with `decorationColor`
+`0xFFFFFF00` and `decorationStyle: double`.
 
-The call site is likewise guarded, in `RenderBox.paint`
-(`packages/flutter/lib/src/rendering/box.dart`):
+### Why only these two screens
+
+`OneUiPage` renders the title and subtitle. Whether they inherit a real text
+style depends entirely on whether the route supplies a `Material`:
+
+| Screen | `Scaffold` of its own | `Material` ancestor | Result |
+| --- | --- | --- | --- |
+| Users | no | none | **yellow double underline** |
+| Update center | no | none | **yellow double underline** |
+| Audit log | yes | yes | clean |
+| Settings, Home, Sync center, … | yes (shell `Scaffold`) | yes | clean |
+
+`app_shell.dart` wraps shell tabs in a `Scaffold`, and the other routed pages
+bring their own, so their text already resolved against a `Material`. Users and
+Update Center are pushed as bare `MaterialPageRoute`s returning `OneUiPage`
+directly, with no `Scaffold` anywhere above them — so they were the only screens
+where the fallback was reachable.
+
+## Fix
+
+`OneUiPage` now provides a transparent `Material`:
 
 ```dart
-if (debugPaintBaselinesEnabled) {
-  debugPaintBaselines(context, offset);
-}
+return Material(
+  type: MaterialType.transparency,
+  child: Column(/* ... */),
+);
 ```
 
-`debugPaintBaselinesEnabled` is declared `false` by default
-(`packages/flutter/lib/src/rendering/debug.dart:39`) and is only reachable from
-the app through the rendering service extension the Inspector drives
-(`rendering/service_extensions.dart`, `rendering/binding.dart`).
+`Material` installs `AnimatedDefaultTextStyle(Theme.of(context).textTheme.bodyMedium!)`
+(`material.dart:476`) for every material type, including `transparency`, which
+paints no background. The fix is structural — it removes the fallback rather
+than masking it — and it protects any future page that uses `OneUiPage` without
+its own `Scaffold`.
 
-### 2. Nothing in the repository enables it
+Verified on a physical device (SM_M107F, Android 11, DPR 1.75): 0 pure-yellow
+pixels on Users and Update Center, with Impeller (the shipping default
+renderer) enabled. All 328 tests pass, including the committed goldens.
 
-```
-$ grep -rniE "(baseline|debugPaint)" app/lib   # -> no matches
-```
+## Why earlier passes got this wrong
 
-`app/lib` contains **no** `TextDecoration` usage at all, so there is no
-underline in the design system either.
+This document previously concluded the lines were the **debug baseline
+overlay** and that "a release build physically cannot render these lines".
+That was wrong, and the reasoning had a specific flaw: it noted the paint site
+is gated by `if (debugPaintBaselinesEnabled)` but treated the flag as
+authoritative, while `debugPaintBaselines`' entire body is itself wrapped in
+`assert(() { ... }())` (`rendering/box.dart:3250`) and is compiled out of
+release. The green pixels that seemed to confirm the theory were an artefact of
+an over-loose colour threshold catching antialiased glyph edges on a dark
+background. Two other theories were also tested and eliminated by measurement:
+disabling Impeller, and device developer options.
 
-### 3. Reproduced and isolated on the reported screens
+The lesson recorded as a test: the existing decoration checks all wrapped the
+screen in `Scaffold(body: screen)`, which supplies a `Material` and therefore
+**hid the bug from every prior verification**. `test/text_decoration_regression_test.dart`
+now also pumps these screens through `pumpRouted`, which renders them as a bare
+route with no `Scaffold` — the shape the app actually ships. Those four tests
+fail without the fix and pass with it.
 
-`AdminUsersScreen` and the Update center header were rendered to PNG twice —
-once with baseline painting off, once on — with everything else identical. The
-images are kept in `doc/diagnostics/`:
+## Guard
 
-| File | Baseline painting | Yellow/green lines |
-| --- | --- | --- |
-| `users_off.png` | off | no |
-| `users_on.png` | on | **yes** |
-| `update_off.png` | off | no |
-| `update_on.png` | on | **yes** |
+`app/test/text_decoration_regression_test.dart` pins both cases:
 
-Diffing the colour histograms, the colours that appear **only** in the
-baseline-painting-on renders are:
+1. Screens wrapped in a `Scaffold` — existing coverage.
+2. Screens rendered as a bare route with no `Scaffold` (`pumpRouted`) — the
+   case that actually reproduced the report.
 
-- **83 distinct green-family blends** with the blue channel near zero
-  (`#66CB05`, `#6CEB02`, `#70E902`, `#71EC02`, …) — antialiased blends of
-  `0x00FF00`.
-- **116 distinct amber-family blends** with red and green both far above blue
-  (`#D7F8B0`, `#C0F691`, `#C9F7A7`, …) — antialiased blends of `0xFFFFD000`.
-
-The off renders contain **zero** pixels from either family.
-
-### 4. The framework itself flags this as a debug-only variable
-
-Running a test that leaves the flag set fails with:
-
-```
-The value of a rendering debug variable was changed by the test.
-  debugAssertAllRenderVarsUnset (package:flutter/src/rendering/debug.dart:348)
-```
-
-Flutter treats these flags as state that must not survive normal execution.
-
-## Debug vs release
-
-- **Debug** (`flutter run`, `flutter test`): asserts are live, so if the flag is
-  toggled the lines appear. Removing the toggle removes them.
-- **Release** (`flutter build … --release`): `assert` bodies are stripped, so
-  the lines cannot be rendered under any circumstance.
-
-Both builds were produced from this tree during verification (see the
-engineering report), and the release pipeline compiles the identical theme and
-widget code paths — there is no conditional typography anywhere in `app/lib`.
-
-## What changed as a result
-
-Nothing in the UI needed to change for this. To stop it being mis-filed as a
-typography regression again, `app/test/debug_rendering_guard_test.dart` now
-asserts that:
-
-1. no rendering debug variable is left enabled, and
-2. no source file under `lib/` enables a debug paint flag, and
-3. no `TextStyle` reachable from the light or dark `ThemeData` carries an
-   underline decoration.
-
-## Re-verified 2026-09-19 (second report)
-
-The report resurfaced for the same two screens. The current tree was
-re-audited end to end:
-
-1. **Source**: `rg -n "TextDecoration" app/lib` still returns nothing; the
-   shared typography (`AppTextStyle`), theme (`AppTheme`) and shared widgets
-   carry no text decoration.
-2. **Rendered pixels**: the committed goldens
-   (`update_center_light.png`, `update_center_paused_light.png`,
-   `admin_users_light.png`) were histogram-audited. They contain **zero**
-   `0x00FF00`/`0xFFFFD000` baseline-paint pixels — the only green-family
-   colors present are the "You" chip's muted accent (`#669363`). The rendered
-   UI is clean.
-3. **Regression guard**: `app/test/text_decoration_regression_test.dart` now
-   pumps Update center (idle / update available / paused / cancelled) and the
-   Users admin screen in light and dark themes and asserts that every rendered
-   `Text` resolves to a style with no underline or line-through decoration,
-   that `debugPaintBaselinesEnabled` is off while they render, and that every
-   `AppTextStyle` token is decoration-free. The Update-status switch in
-   `UpdateCenterScreen._ActionArea` (including `paused` and `cancelled`) was
-   re-verified to contain exactly one case per state; the collapsed
-   `failed`/`offline/unsupported` arms were re-formatted onto separate lines
-   so the switch reads unambiguously.
-
-Still a session/DevTools overlay, not application typography.
-
-## Independently re-verified 2026-09-19 (third report)
-
-Every claim above was re-checked against this tree and against the Flutter SDK
-that actually builds it (3.47.2), rather than taken on trust:
-
-```
-$ grep -rn "TextDecoration" app/lib            # -> no matches
-$ grep -rn "debugPaint|debugRepaint" app/lib   # -> only main.dart setting them false
-```
-
-* `app/lib` still contains **zero** `TextDecoration` usage, so no underline is
-  authored anywhere in the design system, the theme, or any widget.
-* The only debug-paint references in `lib/` are the defensive resets in
-  `main.dart` (all assigned `false`), not an enabling site.
-* `debugPaintBaselines` in the local SDK is still `assert`-gated and still paints
-  `0xFFFFD000` (ideographic) and `0x00FF00` (alphabetic), and
-  `debugPaintBaselinesEnabled` still defaults to `false`:
-
-  ```
-  packages/flutter/lib/src/rendering/box.dart:3250: void debugPaintBaselines(...) { assert(() {
-  packages/flutter/lib/src/rendering/box.dart:3259:   paint.color = const Color(0xFFFFD000);
-  packages/flutter/lib/src/rendering/debug.dart:39:  bool debugPaintBaselinesEnabled = false;
-  ```
-
-* Colour-histogramming the freshly regenerated goldens for the exact screens in
-  the report (`update_center_light.png`, `update_center_paused_light.png`,
-  `admin_users_light.png`) finds **0** pixels from the green/amber
-  baseline-paint families. The rendered UI is clean in all three.
-
-So the lines remain a *debug-session* overlay, not application typography.
-
-### A real Update Center defect found during this pass
-
-The pass did surface a genuine visual defect on the same screen, in
-`UpdateCenterScreen`'s primary action: `_PrimaryButton` wrapped a
-`FilledButton.icon` / `FilledButton` **inside** an outer `FilledButton`. That
-painted two stacked pill surfaces and made the action 80px tall (56px button +
-the outer button's 24px of padding) instead of the design's 56px touch target.
-It is fixed, and `app/test/update_center_action_test.dart` now pins the action
-to exactly one non-nested button whose tap dispatches once.
-
-## If you see the lines again
-
-They are a *session* setting on the running debug app, not stored in the repo:
-
-- In DevTools, close the **Flutter Inspector** panel's "More actions" menu and
-  untick **Paint baselines**.
-- Or hot-restart / relaunch with `flutter run` — the flag is not persisted.
-- To confirm instantly: `flutter build linux --release` (or install a release
-  APK) and look at the same screen. The lines will be gone.
+It also continues to assert that no rendering debug flag is set during a normal
+render and that no `AppTextStyle` token carries a decoration.

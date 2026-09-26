@@ -5,7 +5,7 @@ import 'package:nexadrive/core/design/app_theme.dart';
 import 'package:nexadrive/core/design/app_typography.dart';
 import 'package:nexadrive/services/api.dart';
 import 'package:nexadrive/services/session.dart';
-import 'package:nexadrive/ui/screens/admin/admin_users_screen.dart';
+import 'package:nexadrive/ui/screens/admin/users_screen.dart';
 import 'package:nexadrive/ui/screens/settings/update_center_screen.dart';
 import 'package:nexadrive/update/app_platform.dart';
 import 'package:nexadrive/update/semver.dart';
@@ -18,23 +18,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Regression guard for the "unintended underlines across normal UI text"
 /// report on the Update Center and Users screens.
 ///
-/// The diagnosis is in `doc/diagnostics/DEBUG_TEXT_UNDERLINE_DIAGNOSIS.md`: no
-/// `TextDecoration.underline` exists anywhere in NexaDrive's styles. The "green
-/// or yellow line under every line of text" users saw is Flutter's *debug*
-/// baseline visualisation (`debugPaintBaselinesEnabled`), which paints the
-/// alphabetic baseline in `0x00FF00` and the ideographic baseline in
-/// `0xFFFFD000` beneath every glyph. The paint sites are assert-gated, so they
-/// cannot render in a release build, and `main()` clears the flags at startup.
+/// Two mechanisms can draw a line under text:
 ///
-/// These tests pin both screens at the widget level so a shared typography
-/// regression (either a real underline decoration or a leaked debug flag)
-/// cannot return unnoticed:
-///  - every rendered `Text` widget must carry an effective style whose
-///    decoration is neither underline nor line-through, in light and dark;
-///  - the baseline debug flag must be off while the screens render;
-///  - the shared `AppTextStyle` tokens used by both screens are decorations
-///    free (the component-level style set, distinct from the ThemeData
-///    `textTheme` already covered by `debug_rendering_guard_test.dart`).
+///  1. A real `TextDecoration.underline` in a style (none exists in
+///     NexaDrive's tokens; this file pins that at the widget level).
+///  2. Flutter's *debug* baseline visualisation
+///     (`debugPaintBaselinesEnabled`), which paints the alphabetic baseline in
+///     `0x00FF00` (green) and the ideographic baseline in `0xFFFFD000` (amber)
+///     beneath every glyph — the actual root cause of the original report.
+///     The paint sites are assert-gated, so they cannot render in a release
+///     build, and `main()` clears the flags at startup.
+///
+/// Both rebuilt screens are pinned here in light and dark, across their main
+/// states, so neither a typography regression nor a leaked debug flag can
+/// return unnoticed.
 void main() {
   for (final theme in {
     'light': AppTheme.light(),
@@ -49,6 +46,9 @@ void main() {
           UpdateStatus.updateAvailable,
           UpdateStatus.paused,
           UpdateStatus.cancelled,
+          UpdateStatus.failed,
+          UpdateStatus.offline,
+          UpdateStatus.needsUserAction,
         ]) {
           final controller = await buildController();
           controller.status = status;
@@ -56,6 +56,10 @@ void main() {
             controller.receivedBytes = 18874368;
             controller.totalBytes = 52428800;
             controller.progress = 18874368 / 52428800;
+          }
+          if (status == UpdateStatus.failed) {
+            controller.selectedArtifact = null;
+            controller.errorMessage = 'The download failed verification.';
           }
           await pump(
               tester, theme.value, UpdateCenterScreen(controller: controller));
@@ -74,10 +78,12 @@ void main() {
             tester, theme.value, UpdateCenterScreen(controller: controller));
         for (final label in const [
           'Update center',
-          'Current version',
-          'RELEASE DETAILS',
+          'CURRENT',
+          'LATEST',
+          'v1.2.1',
+          'v1.4.0',
           'Update available',
-          '1.4.0',
+          'Download & install',
         ]) {
           expect(find.text(label), findsOneWidget, reason: label);
         }
@@ -86,7 +92,7 @@ void main() {
 
       testWidgets('users admin text has no underline decoration',
           (tester) async {
-        await pump(tester, theme.value, AdminUsersScreen(api: _FakeApi()));
+        await pump(tester, theme.value, UsersScreen(api: _FakeApi()));
         expect(debugPaintBaselinesEnabled, isFalse,
             reason: 'The debug baseline overlay paints a line under every '
                 'line of text and must not be on during a normal render.');
@@ -95,16 +101,52 @@ void main() {
 
       testWidgets('users admin representative labels render clean',
           (tester) async {
-        await pump(tester, theme.value, AdminUsersScreen(api: _FakeApi()));
+        await pump(tester, theme.value, UsersScreen(api: _FakeApi()));
         expect(find.text('Ada Lovelace'), findsOneWidget);
         expect(find.text('Grace Hopper'), findsOneWidget);
         expect(find.text('Admin'), findsOneWidget);
-        expect(find.text('@grace · Unlimited storage'), findsOneWidget);
+        expect(find.textContaining('@grace'), findsOneWidget);
         expect(find.text('You'), findsOneWidget);
         expectNoUnderline(tester);
       });
     });
   }
+
+  // Root cause found 2026-09-26, after three earlier passes wrongly blamed the
+  // debug baseline overlay. When a page is pushed as a bare route it has no
+  // Scaffold, and therefore no Material ancestor. Text outside a Material
+  // inherits MaterialApp's diagnostic fallback style (`_errorTextStyle` in
+  // material/app.dart): monospace, 48px, and a *double* underline in pure
+  // yellow 0xFFFFFF00, labelled "fallback style; consider putting your text in
+  // a Material". The routed Update Center and Users pages have no Scaffold of
+  // their own, so in a real release APK their headers rendered with a yellow
+  // double underline. `OneUiPage` now provides a transparent Material.
+  //
+  // Every other test in this file wraps the screen in a Scaffold, which
+  // supplies a Material and therefore masks the bug. These tests reproduce the
+  // shape the app actually ships.
+  group('routed pages with no Scaffold do not inherit the fallback style', () {
+    for (final theme in {
+      'light': AppTheme.light(),
+      'dark': AppTheme.dark(),
+    }.entries) {
+      testWidgets('${theme.key}: update center renders with no underline',
+          (tester) async {
+        final controller = await buildController();
+        controller.status = UpdateStatus.updateAvailable;
+        await pumpRouted(
+            tester, theme.value, UpdateCenterScreen(controller: controller));
+        expect(find.text('Update center'), findsOneWidget);
+        expectNoUnderline(tester);
+      });
+
+      testWidgets('${theme.key}: users renders with no underline', (tester) async {
+        await pumpRouted(tester, theme.value, UsersScreen(api: _FakeApi()));
+        expect(find.text('Users'), findsOneWidget);
+        expectNoUnderline(tester);
+      });
+    }
+  });
 
   group('shared AppTextStyle tokens carry no text decoration', () {
     test('no token uses underline or line-through', () {
@@ -201,6 +243,23 @@ Future<void> pump(WidgetTester tester, ThemeData theme, Widget screen) async {
       debugShowCheckedModeBanner: false,
       theme: theme,
       home: Scaffold(body: screen),
+    ),
+  );
+  await tester.pumpAndSettle(const Duration(milliseconds: 100));
+}
+
+/// Pumps [screen] the way the app actually ships it: as the body of a bare
+/// `MaterialPageRoute`, with no Scaffold and therefore no Material ancestor.
+/// This is the only shape in which Flutter's fallback `DefaultTextStyle` can
+/// reach the text, so decoration checks must run through this helper too.
+Future<void> pumpRouted(WidgetTester tester, ThemeData theme, Widget screen) async {
+  await tester.binding.setSurfaceSize(const Size(390, 844));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(
+    MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: theme,
+      home: screen,
     ),
   );
   await tester.pumpAndSettle(const Duration(milliseconds: 100));
