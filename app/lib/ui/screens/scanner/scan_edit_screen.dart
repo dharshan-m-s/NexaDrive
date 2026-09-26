@@ -111,13 +111,16 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
 
   Widget _topBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space8,
-        vertical: AppDimens.space6,
+      padding: const EdgeInsets.fromLTRB(
+        AppDimens.space8,
+        AppDimens.space6,
+        AppDimens.pageMargin,
+        AppDimens.space6,
       ),
       child: Row(
         children: [
           IconButton(
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
             onPressed: () => Navigator.of(context).pop(false),
             icon: const Icon(Icons.close_rounded, color: Colors.white),
           ),

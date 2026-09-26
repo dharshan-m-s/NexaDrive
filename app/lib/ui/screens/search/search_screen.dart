@@ -6,6 +6,7 @@ import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
+import '../../widgets/one_ui_controls.dart';
 import '../../widgets/one_ui_file_tile.dart';
 import '../../widgets/one_ui_search_field.dart';
 import '../../navigation/file_opener.dart';
@@ -97,17 +98,12 @@ class _SearchScreenState extends State<SearchScreen> {
               padding: const EdgeInsets.fromLTRB(
                 AppDimens.space4,
                 AppDimens.space8,
-                AppDimens.space12,
+                AppDimens.pageMargin,
                 AppDimens.space8,
               ),
               child: Row(
                 children: [
-                  IconButton(
-                    tooltip: 'Back',
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                  ),
-                  const SizedBox(width: AppDimens.space4),
+                  const OneUiBackButton(),
                   Expanded(
                     child: OneUiSearchField(
                       controller: _controller,
