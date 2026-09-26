@@ -930,9 +930,11 @@ class _ViewArea extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
-        AppDimens.space20,
+        // Matches OneUiPage's viewing area so every header starts at the
+        // same height, including this screen's richer toolbar variant.
+        AppDimens.space24,
         AppDimens.pageMargin,
-        AppDimens.space8,
+        AppDimens.space12,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

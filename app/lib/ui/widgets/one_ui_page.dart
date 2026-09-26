@@ -197,7 +197,10 @@ class _BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    // `padding` rather than `viewPadding`: an ancestor SafeArea has already
+    // consumed the inset by this point, so `viewPadding` would report it again
+    // and main tabs sitting inside the app shell would be double-padded.
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(
