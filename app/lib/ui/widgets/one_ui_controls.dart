@@ -18,7 +18,8 @@ class OneUiBackButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final IconData icon;
 
-  const OneUiBackButton({super.key, this.onPressed, this.icon = Icons.arrow_back_rounded});
+  const OneUiBackButton(
+      {super.key, this.onPressed, this.icon = Icons.arrow_back_rounded});
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +49,8 @@ class OneUiLoadingBlock extends StatelessWidget {
   final String? label;
   final double inset;
 
-  const OneUiLoadingBlock({super.key, this.label, this.inset = AppDimens.space48});
+  const OneUiLoadingBlock(
+      {super.key, this.label, this.inset = AppDimens.space48});
 
   @override
   Widget build(BuildContext context) {

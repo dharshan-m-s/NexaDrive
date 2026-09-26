@@ -90,8 +90,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 padding: const EdgeInsets.only(bottom: AppDimens.space12),
                 child: Row(
                   children: [
-                    Text('Filter', style: AppTextStyle.rowSubtitle.copyWith(
-                        color: AppColors.textSecondaryFor(brightness))),
+                    Text('Filter',
+                        style: AppTextStyle.rowSubtitle.copyWith(
+                            color: AppColors.textSecondaryFor(brightness))),
                     const SizedBox(width: AppDimens.space12),
                     SegmentedButton<bool>(
                       segments: const [
@@ -123,12 +124,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             itemCount: _items.length,
                             separatorBuilder: (_, __) =>
                                 const SizedBox(height: AppDimens.space2),
-                            itemBuilder: (context, i) =>
-                                _NotificationCard(
+                            itemBuilder: (context, i) => _NotificationCard(
                               item: _items[i],
                               brightness: brightness,
-                              onMarkRead: () => _markRead(
-                                  _items[i]['id'] as String),
+                              onMarkRead: () =>
+                                  _markRead(_items[i]['id'] as String),
                             ),
                           ),
               ),

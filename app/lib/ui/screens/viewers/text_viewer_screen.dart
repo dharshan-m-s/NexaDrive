@@ -53,7 +53,8 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
         bottom: false,
         child: OneUiPage(
           title: widget.file.name,
-          subtitle: widget.file.size == null ? null : Format.bytes(widget.file.size),
+          subtitle:
+              widget.file.size == null ? null : Format.bytes(widget.file.size),
           leading: const OneUiBackButton(),
           body: switch ((_text, _error)) {
             (null, null) => const OneUiLoadingBlock(),

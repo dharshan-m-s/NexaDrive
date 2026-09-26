@@ -64,7 +64,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         bottom: false,
         child: OneUiPage(
           title: widget.file.name,
-          subtitle: widget.file.size == null ? null : Format.bytes(widget.file.size),
+          subtitle:
+              widget.file.size == null ? null : Format.bytes(widget.file.size),
           leading: const OneUiBackButton(),
           headerAction: (_error == null && _bytes != null)
               ? IconButton(
@@ -120,8 +121,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
               options: const DefaultBuilderOptions(),
               documentLoaderBuilder: (_) => const OneUiLoadingBlock(),
-              pageLoaderBuilder: (_) => const OneUiLoadingBlock(
-                  inset: AppDimens.space24),
+              pageLoaderBuilder: (_) =>
+                  const OneUiLoadingBlock(inset: AppDimens.space24),
               errorBuilder: (_, error) => OneUiEmptyState(
                 centered: true,
                 icon: Icons.error_outline_rounded,

@@ -140,7 +140,8 @@ void main() {
         expectNoUnderline(tester);
       });
 
-      testWidgets('${theme.key}: users renders with no underline', (tester) async {
+      testWidgets('${theme.key}: users renders with no underline',
+          (tester) async {
         await pumpRouted(tester, theme.value, UsersScreen(api: _FakeApi()));
         expect(find.text('Users'), findsOneWidget);
         expectNoUnderline(tester);
@@ -252,7 +253,8 @@ Future<void> pump(WidgetTester tester, ThemeData theme, Widget screen) async {
 /// `MaterialPageRoute`, with no Scaffold and therefore no Material ancestor.
 /// This is the only shape in which Flutter's fallback `DefaultTextStyle` can
 /// reach the text, so decoration checks must run through this helper too.
-Future<void> pumpRouted(WidgetTester tester, ThemeData theme, Widget screen) async {
+Future<void> pumpRouted(
+    WidgetTester tester, ThemeData theme, Widget screen) async {
   await tester.binding.setSurfaceSize(const Size(390, 844));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(

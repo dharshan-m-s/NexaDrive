@@ -129,11 +129,11 @@ class _TrashScreenState extends State<TrashScreen> {
                         separatorBuilder: (_, __) =>
                             const SizedBox(height: AppDimens.space2),
                         itemBuilder: (context, i) => _TrashRow(
-                              item: _items[i],
-                              brightness: brightness,
-                              onRestore: () => _restore(_items[i]['id'] as String),
-                              onDelete: () => _delete(_items[i]['id'] as String),
-                            ),
+                          item: _items[i],
+                          brightness: brightness,
+                          onRestore: () => _restore(_items[i]['id'] as String),
+                          onDelete: () => _delete(_items[i]['id'] as String),
+                        ),
                       ),
                     ),
     );
@@ -157,8 +157,8 @@ class _TrashRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isFolder = FileEntry.kindOf(item) == 'folder';
-    final deletedAt = Format.relTime(
-        DateTime.tryParse(item['deleted_at']?.toString() ?? ''));
+    final deletedAt =
+        Format.relTime(DateTime.tryParse(item['deleted_at']?.toString() ?? ''));
 
     return OneUiSurface(
       level: OneUiSurfaceLevel.surface,
@@ -172,8 +172,7 @@ class _TrashRow extends StatelessWidget {
           leading: Icon(
             isFolder ? Icons.folder_rounded : Icons.insert_drive_file_rounded,
             size: AppDimens.iconMedium,
-            color:
-                isFolder ? AppColors.accentFor(brightness) : null,
+            color: isFolder ? AppColors.accentFor(brightness) : null,
           ),
           title: Text(
             item['name'] as String? ?? '',

@@ -38,7 +38,8 @@ void main() {
                     style: AppTextStyle.rowSubtitle),
                 // Label / metadata.
                 const Text('RELEASE DETAILS', style: AppTextStyle.listHeader),
-                const Text('Last checked: just now', style: AppTextStyle.caption),
+                const Text('Last checked: just now',
+                    style: AppTextStyle.caption),
                 const Text('arm64-v8a', style: AppTextStyle.micro),
                 // Version number.
                 const Text(version, style: AppTextStyle.metricValue),
@@ -55,10 +56,12 @@ void main() {
                   ),
                 ),
                 // Button text (enabled) and disabled text (disabled button).
-                FilledButton(onPressed: () {}, child: const Text('Check again')),
+                FilledButton(
+                    onPressed: () {}, child: const Text('Check again')),
                 const FilledButton(onPressed: null, child: Text('Unavailable')),
                 // The ONE intentionally decorated element: a designated link.
-                Text('Release notes', key: linkKey,
+                Text('Release notes',
+                    key: linkKey,
                     style: AppTextStyle.rowSubtitle
                         .copyWith(decoration: TextDecoration.underline)),
               ],
@@ -83,8 +86,7 @@ void main() {
       for (final element in find.byType(Text).evaluate()) {
         final text = element.widget as Text;
         final label = text.data ?? text.textSpan?.toPlainText() ?? '';
-        final effective =
-            DefaultTextStyle.of(element).style.merge(text.style);
+        final effective = DefaultTextStyle.of(element).style.merge(text.style);
         final decoration = effective.decoration;
         final isLink = element.widget.key == linkKey;
         if (isLink) sawLink = true;

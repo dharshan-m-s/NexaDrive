@@ -326,8 +326,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           ),
                           Text(
                             Format.duration(shownPosition),
-                            style: AppTextStyle.micro.copyWith(
-                                color: Colors.white70),
+                            style: AppTextStyle.micro
+                                .copyWith(color: Colors.white70),
                           ),
                           Expanded(
                             child: SliderTheme(
@@ -361,8 +361,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                             duration == Duration.zero
                                 ? '--:--'
                                 : Format.duration(duration),
-                            style: AppTextStyle.micro.copyWith(
-                                color: Colors.white70),
+                            style: AppTextStyle.micro
+                                .copyWith(color: Colors.white70),
                           ),
                           IconButton(
                             tooltip: _fullscreen

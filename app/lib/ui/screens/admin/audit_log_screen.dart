@@ -133,7 +133,8 @@ class _AuditRow extends StatelessWidget {
         ),
       ),
       title: label,
-      subtitle: '$who · ${Format.shortDateTime(DateTime.tryParse(createdAt ?? ''))}',
+      subtitle:
+          '$who · ${Format.shortDateTime(DateTime.tryParse(createdAt ?? ''))}',
     );
   }
 
