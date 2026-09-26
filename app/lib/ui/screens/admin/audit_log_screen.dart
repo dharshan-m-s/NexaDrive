@@ -5,6 +5,8 @@ import '../../../core/design/app_typography.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../widgets/one_ui_empty_state.dart';
+import '../../widgets/one_ui_grouped_list.dart';
+import '../../widgets/one_ui_page.dart';
 
 class AuditLogScreen extends StatefulWidget {
   final Api api;
@@ -41,80 +43,141 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
     }
   }
 
-  String _initial(String? username) {
-    final name = username ?? '?';
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return '?';
-    return String.fromCharCode(trimmed.runes.first).toUpperCase();
-  }
-
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Audit log'),
-        actions: [
-          IconButton(
-              tooltip: 'Refresh',
-              onPressed: load,
-              icon: const Icon(Icons.refresh_rounded)),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
-          : _entries.isEmpty
-              ? const OneUiEmptyState(
-                  icon: Icons.receipt_long_outlined,
-                  title: 'No audit entries',
-                  hint: 'Security events will be listed here.',
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppDimens.pageMargin,
-                    AppDimens.space8,
-                    AppDimens.pageMargin,
-                    AppDimens.space24,
-                  ),
-                  itemCount: _entries.length,
-                  separatorBuilder: (_, __) => Divider(
-                      height: 1, color: AppColors.dividerFor(brightness)),
-                  itemBuilder: (context, i) {
-                    final entry = _entries[i];
-                    final action = entry['action']?.toString() ?? '';
-                    return ListTile(
-                      minVerticalPadding: AppDimens.space12,
-                      leading: CircleAvatar(
-                        radius: 16,
-                        backgroundColor: AppColors.accentFor(brightness)
-                            .withValues(alpha: 0.14),
-                        child: Text(
-                          _initial(entry['username']?.toString()),
-                          style: AppTextStyle.micro.copyWith(
-                            color: AppColors.accentFor(brightness),
-                            fontWeight: FontWeight.w700,
+      body: SafeArea(
+        bottom: false,
+        child: OneUiPage(
+          title: 'Audit log',
+          subtitle: _entries.isEmpty
+              ? null
+              : '${_entries.length} event${_entries.length == 1 ? '' : 's'}',
+          leading: const _BackControl(),
+          headerAction: IconButton(
+            tooltip: 'Refresh',
+            onPressed: load,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+          scrollable: true,
+          padding: const EdgeInsets.fromLTRB(
+            AppDimens.pageMargin,
+            AppDimens.space8,
+            AppDimens.pageMargin,
+            AppDimens.space24,
+          ),
+          body: _loading
+              ? const OneUiProgressTilePlaceholder()
+              : _entries.isEmpty
+                  ? const OneUiEmptyState(
+                      icon: Icons.receipt_long_outlined,
+                      title: 'No audit entries',
+                      hint: 'Security events will be listed here.',
+                    )
+                  : OneUiGroupedList(
+                      withDividers: true,
+                      children: [
+                        for (final entry in _entries)
+                          _AuditRow(
+                            action: entry['action']?.toString() ?? '',
+                            path: entry['path']?.toString() ?? '',
+                            username: entry['username']?.toString(),
+                            createdAt: entry['created_at']?.toString(),
+                            brightness: brightness,
                           ),
-                        ),
-                      ),
-                      title: Text(
-                        '$action ${entry['path']?.toString() ?? ''}'.trim(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyle.rowTitle.copyWith(
-                          color: AppColors.textPrimaryFor(brightness),
-                        ),
-                      ),
-                      subtitle: Text(
-                        '${entry['username'] ?? 'unknown'} · '
-                        '${Format.shortDateTime(DateTime.tryParse(entry['created_at']?.toString() ?? ''))}',
-                        style: AppTextStyle.caption.copyWith(
-                          color: AppColors.textSecondaryFor(brightness),
-                        ),
-                      ),
-                    );
-                  },
-                ),
+                      ],
+                    ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A single audit entry rendered as a standard One UI grouped row.
+class _AuditRow extends StatelessWidget {
+  final String action;
+  final String path;
+  final String? username;
+  final String? createdAt;
+  final Brightness brightness;
+
+  const _AuditRow({
+    required this.action,
+    required this.path,
+    required this.username,
+    required this.createdAt,
+    required this.brightness,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = '$action $path'.trim();
+    final who = (username == null || username!.isEmpty) ? 'unknown' : username!;
+
+    return OneUiGroupTile(
+      showChevron: false,
+      onTap: null,
+      leading: CircleAvatar(
+        radius: AppDimens.space16,
+        backgroundColor:
+            AppColors.accentFor(brightness).withValues(alpha: 0.14),
+        child: Text(
+          _initialOf(who),
+          style: AppTextStyle.micro.copyWith(
+            color: AppColors.accentFor(brightness),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      title: label,
+      subtitle: '$who · ${Format.shortDateTime(DateTime.tryParse(createdAt ?? ''))}',
+    );
+  }
+
+  static String _initialOf(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return '?';
+    return String.fromCharCode(trimmed.runes.first).toUpperCase();
+  }
+}
+
+/// Neutral loading block matching the One UI surface language, so the screen
+/// does not flash a bare Material spinner while fetching.
+class OneUiProgressTilePlaceholder extends StatelessWidget {
+  const OneUiProgressTilePlaceholder({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: AppDimens.space48),
+      child: Center(
+        child: SizedBox(
+          width: AppDimens.space24,
+          height: AppDimens.space24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+    );
+  }
+}
+
+/// Standard back affordance for pushed One UI pages.
+class _BackControl extends StatelessWidget {
+  const _BackControl();
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+      onPressed: () => Navigator.of(context).maybePop(),
+      icon: const Icon(Icons.arrow_back_rounded),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(
+        minWidth: AppDimens.touchTarget,
+        minHeight: AppDimens.touchTarget,
+      ),
     );
   }
 }

@@ -3,26 +3,63 @@ import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 
-/// Standard One UI screen skeleton.
+/// The single One UI page shell for NexaDrive.
 ///
-/// Top region: large page title + optional subtitle/context + optional
-/// action controls. Body below with comfortable horizontal margins.
-/// Interaction controls belong in the lower area, not the top.
+/// One standard skeleton for every screen, so spacing, alignment and safe-area
+/// handling are decided once instead of per screen:
+///
+///  * a **viewing area** — large page title, optional subtitle, optional
+///    trailing action and optional leading control (back);
+///  * a **body** that is either scrollable or pinned, constrained to a
+///    readable width on large screens;
+///  * an optional **bottom action bar** that stays clear of the system insets.
+///
+/// Two properties are load-bearing:
+///
+///  * The whole page sits inside a `Material`. Without one, `MaterialApp`
+///    falls back to its diagnostic `_errorTextStyle` (monospace, 48px, a
+///    *double* underline in pure yellow) as the ambient `DefaultTextStyle`, and
+///    any `Text` that does not set `decoration` itself inherits it. Routed
+///    pages without a `Scaffold` hit this in release builds. A transparent
+///    `Material` installs the real text style and paints no background.
+///  * Insets are applied here, once. Hand-rolled `Scaffold`s were the main
+///    source of headers drifting under the status bar.
 class OneUiPage extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget? headerAction;
+
+  /// Leading control in the viewing area, normally a back button. When null
+  /// the title spans the full width.
+  final Widget? leading;
+
+  /// Trailing control pinned to the bottom of the page, above the system
+  /// insets. Use for a primary action that must stay reachable.
+  final Widget? bottomBar;
+
   final Widget body;
+
+  /// When false the viewing area is omitted and [body] fills the page. Use for
+  /// immersive surfaces (viewers, camera) that provide their own chrome.
+  final bool showHeader;
+
   final bool scrollable;
   final EdgeInsetsGeometry padding;
   final Alignment alignment;
+
+  /// Readable width ceiling. Null means unbounded (phones); pass
+  /// [AppDimens.contentMaxWidth] for prose or form content on large screens.
+  final double? maxWidth;
 
   const OneUiPage({
     super.key,
     required this.title,
     this.subtitle,
     this.headerAction,
+    this.leading,
+    this.bottomBar,
     required this.body,
+    this.showHeader = true,
     this.scrollable = false,
     this.padding = const EdgeInsets.fromLTRB(
       AppDimens.pageMargin,
@@ -31,48 +68,67 @@ class OneUiPage extends StatelessWidget {
       AppDimens.space24,
     ),
     this.alignment = Alignment.topLeft,
+    this.maxWidth,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Every page must sit inside a Material. Without one, MaterialApp falls
-    // back to its diagnostic `_errorTextStyle` (monospace, 48px, pure-yellow
-    // *double* underline) as the ambient DefaultTextStyle. Any Text here that
-    // does not set `decoration` itself inherits that fallback, which is how
-    // the title on the routed (Scaffold-less) pages grew a yellow double
-    // underline. A transparent Material supplies the real bodyMedium style
-    // without painting a background, and is a no-op visually.
     return Material(
       type: MaterialType.transparency,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ViewingArea(
-            title: title,
-            subtitle: subtitle,
-            action: headerAction,
-          ),
+          if (showHeader)
+            _ViewingArea(
+              title: title,
+              subtitle: subtitle,
+              action: headerAction,
+              leading: leading,
+            ),
           Expanded(
             child: scrollable
                 ? SingleChildScrollView(
                     padding: padding,
-                    child: Align(alignment: alignment, child: body),
+                    child: Align(
+                      alignment: alignment,
+                      child: _constrain(body),
+                    ),
                   )
-                : Padding(padding: padding, child: body),
+                : Padding(
+                    padding: padding,
+                    child: _constrain(body),
+                  ),
           ),
+          if (bottomBar != null)
+            _BottomBar(bottomBar: bottomBar!),
         ],
       ),
     );
   }
+
+  Widget _constrain(Widget child) => maxWidth == null
+      ? child
+      : Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth!),
+            child: child,
+          ),
+        );
 }
 
-/// The upper "viewing area": title + context.
+/// The upper "viewing area": leading control, title, context, trailing action.
 class _ViewingArea extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget? action;
+  final Widget? leading;
 
-  const _ViewingArea({required this.title, this.subtitle, this.action});
+  const _ViewingArea({
+    required this.title,
+    this.subtitle,
+    this.action,
+    this.leading,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +143,10 @@ class _ViewingArea extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (leading != null) ...[
+            leading!,
+            const SizedBox(width: AppDimens.space8),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -117,7 +177,38 @@ class _ViewingArea extends StatelessWidget {
   }
 }
 
-/// A horizontally-padded column that keeps content on the page gutter.
+/// Persistent bottom action area, held off the system inset.
+class _BottomBar extends StatelessWidget {
+  final Widget bottomBar;
+
+  const _BottomBar({required this.bottomBar});
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        AppDimens.pageMargin,
+        AppDimens.space12,
+        AppDimens.pageMargin,
+        AppDimens.space12 + bottomInset,
+      ),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: AppColors.dividerFor(Theme.of(context).brightness),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: SafeArea(top: false, child: bottomBar),
+    );
+  }
+}
+
+/// A horizontally padded column that keeps content on the page gutter.
 class OneUiBody extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
