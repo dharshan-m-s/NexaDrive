@@ -13,7 +13,9 @@ import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../../services/download_service.dart';
 import '../../../services/media_cache.dart';
+import '../../widgets/one_ui_controls.dart';
 import '../../widgets/one_ui_empty_state.dart';
+import '../../widgets/one_ui_page.dart';
 import '../../widgets/one_ui_surface.dart';
 
 /// One UI music player.
@@ -278,25 +280,25 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
     final (artist, title) = describe(entry);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Now playing'),
-        actions: [
-          IconButton(
+      body: SafeArea(
+        bottom: false,
+        child: OneUiPage(
+          title: 'Now playing',
+          subtitle: [artist, title].where((s) => s.isNotEmpty).join(' · '),
+          leading: const OneUiBackButton(),
+          headerAction: IconButton(
             tooltip: 'Save to device',
             onPressed: _saveToDevice,
             icon: const Icon(Icons.download_outlined),
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
+          scrollable: true,
           padding: const EdgeInsets.fromLTRB(
             AppDimens.pageMargin,
             AppDimens.space8,
             AppDimens.pageMargin,
             AppDimens.space24,
           ),
-          child: Column(
+          body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _Artwork(
