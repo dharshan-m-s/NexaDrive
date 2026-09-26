@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_motion.dart';
+import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
@@ -325,8 +326,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           ),
                           Text(
                             Format.duration(shownPosition),
-                            style: const TextStyle(
-                                color: Colors.white70, fontSize: 12),
+                            style: AppTextStyle.micro.copyWith(
+                                color: Colors.white70),
                           ),
                           Expanded(
                             child: SliderTheme(
@@ -360,8 +361,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                             duration == Duration.zero
                                 ? '--:--'
                                 : Format.duration(duration),
-                            style: const TextStyle(
-                                color: Colors.white70, fontSize: 12),
+                            style: AppTextStyle.micro.copyWith(
+                                color: Colors.white70),
                           ),
                           IconButton(
                             tooltip: _fullscreen

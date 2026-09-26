@@ -12,6 +12,7 @@ import '../../../services/image_pipeline.dart';
 import '../../../services/session.dart';
 import '../../../services/thumbnail_cache.dart';
 import '../../widgets/one_ui_action_bar.dart';
+import '../../widgets/one_ui_controls.dart';
 import '../../widgets/one_ui_empty_state.dart';
 import '../../widgets/one_ui_page.dart';
 import '../files/file_share_sheet.dart';
@@ -352,7 +353,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      return const OneUiLoadingBlock();
     }
     if (_error != null) {
       return OneUiEmptyState(

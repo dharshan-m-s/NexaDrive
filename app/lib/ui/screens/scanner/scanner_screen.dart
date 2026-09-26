@@ -459,9 +459,8 @@ class _ScannerScreenState extends State<ScannerScreen>
                     ),
                     child: Text(
                       '$count',
-                      style: const TextStyle(
+                      style: AppTextStyle.micro.copyWith(
                         color: AppColors.accent,
-                        fontSize: 10,
                         fontWeight: FontWeight.w700,
                       ),
                       textAlign: TextAlign.center,

@@ -157,8 +157,11 @@ class _ScanPagesScreenState extends State<ScanPagesScreen> {
 
   Widget _buildBody(BuildContext context) {
     if (widget.pages.isEmpty) {
-      return const Center(
-        child: Text('No pages yet', style: TextStyle(color: Colors.white54)),
+      return Center(
+        child: Text(
+          'No pages yet',
+          style: AppTextStyle.rowSubtitle.copyWith(color: Colors.white54),
+        ),
       );
     }
     return GridView.builder(

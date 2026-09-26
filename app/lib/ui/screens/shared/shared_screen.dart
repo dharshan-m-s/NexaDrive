@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../services/api.dart';
+import '../../widgets/one_ui_controls.dart';
 import '../../widgets/one_ui_empty_state.dart';
 import '../../widgets/one_ui_grouped_list.dart';
 import '../../widgets/one_ui_page.dart';
@@ -133,7 +134,7 @@ class _SharedScreenState extends State<SharedScreen> {
   Widget _buildBody() {
     final brightness = Theme.of(context).brightness;
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      return const OneUiLoadingBlock();
     }
     if (_error != null) {
       return OneUiEmptyState(
