@@ -109,71 +109,122 @@ class _ScanPagesScreenState extends State<ScanPagesScreen> {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF101417),
-        foregroundColor: Colors.white,
-        title: Text(
-          '${widget.pages.length} ${widget.pages.length == 1 ? 'page' : 'pages'}',
-          style: AppTextStyle.pageTitle.copyWith(color: Colors.white),
-        ),
-        leading: IconButton(
-          tooltip: 'Back to camera',
-          onPressed: _saving ? null : () => Navigator.of(context).pop(false),
-          icon: const Icon(Icons.arrow_back_rounded),
+      // Deliberately not the standard shell: the page-review surface is a dark
+      // full-bleed canvas showing scanned sheets, so it keeps the document
+      // background rather than the app surface colour.
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppDimens.space8,
+                AppDimens.space8,
+                AppDimens.pageMargin,
+                AppDimens.space12,
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Back to camera',
+                    onPressed:
+                        _saving ? null : () => Navigator.of(context).pop(false),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    color: Colors.white,
+                  ),
+                  Expanded(
+                    child: Text(
+                      '${widget.pages.length} ${widget.pages.length == 1 ? 'page' : 'pages'}',
+                      style:
+                          AppTextStyle.pageTitle.copyWith(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: _buildBody(context)),
+            _ActionBar(
+              saving: _saving,
+              enabled: widget.pages.isNotEmpty,
+              accent: accent,
+              onSave: _saveAsPdf,
+            ),
+          ],
         ),
       ),
-      body: widget.pages.isEmpty
-          ? const Center(
-              child:
-                  Text('No pages yet', style: TextStyle(color: Colors.white54)),
-            )
-          : GridView.builder(
-              padding: const EdgeInsets.all(AppDimens.space12),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 200,
-                mainAxisSpacing: AppDimens.space12,
-                crossAxisSpacing: AppDimens.space12,
-                childAspectRatio: 0.72,
-              ),
-              itemCount: widget.pages.length,
-              itemBuilder: (context, i) => _PageCard(
-                page: widget.pages[i],
-                onTap: () => _editPage(i),
-                onDelete: () => _removePage(i),
-                onMoveUp: i == 0 ? null : () => _movePage(i, i - 1),
-                onMoveDown: i == widget.pages.length - 1
-                    ? null
-                    : () => _movePage(i, i + 1),
-              ),
-            ),
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          color: const Color(0xFF1A1C1E),
-          padding: const EdgeInsets.fromLTRB(
-            AppDimens.pageMargin,
-            AppDimens.space12,
-            AppDimens.pageMargin,
-            AppDimens.space16,
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    if (widget.pages.isEmpty) {
+      return const Center(
+        child: Text('No pages yet', style: TextStyle(color: Colors.white54)),
+      );
+    }
+    return GridView.builder(
+      padding: const EdgeInsets.all(AppDimens.space12),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 200,
+        mainAxisSpacing: AppDimens.space12,
+        crossAxisSpacing: AppDimens.space12,
+        childAspectRatio: 0.72,
+      ),
+      itemCount: widget.pages.length,
+      itemBuilder: (context, i) => _PageCard(
+        page: widget.pages[i],
+        onTap: () => _editPage(i),
+        onDelete: () => _removePage(i),
+        onMoveUp: i == 0 ? null : () => _movePage(i, i - 1),
+        onMoveDown:
+            i == widget.pages.length - 1 ? null : () => _movePage(i, i + 1),
+      ),
+    );
+  }
+}
+
+/// Pinned "Save as PDF" action, held off the system inset.
+class _ActionBar extends StatelessWidget {
+  final bool saving;
+  final bool enabled;
+  final Color accent;
+  final VoidCallback onSave;
+
+  const _ActionBar({
+    required this.saving,
+    required this.enabled,
+    required this.accent,
+    required this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFF1A1C1E),
+      padding: const EdgeInsets.fromLTRB(
+        AppDimens.pageMargin,
+        AppDimens.space12,
+        AppDimens.pageMargin,
+        AppDimens.space16,
+      ),
+      child: SafeArea(
+        top: false,
+        child: FilledButton.icon(
+          onPressed: (saving || !enabled) ? null : onSave,
+          icon: saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.picture_as_pdf_outlined, color: Colors.white),
+          label: Text(
+            saving ? 'Creating PDF…' : 'Save as PDF',
+            style: AppTextStyle.rowTitle.copyWith(color: Colors.white),
           ),
-          child: FilledButton.icon(
-            onPressed: (_saving || widget.pages.isEmpty) ? null : _saveAsPdf,
-            icon: _saving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.picture_as_pdf_outlined,
-                    color: Colors.white),
-            label: Text(
-              _saving ? 'Creating PDF…' : 'Save as PDF',
-              style: AppTextStyle.rowTitle.copyWith(color: Colors.white),
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: accent,
-              padding: const EdgeInsets.symmetric(vertical: AppDimens.space16),
-            ),
+          style: FilledButton.styleFrom(
+            backgroundColor: accent,
+            padding: const EdgeInsets.symmetric(vertical: AppDimens.space16),
           ),
         ),
       ),

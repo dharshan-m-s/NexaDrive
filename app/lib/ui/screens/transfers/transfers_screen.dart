@@ -5,7 +5,9 @@ import '../../../core/design/app_typography.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../../services/transfer_queue.dart';
+import '../../widgets/one_ui_controls.dart';
 import '../../widgets/one_ui_empty_state.dart';
+import '../../widgets/one_ui_page.dart';
 import '../../widgets/one_ui_surface.dart';
 
 /// Offline upload queue — every pending transfer, its progress, and retry.
@@ -87,37 +89,56 @@ class _TransfersScreenState extends State<TransfersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Transfers'),
-        actions: [
-          IconButton(
-            tooltip: 'Process queue',
-            onPressed: _processing
-                ? null
-                : () {
-                    _process();
-                  },
-            icon: Icon(
-              _processing
-                  ? Icons.hourglass_top_rounded
-                  : Icons.play_arrow_rounded,
-            ),
+      body: SafeArea(
+        bottom: false,
+        child: OneUiPage(
+          title: 'Transfers',
+          subtitle: _summary,
+          leading: const OneUiBackButton(),
+          headerAction: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'Process queue',
+                onPressed: _processing ? null : _process,
+                icon: Icon(
+                  _processing
+                      ? Icons.hourglass_top_rounded
+                      : Icons.play_arrow_rounded,
+                ),
+              ),
+              if (_items.any((e) => e.status == 'completed'))
+                IconButton(
+                  tooltip: 'Clear completed',
+                  onPressed: _clearCompleted,
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                ),
+            ],
           ),
-          if (_items.any((e) => e.status == 'completed'))
-            IconButton(
-              tooltip: 'Clear completed',
-              onPressed: _clearCompleted,
-              icon: const Icon(Icons.delete_sweep_outlined),
-            ),
-        ],
+          padding: const EdgeInsets.fromLTRB(
+            AppDimens.pageMargin,
+            0,
+            AppDimens.pageMargin,
+            AppDimens.space24,
+          ),
+          body: _buildBody(),
+        ),
       ),
-      body: _buildBody(),
     );
+  }
+
+  /// One-line state of the queue, so the page says more than its title.
+  String get _summary {
+    if (_loading) return 'Loading…';
+    if (_items.isEmpty) return 'Queue is empty';
+    final active = _items.where((e) => e.status != 'completed').length;
+    if (active == 0) return '${_items.length} completed';
+    return '$active active of ${_items.length}';
   }
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      return const OneUiLoadingBlock();
     }
     if (_items.isEmpty) {
       return const OneUiEmptyState(

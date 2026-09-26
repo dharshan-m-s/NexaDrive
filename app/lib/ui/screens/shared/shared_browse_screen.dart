@@ -4,10 +4,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
+import '../../../core/design/app_typography.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/models/file_entry.dart';
 import '../../../services/api.dart';
+import '../../widgets/one_ui_controls.dart';
 import '../../widgets/one_ui_empty_state.dart';
+import '../../widgets/one_ui_page.dart';
 
 /// Browse the contents of a folder shared with this user.
 class SharedBrowseScreen extends StatefulWidget {
@@ -105,10 +108,13 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
     final secondary = AppColors.textSecondaryFor(brightness);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(path.isEmpty ? widget.title : path.split('/').last),
-        actions: [
-          IconButton(
+      body: SafeArea(
+        bottom: false,
+        child: OneUiPage(
+          title: path.isEmpty ? widget.title : path.split('/').last,
+          subtitle: path.isEmpty ? null : path,
+          leading: const OneUiBackButton(),
+          headerAction: IconButton(
             tooltip: 'Up one level',
             onPressed: path.isEmpty
                 ? null
@@ -118,87 +124,96 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
                     setState(() => path = parent);
                     load(parent);
                   },
-            icon: Icon(Icons.arrow_upward_rounded, color: accent),
+            icon: const Icon(Icons.arrow_upward_rounded),
           ),
-        ],
-      ),
-      body: _error != null
-          ? OneUiEmptyState(
-              icon: Icons.cloud_off_rounded,
-              title: 'Can\'t load this folder',
-              hint: _error,
-              actionLabel: 'Retry',
-              onAction: () => load(path),
-            )
-          : items.isEmpty
-              ? const OneUiEmptyState(
-                  icon: Icons.folder_open_rounded,
-                  title: 'This folder is empty',
-                  hint: 'There\'s nothing here to download.',
+          padding: const EdgeInsets.fromLTRB(
+            AppDimens.pageMargin,
+            AppDimens.space8,
+            AppDimens.pageMargin,
+            AppDimens.space24,
+          ),
+          body: _error != null
+              ? OneUiEmptyState(
+                  icon: Icons.cloud_off_rounded,
+                  title: 'Can\'t load this folder',
+                  hint: _error,
+                  actionLabel: 'Retry',
+                  onAction: () => load(path),
                 )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppDimens.pageMargin,
-                    AppDimens.space8,
-                    AppDimens.pageMargin,
-                    AppDimens.space24,
-                  ),
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) =>
-                      const SizedBox(height: AppDimens.space2),
-                  itemBuilder: (context, i) {
-                    final item = items[i];
-                    final type = FileEntry.kindOf(item);
-                    final isFolder = type == 'folder';
-                    final name = item['name'] as String? ?? '';
-                    final size = (item['size'] as num?)?.toInt();
-                    return ListTile(
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppDimens.radiusTile),
+              : items.isEmpty
+                  ? const OneUiEmptyState(
+                      icon: Icons.folder_open_rounded,
+                      title: 'This folder is empty',
+                      hint: 'There\'s nothing here to download.',
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppDimens.pageMargin,
+                        AppDimens.space8,
+                        AppDimens.pageMargin,
+                        AppDimens.space24,
                       ),
-                      leading: Container(
-                        width: AppDimens.iconTileLarge,
-                        height: AppDimens.iconTileLarge,
-                        decoration: BoxDecoration(
-                          color: brightness == Brightness.dark
-                              ? accent.withValues(alpha: 0.18)
-                              : accent.withValues(alpha: 0.12),
-                          borderRadius:
-                              BorderRadius.circular(AppDimens.radiusInner),
-                        ),
-                        child: Icon(
-                          isFolder
-                              ? Icons.folder_rounded
-                              : Icons.insert_drive_file_rounded,
-                          color: isFolder ? accent : null,
-                          size: AppDimens.iconMedium,
-                        ),
-                      ),
-                      title: Text(
-                        name,
-                        style: const TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      subtitle: isFolder
-                          ? null
-                          : Text(
-                              Format.bytes(size),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: secondary,
-                              ),
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(height: AppDimens.space2),
+                      itemBuilder: (context, i) {
+                        final item = items[i];
+                        final type = FileEntry.kindOf(item);
+                        final isFolder = type == 'folder';
+                        final name = item['name'] as String? ?? '';
+                        final size = (item['size'] as num?)?.toInt();
+                        return ListTile(
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppDimens.radiusTile),
+                          ),
+                          leading: Container(
+                            width: AppDimens.iconTileLarge,
+                            height: AppDimens.iconTileLarge,
+                            decoration: BoxDecoration(
+                              color: brightness == Brightness.dark
+                                  ? accent.withValues(alpha: 0.18)
+                                  : accent.withValues(alpha: 0.12),
+                              borderRadius:
+                                  BorderRadius.circular(AppDimens.radiusInner),
                             ),
-                      trailing: isFolder
-                          ? Icon(Icons.chevron_right_rounded, color: secondary)
-                          : IconButton(
-                              tooltip: 'Download',
-                              icon: const Icon(Icons.download_outlined),
-                              onPressed: () => _download(item),
+                            child: Icon(
+                              isFolder
+                                  ? Icons.folder_rounded
+                                  : Icons.insert_drive_file_rounded,
+                              color: isFolder ? accent : null,
+                              size: AppDimens.iconMedium,
                             ),
-                      onTap: () => _open(item),
-                    );
-                  },
-                ),
+                          ),
+                          title: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyle.rowTitle.copyWith(
+                              color: AppColors.textPrimaryFor(brightness),
+                            ),
+                          ),
+                          subtitle: isFolder
+                              ? null
+                              : Text(
+                                  Format.bytes(size),
+                                  style: AppTextStyle.caption
+                                      .copyWith(color: secondary),
+                                ),
+                          trailing: isFolder
+                              ? Icon(Icons.chevron_right_rounded,
+                                  color: secondary)
+                              : IconButton(
+                                  tooltip: 'Download',
+                                  icon: const Icon(Icons.download_outlined),
+                                  onPressed: () => _download(item),
+                                ),
+                          onTap: () => _open(item),
+                        );
+                      },
+                    ),
+        ),
+      ),
     );
   }
 }
