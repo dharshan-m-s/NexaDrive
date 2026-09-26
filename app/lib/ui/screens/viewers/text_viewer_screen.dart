@@ -4,7 +4,11 @@ import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_dimensions.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/models/file_entry.dart';
+import '../../../../core/utils/format.dart';
 import '../../../../services/api.dart';
+import '../../widgets/one_ui_controls.dart';
+import '../../widgets/one_ui_empty_state.dart';
+import '../../widgets/one_ui_page.dart';
 
 /// In-app text reader for .txt/.md/.log/.json and source files.
 /// Downloads the file and renders it as wrapped monospace text.
@@ -45,44 +49,45 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
     final brightness = Theme.of(context).brightness;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.file.name),
-      ),
       body: SafeArea(
-        child: switch ((_text, _error)) {
-          (null, null) => const Center(
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          (_, final String error) => Center(
-              child: Padding(
+        bottom: false,
+        child: OneUiPage(
+          title: widget.file.name,
+          subtitle: widget.file.size == null ? null : Format.bytes(widget.file.size),
+          leading: const OneUiBackButton(),
+          body: switch ((_text, _error)) {
+            (null, null) => const OneUiLoadingBlock(),
+            (_, final String error) => OneUiEmptyState(
+                icon: Icons.error_outline_rounded,
+                title: 'Could not read this file',
+                hint: error,
+                actionLabel: 'Retry',
+                actionIcon: Icons.refresh_rounded,
+                onAction: () {
+                  setState(() {
+                    _text = null;
+                    _error = null;
+                  });
+                  _load();
+                },
+              ),
+            (final String text, _) => Container(
+                width: double.infinity,
+                color: brightness == Brightness.dark
+                    ? AppColors.surfaceDark
+                    : AppColors.surfaceLight,
                 padding: const EdgeInsets.all(AppDimens.pageMargin),
-                child: Text(
-                  error,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyle.rowSubtitle.copyWith(
-                    color: AppColors.errorFor(brightness),
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    text,
+                    style: AppTextStyle.code.copyWith(
+                      color: AppColors.textPrimaryFor(brightness),
+                    ),
                   ),
                 ),
               ),
-            ),
-          (final String text, _) => Container(
-              color: brightness == Brightness.dark
-                  ? AppColors.surfaceDark
-                  : AppColors.surfaceLight,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppDimens.pageMargin),
-                child: SelectableText(
-                  text,
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 13,
-                    height: 1.5,
-                    color: AppColors.textPrimaryFor(brightness),
-                  ),
-                ),
-              ),
-            ),
-        },
+          },
+        ),
       ),
     );
   }

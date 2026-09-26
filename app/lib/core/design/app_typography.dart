@@ -97,6 +97,27 @@ abstract final class AppTextStyle {
     fontWeight: FontWeight.w400,
   );
 
+  // ------------------------------------------------------------------ code
+  /// Monospaced body for verbatim content: the text reader, log tails and
+  /// source files. Leading is generous because code needs the air, and the
+  /// family is generic so it resolves to the platform's true monospace face.
+  static const TextStyle code = TextStyle(
+    fontFamily: 'monospace',
+    fontFamilyFallback: <String>['Menlo', 'DejaVu Sans Mono', 'Consolas'],
+    fontSize: 13,
+    height: 1.5,
+    fontWeight: FontWeight.w400,
+  );
+
+  /// Monospaced at caption scale, for code in dense panels.
+  static const TextStyle codeSmall = TextStyle(
+    fontFamily: 'monospace',
+    fontFamilyFallback: <String>['Menlo', 'DejaVu Sans Mono', 'Consolas'],
+    fontSize: 11.5,
+    height: 1.45,
+    fontWeight: FontWeight.w400,
+  );
+
   /// Navigation rail / focus-pill label.
   static const TextStyle navLabel = TextStyle(
     fontSize: 13,

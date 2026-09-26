@@ -4,6 +4,7 @@ import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
+import '../../widgets/one_ui_controls.dart';
 import '../../widgets/one_ui_empty_state.dart';
 import '../../widgets/one_ui_grouped_list.dart';
 import '../../widgets/one_ui_page.dart';
@@ -55,7 +56,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
           subtitle: _entries.isEmpty
               ? null
               : '${_entries.length} event${_entries.length == 1 ? '' : 's'}',
-          leading: const _BackControl(),
+          leading: const OneUiBackButton(),
           headerAction: IconButton(
             tooltip: 'Refresh',
             onPressed: load,
@@ -69,7 +70,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
             AppDimens.space24,
           ),
           body: _loading
-              ? const OneUiProgressTilePlaceholder()
+              ? const OneUiLoadingBlock()
               : _entries.isEmpty
                   ? const OneUiEmptyState(
                       icon: Icons.receipt_long_outlined,
@@ -140,44 +141,5 @@ class _AuditRow extends StatelessWidget {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return '?';
     return String.fromCharCode(trimmed.runes.first).toUpperCase();
-  }
-}
-
-/// Neutral loading block matching the One UI surface language, so the screen
-/// does not flash a bare Material spinner while fetching.
-class OneUiProgressTilePlaceholder extends StatelessWidget {
-  const OneUiProgressTilePlaceholder({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: AppDimens.space48),
-      child: Center(
-        child: SizedBox(
-          width: AppDimens.space24,
-          height: AppDimens.space24,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      ),
-    );
-  }
-}
-
-/// Standard back affordance for pushed One UI pages.
-class _BackControl extends StatelessWidget {
-  const _BackControl();
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-      onPressed: () => Navigator.of(context).maybePop(),
-      icon: const Icon(Icons.arrow_back_rounded),
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(
-        minWidth: AppDimens.touchTarget,
-        minHeight: AppDimens.touchTarget,
-      ),
-    );
   }
 }

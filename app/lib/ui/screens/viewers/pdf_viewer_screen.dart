@@ -1,11 +1,14 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:pdfx/pdfx.dart';
-import '../../../../core/design/app_colors.dart';
+import '../../../../core/design/app_dimensions.dart';
 import '../../../../core/models/file_entry.dart';
+import '../../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../widgets/download_to_view.dart';
+import '../../widgets/one_ui_controls.dart';
 import '../../widgets/one_ui_empty_state.dart';
+import '../../widgets/one_ui_page.dart';
 
 /// One UI PDF viewer.
 ///
@@ -56,31 +59,32 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.file.name,
-            maxLines: 1, overflow: TextOverflow.ellipsis),
-        actions: [
-          if (_error == null && _bytes != null)
-            IconButton(
-              tooltip: 'Download',
-              onPressed: () => _fallback(context),
-              icon: Icon(
-                Icons.download_outlined,
-                color: AppColors.accentTextFor(brightness),
-              ),
-            ),
-        ],
+      body: SafeArea(
+        bottom: false,
+        child: OneUiPage(
+          title: widget.file.name,
+          subtitle: widget.file.size == null ? null : Format.bytes(widget.file.size),
+          leading: const OneUiBackButton(),
+          headerAction: (_error == null && _bytes != null)
+              ? IconButton(
+                  tooltip: 'Download',
+                  onPressed: () => _fallback(context),
+                  icon: const Icon(Icons.download_outlined),
+                )
+              : null,
+          // The rendered page runs edge to edge; the header carries the
+          // chrome and the page itself must not be inset.
+          padding: EdgeInsets.zero,
+          body: _buildBody(Theme.of(context).brightness),
+        ),
       ),
-      body: SafeArea(child: _buildBody(brightness)),
     );
   }
 
   Widget _buildBody(Brightness brightness) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      return const OneUiLoadingBlock();
     }
     if (_error != null) {
       return OneUiEmptyState(
@@ -115,10 +119,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             ),
             builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
               options: const DefaultBuilderOptions(),
-              documentLoaderBuilder: (_) => const Center(
-                  child: CircularProgressIndicator(strokeWidth: 2)),
-              pageLoaderBuilder: (_) => const Center(
-                  child: CircularProgressIndicator(strokeWidth: 2)),
+              documentLoaderBuilder: (_) => const OneUiLoadingBlock(),
+              pageLoaderBuilder: (_) => const OneUiLoadingBlock(
+                  inset: AppDimens.space24),
               errorBuilder: (_, error) => OneUiEmptyState(
                 centered: true,
                 icon: Icons.error_outline_rounded,
