@@ -12,6 +12,7 @@ import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../../services/download_service.dart';
 import '../../widgets/one_ui_empty_state.dart';
+import '../../widgets/one_ui_page.dart';
 
 /// One UI video player.
 ///
@@ -203,45 +204,46 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       },
       child: Scaffold(
         backgroundColor: Colors.black,
-        appBar: _fullscreen
-            ? null
-            : AppBar(
-                backgroundColor: Colors.black,
-                foregroundColor: Colors.white,
-                title: Text(
-                  widget.file.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                actions: [
-                  IconButton(
-                    tooltip: 'Save to device',
-                    onPressed: _saveToDevice,
-                    icon: const Icon(Icons.download_outlined,
-                        color: Colors.white),
-                  ),
-                ],
-              ),
         body: SafeArea(
           top: _fullscreen,
-          child: _initializing
-              ? const Center(
-                  child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2),
-                )
-              : _error != null
-                  ? Center(
-                      child: OneUiEmptyState(
-                        icon: Icons.movie_outlined,
-                        title: 'Can\u2019t play this video',
-                        hint: _error,
-                        actionLabel: 'Retry',
-                        onAction: _init,
-                      ),
-                    )
-                  : initialized
-                      ? _buildPlayer(controller!, value!)
-                      : const SizedBox.shrink(),
+          child: OneUiPage(
+            title: widget.file.name,
+            // The header is the chrome for windowed playback only; in
+            // fullscreen the video owns the whole surface.
+            showHeader: !_fullscreen,
+            // This page paints its own black canvas, so the header has to
+            // force light chrome rather than inherit the theme's dark text.
+            headerForeground: Colors.white,
+            leading: IconButton(
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              onPressed: _toggleFullscreen,
+              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+            ),
+            headerAction: IconButton(
+              tooltip: 'Save to device',
+              onPressed: _saveToDevice,
+              icon: const Icon(Icons.download_outlined, color: Colors.white),
+            ),
+            padding: EdgeInsets.zero,
+            body: _initializing
+                ? const Center(
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2),
+                  )
+                : _error != null
+                    ? Center(
+                        child: OneUiEmptyState(
+                          icon: Icons.movie_outlined,
+                          title: 'Can\u2019t play this video',
+                          hint: _error,
+                          actionLabel: 'Retry',
+                          onAction: _init,
+                        ),
+                      )
+                    : initialized
+                        ? _buildPlayer(controller!, value!)
+                        : const SizedBox.shrink(),
+          ),
         ),
       ),
     );

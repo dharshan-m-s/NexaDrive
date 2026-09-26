@@ -51,6 +51,14 @@ class OneUiPage extends StatelessWidget {
   /// [AppDimens.contentMaxWidth] for prose or form content on large screens.
   final double? maxWidth;
 
+  /// Forces the header's title, subtitle and leading colour.
+  ///
+  /// Null derives them from the theme, which is right for every page on the
+  /// app surface. Immersive pages that paint their own dark canvas (the video
+  /// player, the scanner) must pass a light colour, since the theme's dark
+  /// text would be invisible on black.
+  final Color? headerForeground;
+
   const OneUiPage({
     super.key,
     required this.title,
@@ -69,6 +77,7 @@ class OneUiPage extends StatelessWidget {
     ),
     this.alignment = Alignment.topLeft,
     this.maxWidth,
+    this.headerForeground,
   });
 
   @override
@@ -84,6 +93,7 @@ class OneUiPage extends StatelessWidget {
               subtitle: subtitle,
               action: headerAction,
               leading: leading,
+              foreground: headerForeground,
             ),
           Expanded(
             child: scrollable
@@ -99,8 +109,7 @@ class OneUiPage extends StatelessWidget {
                     child: _constrain(body),
                   ),
           ),
-          if (bottomBar != null)
-            _BottomBar(bottomBar: bottomBar!),
+          if (bottomBar != null) _BottomBar(bottomBar: bottomBar!),
         ],
       ),
     );
@@ -122,17 +131,21 @@ class _ViewingArea extends StatelessWidget {
   final String? subtitle;
   final Widget? action;
   final Widget? leading;
+  final Color? foreground;
 
   const _ViewingArea({
     required this.title,
     this.subtitle,
     this.action,
     this.leading,
+    this.foreground,
   });
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final titleColor = foreground ?? AppColors.textPrimaryFor(brightness);
+    final subtitleColor = foreground ?? AppColors.textSecondaryFor(brightness);
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
@@ -153,15 +166,14 @@ class _ViewingArea extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: AppTextStyle.pageTitle
-                      .copyWith(color: AppColors.textPrimaryFor(brightness)),
+                  style: AppTextStyle.pageTitle.copyWith(color: titleColor),
                 ),
                 if (subtitle != null) ...[
                   const SizedBox(height: AppDimens.space4),
                   Text(
                     subtitle!,
-                    style: AppTextStyle.rowSubtitle.copyWith(
-                        color: AppColors.textSecondaryFor(brightness)),
+                    style:
+                        AppTextStyle.rowSubtitle.copyWith(color: subtitleColor),
                   ),
                 ],
               ],
