@@ -8,8 +8,8 @@ import '../../core/models/file_entry.dart';
 import '../../core/utils/file_kind.dart';
 import '../../core/utils/format.dart';
 
-/// One UI file browser row. Icon tile + name + metadata + selection affordance.
-class OneUiFileTile extends StatelessWidget {
+/// iOS-style file browser list tile.
+class NexaFileTile extends StatelessWidget {
   final FileEntry entry;
   final ValueChanged<FileEntry>? onTap;
   final VoidCallback? onLongPress;
@@ -18,12 +18,9 @@ class OneUiFileTile extends StatelessWidget {
   final Widget? trailing;
   final String? subtitle;
   final bool showChevron;
-
-  /// Server-generated preview bytes for image files. Null falls back to the
-  /// category icon, so the row is never empty while a thumbnail loads.
   final Uint8List? thumbnail;
 
-  const OneUiFileTile({
+  const NexaFileTile({
     super.key,
     required this.entry,
     this.onTap,
@@ -42,8 +39,13 @@ class OneUiFileTile extends StatelessWidget {
     final onAccent = AppColors.onAccentContainerFor(brightness);
     final category = entry.category;
 
-    final Widget? leading;
-    if (category == Category.image) {
+    Widget? leading;
+    if (selecting) {
+      leading = _SelectionBadge(
+        selected: selected,
+        accent: AppColors.accentFor(brightness),
+      );
+    } else if (category == Category.image) {
       leading = _ImageThumb(
         entry: entry,
         bytes: thumbnail,
@@ -65,47 +67,51 @@ class OneUiFileTile extends StatelessWidget {
       selected: selected,
       selectedTileColor: AppColors.accentContainerFor(brightness),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppDimens.radiusTile),
+        borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
         side: selected
             ? BorderSide(color: onAccent, width: 1.5)
             : BorderSide.none,
       ),
-      leading: selecting
-          ? _SelectionBadge(
-              selected: selected,
-              accent: brightness == Brightness.dark
-                  ? AppColors.accentDark
-                  : AppColors.accent,
-            )
-          : leading,
+      leading: leading,
       title: Text(
         entry.name,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: AppTextStyle.rowTitle.copyWith(
-          color: selected ? onAccent : AppColors.textPrimaryFor(brightness),
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+        style: AppTextStyle.title1.copyWith(
+          color: selected ? onAccent : AppColors.labelPrimaryFor(brightness),
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
         ),
       ),
       subtitle: Text(
         subtitle ?? defaultSubtitle,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: AppTextStyle.caption
-            .copyWith(color: AppColors.textSecondaryFor(brightness)),
+        style: AppTextStyle.caption1.copyWith(
+          color: AppColors.labelSecondaryFor(brightness),
+        ),
       ),
       trailing: trailing ??
-          (entry.type == 'folder' && showChevron
+          (entry.isFolder && showChevron
               ? Icon(
                   Icons.chevron_right_rounded,
-                  color: AppColors.textTertiaryFor(brightness),
+                  color: AppColors.labelTertiaryFor(brightness),
+                  size: AppDimens.iconMedium,
                 )
               : null),
+      minTileHeight: AppDimens.listHeightLarge,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.pageMargin,
+        vertical: AppDimens.space4,
+      ),
+      visualDensity: VisualDensity.compact,
     );
   }
 }
 
-/// Soft rounded icon tile matching One UI file icons.
+double _leadingDecodeWidth(BuildContext context) =>
+    AppDimens.iconTileLarge * MediaQuery.devicePixelRatioOf(context);
+
+/// Soft rounded icon tile matching iOS file icons.
 class _FileIconTile extends StatelessWidget {
   final Category category;
   final Brightness brightness;
@@ -119,7 +125,7 @@ class _FileIconTile extends StatelessWidget {
       height: AppDimens.iconTileLarge,
       decoration: BoxDecoration(
         color: FileKind.tileFill(category, brightness),
-        borderRadius: BorderRadius.circular(AppDimens.radiusInner),
+        borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
       ),
       child: Icon(
         FileKind.icon(category),
@@ -130,13 +136,7 @@ class _FileIconTile extends StatelessWidget {
   }
 }
 
-/// Decode budget for a list-row preview. A 48dp tile on a 3x screen needs 144
-/// physical pixels; decoding anything larger just wastes memory.
-double _leadingDecodeWidth(BuildContext context) =>
-    AppDimens.iconTileLarge * MediaQuery.devicePixelRatioOf(context);
-
-/// Image preview tile: the real server thumbnail when available, otherwise the
-/// category icon on a neutral tile.
+/// Image preview tile: real thumbnail or fallback.
 class _ImageThumb extends StatelessWidget {
   final FileEntry entry;
   final Uint8List? bytes;
@@ -151,8 +151,9 @@ class _ImageThumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final radius = BorderRadius.circular(AppDimens.radiusInner);
+    final radius = BorderRadius.circular(AppDimens.radiusStandard);
     final value = bytes;
+
     if (value != null) {
       return ClipRRect(
         borderRadius: radius,
@@ -178,8 +179,8 @@ class _ImageThumb extends StatelessWidget {
       height: AppDimens.iconTileLarge,
       decoration: BoxDecoration(
         color: brightness == Brightness.dark
-            ? AppColors.surfaceAltDark
-            : AppColors.surfaceAltLight,
+            ? AppColors.surfaceGroupedAltFor(brightness)
+            : AppColors.fillFor(brightness),
         borderRadius: radius,
       ),
       child: Icon(
@@ -191,10 +192,11 @@ class _ImageThumb extends StatelessWidget {
   }
 }
 
-/// Selection circle/check.
+/// Selection badge for multi-select mode.
 class _SelectionBadge extends StatelessWidget {
   final bool selected;
   final Color accent;
+
   const _SelectionBadge({required this.selected, required this.accent});
 
   @override
@@ -205,29 +207,26 @@ class _SelectionBadge extends StatelessWidget {
           : Icons.radio_button_unchecked_rounded,
       color: selected
           ? accent
-          : AppColors.textTertiaryFor(Theme.of(context).brightness),
+          : AppColors.labelTertiaryFor(Theme.of(context).brightness),
       size: 22,
     );
   }
 }
 
-/// Grid cells are bounded by the grid delegate; decode a little above the
-/// tile size so the preview stays crisp without holding full-resolution pixels.
+/// Decode budget for grid previews.
 double _gridDecodeWidth(BuildContext context) =>
     170 * MediaQuery.devicePixelRatioOf(context);
 
 /// Grid tile for the Files grid view.
-class OneUiFileGridTile extends StatelessWidget {
+class NexaFileGridTile extends StatelessWidget {
   final FileEntry entry;
   final ValueChanged<FileEntry>? onTap;
   final VoidCallback? onLongPress;
   final bool selected;
   final bool selecting;
-
-  /// Server-generated preview bytes for image files.
   final Uint8List? thumbnail;
 
-  const OneUiFileGridTile({
+  const NexaFileGridTile({
     super.key,
     required this.entry,
     this.onTap,
@@ -246,20 +245,17 @@ class OneUiFileGridTile extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppDimens.radiusTile),
+        borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
         onTap: onTap == null ? null : () => onTap!(entry),
         onLongPress: onLongPress,
         child: Container(
           decoration: BoxDecoration(
-            color: brightness == Brightness.dark
-                ? AppColors.surfaceDark
-                : AppColors.surfaceLight,
-            borderRadius: BorderRadius.circular(AppDimens.radiusTile),
+            color: AppColors.surfaceGroupedFor(brightness),
+            borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
             border: selected
                 ? Border.all(
-                    color: AppColors.onAccentContainerFor(brightness),
-                    width: 1.8)
-                : Border.all(color: Colors.transparent, width: 1.8),
+                    color: AppColors.onAccentContainerFor(brightness), width: 2)
+                : Border.all(color: Colors.transparent, width: 2),
           ),
           padding: const EdgeInsets.all(AppDimens.space12),
           child: Column(
@@ -283,7 +279,7 @@ class OneUiFileGridTile extends StatelessWidget {
                           : Icons.radio_button_unchecked_rounded,
                       color: selected
                           ? accent
-                          : AppColors.textTertiaryFor(brightness),
+                          : AppColors.labelTertiaryFor(brightness),
                       size: 20,
                     ),
                 ],
@@ -293,8 +289,8 @@ class OneUiFileGridTile extends StatelessWidget {
                 entry.name,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: AppTextStyle.rowSubtitle.copyWith(
-                  color: AppColors.textPrimaryFor(brightness),
+                style: AppTextStyle.caption1.copyWith(
+                  color: AppColors.labelPrimaryFor(brightness),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -303,8 +299,9 @@ class OneUiFileGridTile extends StatelessWidget {
                 entry.isFolder ? 'Folder' : Format.bytes(entry.size),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppTextStyle.micro
-                    .copyWith(color: AppColors.textSecondaryFor(brightness)),
+                style: AppTextStyle.caption2.copyWith(
+                  color: AppColors.labelSecondaryFor(brightness),
+                ),
               ),
             ],
           ),

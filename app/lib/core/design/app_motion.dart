@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
-/// NexaDrive One UI motion tokens.
+/// NexaDrive motion tokens.
 ///
-/// One UI motion is restrained, confident, and physical. Springs should be
-/// critically damped by default; bounce only for momentum-driven gestures.
-/// Every duration and curve in NexaDrive must come from this file.
+/// THE REFERENCE: Apple's animation guidance. Motion is responsive and
+/// physical: springs are critically damped by default, bounces are reserved for
+/// momentum-driven gestures, and nothing delays a user action. Every duration,
+/// curve and spring in NexaDrive must come from this file.
 abstract final class AppMotion {
   // ------------------------------------------------------------ durations
   /// Micro-interactions: press highlight, toggle, checkbox.
@@ -13,24 +14,34 @@ abstract final class AppMotion {
   /// Small state changes: row highlight, icon swap, counters.
   static const Duration fast = Duration(milliseconds: 180);
 
-  /// Default UI motion: sheet slide, page transitions, expand/collapse.
+  /// Default UI motion: sheet slide, expand/collapse.
   static const Duration normal = Duration(milliseconds: 300);
 
-  /// Deliberate motion: page transitions on navigation.
-  static const Duration slow = Duration(milliseconds: 380);
+  /// Standard navigation push/pop.
+  static const Duration navigation = Duration(milliseconds: 350);
+
+  /// Deliberate motion: full-screen transitions.
+  static const Duration slow = Duration(milliseconds: 420);
 
   // --------------------------------------------------------------- curves
-  /// One UI easing: fast start, gentle settle — the "responsive" feel.
-  static const Curve standard = Cubic(0.25, 0.1, 0.3, 1);
+  /// iOS-style standard easing: fast start, gentle settle.
+  static const Curve standard = Cubic(0.25, 0.1, 0.25, 1.0);
+  static const Curve standardCurve = Cubic(0.25, 0.1, 0.25, 1.0);
 
   /// Slightly snappier entrance (sheets, panels arriving).
-  static const Curve enter = Cubic(0.15, 0.85, 0.25, 1);
+  static const Curve enter = Cubic(0.15, 0.85, 0.3, 1.0);
+  static const Curve enterCurve = Cubic(0.15, 0.85, 0.3, 1.0);
 
-  /// Soft exit (dismiss, close) — the reverse of [enter] path.
+  /// Soft exit (dismiss, close).
   static const Curve exit = Cubic(0.45, 0.05, 0.85, 0.2);
+  static const Curve exitCurve = Cubic(0.45, 0.05, 0.85, 0.2);
 
   /// Ease for opacity-only fades.
   static const Curve fade = Curves.easeOut;
+  static const Curve fadeCurve = Curves.easeOut;
+
+  /// Spring-like curve for interactive gestures (pull, drag settle).
+  static const Curve springCurve = Cubic(0.17, 0.89, 0.32, 1.0);
 
   // ------------------------------------------------------------- springs
   /// Page/sheet settle — critically damped, no bounce.
@@ -39,8 +50,6 @@ abstract final class AppMotion {
 
   /// The resolved spring used wherever tactile physics is warranted
   /// (critical damping 1.0; lower damping only for momentum gestures).
-  /// stiffness = mass/response² and damping = 2·ratio/response, so for
-  /// response 0.35 / damping 1.0 that is stiffness 8.16, damping 5.71.
   static SpringDescription get spring => const SpringDescription(
         mass: 1.0,
         stiffness: 8.1633,
@@ -52,6 +61,14 @@ abstract final class AppMotion {
         mass: 1.0,
         stiffness: 20.6612,
         damping: 9.0909,
+      );
+
+  /// Named spring handles (aliases over [spring]/[microSpring]).
+  static SpringDescription get standardSpring => spring;
+  static SpringDescription get dragSpring => const SpringDescription(
+        mass: 1.0,
+        stiffness: 100,
+        damping: 15,
       );
 
   // ------------------------------------------------------------- helpers
@@ -66,6 +83,25 @@ abstract final class AppMotion {
         child: child,
       );
 
+  /// A cross-fade for boolean state changes.
+  static AnimatedCrossFade crossFade({
+    required bool first,
+    required Widget firstChild,
+    required Widget secondChild,
+    Duration? duration,
+    Curve? firstCurve,
+    Curve? secondCurve,
+  }) =>
+      AnimatedCrossFade(
+        firstChild: firstChild,
+        secondChild: secondChild,
+        crossFadeState:
+            first ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+        duration: duration ?? normal,
+        firstCurve: firstCurve ?? enter,
+        secondCurve: secondCurve ?? exit,
+      );
+
   /// Whether reduced motion is active for the current context.
   static bool reducedMotion(BuildContext context) {
     final data = MediaQuery.maybeOf(context);
@@ -77,7 +113,11 @@ abstract final class AppMotion {
   static Duration resolve(BuildContext context, Duration value) =>
       reducedMotion(context) ? Duration.zero : value;
 
-  /// Resolves the latest frame of a drive animation on reduced motion.
+  /// Resolves a curve to linear when reduced motion is requested.
   static Curve curveFor(BuildContext context, Curve curve) =>
       reducedMotion(context) ? Curves.linear : curve;
+
+  /// Alias for [curveFor] used by layout code.
+  static Curve resolveCurve(BuildContext context, Curve curve) =>
+      curveFor(context, curve);
 }

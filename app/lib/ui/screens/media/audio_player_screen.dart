@@ -13,10 +13,7 @@ import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../../services/download_service.dart';
 import '../../../services/media_cache.dart';
-import '../../widgets/one_ui_controls.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_page.dart';
-import '../../widgets/one_ui_surface.dart';
+import '../../widgets/nexa_components.dart';
 
 /// One UI music player.
 ///
@@ -282,10 +279,10 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: OneUiPage(
+        child: NexaPage(
           title: 'Now playing',
           subtitle: [artist, title].where((s) => s.isNotEmpty).join(' · '),
-          leading: const OneUiBackButton(),
+          leading: const NexaBackButton(),
           headerAction: IconButton(
             tooltip: 'Save to device',
             onPressed: _saveToDevice,
@@ -336,7 +333,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
               ],
               const SizedBox(height: AppDimens.space20),
               if (_error != null)
-                OneUiEmptyState(
+                NexaEmptyState(
                   icon: Icons.music_off_rounded,
                   title: 'Can\u2019t play this track',
                   hint: _error,
@@ -386,8 +383,8 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                   ],
                 ),
                 const SizedBox(height: AppDimens.space8),
-                OneUiSurface(
-                  level: OneUiSurfaceLevel.surface,
+                NexaSurface(
+                  level: NexaSurfaceLevel.surface,
                   radius: AppDimens.radiusCard,
                   child: Column(
                     children: [

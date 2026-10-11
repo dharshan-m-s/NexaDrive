@@ -185,223 +185,230 @@ class _FileShareSheetState extends State<FileShareSheet> {
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppDimens.pageMargin,
-          AppDimens.space16,
-          AppDimens.pageMargin,
-          AppDimens.space16,
+        // Stop the sheet above the keyboard so the recipient field stays visible.
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.share_outlined, color: accent),
-                const SizedBox(width: AppDimens.space12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        single
-                            ? 'Share "${widget.files.first.name}"'
-                            : 'Share ${widget.files.length} items',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyle.rowTitle.copyWith(
-                          color: AppColors.textPrimaryFor(brightness),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (!single)
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            AppDimens.pageMargin,
+            AppDimens.space16,
+            AppDimens.pageMargin,
+            AppDimens.space16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.share_outlined, color: accent),
+                  const SizedBox(width: AppDimens.space12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          _mode == 'person'
-                              ? 'Each file is shared with the same person'
-                              : 'Each file gets its own link',
-                          style:
-                              AppTextStyle.caption.copyWith(color: secondary),
+                          single
+                              ? 'Share "${widget.files.first.name}"'
+                              : 'Share ${widget.files.length} items',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyle.rowTitle.copyWith(
+                            color: AppColors.textPrimaryFor(brightness),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                    ],
+                        if (!single)
+                          Text(
+                            _mode == 'person'
+                                ? 'Each file is shared with the same person'
+                                : 'Each file gets its own link',
+                            style:
+                                AppTextStyle.caption.copyWith(color: secondary),
+                          ),
+                      ],
+                    ),
                   ),
+                ],
+              ),
+              const SizedBox(height: AppDimens.space16),
+              if (_links.isNotEmpty)
+                _CreatedLinks(
+                  links: _links,
+                  onCopy: (link) => _copy(link.url, link.fileName),
+                  onCopyAll: () => _copy(
+                    _links.where((l) => l.isLink).map((l) => l.url).join('\n'),
+                    '${_links.where((l) => l.isLink).length} links',
+                  ),
+                )
+              else ...[
+                if (!_hasFolder) ...[
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: 'link',
+                        label: Text('Anyone with link'),
+                        icon: Icon(Icons.link_rounded),
+                      ),
+                      ButtonSegment(
+                        value: 'person',
+                        label: Text('A person'),
+                        icon: Icon(Icons.person_outline_rounded),
+                      ),
+                    ],
+                    selected: {_mode},
+                    onSelectionChanged:
+                        _busy ? null : (s) => setState(() => _mode = s.first),
+                  ),
+                  const SizedBox(height: AppDimens.space12),
+                ],
+                Text(
+                  _mode == 'link'
+                      ? 'Anyone with the link can '
+                          '${_permission == 'view' ? 'view' : 'download'} '
+                          '${single ? 'this file' : 'these files'} until you revoke it.'
+                      : 'Folders and files shared this way stay private to that '
+                          'NexaDrive account.',
+                  style: AppTextStyle.caption.copyWith(color: secondary),
                 ),
-              ],
-            ),
-            const SizedBox(height: AppDimens.space16),
-            if (_links.isNotEmpty)
-              _CreatedLinks(
-                links: _links,
-                onCopy: (link) => _copy(link.url, link.fileName),
-                onCopyAll: () => _copy(
-                  _links.where((l) => l.isLink).map((l) => l.url).join('\n'),
-                  '${_links.where((l) => l.isLink).length} links',
-                ),
-              )
-            else ...[
-              if (!_hasFolder) ...[
+                const SizedBox(height: AppDimens.space12),
+                if (_mode == 'person') ...[
+                  TextField(
+                    controller: _recipient,
+                    enabled: !_busy,
+                    autocorrect: false,
+                    textInputAction: TextInputAction.done,
+                    decoration: const InputDecoration(
+                      labelText: 'NexaDrive username',
+                      prefixIcon: Icon(Icons.alternate_email_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space12),
+                ],
                 SegmentedButton<String>(
                   segments: const [
                     ButtonSegment(
-                      value: 'link',
-                      label: Text('Anyone with link'),
-                      icon: Icon(Icons.link_rounded),
+                      value: 'view',
+                      label: Text('View only'),
+                      icon: Icon(Icons.visibility_outlined),
                     ),
                     ButtonSegment(
-                      value: 'person',
-                      label: Text('A person'),
-                      icon: Icon(Icons.person_outline_rounded),
+                      value: 'download',
+                      label: Text('Download'),
+                      icon: Icon(Icons.download_outlined),
                     ),
                   ],
-                  selected: {_mode},
-                  onSelectionChanged:
-                      _busy ? null : (s) => setState(() => _mode = s.first),
+                  selected: {_permission},
+                  onSelectionChanged: _busy
+                      ? null
+                      : (s) => setState(() => _permission = s.first),
                 ),
-                const SizedBox(height: AppDimens.space12),
               ],
-              Text(
-                _mode == 'link'
-                    ? 'Anyone with the link can '
-                        '${_permission == 'view' ? 'view' : 'download'} '
-                        '${single ? 'this file' : 'these files'} until you revoke it.'
-                    : 'Folders and files shared this way stay private to that '
-                        'NexaDrive account.',
-                style: AppTextStyle.caption.copyWith(color: secondary),
-              ),
-              const SizedBox(height: AppDimens.space12),
-              if (_mode == 'person') ...[
-                TextField(
-                  controller: _recipient,
-                  enabled: !_busy,
-                  autocorrect: false,
-                  textInputAction: TextInputAction.done,
-                  decoration: const InputDecoration(
-                    labelText: 'NexaDrive username',
-                    prefixIcon: Icon(Icons.alternate_email_rounded),
-                  ),
+              if (_busy && _createdCount > 0) ...[
+                const SizedBox(height: AppDimens.space16),
+                LinearProgressIndicator(
+                  value: widget.files.isEmpty
+                      ? null
+                      : _createdCount / widget.files.length,
                 ),
-                const SizedBox(height: AppDimens.space12),
+                const SizedBox(height: AppDimens.space8),
+                Text(
+                  'Creating links… ($_createdCount of ${widget.files.length})',
+                  style: AppTextStyle.caption.copyWith(color: secondary),
+                ),
               ],
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(
-                    value: 'view',
-                    label: Text('View only'),
-                    icon: Icon(Icons.visibility_outlined),
-                  ),
-                  ButtonSegment(
-                    value: 'download',
-                    label: Text('Download'),
-                    icon: Icon(Icons.download_outlined),
-                  ),
-                ],
-                selected: {_permission},
-                onSelectionChanged:
-                    _busy ? null : (s) => setState(() => _permission = s.first),
-              ),
-            ],
-            if (_busy && _createdCount > 0) ...[
-              const SizedBox(height: AppDimens.space16),
-              LinearProgressIndicator(
-                value: widget.files.isEmpty
-                    ? null
-                    : _createdCount / widget.files.length,
-              ),
-              const SizedBox(height: AppDimens.space8),
-              Text(
-                'Creating links… ($_createdCount of ${widget.files.length})',
-                style: AppTextStyle.caption.copyWith(color: secondary),
-              ),
-            ],
-            if (_failures.isNotEmpty && !_busy) ...[
-              const SizedBox(height: AppDimens.space12),
-              for (final entry in _failures.entries)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppDimens.space4),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.error_outline_rounded,
-                        size: AppDimens.iconSmall,
-                        color: AppColors.errorFor(brightness),
-                      ),
-                      const SizedBox(width: AppDimens.space8),
-                      Expanded(
-                        child: Text(
-                          '${entry.key}: ${entry.value}',
-                          style: AppTextStyle.caption.copyWith(
-                            color: AppColors.errorFor(brightness),
+              if (_failures.isNotEmpty && !_busy) ...[
+                const SizedBox(height: AppDimens.space12),
+                for (final entry in _failures.entries)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppDimens.space4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.error_outline_rounded,
+                          size: AppDimens.iconSmall,
+                          color: AppColors.errorFor(brightness),
+                        ),
+                        const SizedBox(width: AppDimens.space8),
+                        Expanded(
+                          child: Text(
+                            '${entry.key}: ${entry.value}',
+                            style: AppTextStyle.caption.copyWith(
+                              color: AppColors.errorFor(brightness),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-            if (_error != null) ...[
-              const SizedBox(height: AppDimens.space12),
-              Text(
-                _error!,
-                style: AppTextStyle.caption
-                    .copyWith(color: AppColors.errorFor(brightness)),
-              ),
-            ],
-            const SizedBox(height: AppDimens.space20),
-            Row(
-              children: [
-                if (_links.isNotEmpty)
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _busy ? null : _removeAll,
-                      icon: const Icon(Icons.link_off_rounded,
-                          size: AppDimens.iconSmall),
-                      label: Text(
-                        anyLink
-                            ? (_links.length == 1
-                                ? 'Revoke link'
-                                : 'Revoke all')
-                            : 'Remove access',
-                      ),
-                    ),
-                  )
-                else
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _busy ? null : _create,
-                      icon: _busy
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Icon(
-                              _mode == 'person'
-                                  ? Icons.person_add_alt_rounded
-                                  : Icons.add_link_rounded,
-                              size: AppDimens.iconSmall,
-                            ),
-                      label: Text(
-                        _mode == 'person'
-                            ? (single
-                                ? 'Share with person'
-                                : 'Share ${widget.files.length} files')
-                            : (single
-                                ? 'Create link'
-                                : 'Create ${widget.files.length} links'),
-                      ),
+                      ],
                     ),
                   ),
-                const SizedBox(width: AppDimens.space12),
-                OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Close'),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: AppDimens.space12),
+                Text(
+                  _error!,
+                  style: AppTextStyle.caption
+                      .copyWith(color: AppColors.errorFor(brightness)),
                 ),
               ],
-            ),
-          ],
+              const SizedBox(height: AppDimens.space20),
+              Row(
+                children: [
+                  if (_links.isNotEmpty)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _busy ? null : _removeAll,
+                        icon: const Icon(Icons.link_off_rounded,
+                            size: AppDimens.iconSmall),
+                        label: Text(
+                          anyLink
+                              ? (_links.length == 1
+                                  ? 'Revoke link'
+                                  : 'Revoke all')
+                              : 'Remove access',
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _busy ? null : _create,
+                        icon: _busy
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Icon(
+                                _mode == 'person'
+                                    ? Icons.person_add_alt_rounded
+                                    : Icons.add_link_rounded,
+                                size: AppDimens.iconSmall,
+                              ),
+                        label: Text(
+                          _mode == 'person'
+                              ? (single
+                                  ? 'Share with person'
+                                  : 'Share ${widget.files.length} files')
+                              : (single
+                                  ? 'Create link'
+                                  : 'Create ${widget.files.length} links'),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: AppDimens.space12),
+                  OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Close'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

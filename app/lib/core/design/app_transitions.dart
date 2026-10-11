@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
 import 'app_motion.dart';
 
-/// One UI page transition.
+/// NexaDrive page transition.
 ///
-/// Spatially continuous and restrained: the incoming page glides up a few
-/// points while cross-fading, and the outgoing page settles back — the
-/// destination feels connected to the source, never like a hard swap.
-/// Honors reduced motion by skipping entirely.
-class OneUiPageTransitionsBuilder extends PageTransitionsBuilder {
-  const OneUiPageTransitionsBuilder();
-
-  static const double _rise = 0.016;
-  static const double _settle = 0.008;
+/// THE REFERENCE: the iOS interactive push. The incoming page slides in from
+/// the trailing edge while the outgoing page recedes with a slight parallax and
+/// dim — the destination feels spatially connected to the source, never like a
+/// hard swap. Honours reduced motion by skipping the animation entirely.
+class NexaPageTransitionsBuilder extends PageTransitionsBuilder {
+  const NexaPageTransitionsBuilder();
 
   @override
   Widget buildTransitions<T>(
@@ -23,32 +20,35 @@ class OneUiPageTransitionsBuilder extends PageTransitionsBuilder {
   ) {
     if (AppMotion.reducedMotion(context)) return child;
 
-    // Secondary: the outgoing page settles down slightly as the primary comes in.
+    // The outgoing page slides left by a third and dims slightly.
     final secondaryCurve = CurvedAnimation(
       parent: secondaryAnimation,
-      curve: Curves.easeOutCubic,
+      curve: AppMotion.standard,
     );
-    final settle = Tween<Offset>(
+    final outgoingSlide = Tween<Offset>(
       begin: Offset.zero,
-      end: const Offset(0, _settle),
+      end: const Offset(-0.3, 0),
     ).animate(secondaryCurve);
+    final outgoingFade =
+        Tween<double>(begin: 1.0, end: 0.85).animate(secondaryCurve);
 
+    // The incoming page slides in from the right edge.
     final primaryCurve = CurvedAnimation(
       parent: animation,
-      curve: AppMotion.enter,
-      reverseCurve: AppMotion.exit,
+      curve: AppMotion.enterCurve,
+      reverseCurve: AppMotion.exitCurve,
     );
-    final rise = Tween<Offset>(
-      begin: const Offset(0, _rise),
+    final incomingSlide = Tween<Offset>(
+      begin: const Offset(1, 0),
       end: Offset.zero,
     ).animate(primaryCurve);
 
-    return FadeTransition(
-      opacity: primaryCurve,
-      child: SlideTransition(
-        position: rise,
+    return SlideTransition(
+      position: outgoingSlide,
+      child: FadeTransition(
+        opacity: outgoingFade,
         child: SlideTransition(
-          position: settle,
+          position: incomingSlide,
           child: child,
         ),
       ),
@@ -56,13 +56,13 @@ class OneUiPageTransitionsBuilder extends PageTransitionsBuilder {
   }
 }
 
-/// Applies the One UI page transitions for every target platform.
-const PageTransitionsTheme kOneUiPageTransitions = PageTransitionsTheme(
+/// Applies the NexaDrive page transitions for every target platform.
+const PageTransitionsTheme kNexaPageTransitions = PageTransitionsTheme(
   builders: {
-    TargetPlatform.android: OneUiPageTransitionsBuilder(),
-    TargetPlatform.iOS: OneUiPageTransitionsBuilder(),
-    TargetPlatform.linux: OneUiPageTransitionsBuilder(),
-    TargetPlatform.windows: OneUiPageTransitionsBuilder(),
-    TargetPlatform.macOS: OneUiPageTransitionsBuilder(),
+    TargetPlatform.android: NexaPageTransitionsBuilder(),
+    TargetPlatform.iOS: NexaPageTransitionsBuilder(),
+    TargetPlatform.linux: NexaPageTransitionsBuilder(),
+    TargetPlatform.windows: NexaPageTransitionsBuilder(),
+    TargetPlatform.macOS: NexaPageTransitionsBuilder(),
   },
 );

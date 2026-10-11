@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
+import '../../../core/design/app_motion.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../services/api.dart';
 import '../../../services/scan_processor.dart';
@@ -376,7 +377,7 @@ class _ScannerScreenState extends State<ScannerScreen>
             onTap: _busy ? null : _capture,
             customBorder: const CircleBorder(),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
+              duration: AppMotion.fast,
               width: 76,
               height: 76,
               decoration: BoxDecoration(

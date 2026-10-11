@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../services/api.dart';
-import '../../widgets/one_ui_controls.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_grouped_list.dart';
-import '../../widgets/one_ui_page.dart';
+import '../../widgets/nexa_components.dart';
 import 'shared_browse_screen.dart';
 
 class SharedScreen extends StatefulWidget {
@@ -112,7 +109,7 @@ class _SharedScreenState extends State<SharedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return OneUiPage(
+    return NexaPage(
       title: _mine ? 'My shares' : 'Shared with me',
       subtitle: _mine
           ? 'Links and access you have granted'
@@ -134,10 +131,10 @@ class _SharedScreenState extends State<SharedScreen> {
   Widget _buildBody() {
     final brightness = Theme.of(context).brightness;
     if (_loading) {
-      return const OneUiLoadingBlock();
+      return const NexaLoadingBlock();
     }
     if (_error != null) {
-      return OneUiEmptyState(
+      return NexaEmptyState(
         icon: Icons.cloud_off_rounded,
         title: 'Can\'t load shares',
         hint: _error,
@@ -147,7 +144,7 @@ class _SharedScreenState extends State<SharedScreen> {
     }
     final items = _mine ? _shares : _shared;
     if (items.isEmpty) {
-      return OneUiEmptyState(
+      return NexaEmptyState(
         icon: _mine ? Icons.link_rounded : Icons.inbox_rounded,
         title: _mine ? 'No shares yet' : 'Nothing shared with you',
         hint: _mine
@@ -168,8 +165,8 @@ class _SharedScreenState extends State<SharedScreen> {
           final subtitle = _mine
               ? (item['permission'] == 'write' ? 'Read & write' : 'Read only')
               : 'Shared by ${item['owner_username'] ?? 'someone'}';
-          return OneUiGroupTile(
-            icon: _mine ? Icons.link_rounded : Icons.inbox_rounded,
+          return NexaGroupTile(
+            leadingIcon: _mine ? Icons.link_rounded : Icons.inbox_rounded,
             title: name,
             subtitle: subtitle,
             showChevron: !_mine,

@@ -11,10 +11,7 @@ import '../../../services/api.dart';
 import '../../../services/image_pipeline.dart';
 import '../../../services/session.dart';
 import '../../../services/thumbnail_cache.dart';
-import '../../widgets/one_ui_action_bar.dart';
-import '../../widgets/one_ui_controls.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_page.dart';
+import '../../widgets/nexa_components.dart';
 import '../files/file_share_sheet.dart';
 import 'photo_viewer.dart';
 
@@ -328,7 +325,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
     final brightness = Theme.of(context).brightness;
     final photoCount = _photos.length;
 
-    return OneUiPage(
+    return NexaPage(
       title: _selecting ? Format.count(_selected.length, 'photo') : 'Photos',
       subtitle: _selecting
           ? 'Tap photos to include or exclude'
@@ -353,10 +350,10 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const OneUiLoadingBlock();
+      return const NexaLoadingBlock();
     }
     if (_error != null) {
-      return OneUiEmptyState(
+      return NexaEmptyState(
         icon: Icons.cloud_off_rounded,
         title: 'Can\u2019t load photos',
         hint: _error,
@@ -365,7 +362,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
       );
     }
     if (_photos.isEmpty) {
-      return OneUiEmptyState(
+      return NexaEmptyState(
         icon: Icons.photo_library_outlined,
         title: 'No photos yet',
         hint: 'Upload photos from My files and they\u2019ll appear here.',
@@ -427,7 +424,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
           ),
         ),
         if (_selecting)
-          OneUiActionBar(
+          NexaActionBar(
             leading: IconButton(
               tooltip: 'Cancel selection',
               onPressed: _exitSelection,
@@ -435,12 +432,12 @@ class _PhotosScreenState extends State<PhotosScreen> {
             ),
             title: Format.count(_selected.length, 'photo'),
             actions: [
-              OneUiActionItem(
+              NexaActionItem(
                 icon: Icons.share_outlined,
                 label: 'Share',
                 onTap: _shareSelected,
               ),
-              OneUiActionItem(
+              NexaActionItem(
                 icon: Icons.delete_outline_rounded,
                 label: 'Trash',
                 color: AppColors.errorFor(Theme.of(context).brightness),

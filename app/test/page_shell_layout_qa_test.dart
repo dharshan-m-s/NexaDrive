@@ -10,12 +10,11 @@ import 'package:nexadrive/ui/screens/admin/audit_log_screen.dart';
 import 'package:nexadrive/ui/screens/notifications/notifications_screen.dart';
 import 'package:nexadrive/ui/screens/trash/trash_screen.dart';
 import 'package:nexadrive/ui/screens/viewers/text_viewer_screen.dart';
-import 'package:nexadrive/ui/widgets/one_ui_controls.dart';
-import 'package:nexadrive/ui/widgets/one_ui_page.dart';
+import 'package:nexadrive/ui/widgets/nexa_components.dart';
 
 /// Real-layout QA sweep for the page shell and the screens migrated onto it.
 ///
-/// Every screen now builds its page through `OneUiPage`, so a fault in the
+/// Every screen now builds its page through `NexaPage`, so a fault in the
 /// shell surfaces on all of them at once. This pumps the shell directly with
 /// deliberately hostile content — a title that cannot wrap, a subtitle that
 /// cannot wrap, a leading control and a trailing action competing for width,
@@ -52,11 +51,11 @@ void main() {
           // out. It must ellipsize rather than overflow.
           await tester.pumpWidget(_host(
             themeEntry.value,
-            OneUiPage(
+            NexaPage(
               title: 'AVeryLongUnbreakableDirectoryNameThatCannotWrapAtAll',
               subtitle:
                   'an equally unbreakable subtitle that also refuses to wrap onto a second line',
-              leading: const OneUiBackButton(),
+              leading: const NexaBackButton(),
               headerAction: IconButton(
                 onPressed: () {},
                 icon: const Icon(Icons.refresh_rounded),
@@ -76,7 +75,7 @@ void main() {
 
           await tester.pumpWidget(_host(
             themeEntry.value,
-            OneUiPage(
+            NexaPage(
               title: 'Transfers',
               bottomBar: FilledButton(
                 onPressed: () {},
@@ -97,10 +96,7 @@ void main() {
 
           await tester.pumpWidget(_host(
             themeEntry.value,
-            const OneUiPage(
-              title: 'Player',
-              showHeader: false,
-              padding: EdgeInsets.zero,
+            const NexaImmersivePage(
               body: ColoredBox(color: Colors.black),
             ),
           ));
@@ -116,7 +112,7 @@ void main() {
 
           await tester.pumpWidget(_host(
             themeEntry.value,
-            OneUiPage(
+            NexaPage(
               title: 'Log',
               scrollable: true,
               body: Column(

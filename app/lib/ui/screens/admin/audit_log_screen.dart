@@ -4,10 +4,7 @@ import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
-import '../../widgets/one_ui_controls.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_grouped_list.dart';
-import '../../widgets/one_ui_page.dart';
+import '../../widgets/nexa_components.dart';
 
 class AuditLogScreen extends StatefulWidget {
   final Api api;
@@ -51,12 +48,12 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: OneUiPage(
+        child: NexaPage(
           title: 'Audit log',
           subtitle: _entries.isEmpty
               ? null
               : '${_entries.length} event${_entries.length == 1 ? '' : 's'}',
-          leading: const OneUiBackButton(),
+          leading: const NexaBackButton(),
           headerAction: IconButton(
             tooltip: 'Refresh',
             onPressed: load,
@@ -70,14 +67,14 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
             AppDimens.space24,
           ),
           body: _loading
-              ? const OneUiLoadingBlock()
+              ? const NexaLoadingBlock()
               : _entries.isEmpty
-                  ? const OneUiEmptyState(
+                  ? const NexaEmptyState(
                       icon: Icons.receipt_long_outlined,
                       title: 'No audit entries',
                       hint: 'Security events will be listed here.',
                     )
-                  : OneUiGroupedList(
+                  : NexaGroupedList(
                       withDividers: true,
                       children: [
                         for (final entry in _entries)
@@ -117,7 +114,7 @@ class _AuditRow extends StatelessWidget {
     final label = '$action $path'.trim();
     final who = (username == null || username!.isEmpty) ? 'unknown' : username!;
 
-    return OneUiGroupTile(
+    return NexaGroupTile(
       showChevron: false,
       onTap: null,
       leading: CircleAvatar(

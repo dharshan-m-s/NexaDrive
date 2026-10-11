@@ -7,6 +7,7 @@ import '../../../services/api.dart';
 import '../../../services/background_transfer_service.dart';
 import '../../../services/session.dart';
 import '../../shell/app_shell.dart';
+import '../../widgets/nexa_components.dart';
 
 class LoginScreen extends StatefulWidget {
   final Session session;
@@ -23,15 +24,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool loading = false;
   String? error;
   bool _obscure = true;
-
-  /// Below this available height the form moves from centred to top-aligned
-  /// so that the primary action stays reachable without fighting the viewport.
-  ///
-  /// Chosen from measurement, not taste: the centred form is ~538px tall, so a
-  /// 464px window (a small Linux window, a phone in landscape, or a phone with
-  /// the on-screen keyboard open) put "Sign in" 74px below the fold — a real
-  /// tap target that cannot be tapped.
-  static const double _shortViewport = 500;
 
   @override
   void initState() {
@@ -163,96 +155,110 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // --------------------------------------------------------------- fragments
 
-  Widget _brand(Brightness brightness, {required bool compact}) {
-    final size = compact ? 40.0 : 62.0;
+  /// The app mark: a rounded-square "app icon" carrying the cloud glyph, with
+  /// a soft accent glow so it reads as a brand object rather than a flat shape.
+  Widget _brandTile(Brightness brightness) {
+    final accent = AppColors.accentFor(brightness);
+    final onAccent =
+        brightness == Brightness.dark ? Colors.black : Colors.white;
+
     return Container(
-      width: size,
-      height: size,
+      width: 64,
+      height: 64,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: AppColors.accentFor(brightness),
-        borderRadius: BorderRadius.circular(AppDimens.radiusCard),
+        color: accent,
+        borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(
+              alpha: brightness == Brightness.dark ? 0.30 : 0.28,
+            ),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
-      child: Icon(
-        Icons.cloud_rounded,
-        color: brightness == Brightness.dark
-            ? AppColors.textOnPrimaryDark
-            : Colors.white,
-        size: compact ? 20 : 32,
-      ),
+      child: Icon(Icons.cloud_rounded, color: onAccent, size: 34),
     );
   }
 
-  Widget _heading(Brightness brightness,
-      {required bool compact, required bool shortViewport}) {
+  /// The greeting. The subtitle is kept in the tree but taken out of layout on
+  /// short viewports (Offstage) so shrinking the viewport never reshuffles —
+  /// and therefore never unmounts — the fields below it.
+  Widget _heading({required Brightness brightness, required bool short}) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           'Welcome to NexaDrive',
-          style: (compact ? AppTextStyle.pageTitle : AppTextStyle.display)
-              .copyWith(
-            color: AppColors.textPrimaryFor(brightness),
-            fontSize: shortViewport ? 22 : null,
+          textAlign: TextAlign.center,
+          style: AppTextStyle.heroTitle.copyWith(
+            fontSize: short ? 22 : 32,
+            color: AppColors.labelPrimaryFor(brightness),
           ),
         ),
-        if (!shortViewport) ...[
-          const SizedBox(height: AppDimens.space4),
-          Text(
-            'Your files. Your server. Your private cloud.',
-            style: AppTextStyle.rowSubtitle.copyWith(
-              color: AppColors.textSecondaryFor(brightness),
+        Offstage(
+          offstage: short,
+          child: Padding(
+            padding: const EdgeInsets.only(top: AppDimens.space6),
+            child: Text(
+              'Your files. Your server. Your private cloud.',
+              textAlign: TextAlign.center,
+              style: AppTextStyle.callout.copyWith(
+                color: AppColors.labelSecondaryFor(brightness),
+              ),
             ),
           ),
-        ],
+        ),
       ],
     );
   }
 
-  Widget _fields(Brightness brightness,
-      {required bool compact, required bool tight}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: server,
-          keyboardType: TextInputType.url,
-          autofillHints: const [AutofillHints.url],
-          decoration: InputDecoration(
-            labelText: 'Server address',
-            isDense: tight,
-            prefixIcon: const Icon(Icons.dns_outlined),
-            hintText: compact
-                ? 'https://server.example.com'
-                : 'https://server.example.com or http://<lan-ip>:8080',
+  Widget _fields({required bool dense, required Brightness brightness}) {
+    // AutofillGroup lets a password manager populate all three fields as one
+    // credential set instead of filling only whichever field has focus.
+    return AutofillGroup(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          NexaTextField(
+            controller: server,
+            label: 'Server address',
+            hint: 'https://server.example.com',
+            keyboardType: TextInputType.url,
+            autofillHints: const [AutofillHints.url],
+            prefixIcon:
+                const Icon(Icons.dns_outlined, size: AppDimens.iconMedium),
+            textInputAction: TextInputAction.next,
+            dense: dense,
+            onSubmitted: (_) =>
+                FocusScope.of(context).requestFocus(_usernameFocus),
           ),
-        ),
-        SizedBox(
-          height: tight ? AppDimens.space6 : AppDimens.space12,
-        ),
-        TextField(
-          controller: username,
-          textInputAction: TextInputAction.next,
-          autofillHints: const [AutofillHints.username],
-          decoration: InputDecoration(
-            labelText: 'Username',
-            isDense: tight,
-            prefixIcon: const Icon(Icons.person_outline_rounded),
+          SizedBox(height: dense ? AppDimens.space8 : AppDimens.space12),
+          NexaTextField(
+            controller: username,
+            label: 'Username',
+            hint: 'Enter your username',
+            autofillHints: const [AutofillHints.username],
+            prefixIcon: const Icon(Icons.person_outline_rounded,
+                size: AppDimens.iconMedium),
+            textInputAction: TextInputAction.next,
+            focusNode: _usernameFocus,
+            dense: dense,
+            onSubmitted: (_) =>
+                FocusScope.of(context).requestFocus(_passwordFocus),
           ),
-        ),
-        SizedBox(
-          height: tight ? AppDimens.space6 : AppDimens.space12,
-        ),
-        TextField(
-          controller: password,
-          obscureText: _obscure,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => submit(),
-          autofillHints: const [AutofillHints.password],
-          decoration: InputDecoration(
-            labelText: 'Password',
-            isDense: tight,
-            prefixIcon: const Icon(Icons.lock_outline_rounded),
+          SizedBox(height: dense ? AppDimens.space8 : AppDimens.space12),
+          NexaTextField(
+            controller: password,
+            dense: dense,
+            label: 'Password',
+            hint: 'Enter your password',
+            obscureText: _obscure,
+            autofillHints: const [AutofillHints.password],
+            prefixIcon: const Icon(Icons.lock_outline_rounded,
+                size: AppDimens.iconMedium),
             suffixIcon: IconButton(
               tooltip: _obscure ? 'Show password' : 'Hide password',
               onPressed: () => setState(() => _obscure = !_obscure),
@@ -260,40 +266,39 @@ class _LoginScreenState extends State<LoginScreen> {
                 _obscure
                     ? Icons.visibility_outlined
                     : Icons.visibility_off_outlined,
+                size: AppDimens.iconMedium,
               ),
             ),
+            textInputAction: TextInputAction.done,
+            focusNode: _passwordFocus,
+            onSubmitted: (_) => submit(),
           ),
-        ),
-        if (error != null) ...[
-          const SizedBox(height: AppDimens.space16),
-          _ErrorBanner(message: error!),
         ],
-      ],
-    );
-  }
-
-  Widget _submitButton() {
-    return SizedBox(
-      height: AppDimens.touchTargetLarge,
-      child: FilledButton(
-        onPressed: loading ? null : submit,
-        child: loading
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Text('Sign in'),
       ),
     );
   }
 
-  Widget _caption(Brightness brightness) {
+  final _usernameFocus = FocusNode();
+  final _passwordFocus = FocusNode();
+
+  Widget _submitButton() {
+    return SizedBox(
+      height: AppDimens.touchTargetLarge,
+      child: NexaFilledButton(
+        onPressed: loading ? null : submit,
+        isLoading: loading,
+        fullWidth: true,
+        child: const Text('Sign in'),
+      ),
+    );
+  }
+
+  Widget _caption({required Brightness brightness}) {
     return Text(
-      'Private cloud on hardware you control. Enter the address of your NexaDrive server.',
+      'Your files stay on a server you control.',
       textAlign: TextAlign.center,
-      style: AppTextStyle.caption.copyWith(
-        color: AppColors.textTertiaryFor(brightness),
+      style: AppTextStyle.footnote.copyWith(
+        color: AppColors.labelTertiaryFor(brightness),
       ),
     );
   }
@@ -302,24 +307,28 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final size = MediaQuery.sizeOf(context);
-    final compact = size.width < 700;
+    final wide = size.width >= 700;
 
     return Scaffold(
-      // Let Scaffold apply the normal Android IME inset handling. The login
-      // content remains one stable scrollable subtree while the keyboard opens;
-      // it never swaps between two different widget trees based on height.
-      resizeToAvoidBottomInset: true,
+      backgroundColor: AppColors.backgroundFor(brightness),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final shortViewport = constraints.maxHeight < _shortViewport;
+            // Short viewports (phone in landscape, a desktop window, or the
+            // keyboard opening) collapse the decorative masthead and tighten
+            // the spacing so the primary action always stays on screen.
+            //
+            // Important: every block stays in the tree — the short-viewport
+            // treatment uses Offstage, which removes a block from layout
+            // without unmounting it. Swapping children in and out by height
+            // reshuffles the column, unmounts the focused field and the IME
+            // snaps shut; this layout cannot do that.
+            final short = constraints.maxHeight < 600;
             final horizontal =
-                compact ? AppDimens.pageMargin : AppDimens.pageMarginWide;
-            final vertical =
-                shortViewport ? AppDimens.space12 : AppDimens.space32;
-            final gap = shortViewport ? AppDimens.space8 : AppDimens.space12;
-            final sectionGap =
-                shortViewport ? AppDimens.space12 : AppDimens.space32;
+                wide ? AppDimens.pageMarginWide : AppDimens.pageMargin;
+            final vertical = short ? AppDimens.space12 : AppDimens.space32;
+            final minHeight = (constraints.maxHeight - vertical * 2)
+                .clamp(0.0, double.infinity);
 
             return SingleChildScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -327,49 +336,49 @@ class _LoginScreenState extends State<LoginScreen> {
                 horizontal: horizontal,
                 vertical: vertical,
               ),
-              // A scroll view hands its child an unbounded width, so the
-              // 440-wide column below would be laid out against the left edge
-              // and leave the whole right half of a desktop window empty — the
-              // layout spec calls for the form to be centred. Bound the width
-              // to the content area first, then centre inside it, which is the
-              // same Center + ConstrainedBox pattern OneUiPage and AppShell
-              // use for their content columns.
-              child: SizedBox(
-                width: (constraints.maxWidth - horizontal * 2)
-                    .clamp(0.0, double.infinity),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: minHeight),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: 440,
-                      minHeight: (constraints.maxHeight - vertical * 2)
-                          .clamp(0.0, double.infinity),
-                    ),
+                    constraints: const BoxConstraints(maxWidth: 440),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisAlignment: shortViewport
-                          ? MainAxisAlignment.start
-                          : MainAxisAlignment.center,
                       children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: _brand(brightness, compact: shortViewport),
+                        // Masthead: app mark, kept centred in the column.
+                        Offstage(
+                          offstage: short,
+                          child: Center(child: _brandTile(brightness)),
                         ),
-                        SizedBox(height: gap),
-                        _heading(
-                          brightness,
-                          compact: shortViewport,
-                          shortViewport: shortViewport,
+                        SizedBox(
+                          height: short ? 0 : AppDimens.space20,
                         ),
-                        SizedBox(height: gap),
-                        _fields(
-                          brightness,
-                          compact: shortViewport,
-                          tight: shortViewport,
+                        // Greeting.
+                        _heading(brightness: brightness, short: short),
+                        SizedBox(
+                          height: short ? AppDimens.space8 : AppDimens.space24,
                         ),
-                        SizedBox(height: sectionGap),
+                        // Credentials.
+                        _fields(dense: short, brightness: brightness),
+                        // Inline, actionable error.
+                        if (error != null) ...[
+                          const SizedBox(height: AppDimens.space12),
+                          _ErrorBanner(message: error!),
+                        ],
+                        SizedBox(
+                          height: short ? AppDimens.space8 : AppDimens.space16,
+                        ),
+                        // Primary action.
                         _submitButton(),
-                        const SizedBox(height: AppDimens.space20),
-                        _caption(brightness),
+                        // Quiet footer.
+                        Offstage(
+                          offstage: short,
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.only(top: AppDimens.space20),
+                            child: _caption(brightness: brightness),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -390,14 +399,13 @@ class _ErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final error = AppColors.errorFor(brightness);
+
     return Container(
       padding: const EdgeInsets.all(AppDimens.space12),
       decoration: BoxDecoration(
-        color: (brightness == Brightness.dark
-                ? AppColors.errorDark
-                : AppColors.errorLight)
-            .withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(AppDimens.radiusInner),
+        color: error.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -405,16 +413,14 @@ class _ErrorBanner extends StatelessWidget {
           Icon(
             Icons.error_outline_rounded,
             size: AppDimens.iconSmall,
-            color: brightness == Brightness.dark
-                ? AppColors.errorDark
-                : AppColors.errorLight,
+            color: error,
           ),
           const SizedBox(width: AppDimens.space8),
           Expanded(
             child: Text(
               message,
-              style: AppTextStyle.caption.copyWith(
-                color: AppColors.textPrimaryFor(brightness),
+              style: AppTextStyle.caption1.copyWith(
+                color: AppColors.labelPrimaryFor(brightness),
               ),
             ),
           ),

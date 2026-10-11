@@ -12,8 +12,8 @@
   content when selected), utility destinations pinned (Transfers / Sync center /
   Notifications), Settings pinned bottom. Content centered and capped at
   `contentMaxWidth = 1100`.
-- **Mobile (<900px):** `OneUiBottomNav` (five destinations; fifth = More sheet).
-  Selecting More opens `OneUiSheet` with Scan document / Transfers / Trash /
+- **Mobile (<900px):** `NexaBottomNav` (five destinations; fifth = More sheet).
+  Selecting More opens `showNexaSheet` with Scan document / Transfers / Trash /
   Sync center / Notifications / Settings.
 - Queue lifecycle: 30s timer + app resume + server-instance check feed
   `TransferQueue.process`; session-expiry cancels background transfers and
@@ -21,24 +21,24 @@
 - Scan document pushes `ScannerScreen` (real camera), not a tab swap.
 
 ## Home (`ui/screens/home/home_screen.dart`)
-- `OneUiHero` storage hero (gradient family per brightness, `heroTextOnGradient`
+- `NexaHero` storage hero (gradient family per brightness, `heroTextOnGradient`
   text, metric + storage bar, ring accent).
-- `_QuickActionsGrid`: vertical `OneUiFocusBlock`s (Upload / Scan / Photos /
+- `_QuickActionsGrid`: vertical `NexaFocusBlock`s (Upload / Scan / Photos /
   Shared / Transfers) in the interaction area.
 - Real recent files: `api.listFiles('/')` filtered/sorted by modified; pending
-  uploads surface as `OneUiStatusPod`.
+  uploads surface as `NexaStatusPod`.
 
 ## My Files (`ui/screens/files/files_screen.dart`)
-- `_GroupHeader` section headers ("Folders" / "Files") inside `OneUiGroupedList`.
-- Rows via `OneUiFileTile` (accent folder icon, size/time subtitle, token
+- `_GroupHeader` section headers ("Folders" / "Files") inside `NexaGroupedList`.
+- Rows via `NexaFileTile` (accent folder icon, size/time subtitle, token
   selection state).
-- Long-press selection → `OneUiActionBar` (Trash / Move / Copy / Share / Save).
-- File menu + unsupported-type sheets via `OneUiSheet`.
+- Long-press selection → `NexaActionBar` (Trash / Move / Copy / Share / Save).
+- File menu + unsupported-type sheets via `showNexaSheet`.
 - Header search action opens `screens/search/search_screen.dart`.
 
 ## Photos (`ui/screens/photos/photos_screen.dart`)
 - Month-grouped gallery (`_MonthHeader`, `_groups`, count-driven subtitle).
-- Long-press multi-select → `OneUiActionBar` (Share via `FileShareSheet`, Trash
+- Long-press multi-select → `NexaActionBar` (Share via `FileShareSheet`, Trash
   via `api.batch(action:'delete')`).
 - `_PhotoCell` / `_SelectedOverlay` token-driven cells; thumbnails from
   `thumbnail_cache` with full-download fallback.
@@ -72,26 +72,26 @@
 ## Transfers (`ui/screens/transfers/transfers_screen.dart`)
 - Grouped: Uploading (with byte progress + accent `LinearProgressIndicator`),
   Needs attention (retry/remove), Completed (clear).
-- Rows are `OneUiSurface` (L1) tiles; empty state = offline hint.
+- Rows are `NexaSurface` (L1) tiles; empty state = offline hint.
 
 ## Sync center (`ui/screens/sync/sync_center_screen.dart`)
-- `OneUiSurface` folder card (Choose/Unlink), Sync now (52dp filled), result
+- `NexaSurface` folder card (Choose/Unlink), Sync now (52dp filled), result
   stats, warning banner (conflicted files), linked-device list with revoke.
 - Powered by real `SyncManager` (delta + SHA-256 + conflicts, desktop platforms).
 
 ## Settings (`ui/screens/settings/settings_screen.dart`)
-- `OneUiPage` + grouped lists: General (Appearance/Sync center/Transfers/
+- `NexaPage` + grouped lists: General (Appearance/Sync center/Transfers/
   Notifications), Server (Connected to), Admin (Users/Audit log for admins),
   About; sign-out outlined button. Profile avatar + role caption.
 
 ## Admin / Notifications / Trash
 - **Users** (`ui/screens/admin/admin_users_screen.dart`): token rows
-  (`OneUiSurface` + `Material.transparency` + `ListTile`), create-user dialog,
+  (`NexaSurface` + `Material.transparency` + `ListTile`), create-user dialog,
   disable toggle.
 - **Notifications** (`ui/screens/notifications/notifications_screen.dart`):
   All/Unread segmented filter; unread rows tinted (`accentContainerLight` /
   `surfaceAltDark`); mark-read.
-- **Trash** (`ui/screens/trash/trash_screen.dart`): `OneUiPage` + restore /
+- **Trash** (`ui/screens/trash/trash_screen.dart`): `NexaPage` + restore /
   delete-forever actions with confirmation.
 
 ## Data & service layer (unchanged contracts)

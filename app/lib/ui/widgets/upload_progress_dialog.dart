@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
+import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
 import '../../core/utils/format.dart';
 import '../../services/api.dart';
@@ -216,7 +217,7 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
         title: Row(
           children: [
             AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
+              duration: AppMotion.fast,
               child: SizedBox(key: ValueKey(statusTitle), child: statusIcon),
             ),
             const SizedBox(width: AppDimens.space12),

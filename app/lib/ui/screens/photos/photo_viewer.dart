@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import '../../widgets/nexa_components.dart';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -14,7 +15,6 @@ import '../../../services/image_decode_policy.dart';
 import '../../../services/image_decoder.dart';
 import '../../../services/image_pipeline.dart';
 import '../files/file_share_sheet.dart';
-import '../../widgets/one_ui_sheet.dart';
 
 /// Full-resolution photo viewer.
 ///
@@ -353,18 +353,18 @@ class _PhotoViewerState extends State<PhotoViewer> {
   }
 
   void _showActions() {
-    showOneUiSheet<void>(
+    showNexaSheet<void>(
       context,
-      builder: (sheetContext) => OneUiSheetBody(
+      builder: (sheetContext) => NexaSheetBody(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            OneUiSheetHeader(
+            NexaSheetHeader(
               title: _photos[_current]['name']?.toString() ?? 'Photo',
               subtitle: '${_current + 1} of ${_photos.length}',
             ),
-            OneUiSheetAction(
+            NexaSheetAction(
               icon: Icons.download_outlined,
               title: 'Save to device',
               onTap: () {
@@ -372,7 +372,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
                 _downloadCurrent();
               },
             ),
-            OneUiSheetAction(
+            NexaSheetAction(
               icon: Icons.share_outlined,
               title: 'Share',
               onTap: () {
@@ -380,7 +380,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
                 _shareCurrent();
               },
             ),
-            OneUiSheetAction(
+            NexaSheetAction(
               icon: Icons.delete_outline_rounded,
               title: 'Move to Trash',
               destructive: true,

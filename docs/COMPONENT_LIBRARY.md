@@ -1,45 +1,63 @@
-# NexaDrive Component Library — `OneUi*` Primitives
+# NexaDrive Component Library — `Nexa*` Primitives
 
-> These widgets in `lib/ui/widgets/` are the only building blocks a new screen
-> should need. All are token-driven (design tokens in `core/design/`), themable
-> via `Theme`, and honor reduced motion through `AppMotion.resolve`.
+> The `Nexa*` widgets in `app/lib/ui/widgets/` are the only building blocks new
+> screens should use. Every component is token-driven (the `App*` tokens in
+> `app/lib/core/design/`), themable through the app theme, and honours reduced
+> motion via `AppMotion`.
+>
+> In an earlier design-system pass this library was called `OneUi*`. The rename
+> is complete: `one_ui_*.dart` no longer exists and nothing references it.
+> If you find a stale `OneUi`/`one_ui` reference, migrate it to the `Nexa*`
+> equivalent below — do not reintroduce a second component system.
+>
+> The canonical export surface for consumption is `nexa_components.dart`
+> (`app/lib/ui/widgets/nexa_components.dart`). The table below maps each
+> component to its source file; the source is the ground truth for constructor
+> parameters.
 
 ## Page scaffold
 
-| Widget | File | Contract |
+| Component | File | Contract |
 |---|---|---|
-| `OneUiPage` | `one_ui_page.dart` | Screen skeleton: viewing area (title + subtitle + optional header/trailing action) above a scrollable or fixed body. `scrollable` controls single-column scrolling. |
-| `OneUiBody` | `one_ui_page.dart` | Horizontally padded, centered, max-width (`contentMaxWidth` default) column for body content. |
+| `NexaPage` | `nexa_page.dart` | Standard screen shell: viewing area (title/subtitle, header/trailing actions) above a scrollable or fixed body, sticky bottom bar support. |
+| `NexaImmersivePage` | `nexa_page.dart` | Headerless immersive variant for full-screen content (viewers, fullscreen media). |
+| `NexaPageBody` | `nexa_page.dart` | Horizontally padded, centered, max-width body column used by `NexaPage`. |
+| `NexaPageContainer` | `nexa_grouped_list.dart` | Constrained-width page container for wider screens. |
 
 ## Layout & surface
 
-| Widget | File | Contract |
+| Component | File | Contract |
 |---|---|---|
-| `OneUiSurface` | `one_ui_surface.dart` | The surface primitive. `level` picks L0/L1/L2/L3/L4 color+shadow; optional `onTap`/`onLongPress` turns it into an `InkWell`; animates visual state with a fast token duration. Use for cards, rows, tiles. |
-| `OneUiGroupedList` / `OneUiGroupTile` | `one_ui_grouped_list.dart` | Grouped-settings-list composer: header + rows; tile is icon + title + subtitle + chevron/trailing. Used by Settings. |
-| `OneUiFocusBlock` | `one_ui_focus_block.dart` | Tappable card (`onTap`), vertical variant for home quick actions, horizontal variant for stacked lists. |
+| `NexaSurface`, `NexaSurfaceLevel`, `nexaSurfaceColor` | `nexa_surface.dart` → `core/design/nexa_surfaces.dart` | The surface primitive; `NexaSurfaceLevel` picks L0–L4 colour+shadow, optional tap/long-press makes it an ink surface. Base of cards, rows and tiles. |
+| `NexaGroupedList` / `NexaGroupTile` | `nexa_grouped_list.dart` / `nexa_list_tile.dart` | Grouped-settings-list composer: section header + tiles; tile is icon + title + subtitle + chevron/trailing. |
+| `NexaFocusBlock` | `nexa_focus_block.dart` | Tappable card (`onTap`), vertical variant for home quick actions, horizontal for stacked lists. |
+| `NexaListTile`, `NexaGroupTile` | `nexa_list_tile.dart` | Shared list row primitives. |
+| `NexaAvatar`, `NexaAvatarWithStatus` | `nexa_avatar.dart` | User/entity avatars with optional presence state. |
+| `NexaBadge`, `NexaStatusIndicator` | `nexa_badge.dart` | Count/badge and inline status indicators. |
+| `NexaDivider`, `NexaVerticalDivider` | `nexa_divider.dart` | Horizontal / vertical hairline dividers. |
+| `NexaHero` | `nexa_hero.dart` | Prominent header hero content. |
 
 ## Interaction & feedback
 
-| Widget | File | Contract |
+| Component | File | Contract |
 |---|---|---|
-| `OneUiActionBar` | `one_ui_action_bar.dart` | Bottom contextual bar: `title`/`leading`, horizontal scrolling `OneUiActionItem` pills (52dp min height), optional `floating` (pill card centered, ≤720dp). Items carry `label` for `Semantics`. Used by My Files/Photos selection mode. |
-| `OneUiSearchField` | `one_ui_search_field.dart` | Debounced search input; owns its controller, exposes `onChanged`; uses the global searchBar theme (`autoFocus` parameter). |
-| `OneUiStatusPod` | `one_ui_status_pod.dart` | Inline status row: icon + label + optional trailing; used for "N items waiting to upload" on Home. Milliseconds-normal duration. |
-| `OneUiEmptyState` | `one_ui_empty_state.dart` | Icons + title + hint (+ action button) for empty/error/offline states. |
-| `OneUiSheet` | `one_ui_sheet.dart` | `showOneUiSheet(context, builder)` bottom sheet + `OneUiSheetHeader` / `OneUiSheetBody` (Material-transparency body so ListTiles ink correctly) / `OneUiSheetAction`. Powers the More sheet, file menus, unsupported-type prompts. |
-| `OneUiHero` | `one_ui_hero.dart` | Gradient hero band (storage hero on Home) with `heroTextOnGradient` color, ring accent, tap handler. `Ink` (no `borderRadius` param) used for the press overlay. |
-| `OneUiPage` transitions | `app_transitions.dart` | Global `kOneUiPageTransitions` (glide + fade) built into the theme. |
-| `OneUiFileTile` | `one_ui_file_tile.dart` | File/folder row: icon (folder=accent), name, subtitle (size/time), selection highlight via `accentContainerFor` + `onAccentContainerFor` + border. |
+| `NexaActionBar`, `NexaActionItem`, `NexaIconActionItem` | `nexa_action_bar.dart` | Bottom contextual action bar (`title`/`leading`, horizontally scrollable action pills, optional floating card). Powers selection modes. |
+| `NexaSearchField` | `nexa_search_field.dart` | Debounced search input; owns its controller, exposes `onChanged`; theme-aware. |
+| `NexaStatusPod` | `nexa_status_pod.dart` | Inline status row (icon + label + optional trailing), e.g. "N items waiting to upload". |
+| `NexaEmptyState`, `NexaEmptyStateFullScreen`, `NexaRefreshableEmptyState` | `nexa_empty_state.dart` | Icons + title + hint (+ action / pull-to-refresh) for empty/offline states. |
+| `NexaErrorState`, `NexaErrorStateFullScreen` | `nexa_error_state.dart` | Error presentation variant of empty state. |
+| `NexaLoadingBlock`, `NexaLoadingState`, `NexaSkeletonList`, `NexaSkeletonGrid` | `nexa_loading_state.dart` | Loading blocks, spinners and skeleton placeholders. |
+| `showNexaSheet`, `NexaSheetHeader`, `NexaSheetBody`, `NexaSheetAction`, `showNexaConfirmation`, `showNexaActionSheet`, `NexaConfirmationDialog` | `nexa_sheet.dart` | Bottom sheet choreography (transparent body so `ListTile`s ink correctly) + confirmation dialog. |
+| `NexaFilledButton`, `NexaOutlinedButton`, `NexaTextButton`, `NexaDestructiveButton`, `NexaIconButton`, `NexaBackButton`, `NexaFilledIconButton`, `NexaSegmentedControl` | `nexa_button.dart` | The complete button family plus the segmented control. |
+| `NexaChip`, `NexaSectionHeader` | `nexa_chip.dart` | Chips and section headers. |
+| `NexaCircularProgress`, `NexaProgressIndicator`, `NexaSpinner` | `nexa_progress.dart` | Indeterminate progress/spinner primitives. |
+| `NexaTextField` | `nexa_text_field.dart` | Themed text input field. |
+| `NexaFileTile`, `NexaFileGridTile` | `nexa_file_tile.dart` | File/folder list and grid tiles. |
+| `NexaBottomNav`, `NexaBottomNavItem`, `NexaBottomNavItems` | `nexa_bottom_nav.dart` | The floating bottom navigation pill (see `app/lib/ui/shell/navigation.dart`). |
 
-## Rules of composition
+## Rules
 
-1. Screens are built from these primitives — no ad-hoc `Container` boxes with
-   hard-coded colors.
-2. A visual state change animated with `Animated*` must use
-   `AppMotion.resolve(context, AppMotion.x)` for its `duration`.
-3. Icon-only controls need a `tooltip` (and `Semantics` where there is no
-   adjacent text label).
-4. Tappable area ≥ 48dp (action pills enforce 52dp; icon buttons 48dp).
-5. Empty/loading/error states come from `OneUiEmptyState` + the circular
-   progress indicator (strokeWidth 2), never bespoke layouts.
+1. Screens compose these components; they never re-implement their styling.
+2. All visual values come from `App*` tokens — no hard-coded colours, radii,
+   durations or text styles in screens.
+3. Do not create screen-specific variants. Prefer a shared component change.

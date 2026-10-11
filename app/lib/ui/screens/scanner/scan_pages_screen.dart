@@ -202,7 +202,7 @@ class _ActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF1A1C1E),
+      color: AppColors.surfaceDark,
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
         AppDimens.space12,

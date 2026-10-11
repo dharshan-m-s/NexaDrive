@@ -8,10 +8,7 @@ import '../../../core/design/app_typography.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../../services/sync_service.dart';
-import '../../widgets/one_ui_controls.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_page.dart';
-import '../../widgets/one_ui_surface.dart';
+import '../../widgets/nexa_components.dart';
 
 /// Sync Center.
 ///
@@ -257,10 +254,10 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: OneUiPage(
+        child: NexaPage(
           title: 'Sync center',
           subtitle: _loading ? null : _summary,
-          leading: const OneUiBackButton(),
+          leading: const NexaBackButton(),
           headerAction: IconButton(
             tooltip: 'Refresh',
             onPressed: _loading ? null : _init,
@@ -273,7 +270,7 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
             AppDimens.space24,
           ),
           body: _loading
-              ? const OneUiLoadingBlock()
+              ? const NexaLoadingBlock()
               : RefreshIndicator(
                   onRefresh: _init,
                   child: ListView(
@@ -353,7 +350,7 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
                           body: _loadError!,
                         )
                       else if (_devices.isEmpty)
-                        const OneUiEmptyState(
+                        const NexaEmptyState(
                           icon: Icons.devices_other_rounded,
                           title: 'No linked devices yet',
                           hint:
@@ -468,8 +465,8 @@ class _StatusCard extends StatelessWidget {
         ),
     };
 
-    return OneUiSurface(
-      level: OneUiSurfaceLevel.surface,
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
       radius: AppDimens.radiusCard,
       padding: const EdgeInsets.all(AppDimens.space20),
       child: Row(
@@ -525,8 +522,8 @@ class _FolderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    return OneUiSurface(
-      level: OneUiSurfaceLevel.surface,
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
       radius: AppDimens.radiusCard,
       padding: const EdgeInsets.all(AppDimens.space16),
       child: Column(
@@ -575,8 +572,8 @@ class _LastRunCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    return OneUiSurface(
-      level: OneUiSurfaceLevel.surface,
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
       radius: AppDimens.radiusCard,
       padding: const EdgeInsets.all(AppDimens.space16),
       child: Column(
@@ -689,8 +686,8 @@ class _ConflictCardState extends State<_ConflictCard> {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     if (_loading || _items.isEmpty) return const SizedBox.shrink();
-    return OneUiSurface(
-      level: OneUiSurfaceLevel.surface,
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
       radius: AppDimens.radiusCard,
       color: AppColors.warningContainerFor(brightness),
       padding: const EdgeInsets.all(AppDimens.space16),
@@ -793,8 +790,8 @@ class _DeviceRow extends StatelessWidget {
         DateTime.tryParse(device['last_seen_at']?.toString() ?? '');
     final name = device['name']?.toString() ?? 'Device';
 
-    return OneUiSurface(
-      level: OneUiSurfaceLevel.surface,
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
       radius: AppDimens.radiusTile,
       padding: const EdgeInsets.fromLTRB(
         AppDimens.space16,
@@ -897,8 +894,8 @@ class _Notice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    return OneUiSurface(
-      level: OneUiSurfaceLevel.surface,
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
       radius: AppDimens.radiusCard,
       padding: const EdgeInsets.all(AppDimens.space16),
       child: Row(

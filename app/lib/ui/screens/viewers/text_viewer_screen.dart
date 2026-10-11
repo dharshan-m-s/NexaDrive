@@ -6,9 +6,7 @@ import '../../../../core/design/app_typography.dart';
 import '../../../../core/models/file_entry.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../services/api.dart';
-import '../../widgets/one_ui_controls.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_page.dart';
+import '../../widgets/nexa_components.dart';
 
 /// In-app text reader for .txt/.md/.log/.json and source files.
 /// Downloads the file and renders it as wrapped monospace text.
@@ -51,14 +49,14 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: OneUiPage(
+        child: NexaPage(
           title: widget.file.name,
           subtitle:
               widget.file.size == null ? null : Format.bytes(widget.file.size),
-          leading: const OneUiBackButton(),
+          leading: const NexaBackButton(),
           body: switch ((_text, _error)) {
-            (null, null) => const OneUiLoadingBlock(),
-            (_, final String error) => OneUiEmptyState(
+            (null, null) => const NexaLoadingBlock(),
+            (_, final String error) => NexaEmptyState(
                 icon: Icons.error_outline_rounded,
                 title: 'Could not read this file',
                 hint: error,

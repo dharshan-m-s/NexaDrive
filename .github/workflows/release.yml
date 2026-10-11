@@ -33,7 +33,7 @@ permissions:
   contents: write
 
 env:
-  FLUTTER_VERSION: "3.47.2"
+  FLUTTER_VERSION: "3.47.7"
 
 # Third-party actions are pinned to full commit SHAs (resolved from the tagged
 # release of each action); the human-readable tag is kept in a trailing comment.
@@ -150,9 +150,9 @@ jobs:
             echo "::error::A runtime .env file is tracked by git. Remove it."
             exit 1
           fi
-      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # 1.98.1
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # 1.99.0
         with:
-          toolchain: 1.98.1
+          toolchain: 1.99.0
           components: rustfmt, clippy
       - name: Rust checks
         working-directory: server
@@ -178,9 +178,9 @@ jobs:
     needs: [verify, version]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
-      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # 1.98.1
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # 1.99.0
         with:
-          toolchain: 1.98.1
+          toolchain: 1.99.0
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: server
@@ -205,9 +205,9 @@ jobs:
     needs: [verify, version]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.6.x
-      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # 1.98.1
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # 1.99.0
         with:
-          toolchain: 1.98.1
+          toolchain: 1.99.0
       - uses: taiki-e/setup-cross-toolchain-action@12b7ad4acfa95a1476779d6c06699b96ec1691f8 # v1.29.0
         with:
           target: aarch64-unknown-linux-gnu

@@ -28,9 +28,9 @@
 | `app_dimensions.dart` | gutters (24), radii (18/22/28/24), `iconSmall/Medium/Large`, `iconTileLarge`, `spaceN`, `elevation*`, `contentMaxWidth = 1100` | Spacing multiples of 4. |
 | `app_typography.dart` | `pageTitle`, `heroTitle` (38), `sectionHeader`, `metricValue` (26), `statValue` (18), `rowTitle`, `rowSubtitle`, `listHeader`, `chipLabel` (12), `micro`, `caption`, `dialogTitle`, `buttonSmall` | Weight + size + leading as a set; fixed sizes scale with the platform text scaler. |
 | `app_motion.dart` | durations `micro/fast/normal/slow`, curves `standard/enter/exit/fade`, springs (`response 0.35 / damping 1.0` critical), `reducedMotion(context)` helpers | Every animation duration in the app must come from here or `AppMotion.resolve(...)`. |
-| `app_gradients.dart` | `GradientFamily.vivid/soft/pageWash/storageHero` | Cloud/secure/storage/media/success families; page washes stay subtle. |
 | `app_shadows.dart` | `none`, `level1..level4` | Tone-based, restrained. |
-| `app_transitions.dart` | `OneUiPageTransitionsBuilder`, `kOneUiPageTransitions` | Glide-up + settle + cross-fade; skips entirely under reduced motion. |
+| `app_transitions.dart` | `NexaPageTransitionsBuilder`, `kNexaPageTransitions` | Glide-up + settle + cross-fade; skips entirely under reduced motion. |
+| `nexa_surfaces.dart` | `NexaSurface`, `NexaSurfaceLevel`, `nexaSurfaceColor` | Surface material primitive (L0–L4 levels replace the former `app_gradients.dart` washes). |
 | `app_theme.dart` | `buildAppTheme(brightness)` — scheme + component themes (filled/outlined chip/searchBar/bottomAppBar/navigationBar/bottomSheet/pageTransitions) | Single place the theme is composed. |
 
 ### Surface hierarchy
@@ -57,7 +57,7 @@
 
 - Colors: always `Theme.of(context).brightness` → `AppColors.xFor(brightness)`.
 - Text: always an `AppTextStyle.*` base, `.copyWith` for adjustments.
-- Surfaces: prefer `OneUiSurface(level:)` over hand-built `Container` decorations.
+- Surfaces: prefer `NexaSurface(level:)` over hand-built `Container` decorations.
 - Icons: `IconData` from Material Icons; filled when selected, outlined when idle.
 - List rows under a decorated surface: wrap the `ListTile` in
   `Material(type: MaterialType.transparency)` to avoid the

@@ -4,10 +4,7 @@ import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
-import '../../widgets/one_ui_controls.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_page.dart';
-import '../../widgets/one_ui_surface.dart';
+import '../../widgets/nexa_components.dart';
 
 class NotificationsScreen extends StatefulWidget {
   final Api api;
@@ -66,12 +63,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: OneUiPage(
+        child: NexaPage(
           title: 'Notifications',
           subtitle: _unreadOnly
               ? 'Unread only'
               : '${_items.length} item${_items.length == 1 ? '' : 's'}',
-          leading: const OneUiBackButton(),
+          leading: const NexaBackButton(),
           headerAction: IconButton(
             tooltip: 'Mark all read',
             onPressed: _markAllRead,
@@ -111,9 +108,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
               Expanded(
                 child: _loading
-                    ? const OneUiLoadingBlock()
+                    ? const NexaLoadingBlock()
                     : _items.isEmpty
-                        ? const OneUiEmptyState(
+                        ? const NexaEmptyState(
                             icon: Icons.notifications_none_rounded,
                             title: 'No notifications',
                             hint:
@@ -166,8 +163,8 @@ class _NotificationCard extends StatelessWidget {
         ? AppColors.surfaceDark
         : AppColors.surfaceLight;
 
-    return OneUiSurface(
-      level: OneUiSurfaceLevel.surface,
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
       radius: AppDimens.radiusTile,
       color: read ? readSurface : unreadSurface,
       child: Material(

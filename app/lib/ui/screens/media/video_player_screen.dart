@@ -12,8 +12,7 @@ import '../../../core/models/file_entry.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../../services/download_service.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_page.dart';
+import '../../widgets/nexa_components.dart';
 
 /// One UI video player.
 ///
@@ -198,6 +197,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     final value = controller?.value;
     final initialized = value?.isInitialized == true;
 
+    final body = _initializing
+        ? const Center(
+            child:
+                CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+          )
+        : _error != null
+            ? Center(
+                child: NexaEmptyState(
+                  icon: Icons.movie_outlined,
+                  title: 'Can\u2019t play this video',
+                  hint: _error,
+                  actionLabel: 'Retry',
+                  onAction: _init,
+                ),
+              )
+            : initialized
+                ? _buildPlayer(controller!, value!)
+                : const SizedBox.shrink();
+
     return PopScope(
       canPop: !_fullscreen,
       onPopInvokedWithResult: (didPop, _) {
@@ -207,44 +225,33 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         backgroundColor: Colors.black,
         body: SafeArea(
           top: _fullscreen,
-          child: OneUiPage(
-            title: widget.file.name,
-            // The header is the chrome for windowed playback only; in
-            // fullscreen the video owns the whole surface.
-            showHeader: !_fullscreen,
-            // This page paints its own black canvas, so the header has to
-            // force light chrome rather than inherit the theme's dark text.
-            headerForeground: Colors.white,
-            leading: IconButton(
-              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-              onPressed: _toggleFullscreen,
-              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-            ),
-            headerAction: IconButton(
-              tooltip: 'Save to device',
-              onPressed: _saveToDevice,
-              icon: const Icon(Icons.download_outlined, color: Colors.white),
-            ),
-            padding: EdgeInsets.zero,
-            body: _initializing
-                ? const Center(
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2),
-                  )
-                : _error != null
-                    ? Center(
-                        child: OneUiEmptyState(
-                          icon: Icons.movie_outlined,
-                          title: 'Can\u2019t play this video',
-                          hint: _error,
-                          actionLabel: 'Retry',
-                          onAction: _init,
-                        ),
-                      )
-                    : initialized
-                        ? _buildPlayer(controller!, value!)
-                        : const SizedBox.shrink(),
-          ),
+          child: _fullscreen
+              // In fullscreen the video owns the whole surface: no header.
+              ? NexaImmersivePage(
+                  backgroundColor: Colors.black,
+                  body: body,
+                )
+              : NexaPage(
+                  title: widget.file.name,
+                  // This page paints its own black canvas, so the header has to
+                  // force light chrome rather than inherit the theme's dark text.
+                  headerForeground: Colors.white,
+                  leading: IconButton(
+                    tooltip:
+                        MaterialLocalizations.of(context).backButtonTooltip,
+                    onPressed: _toggleFullscreen,
+                    icon: const Icon(Icons.arrow_back_rounded,
+                        color: Colors.white),
+                  ),
+                  headerAction: IconButton(
+                    tooltip: 'Save to device',
+                    onPressed: _saveToDevice,
+                    icon: const Icon(Icons.download_outlined,
+                        color: Colors.white),
+                  ),
+                  padding: EdgeInsets.zero,
+                  body: body,
+                ),
         ),
       ),
     );

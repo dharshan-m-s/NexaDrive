@@ -9,8 +9,9 @@ import '../../../services/api.dart';
 import '../../../services/app_lock.dart';
 import '../../../services/session.dart';
 import '../../../update/update_controller.dart';
-import '../../widgets/one_ui_grouped_list.dart';
-import '../../widgets/one_ui_page.dart';
+import '../../widgets/nexa_grouped_list.dart';
+import '../../widgets/nexa_list_tile.dart';
+import '../../widgets/nexa_page.dart';
 import '../admin/audit_log_screen.dart';
 import '../admin/users_screen.dart';
 import 'update_center_screen.dart';
@@ -46,8 +47,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    // Only Android implements App Lock (device credential); the setting is
-    // meaningless elsewhere and would only promise something it cannot do.
     if (Platform.isAndroid) {
       _appLock.isEnabled().then((value) {
         if (mounted) setState(() => _appLockEnabled = value);
@@ -79,9 +78,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       : mode == 'light'
                           ? Icons.light_mode_rounded
                           : Icons.dark_mode_rounded,
-                  size: AppDimens.iconMedium,
+                  size: AppDimens.iconMd,
                 ),
-                const SizedBox(width: AppDimens.space12),
+                const SizedBox(width: AppDimens.spaceSm),
                 Text(mode[0].toUpperCase() + mode.substring(1)),
               ],
             ),
@@ -93,9 +92,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await widget.session.setThemeMode(value);
   }
 
-  /// Toggles App Lock. Turning it on asks the device once whether it actually
-  /// has a secure lock; a device without one refuses, and the user is told why
-  /// instead of being given a switch that silently does nothing.
   Future<void> _toggleAppLock(bool value) async {
     final ok = await _appLock.setEnabled(value);
     if (!mounted) return;
@@ -114,7 +110,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     setState(() => _appLockEnabled = value);
     if (value) {
-      // Immediate proof the lock works, instead of a surprise at next launch.
       final result = await _appLock.authenticate();
       if (!mounted) return;
       if (result != AppLockResult.unlocked) {
@@ -186,14 +181,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final secondary = AppColors.textSecondaryFor(brightness);
     final session = widget.session;
 
-    return OneUiPage(
+    return NexaPage(
       title: 'Settings',
       subtitle: session.username ?? '',
       scrollable: true,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Profile header
           Center(
             child: Column(
               children: [
@@ -209,41 +203,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   child: Text(
                     _initial,
-                    style: AppTextStyle.display.copyWith(
+                    style: NexaTypography.display.copyWith(
                       color: accent,
                       fontSize: 30,
                     ),
                   ),
                 ),
-                const SizedBox(height: AppDimens.space12),
+                const SizedBox(height: AppDimens.spaceSm),
                 Text(
                   session.displayName ?? session.username ?? '',
-                  style: AppTextStyle.sectionHeader.copyWith(
+                  style: NexaTypography.sectionHeader.copyWith(
                     color: AppColors.textPrimaryFor(brightness),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: AppDimens.space4),
+                const SizedBox(height: AppDimens.spaceXs),
                 Text(
                   isAdmin ? 'Administrator' : (session.username ?? ''),
-                  style: AppTextStyle.caption.copyWith(color: secondary),
+                  style: NexaTypography.caption.copyWith(color: secondary),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: AppDimens.space32),
-
-          OneUiGroupedList(
+          const SizedBox(height: AppDimens.space2xl),
+          NexaGroupedList(
             header: 'General',
             children: [
-              OneUiGroupTile(
+              NexaListTile(
                 icon: Icons.brightness_6_rounded,
                 title: 'Appearance',
                 subtitle: _themeLabel(session.themeMode),
                 onTap: () => _changeTheme(context),
               ),
               if (Platform.isAndroid && _appLockEnabled != null)
-                OneUiGroupTile(
+                NexaListTile(
                   icon: Icons.lock_outline_rounded,
                   title: 'App Lock',
                   subtitle: _appLockEnabled == true
@@ -255,19 +248,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onChanged: _toggleAppLock,
                   ),
                 ),
-              OneUiGroupTile(
+              NexaListTile(
                 icon: Icons.sync_rounded,
                 title: 'Sync center',
                 subtitle: 'Keep a local folder in step with the cloud',
                 onTap: widget.onOpenSync,
               ),
-              OneUiGroupTile(
+              NexaListTile(
                 icon: Icons.cloud_upload_outlined,
                 title: 'Transfers',
                 subtitle: 'Offline upload queue and progress',
                 onTap: widget.onOpenTransfers,
               ),
-              OneUiGroupTile(
+              NexaListTile(
                 icon: Icons.notifications_outlined,
                 title: 'Notifications',
                 subtitle: 'Backup and account alerts',
@@ -275,11 +268,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
-
-          OneUiGroupedList(
+          NexaGroupedList(
             header: 'Server',
             children: [
-              OneUiGroupTile(
+              NexaListTile(
                 icon: Icons.dns_outlined,
                 title: 'Connected to',
                 subtitle: session.serverUrl ?? 'Not configured',
@@ -287,12 +279,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
-
           if (isAdmin) ...[
-            OneUiGroupedList(
+            NexaGroupedList(
               header: 'Admin',
               children: [
-                OneUiGroupTile(
+                NexaListTile(
                   icon: Icons.people_outline_rounded,
                   title: 'Users',
                   subtitle: 'Manage accounts and quotas',
@@ -304,7 +295,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     );
                   },
                 ),
-                OneUiGroupTile(
+                NexaListTile(
                   icon: Icons.receipt_long_outlined,
                   title: 'Audit log',
                   subtitle: 'Review what happened and when',
@@ -319,20 +310,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ],
-
-          OneUiGroupedList(
+          NexaGroupedList(
             header: 'About',
             children: [
               _UpdateCenterTile(controller: widget.updateController),
-              OneUiGroupTile(
+              NexaListTile(
                 icon: Icons.info_outline_rounded,
                 title: 'About NexaDrive',
                 subtitle: 'Your files. Your server. Your private cloud.',
                 onTap: () {
-                  // Only state a version when the controller actually knows it.
-                  // A hardcoded fallback here was a release literal that went
-                  // stale at the next release; `showAboutDialog` omits the
-                  // version line entirely when it is null.
                   showAboutDialog(
                     context: context,
                     applicationName: 'NexaDrive',
@@ -345,17 +331,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
-
-          const SizedBox(height: AppDimens.space24),
+          const SizedBox(height: AppDimens.spaceLg),
           SizedBox(
             height: 52,
             child: OutlinedButton.icon(
               onPressed: () => _confirmLogout(context),
-              icon: const Icon(Icons.logout_rounded, size: AppDimens.iconSmall),
+              icon: const Icon(Icons.logout_rounded, size: AppDimens.iconSm),
               label: const Text('Sign out'),
             ),
           ),
-          const SizedBox(height: AppDimens.space8),
+          const SizedBox(height: AppDimens.space2xs),
         ],
       ),
     );
@@ -373,7 +358,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-/// Settings entry to the Update Center with a subtle availability indicator.
 class _UpdateCenterTile extends StatelessWidget {
   final UpdateController controller;
   const _UpdateCenterTile({required this.controller});
@@ -385,7 +369,7 @@ class _UpdateCenterTile extends StatelessWidget {
       listenable: controller,
       builder: (context, _) {
         final (subtitle, badge) = _statusFor(brightness);
-        return OneUiGroupTile(
+        return NexaListTile(
           icon: Icons.system_update_alt_rounded,
           title: 'Update center',
           subtitle: subtitle,
@@ -428,9 +412,9 @@ class _UpdateCenterTile extends StatelessWidget {
       case UpdateStatus.checking:
         return ('Checking for updates…', _dot(accent));
       case UpdateStatus.readyToInstall:
-        return ('Installer ready', null);
+        return ('Update ready to install', null);
       case UpdateStatus.installingHandoff:
-        return ('Finish the installation', null);
+        return ('Installing update…', _dot(accent));
       case UpdateStatus.completed:
         return ('New version installed', null);
       case UpdateStatus.failed:
@@ -457,8 +441,8 @@ class _UpdateCenterTile extends StatelessWidget {
   Widget _badge(Color fg, Color bg, String label) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space10,
-        vertical: AppDimens.space4,
+        horizontal: AppDimens.space2xs + 2,
+        vertical: AppDimens.space2xs,
       ),
       decoration: BoxDecoration(
         color: bg,
@@ -466,7 +450,7 @@ class _UpdateCenterTile extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: AppTextStyle.chipLabel.copyWith(color: fg),
+        style: NexaTypography.chipLabel.copyWith(color: fg),
       ),
     );
   }

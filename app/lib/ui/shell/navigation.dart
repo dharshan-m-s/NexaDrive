@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
+import '../../../core/design/app_motion.dart';
 import '../../../core/design/app_typography.dart';
 
-/// Desktop navigation rail — One UI sidebar with brand at top, primary
-/// destinations, and utility destinations pinned at the bottom.
+/// Desktop navigation — an iOS-style source list: brand at top, the primary
+/// destinations, then utility destinations, with the active row marked by an
+/// inset group fill rather than a rail indicator.
 class SideNavigation extends StatelessWidget {
   final int index;
   final ValueChanged<int> onSelected;
@@ -24,16 +26,19 @@ class SideNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final surface = brightness == Brightness.dark
-        ? AppColors.surfaceDark
-        : AppColors.surfaceLight;
+    final surface = AppColors.surfaceFor(brightness);
     final primary = AppColors.textPrimaryFor(brightness);
     final accent = AppColors.accentFor(brightness);
 
     return SizedBox(
-      width: 236,
-      child: Material(
-        color: surface,
+      width: AppDimens.navRailWidth,
+      child: Container(
+        decoration: BoxDecoration(
+          color: surface,
+          border: Border(
+            right: BorderSide(color: AppColors.separatorFor(brightness)),
+          ),
+        ),
         child: Column(
           children: [
             Padding(
@@ -46,14 +51,14 @@ class SideNavigation extends StatelessWidget {
               child: Row(
                 children: [
                   Container(
-                    width: 38,
-                    height: 38,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
                       color: accent,
-                      borderRadius:
-                          BorderRadius.circular(AppDimens.radiusInner),
+                      borderRadius: BorderRadius.circular(9),
                     ),
-                    child: Icon(Icons.cloud_rounded, color: surface, size: 22),
+                    child: const Icon(Icons.cloud_rounded,
+                        color: Colors.white, size: 22),
                   ),
                   const SizedBox(width: AppDimens.space12),
                   Expanded(
@@ -143,7 +148,7 @@ class SideNavigation extends StatelessWidget {
   }
 }
 
-/// A single rail row.
+/// A single sidebar row: an inset rounded selection fill, accent glyph.
 class SideNavItem extends StatelessWidget {
   final IconData icon;
   final IconData? selectedIcon;
@@ -163,31 +168,54 @@ class SideNavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final onAccent = AppColors.onAccentContainerFor(brightness);
-    final color = AppColors.textPrimaryFor(brightness);
+    final accent = AppColors.accentFor(brightness);
+    final secondary = AppColors.textSecondaryFor(brightness);
+    final primary = AppColors.textPrimaryFor(brightness);
 
-    return ListTile(
-      onTap: onTap,
-      selected: selected,
-      selectedTileColor: AppColors.accentContainerFor(brightness),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppDimens.radiusTile),
-      ),
-      leading: Icon(
-        selected ? (selectedIcon ?? icon) : icon,
-        size: AppDimens.iconMedium,
-        color: selected ? onAccent : AppColors.textSecondaryFor(brightness),
-      ),
-      title: Text(
-        label,
-        style: AppTextStyle.rowTitle.copyWith(
-          color: selected ? onAccent : color,
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppDimens.space1),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+          child: AnimatedContainer(
+            duration: AppMotion.resolve(context, AppMotion.fast),
+            height: AppDimens.listHeightNarrow,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.space12,
+            ),
+            decoration: BoxDecoration(
+              color: selected
+                  ? AppColors.accentContainerFor(brightness)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  selected ? (selectedIcon ?? icon) : icon,
+                  size: 20,
+                  color: selected ? accent : secondary,
+                ),
+                const SizedBox(width: AppDimens.space12),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyle.bodyEmphasized.copyWith(
+                      fontSize: 15,
+                      color: selected ? accent : primary,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-      minLeadingWidth: 28,
-      contentPadding: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
-      visualDensity: VisualDensity.compact,
     );
   }
 }
@@ -203,71 +231,37 @@ class _UtilityNavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    return ListTile(
-      onTap: onTap,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppDimens.radiusTile),
-      ),
-      leading: Icon(
-        icon,
-        size: AppDimens.iconMedium,
-        color: AppColors.textSecondaryFor(brightness),
-      ),
-      title: Text(
-        label,
-        style: AppTextStyle.rowTitle.copyWith(
-          color: AppColors.textPrimaryFor(brightness),
-          fontWeight: FontWeight.w500,
+    final secondary = AppColors.textSecondaryFor(brightness);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppDimens.space1),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+          child: SizedBox(
+            height: AppDimens.listHeightNarrow,
+            child: Row(
+              children: [
+                const SizedBox(width: AppDimens.space12),
+                Icon(icon, size: 20, color: secondary),
+                const SizedBox(width: AppDimens.space12),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyle.body.copyWith(
+                      fontSize: 15,
+                      color: AppColors.textPrimaryFor(brightness),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-      minLeadingWidth: 28,
-      contentPadding: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
-      visualDensity: VisualDensity.compact,
     );
   }
-}
-
-/// Mobile bottom navigation — One UI style: clean pill labels, restrained
-/// accent indicator, five destinations with the fifth opening a More sheet.
-///
-/// Built on the Material [NavigationBar] so system/theme navigation behavior
-/// stays consistent; the app's navigation-bar theme supplies One UI styling.
-class OneUiBottomNav extends StatelessWidget {
-  final int index;
-  final ValueChanged<int> onSelected;
-
-  const OneUiBottomNav(
-      {super.key, required this.index, required this.onSelected});
-
-  @override
-  Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: index,
-      onDestinationSelected: onSelected,
-      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-      destinations: List.generate(_labels.length, (i) {
-        return NavigationDestination(
-          icon: Icon(_icons[i]),
-          selectedIcon: Icon(_selectedIcons[i]),
-          label: _labels[i],
-        );
-      }),
-    );
-  }
-
-  static const _labels = ['Home', 'Files', 'Shared', 'Photos', 'More'];
-  static const _icons = [
-    Icons.home_outlined,
-    Icons.folder_outlined,
-    Icons.people_outline_rounded,
-    Icons.photo_library_outlined,
-    Icons.more_horiz_rounded,
-  ];
-  static const _selectedIcons = [
-    Icons.home_rounded,
-    Icons.folder_rounded,
-    Icons.people_rounded,
-    Icons.photo_library_rounded,
-    Icons.more_horiz_rounded,
-  ];
 }

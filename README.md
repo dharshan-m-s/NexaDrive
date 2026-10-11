@@ -38,11 +38,50 @@ optional convenience, not a dependency. There is **no built-in VPN** and no
 hardcoded network/DNS default: the address clients use is configured through
 `PUBLIC_URL` in `server/.env` (see `server/README.md`).
 
+## Repository layout
+
+```text
+app/            Flutter client (one codebase: Android, Windows, Linux)
+  lib/core/design/    App* design tokens (colors, type, motion, surfaces)
+  lib/core/           Models, file-kind/format helpers
+  lib/services/       API client, session, sync, transfer queue, media
+  lib/update/         In-app Update Center (manifest, downloader, controller)
+  lib/ui/widgets/     Nexa* component library (nexa_components.dart)
+  lib/ui/shell/       App shell + navigation
+  lib/ui/screens/     Feature screens (files, photos, shared, admin, ...)
+server/         Rust/Axum private-cloud server
+  src/main.rs         Startup wiring only (~120 lines)
+  src/config.rs       Environment configuration
+  src/state.rs        Shared app state
+  src/error.rs        AppError -> HTTP responses
+  src/models.rs       Request/response DTOs
+  src/paths.rs        Path-safety, MIME, byte-range helpers
+  src/auth.rs         Authentication, sessions, rate limiting
+  src/middleware.rs   Security headers
+  src/routes.rs       Router assembly
+  src/handlers/       Domain handlers (files, upload, download, sharing,
+                      sync, admin, notifications, storage, backup, system)
+  migrations/         SQLite migrations (sqlx migrate)
+deploy/         systemd unit template + install script
+scripts/        dev, packaging, backup/verify and release tooling
+docs/           reference docs (API, security, deployment, design system)
+```
+
+## Technology stack
+
+- **Client:** Flutter / Dart, the `Nexa*` component library over centralized
+  `App*` design tokens (iOS-inspired Liquid Glass look), single codebase for
+  Android, Windows and Linux.
+- **Server:** Rust (tokio + axum + sqlx), embedded SQLite (WAL), Argon2id
+  password hashing, SHA-256-stored bearer sessions, Restic backup integration.
+- **Deployment:** systemd unit running as an unprivileged `nexadrive` user,
+  Tailscale Serve (or a reverse proxy) in front of `127.0.0.1`.
+
 ## Current implementation
 
 This repository is a complete runnable MVP foundation:
 
-- Rust/Axum server
+- Rust/Axum server, modularized into config/state/error/auth/routes/handlers
 - Embedded SQLite metadata database (no PostgreSQL service)
 - Argon2id password hashing
 - Random bearer sessions with SHA-256 token storage
@@ -50,7 +89,7 @@ This repository is a complete runnable MVP foundation:
 - File/folder listing
 - Folder creation
 - Multipart file upload
-- File download
+- Streaming file download with HTTP Range support
 - File deletion to Trash
 - Trash restore/permanent delete
 - Rename, move and copy
@@ -64,7 +103,7 @@ This repository is a complete runnable MVP foundation:
 - Systemd service
 - Optional Tailscale Serve / reverse proxy exposure (no hardcoded DNS)
 - Flutter Android/Windows/Linux client
-- One UI-inspired responsive design
+- iOS-inspired responsive design (the `Nexa*` component system)
 - Light/dark mode
 - Search/filter UI
 - GitHub Actions checks

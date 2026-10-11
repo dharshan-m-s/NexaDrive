@@ -6,9 +6,7 @@ import '../../../../core/models/file_entry.dart';
 import '../../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../widgets/download_to_view.dart';
-import '../../widgets/one_ui_controls.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_page.dart';
+import '../../widgets/nexa_components.dart';
 
 /// One UI PDF viewer.
 ///
@@ -62,11 +60,11 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: OneUiPage(
+        child: NexaPage(
           title: widget.file.name,
           subtitle:
               widget.file.size == null ? null : Format.bytes(widget.file.size),
-          leading: const OneUiBackButton(),
+          leading: const NexaBackButton(),
           headerAction: (_error == null && _bytes != null)
               ? IconButton(
                   tooltip: 'Download',
@@ -85,10 +83,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   Widget _buildBody(Brightness brightness) {
     if (_loading) {
-      return const OneUiLoadingBlock();
+      return const NexaLoadingBlock();
     }
     if (_error != null) {
-      return OneUiEmptyState(
+      return NexaEmptyState(
         centered: true,
         icon: Icons.picture_as_pdf_outlined,
         title: 'Can\'t open this PDF',
@@ -102,7 +100,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       builder: (context, snapshot) {
         final supported = snapshot.data == true;
         if (!supported) {
-          return OneUiEmptyState(
+          return NexaEmptyState(
             centered: true,
             icon: Icons.picture_as_pdf_outlined,
             title: 'PDF reader coming to this device',
@@ -120,10 +118,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             ),
             builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
               options: const DefaultBuilderOptions(),
-              documentLoaderBuilder: (_) => const OneUiLoadingBlock(),
+              documentLoaderBuilder: (_) => const NexaLoadingBlock(),
               pageLoaderBuilder: (_) =>
-                  const OneUiLoadingBlock(inset: AppDimens.space24),
-              errorBuilder: (_, error) => OneUiEmptyState(
+                  const NexaLoadingBlock(inset: AppDimens.space24),
+              errorBuilder: (_, error) => NexaEmptyState(
                 centered: true,
                 icon: Icons.error_outline_rounded,
                 title: 'Can\'t render this page',
@@ -134,7 +132,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             ),
           );
         } catch (e) {
-          return OneUiEmptyState(
+          return NexaEmptyState(
             centered: true,
             icon: Icons.picture_as_pdf_outlined,
             title: 'Can\'t open this PDF',

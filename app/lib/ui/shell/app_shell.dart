@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../services/api.dart';
 import '../../../services/session.dart';
@@ -26,7 +27,7 @@ import '../../update/app_platform.dart';
 import '../../update/update_controller.dart';
 import '../../update/update_downloader.dart';
 import '../../update/update_source.dart';
-import '../widgets/one_ui_sheet.dart';
+import '../widgets/nexa_components.dart';
 import 'navigation.dart';
 
 /// Application shell: brand, navigation context, and the active screen.
@@ -241,15 +242,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   Future<void> _showMoreSheet() async {
-    await showOneUiSheet<void>(
+    await showNexaSheet<void>(
       context,
-      builder: (sheetContext) => OneUiSheetBody(
+      builder: (sheetContext) => NexaSheetBody(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const OneUiSheetHeader(title: 'More'),
-            OneUiSheetAction(
+            const NexaSheetHeader(title: 'More'),
+            NexaSheetAction(
               icon: Icons.camera_alt_rounded,
               title: 'Scan document',
               subtitle: 'Snap a page and save it to My files',
@@ -262,7 +263,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 );
               },
             ),
-            OneUiSheetAction(
+            NexaSheetAction(
               icon: Icons.cloud_upload_outlined,
               title: 'Transfers',
               subtitle: 'Uploads waiting for a connection',
@@ -271,7 +272,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 _openTransfers();
               },
             ),
-            OneUiSheetAction(
+            NexaSheetAction(
               icon: Icons.delete_outline_rounded,
               title: 'Trash',
               onTap: () {
@@ -279,7 +280,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 _goTo(4);
               },
             ),
-            OneUiSheetAction(
+            NexaSheetAction(
               icon: Icons.sync_rounded,
               title: 'Sync center',
               onTap: () {
@@ -287,7 +288,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 _openSyncCenter();
               },
             ),
-            OneUiSheetAction(
+            NexaSheetAction(
               icon: Icons.notifications_outlined,
               title: 'Notifications',
               onTap: () {
@@ -295,7 +296,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 _openNotifications();
               },
             ),
-            OneUiSheetAction(
+            NexaSheetAction(
               icon: Icons.settings_outlined,
               title: 'Settings',
               onTap: () {
@@ -383,46 +384,78 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final desktop = width >= 900;
     final pages = _buildPages();
 
-    return Scaffold(
-      body: desktop
-          ? Row(
-              children: [
-                SideNavigation(
-                  index: index,
-                  onSelected: _goTo,
-                  onSync: _openSyncCenter,
-                  onTransfers: _openTransfers,
-                  onNotifications: _openNotifications,
-                ),
-                Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: AppDimens.contentMaxWidth,
-                      ),
-                      child: _PageHost(
-                        index: index,
-                        visited: _visited,
-                        pages: pages,
-                      ),
-                    ),
+    // Desktop: persistent sidebar rail.
+    if (desktop) {
+      return Scaffold(
+        body: Row(
+          children: [
+            SideNavigation(
+              index: index,
+              onSelected: _goTo,
+              onSync: _openSyncCenter,
+              onTransfers: _openTransfers,
+              onNotifications: _openNotifications,
+            ),
+            Expanded(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: AppDimens.contentMaxWidth,
+                  ),
+                  child: _PageHost(
+                    index: index,
+                    visited: _visited,
+                    pages: pages,
                   ),
                 ),
-              ],
-            )
-          : _PageHost(index: index, visited: _visited, pages: pages),
-      bottomNavigationBar: desktop
-          ? null
-          : OneUiBottomNav(
-              index: index >= 4 ? 4 : index,
-              onSelected: (value) {
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Mobile: a floating iOS-style pill. Pages paint edge-to-edge down to the
+    // bottom edge but are padded up by the pill's footprint so content is never
+    // obscured behind it, while the pill still floats over the page like glass.
+    // Each page clears the status bar through [_PageHost]'s safe area.
+    final pillInset = AppDimens.space10 * 2 +
+        AppDimens.bottomNavHeight +
+        MediaQuery.paddingOf(context).bottom;
+
+    return Scaffold(
+      backgroundColor: AppColors.backgroundFor(
+        Theme.of(context).brightness,
+      ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(bottom: pillInset),
+            child: _PageHost(
+              index: index,
+              visited: _visited,
+              pages: pages,
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: AppDimens.space10,
+            child: NexaBottomNav(
+              currentIndex: index >= 4 ? 4 : index,
+              onTap: (value) {
                 if (value == 4) {
                   _showMoreSheet();
                 } else {
                   _goTo(value);
                 }
               },
+              items: NexaBottomNavItems.primary,
             ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -433,6 +466,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 /// in, Photos keeps its scroll offset, and returning to a tab does not re-issue
 /// its request. Unvisited destinations render nothing, so they cost nothing
 /// until first opened.
+///
+/// The page host clears the status bar for every destination; the bottom inset
+/// that keeps content above the floating [NexaBottomNav] is applied by the
+/// shell, so it is not consumed here.
 class _PageHost extends StatelessWidget {
   final int index;
   final Set<int> visited;
@@ -447,6 +484,7 @@ class _PageHost extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
+      bottom: false,
       child: IndexedStack(
         index: index,
         children: [

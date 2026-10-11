@@ -5,10 +5,7 @@ import '../../../core/design/app_typography.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../../services/transfer_queue.dart';
-import '../../widgets/one_ui_controls.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_page.dart';
-import '../../widgets/one_ui_surface.dart';
+import '../../widgets/nexa_components.dart';
 
 /// Offline upload queue — every pending transfer, its progress, and retry.
 class TransfersScreen extends StatefulWidget {
@@ -91,10 +88,10 @@ class _TransfersScreenState extends State<TransfersScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: OneUiPage(
+        child: NexaPage(
           title: 'Transfers',
           subtitle: _summary,
-          leading: const OneUiBackButton(),
+          leading: const NexaBackButton(),
           headerAction: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -138,10 +135,10 @@ class _TransfersScreenState extends State<TransfersScreen> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const OneUiLoadingBlock();
+      return const NexaLoadingBlock();
     }
     if (_items.isEmpty) {
-      return const OneUiEmptyState(
+      return const NexaEmptyState(
         icon: Icons.cloud_upload_outlined,
         title: 'No transfers',
         hint: 'Uploads you start while offline will be queued here.',
@@ -278,8 +275,8 @@ class _TransferRow extends StatelessWidget {
       );
     }
 
-    return OneUiSurface(
-      level: OneUiSurfaceLevel.surface,
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
       margin: const EdgeInsets.only(bottom: AppDimens.space8),
       padding: const EdgeInsets.fromLTRB(
         AppDimens.space16,

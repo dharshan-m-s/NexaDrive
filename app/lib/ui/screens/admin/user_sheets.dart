@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
-import '../../widgets/one_ui_sheet.dart';
+import '../../widgets/nexa_components.dart';
 import 'users_controller.dart';
 
 const double _gib = 1024 * 1024 * 1024;
@@ -32,7 +32,7 @@ Future<bool?> showUserEditorSheet(
   bool usernameLocked = false,
   required UserSaveCallback onSave,
 }) {
-  return showOneUiSheet<bool>(
+  return showNexaSheet<bool>(
     context,
     builder: (_) => _UserEditorSheet(
       title: title,
@@ -156,12 +156,12 @@ class _UserEditorSheetState extends State<_UserEditorSheet> {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    return OneUiSheetBody(
+    return NexaSheetBody(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          OneUiSheetHeader(title: widget.title),
+          NexaSheetHeader(title: widget.title),
           const SizedBox(height: AppDimens.space8),
           Flexible(
             child: SingleChildScrollView(
@@ -295,7 +295,7 @@ Future<void> showUserActionsSheet(
   required Future<void> Function() onToggleBlock,
   required VoidCallback onDelete,
 }) {
-  return showOneUiSheet<void>(
+  return showNexaSheet<void>(
     context,
     builder: (_) => _UserActionsSheet(
       user: user,
@@ -325,12 +325,12 @@ class _UserActionsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    return OneUiSheetBody(
+    return NexaSheetBody(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          OneUiSheetHeader(
+          NexaSheetHeader(
             title: user.displayName,
             subtitle: '@${user.username}',
           ),
@@ -362,7 +362,7 @@ class _UserActionsSheet extends StatelessWidget {
               ),
             ),
           ],
-          OneUiSheetAction(
+          NexaSheetAction(
             icon: Icons.edit_outlined,
             title: 'Edit account',
             onTap: () {
@@ -370,7 +370,7 @@ class _UserActionsSheet extends StatelessWidget {
               onEdit();
             },
           ),
-          OneUiSheetAction(
+          NexaSheetAction(
             icon: user.disabled ? Icons.lock_open_rounded : Icons.block_rounded,
             title: user.disabled ? 'Unblock account' : 'Block account',
             onTap: () {
@@ -378,7 +378,7 @@ class _UserActionsSheet extends StatelessWidget {
               onToggleBlock();
             },
           ),
-          OneUiSheetAction(
+          NexaSheetAction(
             icon: Icons.delete_outline_rounded,
             title: 'Delete account',
             destructive: true,

@@ -34,7 +34,7 @@ widgets under `app/lib/core/design` and `app/lib/ui/widgets`.
 | Document | Covers |
 | --- | --- |
 | [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) | Principles, surfaces, colour roles, typography. |
-| [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md) | The `OneUi*` primitives. |
+| [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md) | The `Nexa*` component library (formerly `OneUi*`, renamed during the 2026-10 design-system consolidation). |
 | [`UI_DESIGN_TOKENS.md`](UI_DESIGN_TOKENS.md) | Exact token values. |
 | [`UI_SCREEN_SPECIFICATION.md`](UI_SCREEN_SPECIFICATION.md) | Screen-by-screen layout specification. |
 | [`SCREEN_SPECIFICATIONS.md`](SCREEN_SPECIFICATIONS.md) | Older, shorter screen notes — superseded by the above where they overlap. |

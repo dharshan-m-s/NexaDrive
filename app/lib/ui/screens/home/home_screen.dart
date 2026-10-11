@@ -9,12 +9,8 @@ import '../../../services/api.dart';
 import '../../../services/session.dart';
 import '../../../services/transfer_queue.dart';
 import '../../navigation/file_opener.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_focus_block.dart';
-import '../../widgets/one_ui_hero.dart';
-import '../../widgets/one_ui_page.dart';
-import '../../widgets/one_ui_status_pod.dart';
-import '../files/files_screen.dart';
+import '../../widgets/nexa_components.dart';
+import '../files/files_screen.dart' show FilesIntent;
 import '../transfers/transfers_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -114,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final storage = _storage;
 
-    return OneUiPage(
+    return NexaPage(
       title: '${_greeting()}, $name',
       subtitle: storage == null
           ? 'Your private cloud'
@@ -134,17 +130,13 @@ class _HomeScreenState extends State<HomeScreen> {
             const Center(
               child: Padding(
                 padding: EdgeInsets.only(top: AppDimens.space40),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+                child: NexaCircularProgress(size: 20),
               ),
             )
           else
-            OneUiEmptyState(
+            NexaEmptyState(
               icon: Icons.cloud_off_rounded,
-              title: 'Can\u2019t reach your server',
+              title: 'Can\'t reach your server',
               hint: _error ?? 'Check your connection and try again.',
               actionLabel: 'Retry',
               onAction: load,
@@ -152,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: AppDimens.space24),
 
           // ------------------------------------- quick actions (focus blocks)
-          const _SectionTitle('Quick actions'),
+          const _SectionHeader('Quick actions'),
           const SizedBox(height: AppDimens.space12),
           _QuickActionsGrid(
             onNavigate: widget.onNavigate,
@@ -162,7 +154,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // ---------------------------------------- active transfer pod
           if (_pendingUploads > 0) ...[
-            OneUiStatusPod(
+            NexaStatusPod(
               icon: Icons.cloud_upload_outlined,
               tint: AppColors.warningFor(Theme.of(context).brightness),
               title:
@@ -192,9 +184,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
+class _SectionHeader extends StatelessWidget {
   final String title;
-  const _SectionTitle(this.title);
+  const _SectionHeader(this.title);
 
   @override
   Widget build(BuildContext context) {
@@ -202,7 +194,7 @@ class _SectionTitle extends StatelessWidget {
     return Text(
       title,
       style: AppTextStyle.sectionHeader.copyWith(
-        color: AppColors.textPrimaryFor(brightness),
+        color: AppColors.labelPrimaryFor(brightness),
       ),
     );
   }
@@ -228,7 +220,7 @@ class _StorageHero extends StatelessWidget {
             '${Format.count(storage.fileCount, 'file')}'
         : 'Storage quota is not set on this server';
 
-    return OneUiHero(
+    return NexaHero(
       label: 'Storage',
       value: value,
       secondary: secondary,
@@ -273,29 +265,29 @@ class _QuickActionsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = <OneUiFocusBlock>[
-      OneUiFocusBlock(
+    final items = <NexaFocusBlock>[
+      NexaFocusBlock(
         icon: Icons.cloud_upload_outlined,
         title: 'Upload',
-        layout: OneUiFocusBlockLayout.vertical,
+        layout: NexaFocusBlockLayout.vertical,
         onTap: () => _request(FilesIntent.upload),
       ),
-      OneUiFocusBlock(
+      NexaFocusBlock(
         icon: Icons.create_new_folder_outlined,
         title: 'New folder',
-        layout: OneUiFocusBlockLayout.vertical,
+        layout: NexaFocusBlockLayout.vertical,
         onTap: () => _request(FilesIntent.newFolder),
       ),
-      OneUiFocusBlock(
+      NexaFocusBlock(
         icon: Icons.photo_library_outlined,
         title: 'Photo library',
-        layout: OneUiFocusBlockLayout.vertical,
+        layout: NexaFocusBlockLayout.vertical,
         onTap: () => onNavigate(3),
       ),
-      OneUiFocusBlock(
+      NexaFocusBlock(
         icon: Icons.delete_outline_rounded,
         title: 'Trash',
-        layout: OneUiFocusBlockLayout.vertical,
+        layout: NexaFocusBlockLayout.vertical,
         onTap: () => onNavigate(4),
       ),
     ];
@@ -339,22 +331,13 @@ class _RecentSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionTitle('Recent'),
+        const _SectionHeader('Recent'),
         const SizedBox(height: AppDimens.space12),
         if (storage != null && storage!.fileCount == 0)
-          Container(
-            padding: const EdgeInsets.fromLTRB(
-              AppDimens.space20,
-              AppDimens.space24,
-              AppDimens.space20,
-              AppDimens.space24,
-            ),
-            decoration: BoxDecoration(
-              color: brightness == Brightness.dark
-                  ? AppColors.surfaceDark
-                  : AppColors.surfaceLight,
-              borderRadius: BorderRadius.circular(AppDimens.radiusCard),
-            ),
+          NexaSurface(
+            level: NexaSurfaceLevel.grouped,
+            radius: AppDimens.radiusMedium,
+            padding: const EdgeInsets.all(AppDimens.space20),
             child: Column(
               children: [
                 Icon(
@@ -366,21 +349,21 @@ class _RecentSection extends StatelessWidget {
                 Text(
                   'Nothing here yet',
                   style: AppTextStyle.sectionHeader.copyWith(
-                    color: AppColors.textPrimaryFor(brightness),
+                    color: AppColors.labelPrimaryFor(brightness),
                   ),
                 ),
                 const SizedBox(height: AppDimens.space4),
                 Text(
                   'Upload your first files to get started.',
-                  style: AppTextStyle.caption.copyWith(
-                    color: AppColors.textSecondaryFor(brightness),
+                  style: AppTextStyle.caption1.copyWith(
+                    color: AppColors.labelSecondaryFor(brightness),
                   ),
                 ),
               ],
             ),
           )
         else if (recent.isEmpty)
-          OneUiEmptyState(
+          NexaEmptyState(
             icon: Icons.folder_open_rounded,
             title: 'Your files are ready',
             hint: 'Browse everything stored in your private cloud.',
@@ -393,7 +376,7 @@ class _RecentSection extends StatelessWidget {
               for (final entry in recent)
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppDimens.space8),
-                  child: OneUiFocusBlock(
+                  child: NexaFocusBlock(
                     icon: FileKind.icon(entry.category),
                     tint: FileKind.tint(entry.category, brightness),
                     title: entry.name,

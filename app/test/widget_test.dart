@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexadrive/main.dart';
 import 'package:nexadrive/services/session.dart';
+import 'package:nexadrive/ui/widgets/nexa_bottom_nav.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -57,7 +58,9 @@ void main() {
         .pumpWidget(NexaDriveApp(session: signedInSession(), prefs: prefs));
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavigationBar), findsOneWidget);
+    // The redesign replaces the Material NavigationBar with an iOS tab bar.
+    expect(find.byType(NexaBottomNav), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
     expect(find.text('Photos'), findsOneWidget);
 
     await tester.tap(find.text('More'));

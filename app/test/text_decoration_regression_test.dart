@@ -120,7 +120,7 @@ void main() {
   // yellow 0xFFFFFF00, labelled "fallback style; consider putting your text in
   // a Material". The routed Update Center and Users pages have no Scaffold of
   // their own, so in a real release APK their headers rendered with a yellow
-  // double underline. `OneUiPage` now provides a transparent Material.
+  // double underline. `NexaPage` now provides a transparent Material.
   //
   // Every other test in this file wraps the screen in a Scaffold, which
   // supplies a Material and therefore masks the bug. These tests reproduce the

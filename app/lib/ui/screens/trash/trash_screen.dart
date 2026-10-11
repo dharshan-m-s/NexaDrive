@@ -5,10 +5,7 @@ import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
-import '../../widgets/one_ui_controls.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_page.dart';
-import '../../widgets/one_ui_surface.dart';
+import '../../widgets/nexa_components.dart';
 
 class TrashScreen extends StatefulWidget {
   final Api api;
@@ -101,13 +98,13 @@ class _TrashScreenState extends State<TrashScreen> {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
 
-    return OneUiPage(
+    return NexaPage(
       title: 'Trash',
       subtitle: 'Deleted items are kept for 30 days',
       body: _loading
-          ? const OneUiLoadingBlock()
+          ? const NexaLoadingBlock()
           : _error != null
-              ? OneUiEmptyState(
+              ? NexaEmptyState(
                   icon: Icons.cloud_off_rounded,
                   title: 'Can\u2019t load Trash',
                   hint: _error,
@@ -115,7 +112,7 @@ class _TrashScreenState extends State<TrashScreen> {
                   onAction: load,
                 )
               : _items.isEmpty
-                  ? const OneUiEmptyState(
+                  ? const NexaEmptyState(
                       icon: Icons.delete_outline_rounded,
                       title: 'Trash is empty',
                       hint: 'Deleted files and folders will show up here.',
@@ -160,8 +157,8 @@ class _TrashRow extends StatelessWidget {
     final deletedAt =
         Format.relTime(DateTime.tryParse(item['deleted_at']?.toString() ?? ''));
 
-    return OneUiSurface(
-      level: OneUiSurfaceLevel.surface,
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
       radius: AppDimens.radiusTile,
       child: Material(
         type: MaterialType.transparency,

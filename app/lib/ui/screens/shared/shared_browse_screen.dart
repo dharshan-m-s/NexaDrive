@@ -8,9 +8,7 @@ import '../../../core/design/app_typography.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/models/file_entry.dart';
 import '../../../services/api.dart';
-import '../../widgets/one_ui_controls.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_page.dart';
+import '../../widgets/nexa_components.dart';
 
 /// Browse the contents of a folder shared with this user.
 class SharedBrowseScreen extends StatefulWidget {
@@ -110,10 +108,10 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: OneUiPage(
+        child: NexaPage(
           title: path.isEmpty ? widget.title : path.split('/').last,
           subtitle: path.isEmpty ? null : path,
-          leading: const OneUiBackButton(),
+          leading: const NexaBackButton(),
           headerAction: IconButton(
             tooltip: 'Up one level',
             onPressed: path.isEmpty
@@ -133,7 +131,7 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
             AppDimens.space24,
           ),
           body: _error != null
-              ? OneUiEmptyState(
+              ? NexaEmptyState(
                   icon: Icons.cloud_off_rounded,
                   title: 'Can\'t load this folder',
                   hint: _error,
@@ -141,7 +139,7 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
                   onAction: () => load(path),
                 )
               : items.isEmpty
-                  ? const OneUiEmptyState(
+                  ? const NexaEmptyState(
                       icon: Icons.folder_open_rounded,
                       title: 'This folder is empty',
                       hint: 'There\'s nothing here to download.',

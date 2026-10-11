@@ -5,8 +5,8 @@ import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../services/api.dart';
 import '../../../services/session.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_page.dart';
+import '../../widgets/nexa_empty_state.dart';
+import '../../widgets/nexa_page.dart';
 import 'admin_user_rules.dart';
 import 'user_sheets.dart';
 import 'users_controller.dart';
@@ -48,7 +48,7 @@ class _UsersScreenState extends State<UsersScreen> {
       listenable: _controller,
       builder: (context, _) {
         final c = _controller;
-        return OneUiPage(
+        return NexaPage(
           title: 'Users',
           subtitle: 'Manage accounts and access',
           headerAction: IconButton(
@@ -86,7 +86,7 @@ class _UsersScreenState extends State<UsersScreen> {
 
   Widget _buildFailure(UsersController c) {
     final (title, hint) = _failureInfo(c.error);
-    return OneUiEmptyState(
+    return NexaEmptyState(
       icon: Icons.error_outline_rounded,
       title: title,
       hint: hint,
@@ -125,15 +125,15 @@ class _UsersScreenState extends State<UsersScreen> {
                   children: [
                     Text(
                       'No accounts yet',
-                      style: AppTextStyle.rowTitle.copyWith(
-                        color: AppColors.textPrimaryFor(brightness),
+                      style: NexaTypography.rowTitle.copyWith(
+                        color: AppColors.labelPrimaryFor(brightness),
                       ),
                     ),
                     const SizedBox(height: AppDimens.space2),
                     Text(
                       'Add the first account to let people in.',
-                      style: AppTextStyle.caption.copyWith(
-                        color: AppColors.textSecondaryFor(brightness),
+                      style: NexaTypography.caption.copyWith(
+                        color: AppColors.labelSecondaryFor(brightness),
                       ),
                     ),
                   ],
@@ -166,7 +166,7 @@ class _UsersScreenState extends State<UsersScreen> {
           ),
           const SizedBox(height: AppDimens.space8),
           if (c.visible.isEmpty)
-            OneUiEmptyState(
+            NexaEmptyState(
               icon: Icons.search_off_rounded,
               title: 'No accounts match "${c.query}"',
               hint: 'Clear the search to see all accounts.',
@@ -370,7 +370,7 @@ class _SummaryStrip extends StatelessWidget {
         Expanded(
           child: _SummaryTile(
             icon: Icons.admin_panel_settings_outlined,
-            color: AppColors.accentTextFor(brightness),
+            color: AppColors.onAccentFor(brightness),
             label: plural(summary.admins, 'administrator'),
           ),
         ),
@@ -418,8 +418,8 @@ class _SummaryTile extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyle.caption.copyWith(
-                color: AppColors.textPrimaryFor(Theme.of(context).brightness),
+              style: NexaTypography.caption.copyWith(
+                color: AppColors.labelPrimaryFor(Theme.of(context).brightness),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -477,11 +477,12 @@ class _UserRow extends StatelessWidget {
                   backgroundColor: disabled
                       ? AppColors.surfaceAltLight
                       : accent.withValues(alpha: 0.14),
-                  foregroundColor:
-                      disabled ? AppColors.textTertiaryFor(brightness) : accent,
+                  foregroundColor: disabled
+                      ? AppColors.labelTertiaryFor(brightness)
+                      : accent,
                   child: Text(
                     _initial(user.displayName),
-                    style: AppTextStyle.buttonSmall,
+                    style: NexaTypography.buttonSmall,
                   ),
                 ),
                 const SizedBox(width: AppDimens.space12),
@@ -496,8 +497,8 @@ class _UserRow extends StatelessWidget {
                               user.displayName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTextStyle.rowTitle.copyWith(
-                                color: AppColors.textPrimaryFor(brightness),
+                              style: NexaTypography.rowTitle.copyWith(
+                                color: AppColors.labelPrimaryFor(brightness),
                               ),
                             ),
                           ),
@@ -505,7 +506,7 @@ class _UserRow extends StatelessWidget {
                             const SizedBox(width: AppDimens.space6),
                             _Chip(
                               label: 'Admin',
-                              foreground: AppColors.accentTextFor(brightness),
+                              foreground: AppColors.onAccentFor(brightness),
                               background: accent.withValues(alpha: 0.12),
                             ),
                           ],
@@ -534,8 +535,8 @@ class _UserRow extends StatelessWidget {
                         metaParts.join(' · '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyle.caption.copyWith(
-                          color: AppColors.textSecondaryFor(brightness),
+                        style: NexaTypography.caption.copyWith(
+                          color: AppColors.labelSecondaryFor(brightness),
                         ),
                       ),
                     ],
@@ -547,7 +548,7 @@ class _UserRow extends StatelessWidget {
                   onPressed: onActions,
                   icon: Icon(
                     Icons.more_vert_rounded,
-                    color: AppColors.textSecondaryFor(brightness),
+                    color: AppColors.labelSecondaryFor(brightness),
                   ),
                 ),
               ],
@@ -589,7 +590,7 @@ class _Chip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: AppTextStyle.micro.copyWith(
+        style: NexaTypography.micro.copyWith(
           color: foreground,
           fontWeight: FontWeight.w700,
         ),

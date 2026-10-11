@@ -7,7 +7,7 @@ import '../../../core/design/app_motion.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../update/app_platform.dart';
 import '../../../update/update_controller.dart';
-import '../../widgets/one_ui_page.dart';
+import '../../widgets/nexa_page.dart';
 
 /// The Update Center, rebuilt from scratch.
 ///
@@ -16,7 +16,7 @@ import '../../widgets/one_ui_page.dart';
 /// controller method, and every visual state maps 1:1 onto an
 /// [UpdateStatus].
 ///
-/// Typography contract: every text carries an explicit [AppTextStyle] token.
+/// Typography contract: every text carries an explicit [NexaTypography] token.
 /// Nothing relies on an inherited [DefaultTextStyle], so no text can
 /// accidentally render with a decoration it never asked for.
 class UpdateCenterScreen extends StatelessWidget {
@@ -31,7 +31,7 @@ class UpdateCenterScreen extends StatelessWidget {
       builder: (context, _) {
         final status = controller.status;
 
-        return OneUiPage(
+        return NexaPage(
           title: 'Update center',
           subtitle: _subtitleText(controller, status),
           scrollable: true,
@@ -124,7 +124,7 @@ class _VersionPanel extends StatelessWidget {
         color: AppColors.surfaceFor(brightness),
         borderRadius: BorderRadius.circular(AppDimens.radiusCard),
         border: brightness == Brightness.dark
-            ? Border.all(color: const Color(0x1FFFFFFF))
+            ? Border.all(color: AppColors.separatorFor(brightness))
             : null,
         boxShadow: const [
           BoxShadow(
@@ -144,8 +144,8 @@ class _VersionPanel extends StatelessWidget {
               Expanded(
                 child: Text(
                   headline,
-                  style: AppTextStyle.sectionHeader.copyWith(
-                    color: AppColors.textPrimaryFor(brightness),
+                  style: NexaTypography.sectionHeader.copyWith(
+                    color: AppColors.labelPrimaryFor(brightness),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -317,13 +317,13 @@ class _VersionLine extends StatelessWidget {
         _VersionFigure(
           label: 'CURRENT',
           value: current,
-          color: AppColors.textSecondaryFor(brightness),
+          color: AppColors.labelSecondaryFor(brightness),
         ),
         if (showLatest)
           _VersionFigure(
             label: 'LATEST',
             value: latest,
-            color: AppColors.textPrimaryFor(brightness),
+            color: AppColors.labelPrimaryFor(brightness),
           ),
       ],
     );
@@ -349,8 +349,8 @@ class _VersionFigure extends StatelessWidget {
       children: [
         Text(
           label,
-          style: AppTextStyle.micro.copyWith(
-            color: AppColors.textTertiaryFor(Theme.of(context).brightness),
+          style: NexaTypography.micro.copyWith(
+            color: AppColors.labelTertiaryFor(Theme.of(context).brightness),
             fontWeight: FontWeight.w600,
             letterSpacing: 0.8,
           ),
@@ -358,7 +358,7 @@ class _VersionFigure extends StatelessWidget {
         const SizedBox(height: AppDimens.space2),
         Text(
           'v$value',
-          style: AppTextStyle.metricValue.copyWith(color: color),
+          style: NexaTypography.metricValue.copyWith(color: color),
         ),
       ],
     );
@@ -410,8 +410,8 @@ class _ProgressBar extends StatelessWidget {
                   liveRegion: true,
                   child: Text(
                     _progressLabel(received, total, downloading),
-                    style: AppTextStyle.caption.copyWith(
-                      color: AppColors.textSecondaryFor(
+                    style: NexaTypography.caption.copyWith(
+                      color: AppColors.labelSecondaryFor(
                           Theme.of(context).brightness),
                       fontWeight: FontWeight.w500,
                     ),
@@ -421,9 +421,9 @@ class _ProgressBar extends StatelessWidget {
               if (downloading)
                 Text(
                   '${(controller.progress.clamp(0.0, 1.0) * 100).round()}%',
-                  style: AppTextStyle.chipLabel.copyWith(
+                  style: NexaTypography.chipLabel.copyWith(
                     color:
-                        AppColors.textPrimaryFor(Theme.of(context).brightness),
+                        AppColors.labelPrimaryFor(Theme.of(context).brightness),
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -718,8 +718,8 @@ class _ActionArea extends StatelessWidget {
               controller.latestKnownLabel != null
                   ? 'Last checked: ${controller.lastCheckLabel}'
                   : 'Latest known version is shown automatically.',
-              style: AppTextStyle.caption.copyWith(
-                color: AppColors.textTertiaryFor(Theme.of(context).brightness),
+              style: NexaTypography.caption.copyWith(
+                color: AppColors.labelTertiaryFor(Theme.of(context).brightness),
               ),
             ),
           ),
@@ -764,7 +764,7 @@ class _PrimaryButton extends StatelessWidget {
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(AppDimens.radiusPill),
     ),
-    textStyle: AppTextStyle.button,
+    textStyle: NexaTypography.button,
   );
 
   @override
@@ -826,8 +826,8 @@ class _Notice extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: AppTextStyle.rowSubtitle.copyWith(
-                color: AppColors.textPrimaryFor(brightness),
+              style: NexaTypography.rowSubtitle.copyWith(
+                color: AppColors.labelPrimaryFor(brightness),
                 height: 1.4,
               ),
             ),
@@ -913,7 +913,7 @@ class _ReleaseNotes extends StatelessWidget {
             ),
             child: Text(
               entry.key,
-              style: AppTextStyle.listHeader.copyWith(
+              style: NexaTypography.listHeader.copyWith(
                 color: AppColors.accentTextFor(brightness),
                 letterSpacing: 0.6,
               ),
@@ -941,8 +941,8 @@ class _ReleaseNotes extends StatelessWidget {
                   Expanded(
                     child: Text(
                       item,
-                      style: AppTextStyle.rowSubtitle.copyWith(
-                        color: AppColors.textPrimaryFor(brightness),
+                      style: NexaTypography.rowSubtitle.copyWith(
+                        color: AppColors.labelPrimaryFor(brightness),
                         height: 1.45,
                       ),
                     ),
@@ -973,7 +973,7 @@ class _Section extends StatelessWidget {
         color: AppColors.surfaceFor(brightness),
         borderRadius: BorderRadius.circular(AppDimens.radiusCard),
         border: brightness == Brightness.dark
-            ? Border.all(color: const Color(0x1FFFFFFF))
+            ? Border.all(color: AppColors.separatorFor(brightness))
             : null,
       ),
       child: Column(
@@ -981,8 +981,8 @@ class _Section extends StatelessWidget {
         children: [
           Text(
             header,
-            style: AppTextStyle.listHeader.copyWith(
-              color: AppColors.textTertiaryFor(brightness),
+            style: NexaTypography.listHeader.copyWith(
+              color: AppColors.labelTertiaryFor(brightness),
               letterSpacing: 0.8,
             ),
           ),
@@ -1019,16 +1019,16 @@ class _DefinitionRow extends StatelessWidget {
             width: 150,
             child: Text(
               label,
-              style: AppTextStyle.caption.copyWith(
-                color: AppColors.textSecondaryFor(brightness),
+              style: NexaTypography.caption.copyWith(
+                color: AppColors.labelSecondaryFor(brightness),
               ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: AppTextStyle.rowSubtitle.copyWith(
-                color: valueColor ?? AppColors.textPrimaryFor(brightness),
+              style: NexaTypography.rowSubtitle.copyWith(
+                color: valueColor ?? AppColors.labelPrimaryFor(brightness),
                 fontWeight: FontWeight.w500,
               ),
               textAlign: TextAlign.right,

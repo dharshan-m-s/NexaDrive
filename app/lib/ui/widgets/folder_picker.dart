@@ -4,7 +4,7 @@ import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import '../../core/models/file_entry.dart';
 import '../../services/api.dart';
-import 'one_ui_empty_state.dart';
+import 'nexa_components.dart';
 
 /// One UI folder picker that browses the user's server directory tree.
 ///
@@ -213,7 +213,7 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
     if (_error != null) {
       return SizedBox(
         height: 180,
-        child: OneUiEmptyState(
+        child: NexaEmptyState(
           icon: Icons.cloud_off_rounded,
           title: 'Can\'t load folders',
           hint: _error,
@@ -225,7 +225,7 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
     if (_folders.isEmpty) {
       return const SizedBox(
         height: 180,
-        child: OneUiEmptyState(
+        child: NexaEmptyState(
           icon: Icons.folder_open_rounded,
           title: 'No subfolders',
           hint: 'This folder is ready to use as a destination.',

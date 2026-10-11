@@ -2,13 +2,13 @@
 
 > One Flutter codebase, three form-factor families: phone, tablet/foldable, and
 > desktop. The rules below are enforced centrally in `ui/shell/app_shell.dart`
-> plus the `OneUi*` primitives; widget tests lock the two breakpoints.
+> plus the `Nexa*` primitives; widget tests lock the two breakpoints.
 
 ## 1. Breakpoints & shells
 
 | Window width | Shell | Notes |
 |---|---|---|
-| < 900px | `OneUiBottomNav` (5 slots, 5th = More sheet) + full-height page stack | Reachability-first; actions in the bottom action bar |
+| < 900px | `NexaBottomNav` (5 slots, 5th = More sheet) + full-height page stack | Reachability-first; actions in the bottom action bar |
 | ≥ 900px | 236dp `SideNavigation` rail + content | No bottom nav; utility destinations pinned in the rail |
 
 Both shells render the same six page widgets; only the chrome changes.

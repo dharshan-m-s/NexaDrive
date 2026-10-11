@@ -6,9 +6,7 @@ import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
-import '../../widgets/one_ui_controls.dart';
-import '../../widgets/one_ui_file_tile.dart';
-import '../../widgets/one_ui_search_field.dart';
+import '../../widgets/nexa_components.dart';
 import '../../navigation/file_opener.dart';
 
 /// Focused One UI search mode.
@@ -81,7 +79,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    Widget row(FileEntry e) => OneUiFileTile(
+    Widget row(FileEntry e) => NexaFileTile(
           entry: e,
           onTap: (v) => _open(v),
           showChevron: true,
@@ -103,14 +101,12 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
               child: Row(
                 children: [
-                  const OneUiBackButton(),
+                  const NexaBackButton(),
                   Expanded(
-                    child: OneUiSearchField(
+                    child: NexaSearchField(
                       controller: _controller,
                       hint: 'Search your files',
-                      labelText: 'Search',
                       onChanged: _onChanged,
-                      onSubmitted: _onChanged,
                     ),
                   ),
                 ],

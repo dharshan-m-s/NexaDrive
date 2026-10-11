@@ -11,6 +11,36 @@ public internet and the database never listens on the network at all.
 
 ---
 
+## 0. Source layout
+
+The crate was modularized out of a single `main.rs`; responsibilities are
+separated so handlers stay thin and testable.
+
+```text
+src/main.rs          Startup wiring + router assembly (~120 lines)
+src/config.rs        All environment configuration, read once
+src/state.rs         AppState (pool, storage root, rate-limit maps, thumb cache)
+src/error.rs         AppError -> typed HTTP responses
+src/models.rs        Request/response DTOs shared by handlers
+src/paths.rs         Path-safety, sanitization, MIME/content-disposition, ranges
+src/auth.rs          Passwords, tokens, sessions, auth middleware, throttling
+src/middleware.rs    Security headers
+src/routes.rs        Public + protected router construction
+src/handlers/        Domain handlers: files, upload, download, sharing, sync,
+                     admin, notifications, storage, backup, system
+```
+
+Build and test:
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+cargo build --release
+```
+
+---
+
 ## 1. Configuration
 
 All configuration lives in `server/.env` (or `/etc/nexadrive/server.env` when

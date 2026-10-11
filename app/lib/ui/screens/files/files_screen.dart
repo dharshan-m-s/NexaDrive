@@ -14,11 +14,11 @@ import '../../../services/download_service.dart';
 import '../../../services/image_pipeline.dart';
 import '../../../services/thumbnail_cache.dart';
 import '../../widgets/folder_picker.dart';
-import '../../widgets/one_ui_action_bar.dart';
-import '../../widgets/one_ui_controls.dart';
-import '../../widgets/one_ui_empty_state.dart';
-import '../../widgets/one_ui_file_tile.dart';
-import '../../widgets/one_ui_sheet.dart';
+import '../../widgets/nexa_action_bar.dart';
+import '../../widgets/nexa_empty_state.dart';
+import '../../widgets/nexa_file_tile.dart';
+import '../../widgets/nexa_loading_state.dart';
+import '../../widgets/nexa_sheet.dart';
 import '../../widgets/upload_progress_dialog.dart';
 import '../scanner/scanner_screen.dart';
 import '../search/search_screen.dart';
@@ -28,9 +28,7 @@ import 'file_share_sheet.dart';
 
 enum _Sort { name, size, newOld, oldNew }
 
-/// A one-shot action another screen wants My files to perform, so a shortcut
-/// like Home's "New folder" really creates a folder instead of only switching
-/// tabs.
+/// A one-shot action another screen wants My files to perform.
 enum FilesIntent { upload, newFolder }
 
 class FilesScreen extends StatefulWidget {
@@ -42,8 +40,7 @@ class FilesScreen extends StatefulWidget {
   /// Set by the shell when another screen asked My files to do something.
   final FilesIntent? intent;
 
-  /// Called once [intent] has been started, so the shell can clear it and the
-  /// same action can be requested again later.
+  /// Called once [intent] has been started.
   final VoidCallback? onIntentHandled;
 
   const FilesScreen({
@@ -69,18 +66,8 @@ class _FilesScreenState extends State<FilesScreen> {
   final Set<String> _selected = <String>{};
   String? _error;
   _Sort _sort = _Sort.name;
-
-  /// Sorted view of [_items], invalidated whenever the listing or sort order
-  /// changes. Sorting in `build` re-ran on every thumbnail that arrived, which
-  /// made scrolling a large folder O(n log n) per preview.
   List<FileEntry>? _sortedCache;
-
-  /// Paths with a download in flight. A set (not a single flag) so starting
-  /// one download never silently swallows another one's request.
   final Set<String> _busyDownloads = <String>{};
-
-  /// Paths the server cannot thumbnail (e.g. HEIC). Those rows keep the
-  /// category icon instead of pulling full-resolution bytes into the list.
   final Set<String> _noThumbnail = <String>{};
   final Set<String> _loadingThumbs = <String>{};
 
@@ -89,8 +76,6 @@ class _FilesScreenState extends State<FilesScreen> {
     super.initState();
     _attachDiskCache();
     load();
-    // The first time this tab is opened the widget is created rather than
-    // updated, so an initial intent has to be handled here too.
     final intent = widget.intent;
     if (intent != null) _scheduleIntent(intent);
   }
@@ -115,8 +100,6 @@ class _FilesScreenState extends State<FilesScreen> {
     });
   }
 
-  /// Previews survive a restart; the cache is keyed by account + path so it
-  /// never crosses accounts.
   Future<void> _attachDiskCache() async {
     try {
       final cache = await ThumbnailCache.open();
@@ -148,8 +131,6 @@ class _FilesScreenState extends State<FilesScreen> {
     }
   }
 
-  /// Loads previews for image rows in the background, capped so opening a
-  /// folder with thousands of photos never queues thousands of requests.
   void _prefetchThumbnails() {
     final images = _items
         .where((e) => e.category == Category.image)
@@ -180,7 +161,6 @@ class _FilesScreenState extends State<FilesScreen> {
     } on ThumbnailUnavailable {
       if (mounted) setState(() => _noThumbnail.add(entry.path));
     } catch (_) {
-      // Transient failures keep the icon; the next visit retries.
     } finally {
       _loadingThumbs.remove(entry.path);
     }
@@ -191,7 +171,6 @@ class _FilesScreenState extends State<FilesScreen> {
     return _images.peekThumbnail(_thumbKey(entry));
   }
 
-  // ------------------------------------------------------------- actions
   Future<void> _createFolder() async {
     final controller = TextEditingController();
     final name = await showDialog<String>(
@@ -245,7 +224,6 @@ class _FilesScreenState extends State<FilesScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  // -------------------------------------------------------------- selection
   void _enterSelection(String path) {
     setState(() {
       _selecting = true;
@@ -270,7 +248,6 @@ class _FilesScreenState extends State<FilesScreen> {
     });
   }
 
-  // ------------------------------------------------------------ navigation
   void _openEntry(FileEntry entry) {
     if (_selecting) {
       _toggleSelect(entry.path);
@@ -284,8 +261,6 @@ class _FilesScreenState extends State<FilesScreen> {
     _openFile(entry);
   }
 
-  /// Every file type opens through the one shared [FileOpener], so behaviour
-  /// is identical wherever a file is tapped from.
   void _openFile(FileEntry entry) {
     FileOpener.open(
       context,
@@ -295,7 +270,6 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-  // ------------------------------------------------------------- file ops
   Future<void> _renameItem(FileEntry entry) async {
     final controller = TextEditingController(text: entry.name);
     final newName = await showDialog<String>(
@@ -421,16 +395,16 @@ class _FilesScreenState extends State<FilesScreen> {
                     option == _sort
                         ? Icons.radio_button_checked_rounded
                         : Icons.radio_button_unchecked_rounded,
-                    size: AppDimens.iconSmall,
+                    size: AppDimens.iconSm,
                     color: option == _sort
                         ? AppColors.accentFor(Theme.of(context).brightness)
                         : AppColors.textTertiaryFor(
                             Theme.of(context).brightness),
                   ),
-                  const SizedBox(width: AppDimens.space12),
+                  const SizedBox(width: AppDimens.spaceSm),
                   Text(
                     _sortLabel(option),
-                    style: AppTextStyle.rowTitle.copyWith(
+                    style: NexaTypography.rowTitle.copyWith(
                       fontWeight:
                           option == _sort ? FontWeight.w600 : FontWeight.w400,
                     ),
@@ -457,8 +431,6 @@ class _FilesScreenState extends State<FilesScreen> {
       };
 
   Future<void> _downloadItem(FileEntry entry) async {
-    // Already saving this exact file? Ignore the repeat instead of starting a
-    // second transfer that would fight over the same destination.
     if (_busyDownloads.contains(entry.path)) return;
     setState(() => _busyDownloads.add(entry.path));
     try {
@@ -482,7 +454,6 @@ class _FilesScreenState extends State<FilesScreen> {
     }
   }
 
-  // ---------------------------------------------------------- sorting
   List<FileEntry> get _sorted => _sortedCache ??= _computeSorted();
 
   List<FileEntry> _computeSorted() {
@@ -510,12 +481,10 @@ class _FilesScreenState extends State<FilesScreen> {
     return [...folders, ...files];
   }
 
-  // ------------------------------------------------------------------ bag
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final accent = AppColors.accentFor(brightness);
-
     final crumb = _path.isEmpty ? 'My files' : _path.split('/').last;
 
     return Column(
@@ -560,8 +529,6 @@ class _FilesScreenState extends State<FilesScreen> {
                     if (saved == true) load();
                   }),
         ),
-
-        // Breadcrumb strip
         if (!_selecting && _path.isNotEmpty)
           _Breadcrumb(
             path: _path,
@@ -571,14 +538,9 @@ class _FilesScreenState extends State<FilesScreen> {
               load();
             },
           ),
-
-        Expanded(
-          child: _buildBody(),
-        ),
-
-        // Selection contextual action bar (lower interaction area)
+        Expanded(child: _buildBody()),
         if (_selecting)
-          OneUiActionBar(
+          NexaActionBar(
             leading: IconButton(
               tooltip: 'Cancel selection',
               onPressed: _exitSelection,
@@ -586,28 +548,28 @@ class _FilesScreenState extends State<FilesScreen> {
             ),
             title: Format.count(_selected.length, 'item'),
             actions: [
-              OneUiActionItem(
+              NexaActionItem(
                 icon: Icons.delete_outline_rounded,
                 label: 'Trash',
                 color: AppColors.errorFor(Theme.of(context).brightness),
                 onTap: () => _deleteItems(),
               ),
-              OneUiActionItem(
+              NexaActionItem(
                 icon: Icons.drive_file_move_outlined,
                 label: 'Move',
                 onTap: () => _moveItems(),
               ),
-              OneUiActionItem(
+              NexaActionItem(
                 icon: Icons.copy_rounded,
                 label: 'Copy',
                 onTap: () => _copyItems(),
               ),
-              OneUiActionItem(
+              NexaActionItem(
                 icon: Icons.share_outlined,
                 label: 'Share',
                 onTap: () => _shareSelected(),
               ),
-              OneUiActionItem(
+              NexaActionItem(
                 icon: Icons.download_outlined,
                 label: 'Save',
                 onTap: () => _downloadSelected(),
@@ -618,9 +580,6 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-  /// Multi-select download. One file uses the normal single-file save dialog;
-  /// several files are streamed into one chosen folder with real progress, so
-  /// "Save 5 items" can never quietly save just the first one.
   Future<void> _downloadSelected() async {
     final entries = _items.where((e) => _selected.contains(e.path)).toList();
     if (entries.isEmpty) return;
@@ -629,11 +588,9 @@ class _FilesScreenState extends State<FilesScreen> {
       await _downloadItem(entries.first);
       return;
     }
-
     final destination = await _downloads.pickBatchDestination();
     if (destination == null) return;
     if (!mounted) return;
-
     final cancel = CancelToken();
     final outcome = await showDialog<BatchSaveResult>(
       context: context,
@@ -674,12 +631,12 @@ class _FilesScreenState extends State<FilesScreen> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const OneUiLoadingBlock();
+      return const NexaLoadingState();
     }
     if (_error != null) {
-      return OneUiEmptyState(
+      return NexaEmptyState(
         icon: Icons.cloud_off_rounded,
-        title: 'Can\'t reach NexaDrive',
+        title: "Can't reach NexaDrive",
         hint: _error,
         actionLabel: 'Retry',
         onAction: load,
@@ -692,7 +649,7 @@ class _FilesScreenState extends State<FilesScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             SizedBox(height: MediaQuery.sizeOf(context).height * 0.16),
-            OneUiEmptyState(
+            NexaEmptyState(
               icon: _path.isEmpty
                   ? Icons.cloud_upload_outlined
                   : Icons.folder_open_rounded,
@@ -720,20 +677,20 @@ class _FilesScreenState extends State<FilesScreen> {
           ? GridView.builder(
               padding: const EdgeInsets.fromLTRB(
                 AppDimens.pageMargin,
-                AppDimens.space12,
+                AppDimens.spaceSm,
                 AppDimens.pageMargin,
-                AppDimens.space24,
+                AppDimens.spaceLg,
               ),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                 maxCrossAxisExtent: 170,
-                mainAxisSpacing: AppDimens.space12,
-                crossAxisSpacing: AppDimens.space12,
+                mainAxisSpacing: AppDimens.spaceSm,
+                crossAxisSpacing: AppDimens.spaceSm,
                 childAspectRatio: 0.95,
               ),
               itemCount: sorted.length,
               itemBuilder: (context, i) {
                 final e = sorted[i];
-                return OneUiFileGridTile(
+                return NexaFileGridTile(
                   entry: e,
                   thumbnail: _thumbFor(e),
                   selected: _selected.contains(e.path),
@@ -746,9 +703,9 @@ class _FilesScreenState extends State<FilesScreen> {
           : ListView.builder(
               padding: const EdgeInsets.fromLTRB(
                 AppDimens.pageMargin,
-                AppDimens.space4,
+                AppDimens.spaceXs,
                 AppDimens.pageMargin,
-                AppDimens.space24,
+                AppDimens.spaceLg,
               ),
               itemCount: (folders.isEmpty ? 0 : folders.length + 1) +
                   (files.isEmpty ? 0 : files.length + 1),
@@ -786,7 +743,7 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   Widget _fileRow(FileEntry e) {
-    return OneUiFileTile(
+    return NexaFileTile(
       entry: e,
       thumbnail: _thumbFor(e),
       selected: _selected.contains(e.path),
@@ -806,27 +763,25 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-  // ---- batch download dialog is declared at file scope, below the state ----
-
   void _showFileMenu(BuildContext context, FileEntry entry) {
-    showOneUiSheet<void>(
+    showNexaSheet<void>(
       context,
-      builder: (sheetContext) => OneUiSheetBody(
+      builder: (sheetContext) => NexaSheetBody(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            OneUiSheetHeader(
+            NexaSheetHeader(
               title: entry.name,
               subtitle:
                   '${FileKind.label(entry.category)} · ${Format.bytes(entry.size)}',
             ),
-            OneUiSheetAction(
+            NexaSheetAction(
               icon: Icons.info_outline_rounded,
               title: 'Details',
               onTap: () {
                 Navigator.pop(sheetContext);
-                showOneUiSheet<void>(
+                showNexaSheet<void>(
                   context,
                   isScrollControlled: true,
                   builder: (_) =>
@@ -834,12 +789,12 @@ class _FilesScreenState extends State<FilesScreen> {
                 );
               },
             ),
-            OneUiSheetAction(
+            NexaSheetAction(
               icon: Icons.share_outlined,
               title: 'Share',
               onTap: () {
                 Navigator.pop(sheetContext);
-                showOneUiSheet<void>(
+                showNexaSheet<void>(
                   context,
                   isScrollControlled: true,
                   builder: (_) =>
@@ -848,7 +803,7 @@ class _FilesScreenState extends State<FilesScreen> {
               },
             ),
             if (!entry.isFolder)
-              OneUiSheetAction(
+              NexaSheetAction(
                 icon: Icons.download_outlined,
                 title: 'Download',
                 onTap: () {
@@ -857,7 +812,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 },
               ),
             if (entry.isFolder)
-              OneUiSheetAction(
+              NexaSheetAction(
                 icon: Icons.drive_file_move_outlined,
                 title: 'Move',
                 onTap: () {
@@ -865,7 +820,7 @@ class _FilesScreenState extends State<FilesScreen> {
                   _moveItems(paths: [entry.path]);
                 },
               ),
-            OneUiSheetAction(
+            NexaSheetAction(
               icon: Icons.edit_outlined,
               title: 'Rename',
               onTap: () {
@@ -873,7 +828,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 _renameItem(entry);
               },
             ),
-            OneUiSheetAction(
+            NexaSheetAction(
               icon: Icons.delete_outline_rounded,
               title: 'Move to Trash',
               destructive: true,
@@ -889,7 +844,6 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 }
 
-// -------------------------------------------------------------------------
 class _ViewArea extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -930,11 +884,9 @@ class _ViewArea extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
-        // Matches OneUiPage's viewing area so every header starts at the
-        // same height, including this screen's richer toolbar variant.
-        AppDimens.space24,
+        AppDimens.spaceLg,
         AppDimens.pageMargin,
-        AppDimens.space12,
+        AppDimens.spaceSm,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -945,28 +897,28 @@ class _ViewArea extends StatelessWidget {
               children: [
                 Text(
                   selecting ? Format.count(selectedCount, 'item') : title,
-                  style: AppTextStyle.pageTitle.copyWith(
+                  style: NexaTypography.pageTitle.copyWith(
                     color: selecting
                         ? accent
                         : AppColors.textPrimaryFor(brightness),
                   ),
                 ),
                 if (!selecting) ...[
-                  const SizedBox(height: AppDimens.space4),
+                  const SizedBox(height: AppDimens.spaceXs),
                   Text(
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyle.caption.copyWith(
+                    style: NexaTypography.caption.copyWith(
                         color: AppColors.textSecondaryFor(brightness)),
                   ),
                 ],
                 if (selecting && onBackToRoot != null) ...[
-                  const SizedBox(height: AppDimens.space6),
+                  const SizedBox(height: AppDimens.space2xs),
                   TextButton.icon(
                     onPressed: onBackToRoot,
-                    icon: const Icon(Icons.home_outlined,
-                        size: AppDimens.iconSmall),
+                    icon:
+                        const Icon(Icons.home_outlined, size: AppDimens.iconSm),
                     label: const Text('Back to My files'),
                   ),
                 ],
@@ -980,9 +932,6 @@ class _ViewArea extends StatelessWidget {
               icon: const Icon(Icons.close_rounded),
             )
           else ...[
-            // Three controls, not seven: the primary action stays on screen
-            // and the rest live in one overflow menu, so the page title still
-            // has room on a phone.
             IconButton.filled(
               tooltip: 'Upload files',
               onPressed: onUpload,
@@ -1089,11 +1038,10 @@ class _Breadcrumb extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     final parts = path.split('/');
     return SizedBox(
-      // Meets the 48dp touch-target floor so crumbs are actually tappable.
       height: AppDimens.touchTarget,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+        padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceMd),
         children: [
           _crumb(context, brightness, 'My files', '', true),
           for (var i = 0; i < parts.length; i++) ...[
@@ -1131,12 +1079,12 @@ class _Breadcrumb extends StatelessWidget {
         child: Container(
           alignment: Alignment.center,
           constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
-          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space8),
+          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space2xs),
           child: Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyle.caption.copyWith(
+            style: NexaTypography.caption.copyWith(
               color: last ? AppColors.textPrimaryFor(brightness) : accent,
               fontWeight: last ? FontWeight.w600 : FontWeight.w500,
             ),
@@ -1147,7 +1095,6 @@ class _Breadcrumb extends StatelessWidget {
   }
 }
 
-/// Section label separating the grouped list (Folders / Files).
 class _GroupHeader extends StatelessWidget {
   final String title;
   const _GroupHeader(this.title);
@@ -1157,24 +1104,22 @@ class _GroupHeader extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppDimens.space4,
-        AppDimens.space12,
-        AppDimens.space4,
-        AppDimens.space4,
+        AppDimens.spaceXs,
+        AppDimens.spaceSm,
+        AppDimens.spaceXs,
+        AppDimens.spaceXs,
       ),
       child: Text(
         title,
-        style: AppTextStyle.sectionHeader.copyWith(
+        style: NexaTypography.sectionHeader.copyWith(
           color: AppColors.textSecondaryFor(brightness),
-          fontSize: AppTextStyle.sectionHeader.fontSize! * 0.82,
+          fontSize: NexaTypography.sectionHeader.fontSize! * 0.82,
         ),
       ),
     );
   }
 }
 
-/// Modal progress for a multi-file download. Shows the file being saved, the
-/// completed count, and resolves with the batch outcome.
 class _BatchDownloadDialog extends StatefulWidget {
   final List<BatchItem> items;
   final String directory;
@@ -1232,22 +1177,22 @@ class _BatchDownloadDialogState extends State<_BatchDownloadDialog> {
           children: [
             Text(
               '${widget.items.length} files to ${widget.directory}',
-              style: AppTextStyle.caption.copyWith(
+              style: NexaTypography.caption.copyWith(
                 color: AppColors.textSecondaryFor(brightness),
               ),
             ),
-            const SizedBox(height: AppDimens.space16),
+            const SizedBox(height: AppDimens.spaceMd),
             LinearProgressIndicator(
               value: widget.items.isEmpty
                   ? null
                   : _completed / widget.items.length,
             ),
-            const SizedBox(height: AppDimens.space12),
+            const SizedBox(height: AppDimens.spaceSm),
             Text(
               _current,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyle.rowSubtitle.copyWith(
+              style: NexaTypography.rowSubtitle.copyWith(
                 color: AppColors.textPrimaryFor(brightness),
               ),
             ),

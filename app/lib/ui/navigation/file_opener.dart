@@ -14,7 +14,7 @@ import '../screens/media/video_player_screen.dart';
 import '../screens/photos/photo_viewer.dart';
 import '../screens/viewers/pdf_viewer_screen.dart';
 import '../screens/viewers/text_viewer_screen.dart';
-import '../widgets/one_ui_sheet.dart';
+import '../widgets/nexa_components.dart';
 
 /// The one place that decides how a file is opened.
 ///
@@ -110,14 +110,14 @@ abstract final class FileOpener {
     required Api api,
     required FileEntry entry,
   }) async {
-    await showOneUiSheet<void>(
+    await showNexaSheet<void>(
       context,
-      builder: (sheetContext) => OneUiSheetBody(
+      builder: (sheetContext) => NexaSheetBody(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            OneUiSheetHeader(
+            NexaSheetHeader(
               title: entry.name,
               subtitle: '${FileKind.label(entry.category)} · Not viewable here',
             ),

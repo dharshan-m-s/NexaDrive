@@ -33,7 +33,7 @@ stiffness: 8.1633, damping: 5.7143)` (response 0.35 / damping 1.0) and a faster
 |---|---|
 | Respond on pointer-down, not release | `InkWell` press states surface on touch-down by default; scrim/overlay widgets in the library are `Animated*` from the live value |
 | Interruptible, animate from presentation value | `Animated*` widgets re-target from current value; sheets/transitions use controllers that reset from current positions |
-| Continuous feedback during gesture | Sliders update 1:1; `OneUiActionBar` pills press immediately |
+| Continuous feedback during gesture | Sliders update 1:1; `NexaActionBar` pills press immediately |
 | Momentum projection | Flutter's scrollable/sheet drag systems already project release velocity natively |
 | 1:1 drag with grab offset | Bottom sheets/native drags track the finger offset |
 | Spatial consistency | Page transitions: incoming page glides up while outgoing settles; sheet dismiss mirrors entry path |
@@ -47,7 +47,7 @@ stiffness: 8.1633, damping: 5.7143)` (response 0.35 / damping 1.0) and a faster
 - `AppMotion.resolve(context, duration)` and `AppMotion.curveFor(context, curve)`
   collapse non-essential motion to instant/linear.
 - Page transitions skip entirely when reduced motion is active.
-- `OneUiHero`, `OneUiStatusPod`, `OneUiSurface`, `_PageHost`, audio/video/scanner
+- `NexaHero`, `NexaStatusPod`, `NexaSurface`, `_PageHost`, audio/video/scanner
   control surfaces use resolved durations.
 - Custom springs should be replaced by cross-fades or static transitions under
 - reduced motion (no slides/parallax). Future: also react to
@@ -58,7 +58,7 @@ stiffness: 8.1633, damping: 5.7143)` (response 0.35 / damping 1.0) and a faster
 - **Status** — ongoing: transfer progress bars (accent filled), upload status pod.
 - **Completion** — SnackBar ("saved to"), success icon in transfers.
 - **Warning** — amber server-restart toast, sync conflict banner (`warningFor` tint).
-- **Error** — inline error states (`OneUiEmptyState`) + SnackBar with server text.
+- **Error** — inline error states (`NexaEmptyState`) + SnackBar with server text.
 - Haptics/audio: only for causal, same-frame, meaningful events (not wired yet;
   a future enhancement).
 
