@@ -95,7 +95,9 @@ class UploadManager extends ChangeNotifier {
   @visibleForTesting
   static void installForTesting(UploadManager manager) {
     _current = manager;
-    if (!manager._readyCompleter.isCompleted) manager._readyCompleter.complete();
+    if (!manager._readyCompleter.isCompleted) {
+      manager._readyCompleter.complete();
+    }
   }
 
   /// Creates a manager that writes its journal to [file].
@@ -169,8 +171,9 @@ class UploadManager extends ChangeNotifier {
       .length;
 
   /// How many transfers failed and can be retried.
-  int get failedCount =>
-      _items.values.where((UploadItem item) => item.state == UploadState.failed).length;
+  int get failedCount => _items.values
+      .where((UploadItem item) => item.state == UploadState.failed)
+      .length;
 
   /// Whether a worker is transferring right now.
   bool get isBusy => _active.isNotEmpty;
@@ -349,9 +352,8 @@ class UploadManager extends ChangeNotifier {
     final base = folder.trim();
     final tail = relative.trim();
     if (tail.isEmpty) return base;
-    final directory = tail.contains('/')
-        ? tail.substring(0, tail.lastIndexOf('/'))
-        : '';
+    final directory =
+        tail.contains('/') ? tail.substring(0, tail.lastIndexOf('/')) : '';
     if (directory.isEmpty) return base;
     final cleaned = directory
         .split('/')
@@ -424,7 +426,8 @@ class UploadManager extends ChangeNotifier {
   Future<void> retry(String id) async {
     final item = _items[id];
     if (item == null) return;
-    if (item.state != UploadState.failed && item.state != UploadState.cancelled) {
+    if (item.state != UploadState.failed &&
+        item.state != UploadState.cancelled) {
       return;
     }
     _cancelled.remove(id);

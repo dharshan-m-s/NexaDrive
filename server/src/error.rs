@@ -49,7 +49,10 @@ impl IntoResponse for AppError {
                 StatusCode::FORBIDDEN,
                 serde_json::json!({"error": "Forbidden"}),
             ),
-            Self::NotFound => (StatusCode::NOT_FOUND, serde_json::json!({"error": "Not found"})),
+            Self::NotFound => (
+                StatusCode::NOT_FOUND,
+                serde_json::json!({"error": "Not found"}),
+            ),
             Self::Conflict(message) => {
                 (StatusCode::CONFLICT, serde_json::json!({"error": message}))
             }
@@ -57,9 +60,10 @@ impl IntoResponse for AppError {
                 StatusCode::CONFLICT,
                 serde_json::json!({"error": message, "code": code}),
             ),
-            Self::BadRequest(message) => {
-                (StatusCode::BAD_REQUEST, serde_json::json!({"error": message}))
-            }
+            Self::BadRequest(message) => (
+                StatusCode::BAD_REQUEST,
+                serde_json::json!({"error": message}),
+            ),
             Self::UnsupportedMedia => (
                 StatusCode::UNSUPPORTED_MEDIA_TYPE,
                 serde_json::json!({"error": "Unsupported image format"}),

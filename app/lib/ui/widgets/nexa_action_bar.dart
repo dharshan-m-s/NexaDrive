@@ -119,7 +119,8 @@ class NexaActionBar extends StatelessWidget {
                       children: [
                         for (final action in actions)
                           Padding(
-                            padding: const EdgeInsets.only(left: AppDimens.space6),
+                            padding:
+                                const EdgeInsets.only(left: AppDimens.space6),
                             child: action,
                           ),
                       ],

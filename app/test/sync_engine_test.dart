@@ -255,8 +255,8 @@ void main() {
     await sync.setFolder(root.path);
     // The upload queue gets its own journal so the test can prove the sync
     // engine never writes into it.
-    final queue = UploadManager.forTesting(
-        File('${root.path}/upload-queue.jsonl'));
+    final queue =
+        UploadManager.forTesting(File('${root.path}/upload-queue.jsonl'));
     await queue.ready;
   });
 

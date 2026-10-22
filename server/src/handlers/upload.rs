@@ -316,13 +316,7 @@ pub(crate) async fn upload_file(
             .bind(&relative_text)
             .execute(&state.db)
             .await?;
-        audit(
-            &state.db,
-            user_id,
-            "upload",
-            Some(&relative_text),
-        )
-        .await?;
+        audit(&state.db, user_id, "upload", Some(&relative_text)).await?;
         result = Some(FileEntry {
             name: filename,
             path: relative_text,
@@ -350,13 +344,10 @@ pub(crate) async fn upload_chunk(
     body: Body,
 ) -> Result<Json<serde_json::Value>, AppError> {
     // The server, not the client, decides how many transfers run at once.
-    let permit = tokio::time::timeout(
-        UPLOAD_SLOT_WAIT,
-        state.upload_slots.clone().acquire_owned(),
-    )
-    .await
-    .map_err(|_| AppError::ServiceUnavailable)?
-    .map_err(|_| AppError::ServiceUnavailable)?;
+    let permit = tokio::time::timeout(UPLOAD_SLOT_WAIT, state.upload_slots.clone().acquire_owned())
+        .await
+        .map_err(|_| AppError::ServiceUnavailable)?
+        .map_err(|_| AppError::ServiceUnavailable)?;
     let _permit = permit;
 
     let upload_id = query.upload_id;
@@ -515,13 +506,7 @@ pub(crate) async fn upload_chunk(
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
-    audit(
-        &state.db,
-        user_id,
-        "upload",
-        Some(&relative_text),
-    )
-    .await?;
+    audit(&state.db, user_id, "upload", Some(&relative_text)).await?;
     Ok(Json(
         serde_json::json!({"upload_id":upload_id,"status":"completed","offset":total,"total":total,"checksum_sha256":checksum,"path":relative_text}),
     ))
@@ -541,12 +526,16 @@ pub(crate) async fn cancel_upload(
         .fetch_optional(&state.db)
         .await?;
     let Some(row) = row else {
-        return Ok(Json(serde_json::json!({"upload_id":upload_id,"status":"unknown"})));
+        return Ok(Json(
+            serde_json::json!({"upload_id":upload_id,"status":"unknown"}),
+        ));
     };
     let relative: String = row.get("path");
     let status: String = row.get("status");
     if status == "completed" {
-        return Ok(Json(serde_json::json!({"upload_id":upload_id,"status":"completed"})));
+        return Ok(Json(
+            serde_json::json!({"upload_id":upload_id,"status":"completed"}),
+        ));
     }
     let relative = safe_relative_path(&relative)?;
     let absolute = user_root(&state, user_id).join(&relative);
@@ -557,7 +546,9 @@ pub(crate) async fn cancel_upload(
         .bind(user_id)
         .execute(&state.db)
         .await?;
-    Ok(Json(serde_json::json!({"upload_id":upload_id,"status":"cancelled"})))
+    Ok(Json(
+        serde_json::json!({"upload_id":upload_id,"status":"cancelled"}),
+    ))
 }
 
 pub(crate) async fn sha256_file(path: &Path) -> Result<String, AppError> {
@@ -634,10 +625,7 @@ pub(crate) async fn recover_upload_jobs(
             continue;
         }
         let staging = staging_path(&final_path, &id);
-        let staging_len = fs::metadata(&staging)
-            .await
-            .map(|m| m.len())
-            .unwrap_or(0);
+        let staging_len = fs::metadata(&staging).await.map(|m| m.len()).unwrap_or(0);
         if staging_len == received && received > 0 {
             // The staged bytes are still there: keep the session resumable.
             sqlx::query("UPDATE upload_jobs SET status='receiving',updated_at=CURRENT_TIMESTAMP WHERE id=$1")

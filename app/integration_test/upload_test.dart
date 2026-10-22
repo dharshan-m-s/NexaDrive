@@ -130,9 +130,8 @@ void main() {
     expect(find.text('Upload complete'), findsOneWidget,
         reason: 'upload must succeed, not report issues');
     final closeButton = find.text('Close');
-    await tester.tap(closeButton.evaluate().isNotEmpty
-        ? closeButton
-        : find.text('Done'));
+    await tester.tap(
+        closeButton.evaluate().isNotEmpty ? closeButton : find.text('Done'));
     await tester.pumpAndSettle();
 
     // The file must be listed remotely.

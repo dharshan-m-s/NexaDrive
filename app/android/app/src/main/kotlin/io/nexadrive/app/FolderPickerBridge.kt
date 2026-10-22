@@ -21,6 +21,10 @@ import java.io.File
  */
 internal class FolderPickerBridge(private val context: Context) {
 
+    companion object {
+        const val REQUEST_CODE = 10021
+    }
+
     /** One file found inside a picked tree. */
     data class Entry(
         val relativePath: String,

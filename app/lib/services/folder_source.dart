@@ -65,11 +65,15 @@ class FolderSelection {
 class FolderUploadPicker {
   const FolderUploadPicker();
 
-  static const MethodChannel _channel = MethodChannel('nexadrive/folder_picker');
+  static const MethodChannel _channel =
+      MethodChannel('nexadrive/folder_picker');
 
   /// Whether this platform can pick a folder at all.
   static bool get isSupported =>
-      Platform.isAndroid || Platform.isLinux || Platform.isWindows || Platform.isMacOS;
+      Platform.isAndroid ||
+      Platform.isLinux ||
+      Platform.isWindows ||
+      Platform.isMacOS;
 
   /// Opens the folder picker.
   ///
@@ -150,7 +154,8 @@ class FolderUploadPicker {
           continue;
         }
         files.add(FolderFile(
-          relativePath: p.relative(child.path, from: root).replaceAll('\\', '/'),
+          relativePath:
+              p.relative(child.path, from: root).replaceAll('\\', '/'),
           name: name,
           size: size,
           localPath: child.path,

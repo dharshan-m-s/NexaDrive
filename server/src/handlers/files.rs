@@ -245,7 +245,7 @@ async fn transfer_entry(
         } else {
             fs::metadata(&src_abs).await?.len()
         };
-        ensure_quota(&state, user_id, incoming, None).await?;
+        ensure_quota(state, user_id, incoming, None).await?;
         copy_entry(&src_abs, &dst_abs).await?;
     } else {
         fs::rename(&src_abs, &dst_abs).await?;

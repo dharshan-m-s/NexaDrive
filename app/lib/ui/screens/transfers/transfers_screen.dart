@@ -99,13 +99,15 @@ class _TransfersScreenState extends State<TransfersScreen> {
           headerAction: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (items.any((UploadItem item) => item.state == UploadState.failed))
+              if (items
+                  .any((UploadItem item) => item.state == UploadState.failed))
                 IconButton(
                   tooltip: 'Retry failed',
                   onPressed: _retryAll,
                   icon: const Icon(Icons.refresh_rounded),
                 ),
-              if (items.any((UploadItem item) => item.state == UploadState.completed))
+              if (items.any(
+                  (UploadItem item) => item.state == UploadState.completed))
                 IconButton(
                   tooltip: 'Clear completed',
                   onPressed: _clearCompleted,
@@ -134,8 +136,9 @@ class _TransfersScreenState extends State<TransfersScreen> {
             item.state == UploadState.uploading ||
             item.state == UploadState.retrying)
         .length;
-    final failed =
-        items.where((UploadItem item) => item.state == UploadState.failed).length;
+    final failed = items
+        .where((UploadItem item) => item.state == UploadState.failed)
+        .length;
     if (active == 0 && failed == 0) return '${items.length} completed';
     final parts = <String>[];
     if (active > 0) parts.add('$active active');
@@ -167,8 +170,9 @@ class _TransfersScreenState extends State<TransfersScreen> {
             item.state == UploadState.retrying ||
             item.state == UploadState.paused)
         .toList();
-    final completed =
-        items.where((UploadItem item) => item.state == UploadState.completed).toList();
+    final completed = items
+        .where((UploadItem item) => item.state == UploadState.completed)
+        .toList();
     final failed = items
         .where((UploadItem item) =>
             item.state == UploadState.failed ||
@@ -194,15 +198,13 @@ class _TransfersScreenState extends State<TransfersScreen> {
           const SizedBox(height: AppDimens.space16),
           _Section('Needs attention', '${failed.length} failed'),
           for (final item in failed)
-            _TransferRow(
-                item: item, onToggle: _toggle, onRemove: _remove),
+            _TransferRow(item: item, onToggle: _toggle, onRemove: _remove),
         ],
         if (completed.isNotEmpty) ...[
           const SizedBox(height: AppDimens.space16),
           _Section('Completed', '${completed.length} done'),
           for (final item in completed)
-            _TransferRow(
-                item: item, onToggle: null, onRemove: _remove),
+            _TransferRow(item: item, onToggle: null, onRemove: _remove),
         ],
       ],
     );
@@ -258,9 +260,10 @@ class _TransferRow extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     final state = item.state;
     final completed = state == UploadState.completed;
-    final failed = state == UploadState.failed || state == UploadState.cancelled;
-    final uploading = state == UploadState.uploading ||
-        state == UploadState.retrying;
+    final failed =
+        state == UploadState.failed || state == UploadState.cancelled;
+    final uploading =
+        state == UploadState.uploading || state == UploadState.retrying;
     final paused = state == UploadState.paused;
     final frac = item.progress;
 
@@ -292,9 +295,7 @@ class _TransferRow extends StatelessWidget {
         onPressed: onRemove == null ? null : () => onRemove!(item),
       );
     } else {
-      statusColor = paused
-          ? AppColors.textSecondaryFor(brightness)
-          : accent;
+      statusColor = paused ? AppColors.textSecondaryFor(brightness) : accent;
       trailing = IconButton(
         tooltip: paused ? 'Resume' : 'Pause',
         icon: Icon(

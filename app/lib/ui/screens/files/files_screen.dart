@@ -533,8 +533,7 @@ class _FilesScreenState extends State<FilesScreen> {
           isGrid: _grid,
           onNewFolder: _selecting ? null : _createFolder,
           onUpload: _selecting ? null : _pickAndUpload,
-          onUploadFolder:
-              _selecting ? null : _pickAndUploadFolder,
+          onUploadFolder: _selecting ? null : _pickAndUploadFolder,
           onSearch: _selecting
               ? null
               : () => Navigator.of(context).push(

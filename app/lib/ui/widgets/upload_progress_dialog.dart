@@ -134,13 +134,16 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
     final theme = Theme.of(context);
     final brightness = theme.brightness;
     final secondary = AppColors.textSecondaryFor(brightness);
-    final total = _items.fold<int>(0, (int sum, UploadItem item) => sum + item.size);
+    final total =
+        _items.fold<int>(0, (int sum, UploadItem item) => sum + item.size);
     final done = _items.fold<int>(
         0, (int sum, UploadItem item) => sum + item.transferred);
-    final completed =
-        _items.where((UploadItem item) => item.state == UploadState.completed).length;
-    final failed =
-        _items.where((UploadItem item) => item.state == UploadState.failed).length;
+    final completed = _items
+        .where((UploadItem item) => item.state == UploadState.completed)
+        .length;
+    final failed = _items
+        .where((UploadItem item) => item.state == UploadState.failed)
+        .length;
     final active = _items
         .where((UploadItem item) =>
             item.state == UploadState.uploading ||
