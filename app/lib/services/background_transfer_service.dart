@@ -6,7 +6,7 @@ import 'package:workmanager/workmanager.dart';
 
 import 'api.dart';
 import 'session.dart';
-import 'transfer_queue.dart';
+import 'upload_manager.dart';
 
 const String nexadriveBackgroundTransferTask = 'nexadrive.backgroundTransfers';
 
@@ -18,13 +18,16 @@ void nexadriveBackgroundDispatcher() {
       final session = Session();
       await session.load();
       if (session.serverUrl == null || session.token == null) return true;
-      final queue = TransferQueue(Api(session));
-      final pending = (await queue.items())
-          .where((item) => item.status != 'completed')
-          .toList();
-      if (pending.isEmpty) return true;
-      await queue.process();
-      return true;
+
+      // Only one process may drive the queue. If the app is in the foreground
+      // it owns the transfers, and the background worker stays out of the
+      // way instead of uploading the same file a second time.
+      if (await UploadManager.isForegroundOwnerAlive()) return true;
+
+      final manager = UploadManager.background();
+      manager.attach(Api(session));
+      final pending = await manager.runPending();
+      return pending == 0;
     } catch (error, stack) {
       debugPrint('NexaDrive background transfer failed: $error\n$stack');
       return false;

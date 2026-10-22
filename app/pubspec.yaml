@@ -17,6 +17,9 @@ dependencies:
   # installed devices. Revisit with an on-device credential-migration test.
   flutter_secure_storage: ^10.3.4
   path_provider: ^2.1.6
+  # Path arithmetic for the folder uploader (relative paths inside a picked
+  # folder, and the destination folder on the server).
+  path: ^1.9.0
   shared_preferences: ^2.5.6
   uuid: ^4.5.1
   workmanager: ^0.10.10

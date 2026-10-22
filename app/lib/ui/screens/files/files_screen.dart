@@ -11,8 +11,10 @@ import '../../../../core/utils/file_kind.dart';
 import '../../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../../services/download_service.dart';
+import '../../../services/folder_source.dart' show FolderUploadPicker;
 import '../../../services/image_pipeline.dart';
 import '../../../services/thumbnail_cache.dart';
+import '../../../services/upload_manager.dart';
 import '../../widgets/folder_picker.dart';
 import '../../widgets/nexa_action_bar.dart';
 import '../../widgets/nexa_empty_state.dart';
@@ -210,9 +212,33 @@ class _FilesScreenState extends State<FilesScreen> {
     if (!mounted) return;
     await UploadProgressDialog.show(
       context,
-      api: widget.api,
       files: files,
       folder: _path,
+    );
+    if (mounted) await load();
+  }
+
+  /// Uploads a whole folder, keeping its nested structure.
+  Future<void> _pickAndUploadFolder() async {
+    if (!mounted) return;
+    final selection = await const FolderUploadPicker().pick();
+    if (selection == null) return;
+    if (!mounted) return;
+    final sources = <UploadSource>[];
+    for (final file in selection.files) {
+      sources.add(UploadSource(
+        path: file.localPath,
+        name: file.name,
+        size: file.size,
+        relativePath: file.relativePath,
+        temporary: selection.root != null,
+      ));
+    }
+    if (sources.isEmpty) return;
+    await UploadProgressDialog.showSources(
+      context,
+      sources: sources,
+      folder: selection.destination(_path),
     );
     if (mounted) await load();
   }
@@ -507,6 +533,8 @@ class _FilesScreenState extends State<FilesScreen> {
           isGrid: _grid,
           onNewFolder: _selecting ? null : _createFolder,
           onUpload: _selecting ? null : _pickAndUpload,
+          onUploadFolder:
+              _selecting ? null : _pickAndUploadFolder,
           onSearch: _selecting
               ? null
               : () => Navigator.of(context).push(
@@ -874,6 +902,7 @@ class _ViewArea extends StatelessWidget {
   final bool isGrid;
   final VoidCallback? onNewFolder;
   final VoidCallback? onUpload;
+  final VoidCallback? onUploadFolder;
   final VoidCallback? onSearch;
   final VoidCallback? onScan;
   final VoidCallback? onSort;
@@ -890,6 +919,7 @@ class _ViewArea extends StatelessWidget {
     required this.isGrid,
     this.onNewFolder,
     this.onUpload,
+    this.onUploadFolder,
     this.onSearch,
     this.onScan,
     this.onSort,
@@ -955,6 +985,12 @@ class _ViewArea extends StatelessWidget {
               onPressed: onUpload,
               icon: const Icon(Icons.upload_rounded),
             ),
+            if (onUploadFolder != null)
+              IconButton(
+                tooltip: 'Upload folder',
+                onPressed: onUploadFolder,
+                icon: const Icon(Icons.create_new_folder_outlined),
+              ),
             IconButton(
               tooltip: 'Search files',
               onPressed: onSearch,

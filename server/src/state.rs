@@ -6,6 +6,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Instant,
 };
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use crate::{config::Config, logbuf::LogBuffer, metrics::Metrics, storage_stats::StorageSummary};
@@ -31,6 +32,22 @@ pub(crate) struct AppState {
     /// Short-lived cache of the whole-storage roll-up (scanning the tree on
     /// every dashboard refresh would be wasteful).
     pub(crate) storage_cache: Arc<Mutex<Option<(Instant, StorageSummary)>>>,
+    /// Slots for in-flight upload streams. The server, not the client, decides
+    /// how many transfers may run at once.
+    pub(crate) upload_slots: Arc<Semaphore>,
+    /// Short-lived cache of each user's on-disk usage, so the quota check does
+    /// not re-walk the whole tree on every single upload.
+    pub(crate) quota_cache: Arc<Mutex<HashMap<Uuid, QuotaCacheEntry>>>,
+}
+
+/// A cached "bytes used" reading for one account.
+pub(crate) struct QuotaCacheEntry {
+    /// When the walk that produced [bytes] finished.
+    pub(crate) at: Instant,
+    /// The `updated_at` timestamp of the walk, in SQLite's text format, so
+    /// uploads that completed since then can be added back on top.
+    pub(crate) cutoff: String,
+    pub(crate) bytes: u64,
 }
 
 pub(crate) struct CachedThumb {

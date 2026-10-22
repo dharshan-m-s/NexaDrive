@@ -9,7 +9,13 @@ import 'session.dart';
 class ApiException implements Exception {
   final int status;
   final String message;
-  ApiException(this.status, this.message);
+
+  /// A machine-readable code the server attached to the error, when it sent
+  /// one. The upload queue uses `offset_mismatch` to tell "the server is at a
+  /// different offset" apart from "this file already exists".
+  final String? code;
+
+  ApiException(this.status, this.message, {this.code});
 
   @override
   String toString() => message;
@@ -228,16 +234,57 @@ class Api {
     request.headers.addAll({..._headers, 'Content-Length': '$contentLength'});
     request.contentLength = contentLength;
     final responseFuture = _client.send(request).timeout(_transferTimeout);
+
+    // The body is streamed. When the server rejects the chunk early (a stale
+    // offset, a full quota) it can answer before the body is finished, which
+    // breaks the connection mid-send. The server's answer is the useful one,
+    // so it is preferred over the resulting socket error.
+    Object? bodyError;
     try {
       await request.sink.addStream(bytes);
       await request.sink.close();
-    } catch (e) {
-      unawaited(responseFuture.then<void>((_) {}, onError: (_) {}));
+    } catch (error) {
+      bodyError = error;
+    }
+
+    http.StreamedResponse streamed;
+    try {
+      streamed = await responseFuture;
+    } catch (error) {
+      if (bodyError != null) throw bodyError;
       rethrow;
     }
-    final response = await http.Response.fromStream(await responseFuture);
+
+    final response =
+        await http.Response.fromStream(streamed).timeout(_controlTimeout);
     _check(response);
+    if (bodyError != null) {
+      // The server accepted the chunk but the body did not fully arrive; the
+      // offset the server reports is the truth, so this is not fatal.
+      final offset = (jsonDecode(response.body) as Map)['offset'];
+      if (offset is num) {
+        return <String, dynamic>{
+          'upload_id': uploadId,
+          'status': offset >= total ? 'completed' : 'receiving',
+          'offset': offset.toInt(),
+          'total': total,
+        };
+      }
+      throw bodyError;
+    }
     return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  /// Releases an upload session.
+  ///
+  /// The server drops the staged bytes and marks the session failed, so a
+  /// cancelled transfer leaves nothing behind on the disk.
+  Future<void> cancelUpload(String uploadId) async {
+    final response = await _client.post(
+      _uri('/api/uploads/cancel', {'upload_id': uploadId}),
+      headers: _headers,
+    );
+    _check(response);
   }
 
   Uri fileDownloadUri(String path) =>
@@ -754,8 +801,25 @@ class Api {
           unawaited(handler());
         }
       }
-      throw ApiException(response.statusCode, _message(response));
+      throw ApiException(
+        response.statusCode,
+        _message(response),
+        code: _errorCode(response),
+      );
     }
+  }
+
+  /// The machine-readable code the server attached to an error, if any.
+  String? _errorCode(http.Response response) {
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map && decoded['code'] is String) {
+        return decoded['code'] as String;
+      }
+    } catch (_) {
+      // A body without a code is fine.
+    }
+    return null;
   }
 
   String _messageFromBody(String body, int status) {

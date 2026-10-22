@@ -88,26 +88,47 @@ class NexaActionBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Row(
-          children: [
-            if (leading != null) ...[
-              leading!,
-              const SizedBox(width: AppDimens.space12),
-            ],
-            Expanded(
-              child: Text(
-                title,
-                style: AppTextStyle.title1.copyWith(
-                  color: AppColors.labelPrimaryFor(brightness),
-                  fontWeight: FontWeight.w600,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return Row(
+              children: [
+                if (leading != null) ...[
+                  leading!,
+                  const SizedBox(width: AppDimens.space8),
+                ],
+                Flexible(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyle.body.copyWith(
+                      color: AppColors.labelPrimaryFor(brightness),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            ...actions.map((action) => Padding(
-                  padding: const EdgeInsets.only(left: AppDimens.space8),
-                  child: action,
-                )),
-          ],
+                const SizedBox(width: AppDimens.space12),
+                Flexible(
+                  flex: 2,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    reverse: true,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final action in actions)
+                          Padding(
+                            padding: const EdgeInsets.only(left: AppDimens.space6),
+                            child: action,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -146,15 +167,15 @@ class NexaActionItem extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
         child: Container(
           padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space12,
-            vertical: AppDimens.space8,
+            horizontal: AppDimens.space10,
+            vertical: AppDimens.space6,
           ),
           decoration: BoxDecoration(
             color: enabled ? bg : bg.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -162,10 +183,10 @@ class NexaActionItem extends StatelessWidget {
               Icon(icon,
                   size: AppDimens.iconSmall,
                   color: enabled ? fg : fg.withValues(alpha: 0.5)),
-              const SizedBox(width: AppDimens.space8),
+              const SizedBox(width: AppDimens.space6),
               Text(
                 label,
-                style: AppTextStyle.caption1.copyWith(
+                style: AppTextStyle.micro.copyWith(
                   color: enabled ? fg : fg.withValues(alpha: 0.5),
                   fontWeight: FontWeight.w600,
                 ),

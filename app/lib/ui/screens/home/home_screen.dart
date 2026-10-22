@@ -7,7 +7,7 @@ import '../../../../core/utils/format.dart';
 import '../../../../core/utils/file_kind.dart';
 import '../../../services/api.dart';
 import '../../../services/session.dart';
-import '../../../services/transfer_queue.dart';
+import '../../../services/upload_manager.dart';
 import '../../navigation/file_opener.dart';
 import '../../widgets/nexa_components.dart';
 import '../files/files_screen.dart' show FilesIntent;
@@ -41,10 +41,29 @@ class _HomeScreenState extends State<HomeScreen> {
   int _pendingUploads = 0;
   List<FileEntry> _recent = const [];
 
+  /// The upload queue this screen shows.
+  late final UploadManager _manager;
+
   @override
   void initState() {
     super.initState();
+    _manager = UploadManager.current;
+    _manager.addListener(_onQueueChanged);
     load();
+  }
+
+  @override
+  void dispose() {
+    _manager.removeListener(_onQueueChanged);
+    super.dispose();
+  }
+
+  /// Keeps the "waiting to upload" pod in step with the queue.
+  void _onQueueChanged() {
+    if (!mounted) return;
+    final pending = _manager.pendingCount;
+    if (pending == _pendingUploads) return;
+    setState(() => _pendingUploads = pending);
   }
 
   Future<void> load() async {
@@ -78,11 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<int> _readQueue() async {
-    final queue = TransferQueue(widget.api);
-    final items = await queue.items();
-    return items.where((e) => e.status != 'completed').length;
-  }
+  Future<int> _readQueue() async => _manager.pendingCount;
 
   Future<List<FileEntry>> _readRecent() async {
     // The API root is '' — the server rejects '/' as an absolute path.
@@ -185,8 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
               trailing: 'Paused',
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                      builder: (_) => TransfersScreen(api: widget.api)),
+                  MaterialPageRoute(builder: (_) => const TransfersScreen()),
                 );
               },
             ),

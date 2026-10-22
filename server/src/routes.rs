@@ -35,7 +35,7 @@ use crate::{
             sync_manifest,
         },
         system::{health, server_status},
-        upload::{upload_chunk, upload_file, upload_status},
+        upload::{cancel_upload, upload_chunk, upload_file, upload_status},
     },
     middleware::{security_headers, track_metrics},
     state::AppState,
@@ -90,6 +90,7 @@ pub(crate) fn app(state: AppState, config: &Config) -> Router {
         .route("/api/files/upload", post(upload_file))
         .route("/api/uploads/status", get(upload_status))
         .route("/api/uploads/chunk", post(upload_chunk))
+        .route("/api/uploads/cancel", post(cancel_upload))
         .route("/api/sync/manifest", get(sync_manifest))
         .route("/api/sync/delta", get(sync_delta))
         .route("/api/sync/delete", post(sync_delete))

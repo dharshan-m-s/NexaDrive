@@ -11,7 +11,7 @@ import 'package:nexadrive/ui/shell/app_shell.dart';
 import 'package:nexadrive/ui/widgets/upload_progress_dialog.dart';
 import 'package:nexadrive/services/api.dart';
 import 'package:nexadrive/services/session.dart';
-import 'package:nexadrive/services/transfer_queue.dart';
+import 'package:nexadrive/services/upload_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_config.dart';
@@ -70,9 +70,9 @@ void main() {
     }
     await writeSink.close();
     final size = src.lengthSync();
-    expect(size, greaterThan(TransferQueue.chunkSize),
+    expect(size, greaterThan(UploadManager.chunkSize),
         reason:
-            'file must span at least two chunks (TransferQueue.chunkSize = 8 MB)');
+            'file must span at least two chunks (UploadManager.chunkSize = 8 MB)');
     final expectedDigest = (await _sha256File(src));
 
     // Drive the upload-progress dialog for a real multi-chunk upload to root.
@@ -116,11 +116,11 @@ void main() {
         .evaluate()) {
       debugPrint('TEXT: ${(e.widget as Text).data}');
     }
-    final items = await TransferQueue(api).items();
+    final items = UploadManager.current.items();
     debugPrint('=== QUEUE ITEMS (${items.length}) ===');
     for (final item in items) {
       debugPrint(
-          '${item.name} status=${item.status} err=${item.error} bytes=${item.transferred}/${item.size}');
+          '${item.name} state=${item.state.name} err=${item.error} bytes=${item.transferred}/${item.size}');
     }
 
     expect(sawProgress, isTrue,
@@ -129,7 +129,10 @@ void main() {
         reason: 'upload dialog must reach a terminal state');
     expect(find.text('Upload complete'), findsOneWidget,
         reason: 'upload must succeed, not report issues');
-    await tester.tap(find.text('Close'));
+    final closeButton = find.text('Close');
+    await tester.tap(closeButton.evaluate().isNotEmpty
+        ? closeButton
+        : find.text('Done'));
     await tester.pumpAndSettle();
 
     // The file must be listed remotely.
@@ -146,7 +149,7 @@ void main() {
         reason: 'downloaded file must be byte-identical');
     // ignore: avoid_print
     print(
-        'ROUND-TRIP OK: $size bytes, sha256=$remoteDigest, chunks=${(size / TransferQueue.chunkSize).ceil()}');
+        'ROUND-TRIP OK: $size bytes, sha256=$remoteDigest, chunks=${(size / UploadManager.chunkSize).ceil()}');
 
     // Clean up: trash + purge the test file.
     await api.delete(name);

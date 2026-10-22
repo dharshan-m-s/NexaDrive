@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'api.dart';
-import 'transfer_queue.dart';
+import 'upload_manager.dart';
 
 class SyncResult {
   final int uploaded;
@@ -218,7 +218,7 @@ class SyncManager {
     }
   }
 
-  /// Chunk size for sync-driven uploads, matching [TransferQueue.chunkSize] so
+  /// Chunk size for sync-driven uploads, matching [UploadManager.chunkSize] so
   /// a file already partially staged by a manual transfer resumes on the same
   /// boundaries.
   static const _chunkSize = 8 * 1024 * 1024;
@@ -229,7 +229,7 @@ class SyncManager {
   /// Streams [localPath] to [remotePath], resuming from the offset the server
   /// reports and retrying transient failures with backoff.
   ///
-  /// Deliberately does *not* go through [TransferQueue]. That queue is the
+  /// Deliberately does *not* go through [UploadManager]. That queue is the
   /// user's manual transfer list, and driving it from the sync had three
   /// consequences: every synced file left a permanent "completed" row behind
   /// (so the Transfers list grew without bound and was re-parsed on every
@@ -284,7 +284,7 @@ class SyncManager {
         }
         return;
       } catch (e) {
-        if (!TransferQueue.isTransient(e) || attempt >= _maxUploadAttempts) {
+        if (!UploadManager.isTransient(e) || attempt >= _maxUploadAttempts) {
           rethrow;
         }
         await Future<void>.delayed(Duration(seconds: 2 * attempt));

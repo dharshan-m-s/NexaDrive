@@ -8,7 +8,7 @@ import 'package:http/testing.dart';
 import 'package:nexadrive/services/api.dart';
 import 'package:nexadrive/services/session.dart';
 import 'package:nexadrive/services/sync_service.dart';
-import 'package:nexadrive/services/transfer_queue.dart';
+import 'package:nexadrive/services/upload_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// An in-process stand-in for the `/api/sync/*`, `/api/folders`,
@@ -253,6 +253,11 @@ void main() {
     api = Api(session, client: server.client());
     sync = SyncManager(api);
     await sync.setFolder(root.path);
+    // The upload queue gets its own journal so the test can prove the sync
+    // engine never writes into it.
+    final queue = UploadManager.forTesting(
+        File('${root.path}/upload-queue.jsonl'));
+    await queue.ready;
   });
 
   tearDown(() async {
@@ -675,7 +680,7 @@ void main() {
       // The Transfers screen reads this queue. Every sync used to leave one
       // permanent "completed" row behind, so the list grew without bound and
       // was re-parsed on every queue pass.
-      final items = await TransferQueue(api).items();
+      final items = UploadManager.current.items();
       expect(items, isEmpty,
           reason: 'sync drives its own transfers and must clean up after them');
     });
@@ -687,7 +692,7 @@ void main() {
 
       await sync.sync();
 
-      expect(await TransferQueue(api).items(), isEmpty);
+      expect(UploadManager.current.items(), isEmpty);
     });
   });
 }

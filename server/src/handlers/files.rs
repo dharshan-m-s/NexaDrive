@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::{
     auth::require_write_access,
     error::AppError,
-    handlers::{admin::audit, storage::folder_size, upload::ensure_quota},
+    handlers::{admin::audit, storage::folder_size, upload, upload::ensure_quota},
     models::{
         ActionResponse, BatchRequest, CreateFolderRequest, FileEntry, PathQuery, PhotoEntry,
         RenameRequest, SearchQuery, TransferRequest,
@@ -40,6 +40,11 @@ pub(crate) async fn list_files(
         }
         let metadata = entry.metadata().await?;
         let name = entry.file_name().to_string_lossy().to_string();
+        // A partially uploaded file is an implementation detail of the
+        // transfer, not something the user should see in their folder.
+        if upload::is_staging_name(&name) {
+            continue;
+        }
         let child = relative.join(&name);
         result.push(FileEntry {
             name,
@@ -91,6 +96,9 @@ pub(crate) async fn search_files(
                 continue;
             }
             let name = entry.file_name().to_string_lossy().to_string();
+            if upload::is_staging_name(&name) {
+                continue;
+            }
             let absolute = entry.path();
             let relative = absolute
                 .strip_prefix(&root)
@@ -237,14 +245,7 @@ async fn transfer_entry(
         } else {
             fs::metadata(&src_abs).await?.len()
         };
-        ensure_quota(
-            &state.db,
-            &user_root(state, user_id),
-            user_id,
-            incoming,
-            None,
-        )
-        .await?;
+        ensure_quota(&state, user_id, incoming, None).await?;
         copy_entry(&src_abs, &dst_abs).await?;
     } else {
         fs::rename(&src_abs, &dst_abs).await?;
@@ -427,14 +428,22 @@ pub(crate) async fn list_photos(
                 continue;
             }
             if ft.is_file() && is_photo(&path) {
-                let metadata = entry.metadata().await?;
+                let name = entry.file_name().to_string_lossy().to_string();
+                if upload::is_staging_name(&name) {
+                    continue;
+                }
+                let metadata = match entry.metadata().await {
+                    Ok(metadata) => metadata,
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                    Err(e) => return Err(AppError::Io(e)),
+                };
                 let relative = path
                     .strip_prefix(&root)
                     .map_err(|_| AppError::Internal)?
                     .to_string_lossy()
                     .replace('\\', "/");
                 photos.push(PhotoEntry {
-                    name: entry.file_name().to_string_lossy().to_string(),
+                    name,
                     path: relative,
                     size: metadata.len() as i64,
                     modified_at: metadata.modified().ok().map(DateTime::<Utc>::from),

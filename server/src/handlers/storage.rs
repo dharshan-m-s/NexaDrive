@@ -136,16 +136,37 @@ pub(crate) async fn tree_stats(root: &Path) -> Result<(u64, u64), AppError> {
     let mut used = 0u64;
     let mut count = 0u64;
     while let Some(dir) = stack.pop() {
-        let mut entries = fs::read_dir(dir).await?;
+        // The tree changes underneath a walk (files are uploaded, renamed or
+        // deleted while it runs), so a directory that disappears mid-walk is
+        // not an error: it simply contributes nothing.
+        let mut entries = match fs::read_dir(dir).await {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(AppError::Io(e)),
+        };
         while let Some(entry) = entries.next_entry().await? {
-            let ft = entry.file_type().await?;
+            let ft = match entry.file_type().await {
+                Ok(ft) => ft,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(AppError::Io(e)),
+            };
             if ft.is_symlink() {
                 continue;
             }
             if ft.is_dir() {
                 stack.push(entry.path());
             } else if ft.is_file() {
-                used = used.saturating_add(entry.metadata().await?.len());
+                let name = entry.file_name().to_string_lossy().to_string();
+                // Partially uploaded files are not user data yet.
+                if crate::handlers::upload::is_staging_name(&name) {
+                    continue;
+                }
+                let metadata = match entry.metadata().await {
+                    Ok(metadata) => metadata,
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                    Err(e) => return Err(AppError::Io(e)),
+                };
+                used = used.saturating_add(metadata.len());
                 count += 1;
             }
         }

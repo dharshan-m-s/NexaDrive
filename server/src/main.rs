@@ -27,7 +27,7 @@ use uuid::Uuid;
 use crate::{
     auth::bootstrap_admin,
     config::Config,
-    handlers::upload::{cleanup_stale_uploads, recover_upload_jobs},
+    handlers::upload::{cleanup_stale_uploads, recover_upload_jobs, sweep_expired_uploads},
     logbuf::LogBuffer,
     state::AppState,
 };
@@ -69,7 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     sqlx::migrate!("./migrations").run(&db).await?;
     bootstrap_admin(&db, &config).await?;
 
-    cleanup_stale_uploads(&config.storage_root).await?;
+    cleanup_stale_uploads(&db, &config.storage_root, config.upload_session_ttl_hours).await?;
     recover_upload_jobs(&db, &config.storage_root).await?;
     if let Some(url) = &config.public_url {
         info!(%url, "NexaDrive public URL configured");
@@ -90,7 +90,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         logs,
         console_attempts: Arc::new(Mutex::new(HashMap::new())),
         storage_cache: Arc::new(Mutex::new(None)),
+        upload_slots: Arc::new(tokio::sync::Semaphore::new(config.max_concurrent_uploads)),
+        quota_cache: Arc::new(Mutex::new(HashMap::new())),
     };
+
+    // Upload sessions that were never finished must not keep their staging
+    // files forever.
+    {
+        let db = state.db.clone();
+        let storage_root = (*state.storage_root).clone();
+        let ttl_hours = config.upload_session_ttl_hours;
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(15 * 60)).await;
+                match sweep_expired_uploads(&db, &storage_root, ttl_hours).await {
+                    Ok(expired) if expired > 0 => {
+                        info!(expired, "expired stale upload sessions");
+                    }
+                    Ok(_) => {}
+                    Err(e) => error!(error = %e, "failed to sweep expired upload sessions"),
+                }
+            }
+        });
+    }
 
     metrics::spawn_sampler(
         Arc::clone(&state.metrics),

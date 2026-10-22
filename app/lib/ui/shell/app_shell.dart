@@ -7,7 +7,7 @@ import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_motion.dart';
 import '../../../services/api.dart';
 import '../../../services/session.dart';
-import '../../../services/transfer_queue.dart';
+import '../../../services/upload_manager.dart';
 import '../../../services/sync_service.dart';
 import '../../../services/media_cache.dart';
 import '../../../services/thumbnail_cache.dart';
@@ -101,6 +101,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         Timer.periodic(const Duration(seconds: 30), (_) => _resumeQueue());
     api = widget.api ?? Api(widget.session);
     api.onUnauthorized = _handleSessionExpired;
+    // The upload queue uploads through this client and picks up transfers
+    // that were interrupted by an earlier crash. The shell claims the queue
+    // for the foreground app, so the Android background worker knows to stay
+    // out of the way while the app is open.
+    UploadManager.current
+      ..attach(api)
+      ..claimForeground();
     updateController = UpdateController(
       source: UpdateSource(),
       downloader: UpdateDownloader(),
@@ -148,12 +155,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
   }
 
+  /// Nudges the upload queue to pick up whatever is still pending.
   Future<void> _resumeQueue() async {
     try {
-      final queue = TransferQueue(api);
-      final pending =
-          (await queue.items()).where((x) => x.status != 'completed').toList();
-      if (pending.isNotEmpty) await queue.process(onChanged: (_) {});
+      final manager = UploadManager.current;
+      manager.attach(api);
+      // A transfer that was running when the app went away is marked as
+      // queued again; the worker asks the server for the authoritative offset
+      // before it sends a byte.
+      await manager.requeueInterrupted();
     } catch (_) {}
   }
 
@@ -176,11 +186,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         _toast(
             'The server restarted. Interrupted transfers are safe in the queue.');
       }
-      final queue = TransferQueue(api);
-      final pending =
-          (await queue.items()).where((x) => x.status != 'completed').toList();
-      if (pending.isNotEmpty) {
-        await queue.process(onChanged: (_) {});
+      final manager = UploadManager.current;
+      manager.attach(api);
+      if (manager.pendingCount > 0) {
+        await manager.requeueInterrupted();
         if (mounted) setState(() {});
       }
     } catch (_) {
@@ -238,7 +247,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   void _openTransfers() {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => TransfersScreen(api: api)),
+      MaterialPageRoute(builder: (_) => const TransfersScreen()),
     );
   }
 
@@ -341,6 +350,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _queueTimer?.cancel();
+    // The app is no longer in the foreground, so the background worker may
+    // take over the queue.
+    UploadManager.current.releaseForeground();
     updateController.dispose();
     super.dispose();
   }

@@ -1,59 +1,74 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
 import '../../core/utils/format.dart';
 import '../../services/api.dart';
-import '../../services/transfer_queue.dart';
+import '../../services/upload_item.dart';
+import '../../services/upload_manager.dart';
 
 /// One UI upload progress dialog — modal while active, showing per-file
 /// progress, then a summary with retry for failures.
+///
+/// The dialog is a *view* of the queue, not the queue itself. Closing it does
+/// not stop a transfer: the upload keeps running and stays visible on the
+/// Transfers screen.
 class UploadProgressDialog extends StatefulWidget {
-  final TransferQueue queue;
+  final UploadManager manager;
   final List<String> uploadIds;
-  final String folder;
+  final String destination;
 
   const UploadProgressDialog({
     super.key,
-    required this.queue,
+    required this.manager,
     required this.uploadIds,
-    required this.folder,
+    required this.destination,
   });
 
+  /// Queues [files] and shows the progress dialog.
   static Future<void> show(
     BuildContext context, {
-    required Api api,
     required List<PlatformFile> files,
     required String folder,
   }) async {
-    final queue = TransferQueue(api);
-    final uploadIds = <String>[];
-    try {
-      for (final file in files) {
-        final item = await queue.enqueue(file, folder);
-        uploadIds.add(item.id);
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed to start: $e')),
-        );
-      }
-      return;
+    final sources = <UploadSource>[];
+    for (final file in files) {
+      final path = file.path;
+      if (path == null) continue;
+      sources.add(UploadSource(
+        path: path,
+        name: file.name,
+        size: file.lengthSync() ?? 0,
+      ));
     }
-    if (!context.mounted) return;
+    await showSources(context, sources: sources, folder: folder);
+  }
 
+  /// Queues [sources] and shows the progress dialog.
+  static Future<void> showSources(
+    BuildContext context, {
+    required List<UploadSource> sources,
+    required String folder,
+    Api? api,
+  }) async {
+    if (sources.isEmpty) return;
+    final manager = UploadManager.current;
+    if (api != null) manager.attach(api);
+    final ids = await manager.enqueueAll(sources, folder);
+    if (!context.mounted) return;
+    if (ids.isEmpty) return;
     await showDialog<void>(
       context: context,
-      barrierDismissible: false,
       builder: (_) => UploadProgressDialog(
-        queue: queue,
-        uploadIds: uploadIds,
-        folder: folder,
+        manager: manager,
+        uploadIds: ids,
+        destination: folder,
       ),
     );
   }
@@ -66,37 +81,18 @@ class UploadProgressDialog extends StatefulWidget {
     required List<String> paths,
     required String folder,
   }) async {
-    final queue = TransferQueue(api);
-    final uploadIds = <String>[];
-    try {
-      for (final path in paths) {
-        final file = File(path);
-        final item = await queue.enqueueLocalPath(
-          path,
-          name: file.uri.pathSegments.last,
-          folder: folder,
-        );
-        uploadIds.add(item.id);
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed to start: $e')),
-        );
-      }
-      return;
+    final sources = <UploadSource>[];
+    for (final path in paths) {
+      final file = File(path);
+      final size = await file.exists() ? await file.length() : 0;
+      sources.add(UploadSource(
+        path: path,
+        name: file.uri.pathSegments.last,
+        size: size,
+      ));
     }
     if (!context.mounted) return;
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => UploadProgressDialog(
-        queue: queue,
-        uploadIds: uploadIds,
-        folder: folder,
-      ),
-    );
+    await showSources(context, sources: sources, folder: folder, api: api);
   }
 
   @override
@@ -104,63 +100,33 @@ class UploadProgressDialog extends StatefulWidget {
 }
 
 class _UploadProgressDialogState extends State<UploadProgressDialog> {
-  List<TransferItem> _items = [];
-  Timer? _poll;
-  bool _finished = false;
+  /// The items of this batch, in queue order.
+  List<UploadItem> _items = [];
 
   @override
   void initState() {
     super.initState();
+    widget.manager.addListener(_refresh);
     _refresh();
-    _startProcessing();
-    _poll =
-        Timer.periodic(const Duration(milliseconds: 700), (_) => _refresh());
   }
 
   @override
   void dispose() {
-    _poll?.cancel();
+    widget.manager.removeListener(_refresh);
     super.dispose();
   }
 
-  bool _isDone(List<TransferItem> items) => items.every(
-        (e) =>
-            e.status == 'completed' ||
-            (e.status == 'queued' && e.error != null),
-      );
-
-  Future<void> _startProcessing() async {
-    await widget.queue.process(onChanged: (_) => _refresh());
+  void _refresh() {
     if (!mounted) return;
-    await _refresh();
-    if (mounted && _finished) _poll?.cancel();
-  }
-
-  Future<void> _refresh() async {
-    final all = await widget.queue.items();
-    if (!mounted) return;
-    setState(() {
-      _items = all.where((e) => widget.uploadIds.contains(e.id)).toList();
-      if (_isDone(_items)) {
-        _finished = true;
-        _poll?.cancel();
-      }
-    });
-  }
-
-  Future<void> _cancel() async {
-    final all = await widget.queue.items();
-    for (final e in all) {
-      if (!widget.uploadIds.contains(e.id)) continue;
-      if (e.status != 'completed') await widget.queue.remove(e.id);
+    final byId = <String, UploadItem>{
+      for (final item in widget.manager.items()) item.id: item,
+    };
+    final items = <UploadItem>[];
+    for (final id in widget.uploadIds) {
+      final item = byId[id];
+      if (item != null) items.add(item);
     }
-    if (mounted) Navigator.of(context).pop();
-  }
-
-  Future<void> _retry(TransferItem item) async {
-    await widget.queue.reset(item.id);
-    await _refresh();
-    await _startProcessing();
+    setState(() => _items = items);
   }
 
   @override
@@ -168,22 +134,26 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
     final theme = Theme.of(context);
     final brightness = theme.brightness;
     final secondary = AppColors.textSecondaryFor(brightness);
-    final total = _items.fold<int>(0, (sum, e) => sum + e.size);
-    final done = _items.fold<int>(0, (sum, e) => sum + e.transferred);
-    final completed = _items.where((e) => e.status == 'completed').length;
+    final total = _items.fold<int>(0, (int sum, UploadItem item) => sum + item.size);
+    final done = _items.fold<int>(
+        0, (int sum, UploadItem item) => sum + item.transferred);
+    final completed =
+        _items.where((UploadItem item) => item.state == UploadState.completed).length;
     final failed =
-        _items.where((e) => e.status == 'queued' && e.error != null).length;
+        _items.where((UploadItem item) => item.state == UploadState.failed).length;
     final active = _items
-        .where(
-          (e) =>
-              e.status != 'completed' &&
-              !(e.status == 'queued' && e.error != null),
-        )
+        .where((UploadItem item) =>
+            item.state == UploadState.uploading ||
+            item.state == UploadState.retrying ||
+            item.state == UploadState.queued)
         .length;
-    final isActive = !_finished && active > 0;
+    final paused = _items
+        .where((UploadItem item) => item.state == UploadState.paused)
+        .length;
+    final isActive = active > 0;
     final progress = total == 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
     final allSucceeded =
-        _items.isNotEmpty && _items.every((e) => e.status == 'completed');
+        _items.isNotEmpty && completed == _items.length && failed == 0;
 
     final Widget statusIcon;
     final String statusTitle;
@@ -198,6 +168,14 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
       statusIcon =
           Icon(Icons.check_circle_rounded, color: successFor(brightness));
       statusTitle = 'Upload complete';
+    } else if (_items.isEmpty) {
+      statusIcon = Icon(
+        Icons.error_outline_rounded,
+        color: brightness == Brightness.dark
+            ? AppColors.errorDark
+            : AppColors.errorLight,
+      );
+      statusTitle = 'Nothing was uploaded';
     } else {
       statusIcon = Icon(
         Icons.error_outline_rounded,
@@ -208,94 +186,133 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
       statusTitle = 'Upload finished with issues';
     }
 
-    return PopScope(
-      canPop: !isActive,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _cancel();
-      },
-      child: AlertDialog(
-        title: Row(
-          children: [
-            AnimatedSwitcher(
-              duration: AppMotion.fast,
-              child: SizedBox(key: ValueKey(statusTitle), child: statusIcon),
-            ),
-            const SizedBox(width: AppDimens.space12),
-            Expanded(
-              child: Text(
-                statusTitle,
-                style: AppTextStyle.dialogTitle.copyWith(
-                  color: AppColors.textPrimaryFor(brightness),
-                ),
-              ),
-            ),
-          ],
-        ),
-        content: SizedBox(
-          width: 380,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${Format.count(completed, 'file')} uploaded to '
-                '${widget.folder.isEmpty ? 'My files' : widget.folder}',
-                style: AppTextStyle.caption.copyWith(color: secondary),
-              ),
-              const SizedBox(height: AppDimens.space12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                child: LinearProgressIndicator(value: progress, minHeight: 8),
-              ),
-              const SizedBox(height: AppDimens.space6),
-              Text(
-                '${Format.bytes(done)} of ${Format.bytes(total)}',
-                style: AppTextStyle.micro.copyWith(color: secondary),
-              ),
-              const SizedBox(height: AppDimens.space12),
-              if (_items.isEmpty)
-                Text(
-                  'No files could be started.',
-                  style: AppTextStyle.caption.copyWith(color: secondary),
-                )
-              else
-                Flexible(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: _items.length,
-                    separatorBuilder: (_, __) =>
-                        const SizedBox(height: AppDimens.space2),
-                    itemBuilder: (_, index) =>
-                        _buildRow(context, _items[index]),
-                  ),
-                ),
-            ],
+    return AlertDialog(
+      title: Row(
+        children: [
+          AnimatedSwitcher(
+            duration: AppMotion.fast,
+            child: SizedBox(key: ValueKey(statusTitle), child: statusIcon),
           ),
-        ),
-        actions: [
-          if (isActive)
-            TextButton(onPressed: _cancel, child: const Text('Cancel'))
-          else
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(failed > 0 ? 'Close' : 'Done'),
+          const SizedBox(width: AppDimens.space12),
+          Expanded(
+            child: Text(
+              statusTitle,
+              style: AppTextStyle.dialogTitle.copyWith(
+                color: AppColors.textPrimaryFor(brightness),
+              ),
             ),
+          ),
         ],
       ),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${Format.count(completed, 'file')} uploaded to '
+              '${widget.destination.isEmpty ? 'My files' : widget.destination}',
+              style: AppTextStyle.caption.copyWith(color: secondary),
+            ),
+            const SizedBox(height: AppDimens.space12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+              child: LinearProgressIndicator(value: progress, minHeight: 8),
+            ),
+            const SizedBox(height: AppDimens.space6),
+            Text(
+              '${Format.bytes(done)} of ${Format.bytes(total)}'
+              '${paused > 0 ? ' · $paused paused' : ''}',
+              style: AppTextStyle.micro.copyWith(color: secondary),
+            ),
+            const SizedBox(height: AppDimens.space12),
+            if (_items.isEmpty)
+              Text(
+                'No files could be started.',
+                style: AppTextStyle.caption.copyWith(color: secondary),
+              )
+            else
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _items.length,
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(height: AppDimens.space2),
+                  itemBuilder: (_, int index) =>
+                      _buildRow(context, _items[index]),
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        if (isActive)
+          TextButton(onPressed: _pauseAll, child: const Text('Pause all')),
+        if (paused > 0)
+          TextButton(onPressed: _resumeAll, child: const Text('Resume all')),
+        if (failed > 0)
+          TextButton(
+            onPressed: _retryFailed,
+            child: const Text('Retry failed'),
+          ),
+        if (isActive)
+          TextButton(onPressed: _cancelAll, child: const Text('Cancel'))
+        else
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(failed > 0 ? 'Close' : 'Done'),
+          ),
+      ],
     );
+  }
+
+  Future<void> _pauseAll() async {
+    for (final item in _items) {
+      if (item.state == UploadState.queued ||
+          item.state == UploadState.uploading ||
+          item.state == UploadState.retrying) {
+        await widget.manager.pause(item.id);
+      }
+    }
+    _refresh();
+  }
+
+  Future<void> _resumeAll() async {
+    for (final item in _items) {
+      if (item.state == UploadState.paused) {
+        await widget.manager.resume(item.id);
+      }
+    }
+    _refresh();
+  }
+
+  Future<void> _cancelAll() async {
+    for (final item in _items) {
+      if (!item.state.isTerminal) {
+        await widget.manager.cancel(item.id);
+      }
+    }
+    _refresh();
+  }
+
+  Future<void> _retryFailed() async {
+    await widget.manager.retryFailed();
+    _refresh();
   }
 
   Color successFor(Brightness b) =>
       b == Brightness.dark ? AppColors.successDark : AppColors.successLight;
 
-  Widget _buildRow(BuildContext context, TransferItem item) {
-    final theme = Theme.of(context);
-    final brightness = theme.brightness;
-    final failed = item.status == 'queued' && item.error != null;
-    final doneStatus = item.status == 'completed';
-    final uploading = item.status == 'uploading';
-    final frac =
-        item.size == 0 ? 0.0 : (item.transferred / item.size).clamp(0.0, 1.0);
+  Widget _buildRow(BuildContext context, UploadItem item) {
+    final brightness = Theme.of(context).brightness;
+    final state = item.state;
+    final failed = state == UploadState.failed;
+    final doneStatus = state == UploadState.completed;
+    final uploading = state == UploadState.uploading;
+    final paused = state == UploadState.paused;
+    final cancelled = state == UploadState.cancelled;
+    final frac = item.progress;
 
     final IconData icon;
     final Color color;
@@ -310,10 +327,22 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
           ? AppColors.errorDark
           : AppColors.errorLight;
       label = item.error ?? 'Failed';
+    } else if (cancelled) {
+      icon = Icons.cancel_outlined;
+      color = secondaryFor(brightness);
+      label = 'Cancelled';
+    } else if (paused) {
+      icon = Icons.pause_circle_outline_rounded;
+      color = secondaryFor(brightness);
+      label = 'Paused';
     } else if (uploading) {
       icon = Icons.cloud_upload_outlined;
       color = AppColors.accentFor(brightness);
       label = '${Format.bytes(item.transferred)} / ${Format.bytes(item.size)}';
+    } else if (state == UploadState.retrying) {
+      icon = Icons.refresh_rounded;
+      color = AppColors.accentFor(brightness);
+      label = 'Retrying…';
     } else {
       icon = Icons.schedule_rounded;
       color = secondaryFor(brightness);
@@ -363,18 +392,56 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
               ],
             ),
           ),
-          if (failed)
-            IconButton(
-              tooltip: 'Retry',
-              onPressed: () => _retry(item),
-              icon:
-                  const Icon(Icons.refresh_rounded, size: AppDimens.iconSmall),
-              color: brightness == Brightness.dark
-                  ? AppColors.errorDark
-                  : AppColors.errorLight,
-            ),
+          _rowAction(item),
         ],
       ),
+    );
+  }
+
+  /// The per-row control: pause, resume, retry or cancel.
+  Widget _rowAction(UploadItem item) {
+    final brightness = Theme.of(context).brightness;
+    final state = item.state;
+    if (state == UploadState.completed) {
+      return IconButton(
+        tooltip: 'Remove from list',
+        onPressed: () async {
+          await widget.manager.remove(item.id);
+          _refresh();
+        },
+        icon: const Icon(Icons.close_rounded, size: AppDimens.iconSmall),
+      );
+    }
+    if (state == UploadState.failed || state == UploadState.cancelled) {
+      return IconButton(
+        tooltip: 'Retry',
+        onPressed: () async {
+          await widget.manager.retry(item.id);
+          _refresh();
+        },
+        icon: const Icon(Icons.refresh_rounded, size: AppDimens.iconSmall),
+        color: brightness == Brightness.dark
+            ? AppColors.errorDark
+            : AppColors.errorLight,
+      );
+    }
+    if (state == UploadState.paused) {
+      return IconButton(
+        tooltip: 'Resume',
+        onPressed: () async {
+          await widget.manager.resume(item.id);
+          _refresh();
+        },
+        icon: const Icon(Icons.play_arrow_rounded, size: AppDimens.iconSmall),
+      );
+    }
+    return IconButton(
+      tooltip: 'Pause',
+      onPressed: () async {
+        await widget.manager.pause(item.id);
+        _refresh();
+      },
+      icon: const Icon(Icons.pause_rounded, size: AppDimens.iconSmall),
     );
   }
 

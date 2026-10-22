@@ -45,6 +45,14 @@ class MainActivity : FlutterFragmentActivity() {
     /// never blocks the UI while the session is written.
     private val installerExecutor: Executor = Executors.newSingleThreadExecutor()
 
+    /// The folder picker hands back a tree URI. The tree is materialised into
+    /// the app cache on this executor so a large folder never blocks the
+    /// platform thread.
+    private val folderExecutor: Executor = Executors.newSingleThreadExecutor()
+
+    /// The pending result of an open tree picker.
+    private var pendingFolderResult: MethodChannel.Result? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
@@ -75,6 +83,104 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        MethodChannel(messenger, FOLDER_PICKER_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "pickFolder" -> pickFolder(result)
+                "materializeFolder" -> materializeFolder(
+                    call.argument<String>("uri"),
+                    result,
+                )
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    // -------------------------------------------------------- folder picker
+
+    /**
+     * Opens the system tree picker.
+     *
+     * The user grants access to exactly one tree; the grant is what makes the
+     * tree readable, so no storage permission is involved.
+     */
+    private fun pickFolder(result: MethodChannel.Result) {
+        if (pendingFolderResult != null) {
+            result.error("busy", "A folder picker is already open", null)
+            return
+        }
+        pendingFolderResult = result
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PREFIX_URI_PERMISSION,
+            )
+        }
+        try {
+            startActivityForResult(intent, FolderPickerBridge.REQUEST_CODE)
+        } catch (e: android.content.ActivityNotFoundException) {
+            pendingFolderResult = null
+            result.error("unavailable", "No folder picker is available", null)
+        }
+    }
+
+    /**
+     * Copies the picked tree into the app cache and reports the copied files.
+     *
+     * The upload queue reads local files, so the tree is materialised once
+     * instead of asking the platform for every byte of every chunk.
+     */
+    private fun materializeFolder(uri: String?, result: MethodChannel.Result) {
+        if (uri.isNullOrEmpty()) {
+            result.error("invalid", "No folder was picked", null)
+            return
+        }
+        val treeUri = android.net.Uri.parse(uri)
+        folderExecutor.execute {
+            try {
+                val bridge = FolderPickerBridge(this)
+                val root = File(
+                    File(cacheDir, "nexadrive-uploads"),
+                    System.currentTimeMillis().toString(),
+                )
+                root.mkdirs()
+                val files = bridge.materialize(treeUri, root)
+                val payload = mapOf(
+                    "name" to bridge.displayName(treeUri),
+                    "root" to root.absolutePath,
+                    "files" to files,
+                )
+                runOnUiThread { result.success(payload) }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    result.error("failed", e.message ?: "The folder could not be read", null)
+                }
+            }
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != FolderPickerBridge.REQUEST_CODE) return
+        val result = pendingFolderResult ?: return
+        pendingFolderResult = null
+        val uri = data?.data
+        if (resultCode != Activity.RESULT_OK || uri == null) {
+            result.success(null)
+            return
+        }
+        // Keep read access for the session so the tree stays readable after
+        // the picker closes.
+        try {
+            contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        } catch (_: SecurityException) {
+            // Some providers do not offer a persistable grant; the tree is
+            // still readable for this session.
+        }
+        result.success(uri.toString())
     }
 
     // ------------------------------------------------------------- updater
@@ -278,6 +384,7 @@ class MainActivity : FlutterFragmentActivity() {
     companion object {
         private const val UPDATER_CHANNEL = "nexadrive/updater"
         private const val APP_LOCK_CHANNEL = "nexadrive/app_lock"
+        private const val FOLDER_PICKER_CHANNEL = "nexadrive/folder_picker"
         const val ACTION_INSTALL_STATUS = "io.nexadrive.app.INSTALL_STATUS"
     }
 }

@@ -3,59 +3,57 @@ import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/utils/format.dart';
-import '../../../services/api.dart';
-import '../../../services/transfer_queue.dart';
+import '../../../services/upload_item.dart';
+import '../../../services/upload_manager.dart';
 import '../../widgets/nexa_components.dart';
 
 /// Offline upload queue — every pending transfer, its progress, and retry.
 class TransfersScreen extends StatefulWidget {
-  final Api api;
-  const TransfersScreen({super.key, required this.api});
+  const TransfersScreen({super.key});
 
   @override
   State<TransfersScreen> createState() => _TransfersScreenState();
 }
 
 class _TransfersScreenState extends State<TransfersScreen> {
-  List<TransferItem> _items = [];
-  bool _loading = true;
-  bool _processing = false;
+  late final UploadManager _manager;
 
   @override
   void initState() {
     super.initState();
+    _manager = UploadManager.current;
+    _manager.addListener(_refresh);
     _refresh();
   }
 
-  Future<void> _refresh() async {
-    final queue = TransferQueue(widget.api);
-    final items = await queue.items();
-    if (!mounted) return;
-    setState(() {
-      _items = items;
-      _loading = false;
-    });
+  @override
+  void dispose() {
+    _manager.removeListener(_refresh);
+    super.dispose();
   }
 
-  Future<void> _process() async {
-    setState(() => _processing = true);
-    await TransferQueue(widget.api).process(onChanged: (_) => _refresh());
-    await _refresh();
-    if (mounted) setState(() => _processing = false);
+  void _refresh() {
+    if (mounted) setState(() {});
   }
 
-  Future<void> _resumeOrPause(TransferItem item) async {
-    final queue = TransferQueue(widget.api);
-    if (item.status == 'queued' && item.error != null) {
-      await queue.reset(item.id);
-    } else {
-      await queue.pause(item.id);
+  Future<void> _toggle(UploadItem item) async {
+    switch (item.state) {
+      case UploadState.paused:
+        await _manager.resume(item.id);
+      case UploadState.failed:
+      case UploadState.cancelled:
+        await _manager.retry(item.id);
+      case UploadState.completed:
+        break;
+      case UploadState.queued:
+      case UploadState.uploading:
+      case UploadState.retrying:
+        await _manager.pause(item.id);
     }
-    await _refresh();
-    if (item.status != 'completed') await _process();
+    _refresh();
   }
 
-  Future<void> _remove(TransferItem item) async {
+  Future<void> _remove(UploadItem item) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -74,37 +72,40 @@ class _TransfersScreenState extends State<TransfersScreen> {
       ),
     );
     if (confirmed != true) return;
-    await TransferQueue(widget.api).remove(item.id);
-    await _refresh();
+    await _manager.remove(item.id);
+    _refresh();
   }
 
   Future<void> _clearCompleted() async {
-    await TransferQueue(widget.api).clearCompleted();
-    await _refresh();
+    await _manager.clearCompleted();
+    _refresh();
+  }
+
+  Future<void> _retryAll() async {
+    await _manager.retryFailed();
+    _refresh();
   }
 
   @override
   Widget build(BuildContext context) {
+    final items = _manager.items();
     return Scaffold(
       body: SafeArea(
         bottom: false,
         child: NexaPage(
           title: 'Transfers',
-          subtitle: _summary,
+          subtitle: _summary(items),
           leading: const NexaBackButton(),
           headerAction: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              IconButton(
-                tooltip: 'Process queue',
-                onPressed: _processing ? null : _process,
-                icon: Icon(
-                  _processing
-                      ? Icons.hourglass_top_rounded
-                      : Icons.play_arrow_rounded,
+              if (items.any((UploadItem item) => item.state == UploadState.failed))
+                IconButton(
+                  tooltip: 'Retry failed',
+                  onPressed: _retryAll,
+                  icon: const Icon(Icons.refresh_rounded),
                 ),
-              ),
-              if (_items.any((e) => e.status == 'completed'))
+              if (items.any((UploadItem item) => item.state == UploadState.completed))
                 IconButton(
                   tooltip: 'Clear completed',
                   onPressed: _clearCompleted,
@@ -118,52 +119,61 @@ class _TransfersScreenState extends State<TransfersScreen> {
             AppDimens.pageMargin,
             AppDimens.space24,
           ),
-          body: _body(),
+          body: _body(items),
         ),
       ),
     );
   }
 
   /// One-line state of the queue, so the page says more than its title.
-  String get _summary {
-    if (_loading) return 'Loading…';
-    if (_items.isEmpty) return 'Queue is empty';
-    final active = _items.where((e) => e.status != 'completed').length;
-    if (active == 0) return '${_items.length} completed';
-    return '$active active of ${_items.length}';
+  String _summary(List<UploadItem> items) {
+    if (items.isEmpty) return 'Queue is empty';
+    final active = items
+        .where((UploadItem item) =>
+            item.state == UploadState.queued ||
+            item.state == UploadState.uploading ||
+            item.state == UploadState.retrying)
+        .length;
+    final failed =
+        items.where((UploadItem item) => item.state == UploadState.failed).length;
+    if (active == 0 && failed == 0) return '${items.length} completed';
+    final parts = <String>[];
+    if (active > 0) parts.add('$active active');
+    if (failed > 0) parts.add('$failed failed');
+    return '${parts.join(' · ')} of ${items.length}';
   }
 
   /// The body, cross-faded between states so a resolved queue settles in.
-  Widget _body() => NexaStateSwitcher(
-        stateKey: ValueKey(_bodyState),
-        child: _buildBody(),
+  Widget _body(List<UploadItem> items) => NexaStateSwitcher(
+        stateKey: ValueKey(_bodyState(items)),
+        child: _buildBody(items),
       );
 
-  String get _bodyState => _loading
-      ? 'loading'
-      : _items.isEmpty
-          ? 'empty'
-          : 'content';
+  String _bodyState(List<UploadItem> items) =>
+      items.isEmpty ? 'empty' : 'content';
 
-  Widget _buildBody() {
-    if (_loading) {
-      return const NexaLoadingBlock();
-    }
-    if (_items.isEmpty) {
+  Widget _buildBody(List<UploadItem> items) {
+    if (items.isEmpty) {
       return const NexaEmptyState(
         icon: Icons.cloud_upload_outlined,
         title: 'No transfers',
         hint: 'Uploads you start while offline will be queued here.',
       );
     }
-    final active = _items
-        .where((e) =>
-            e.status != 'completed' &&
-            !(e.status == 'queued' && e.error != null))
+    final active = items
+        .where((UploadItem item) =>
+            item.state == UploadState.queued ||
+            item.state == UploadState.uploading ||
+            item.state == UploadState.retrying ||
+            item.state == UploadState.paused)
         .toList();
-    final completed = _items.where((e) => e.status == 'completed').toList();
-    final failed =
-        _items.where((e) => e.status == 'queued' && e.error != null).toList();
+    final completed =
+        items.where((UploadItem item) => item.state == UploadState.completed).toList();
+    final failed = items
+        .where((UploadItem item) =>
+            item.state == UploadState.failed ||
+            item.state == UploadState.cancelled)
+        .toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
@@ -176,22 +186,23 @@ class _TransfersScreenState extends State<TransfersScreen> {
         if (active.isNotEmpty)
           _Section(
               'Uploading',
-              '${Format.bytes(active.fold<int>(0, (s, e) => s + e.transferred))} '
-                  'of ${Format.bytes(active.fold<int>(0, (s, e) => s + e.size))}'),
+              '${Format.bytes(active.fold<int>(0, (int s, UploadItem e) => s + e.transferred))} '
+                  'of ${Format.bytes(active.fold<int>(0, (int s, UploadItem e) => s + e.size))}'),
         for (final item in active)
-          _TransferRow(item: item, onToggle: _resumeOrPause, onRemove: _remove),
+          _TransferRow(item: item, onToggle: _toggle, onRemove: _remove),
         if (failed.isNotEmpty) ...[
           const SizedBox(height: AppDimens.space16),
           _Section('Needs attention', '${failed.length} failed'),
           for (final item in failed)
             _TransferRow(
-                item: item, onToggle: _resumeOrPause, onRemove: _remove),
+                item: item, onToggle: _toggle, onRemove: _remove),
         ],
         if (completed.isNotEmpty) ...[
           const SizedBox(height: AppDimens.space16),
           _Section('Completed', '${completed.length} done'),
           for (final item in completed)
-            _TransferRow(item: item, onToggle: null, onRemove: null),
+            _TransferRow(
+                item: item, onToggle: null, onRemove: _remove),
         ],
       ],
     );
@@ -236,20 +247,22 @@ class _Section extends StatelessWidget {
 }
 
 class _TransferRow extends StatelessWidget {
-  final TransferItem item;
-  final Future<void> Function(TransferItem)? onToggle;
-  final Future<void> Function(TransferItem)? onRemove;
+  final UploadItem item;
+  final Future<void> Function(UploadItem)? onToggle;
+  final Future<void> Function(UploadItem)? onRemove;
 
   const _TransferRow({required this.item, this.onToggle, this.onRemove});
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final completed = item.status == 'completed';
-    final failed = item.status == 'queued' && item.error != null;
-    final uploading = item.status == 'uploading';
-    final frac =
-        item.size == 0 ? 0.0 : (item.transferred / item.size).clamp(0.0, 1.0);
+    final state = item.state;
+    final completed = state == UploadState.completed;
+    final failed = state == UploadState.failed || state == UploadState.cancelled;
+    final uploading = state == UploadState.uploading ||
+        state == UploadState.retrying;
+    final paused = state == UploadState.paused;
+    final frac = item.progress;
 
     final accent = AppColors.accentFor(brightness);
     final Color statusColor;
@@ -279,10 +292,15 @@ class _TransferRow extends StatelessWidget {
         onPressed: onRemove == null ? null : () => onRemove!(item),
       );
     } else {
-      statusColor = accent;
+      statusColor = paused
+          ? AppColors.textSecondaryFor(brightness)
+          : accent;
       trailing = IconButton(
-        tooltip: 'Pause',
-        icon: Icon(Icons.pause_rounded, color: accent),
+        tooltip: paused ? 'Resume' : 'Pause',
+        icon: Icon(
+          paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+          color: statusColor,
+        ),
         onPressed: onToggle == null ? null : () => onToggle!(item),
       );
     }
@@ -311,7 +329,9 @@ class _TransferRow extends StatelessWidget {
                         ? Icons.check_circle_outline_rounded
                         : failed
                             ? Icons.error_outline_rounded
-                            : Icons.schedule_rounded,
+                            : paused
+                                ? Icons.pause_circle_outline_rounded
+                                : Icons.schedule_rounded,
                     size: 20,
                     color: statusColor,
                   ),
@@ -331,13 +351,7 @@ class _TransferRow extends StatelessWidget {
                 ),
                 const SizedBox(height: AppDimens.space2),
                 Text(
-                  failed
-                      ? (item.error ?? 'Failed')
-                      : uploading
-                          ? '${Format.bytes(item.transferred)} / ${Format.bytes(item.size)}'
-                          : completed
-                              ? 'Uploaded'
-                              : 'Waiting…',
+                  _label(state, item),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyle.caption.copyWith(
@@ -346,7 +360,7 @@ class _TransferRow extends StatelessWidget {
                         : AppColors.textSecondaryFor(brightness),
                   ),
                 ),
-                if (uploading) ...[
+                if (!completed && !failed) ...[
                   const SizedBox(height: AppDimens.space6),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(AppDimens.radiusPill),
@@ -365,5 +379,24 @@ class _TransferRow extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static String _label(UploadState state, UploadItem item) {
+    switch (state) {
+      case UploadState.completed:
+        return 'Uploaded';
+      case UploadState.failed:
+        return item.error ?? 'Failed';
+      case UploadState.cancelled:
+        return 'Cancelled';
+      case UploadState.paused:
+        return 'Paused · ${Format.bytes(item.transferred)} of ${Format.bytes(item.size)}';
+      case UploadState.uploading:
+        return '${Format.bytes(item.transferred)} / ${Format.bytes(item.size)}';
+      case UploadState.retrying:
+        return 'Retrying…';
+      case UploadState.queued:
+        return 'Waiting…';
+    }
   }
 }

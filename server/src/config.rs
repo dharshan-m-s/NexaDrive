@@ -14,6 +14,8 @@ pub(crate) struct Config {
     pub(crate) admin_display_name: String,
     pub(crate) admin_password: Option<String>,
     pub(crate) max_upload_bytes: usize,
+    pub(crate) max_concurrent_uploads: usize,
+    pub(crate) upload_session_ttl_hours: i64,
     pub(crate) cors_origins: String,
     pub(crate) rust_log: String,
     pub(crate) restic_repository: Option<String>,
@@ -61,6 +63,21 @@ impl Config {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(10usize * 1024 * 1024 * 1024),
+            // How many upload streams may be in flight at once. Each stream
+            // holds a task, a file handle and a connection, so the server
+            // caps them instead of trusting every client to be polite.
+            max_concurrent_uploads: std::env::var("MAX_CONCURRENT_UPLOADS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .filter(|v| *v > 0)
+                .unwrap_or(8),
+            // How long an unfinished upload session (and its staging file) is
+            // kept so a client can resume after a crash or a server restart.
+            upload_session_ttl_hours: std::env::var("UPLOAD_SESSION_TTL_HOURS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .filter(|v| *v > 0)
+                .unwrap_or(24),
             cors_origins: std::env::var("CORS_ORIGINS").unwrap_or_default(),
             rust_log: std::env::var("RUST_LOG")
                 .unwrap_or_else(|_| "info,nexadrive_server=debug".into()),
