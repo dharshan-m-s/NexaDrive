@@ -112,6 +112,42 @@ void main() {
           reason: 'content must end above the floating pill');
     });
 
+    testWidgets('the pill floats above the bottom inset without growing',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final prefs = await SharedPreferences.getInstance();
+      const inset = 34.0;
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(padding: EdgeInsets.only(bottom: inset)),
+          child: NexaDriveApp(session: signedIn(), prefs: prefs),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final height =
+          tester.view.physicalSize.height / tester.view.devicePixelRatio;
+      final pill = tester.getRect(find.byType(NexaBottomNav));
+      // The capsule keeps its own height: the gesture inset is never absorbed
+      // into the pill's glass (which would make it read as bulky).
+      final capsule = tester.getRect(
+        find
+            .descendant(
+              of: find.byType(NexaBottomNav),
+              matching: find.byType(SizedBox),
+            )
+            .first,
+      );
+      expect(capsule.height, closeTo(AppDimens.bottomNavHeight, 1.0));
+      // It floats a clear gap above the safe-area inset instead.
+      expect(pill.bottom, closeTo(height - AppDimens.space10 - inset, 1.0),
+          reason: 'the pill floats above the gesture area');
+    });
+
     testWidgets('page content clears the status-bar inset', (tester) async {
       SharedPreferences.setMockInitialValues({});
       tester.view.physicalSize = const Size(400, 800);

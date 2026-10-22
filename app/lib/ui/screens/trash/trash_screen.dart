@@ -101,40 +101,52 @@ class _TrashScreenState extends State<TrashScreen> {
     return NexaPage(
       title: 'Trash',
       subtitle: 'Deleted items are kept for 30 days',
-      body: _loading
-          ? const NexaLoadingBlock()
-          : _error != null
-              ? NexaEmptyState(
-                  icon: Icons.cloud_off_rounded,
-                  title: 'Can\u2019t load Trash',
-                  hint: _error,
-                  actionLabel: 'Retry',
-                  onAction: load,
-                )
-              : _items.isEmpty
-                  ? const NexaEmptyState(
-                      icon: Icons.delete_outline_rounded,
-                      title: 'Trash is empty',
-                      hint: 'Deleted files and folders will show up here.',
-                    )
-                  : RefreshIndicator(
-                      onRefresh: load,
-                      child: ListView.separated(
-                        padding:
-                            const EdgeInsets.only(bottom: AppDimens.space24),
-                        itemCount: _items.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: AppDimens.space2),
-                        itemBuilder: (context, i) => _TrashRow(
-                          item: _items[i],
-                          brightness: brightness,
-                          onRestore: () => _restore(_items[i]['id'] as String),
-                          onDelete: () => _delete(_items[i]['id'] as String),
+      body: NexaStateSwitcher(
+        stateKey: ValueKey(_bodyState),
+        child: _loading
+            ? const NexaLoadingBlock()
+            : _error != null
+                ? NexaEmptyState(
+                    icon: Icons.cloud_off_rounded,
+                    title: 'Can\u2019t load Trash',
+                    hint: _error,
+                    actionLabel: 'Retry',
+                    onAction: load,
+                  )
+                : _items.isEmpty
+                    ? const NexaEmptyState(
+                        icon: Icons.delete_outline_rounded,
+                        title: 'Trash is empty',
+                        hint: 'Deleted files and folders will show up here.',
+                      )
+                    : RefreshIndicator(
+                        onRefresh: load,
+                        child: ListView.separated(
+                          padding:
+                              const EdgeInsets.only(bottom: AppDimens.space24),
+                          itemCount: _items.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: AppDimens.space2),
+                          itemBuilder: (context, i) => _TrashRow(
+                            item: _items[i],
+                            brightness: brightness,
+                            onRestore: () =>
+                                _restore(_items[i]['id'] as String),
+                            onDelete: () => _delete(_items[i]['id'] as String),
+                          ),
                         ),
                       ),
-                    ),
+      ),
     );
   }
+
+  String get _bodyState => _loading
+      ? 'loading'
+      : _error != null
+          ? 'error'
+          : _items.isEmpty
+              ? 'empty'
+              : 'content';
 }
 
 /// One trashed entry as a standard One UI surface row.

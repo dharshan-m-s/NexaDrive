@@ -11,6 +11,14 @@ class NexaChip extends StatelessWidget {
   final bool selected;
   final NexaChipVariant variant;
 
+  /// Optional semantic tint for status chips (success / warning / error).
+  /// When set, the chip renders with these tonal container colours instead of
+  /// the neutral or accent fill — e.g. a "Blocked" or "You" badge in an
+  /// account list. Still token-driven: pass `AppColors.errorContainerFor(b)` /
+  /// `AppColors.onErrorContainerFor(b)` pairs, never raw colours.
+  final Color? tintColor;
+  final Color? tintForeground;
+
   const NexaChip({
     super.key,
     required this.label,
@@ -18,6 +26,8 @@ class NexaChip extends StatelessWidget {
     this.onTap,
     this.selected = false,
     this.variant = NexaChipVariant.tonal,
+    this.tintColor,
+    this.tintForeground,
   });
 
   /// Filled accent chip (primary actions, selected state).
@@ -27,6 +37,8 @@ class NexaChip extends StatelessWidget {
     this.leadingIcon,
     this.onTap,
     this.selected = false,
+    this.tintColor,
+    this.tintForeground,
   }) : variant = NexaChipVariant.filled;
 
   /// Outlined chip (secondary actions).
@@ -36,6 +48,8 @@ class NexaChip extends StatelessWidget {
     this.leadingIcon,
     this.onTap,
     this.selected = false,
+    this.tintColor,
+    this.tintForeground,
   }) : variant = NexaChipVariant.outlined;
 
   /// Tonal chip (status, categories) — uses accent container.
@@ -45,6 +59,8 @@ class NexaChip extends StatelessWidget {
     this.leadingIcon,
     this.onTap,
     this.selected = false,
+    this.tintColor,
+    this.tintForeground,
   }) : variant = NexaChipVariant.tonal;
 
   @override
@@ -57,21 +73,29 @@ class NexaChip extends StatelessWidget {
     Color fg;
     BorderSide? border;
 
-    switch (variant) {
-      case NexaChipVariant.filled:
-        bg = selected ? accent : accent.withValues(alpha: 0.12);
-        fg = selected ? onAccent : accent;
-        border = BorderSide.none;
-      case NexaChipVariant.outlined:
-        bg = Colors.transparent;
-        fg = accent;
-        border = BorderSide(color: accent, width: 1.5);
-      case NexaChipVariant.tonal:
-        bg = selected
-            ? AppColors.accentContainerFor(brightness)
-            : AppColors.fillFor(brightness);
-        fg = selected ? onAccent : AppColors.labelSecondaryFor(brightness);
-        border = BorderSide.none;
+    if (tintColor != null) {
+      // Semantic status chip: the tint carries the meaning, in both
+      // appearances, through the tonal container tokens.
+      bg = tintColor!;
+      fg = tintForeground ?? AppColors.labelPrimaryFor(brightness);
+      border = BorderSide.none;
+    } else {
+      switch (variant) {
+        case NexaChipVariant.filled:
+          bg = selected ? accent : accent.withValues(alpha: 0.12);
+          fg = selected ? onAccent : accent;
+          border = BorderSide.none;
+        case NexaChipVariant.outlined:
+          bg = Colors.transparent;
+          fg = accent;
+          border = BorderSide(color: accent, width: 1.5);
+        case NexaChipVariant.tonal:
+          bg = selected
+              ? AppColors.accentContainerFor(brightness)
+              : AppColors.fillFor(brightness);
+          fg = selected ? onAccent : AppColors.labelSecondaryFor(brightness);
+          border = BorderSide.none;
+      }
     }
 
     final widget = Container(
@@ -149,7 +173,7 @@ class NexaSectionHeader extends StatelessWidget {
               style: style ??
                   AppTextStyle.listHeader.copyWith(
                     color: AppColors.labelTertiaryFor(brightness),
-                    letterSpacing: 0.8,
+                    letterSpacing: 0.4,
                   ),
             ),
           ),

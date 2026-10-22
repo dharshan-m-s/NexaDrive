@@ -37,8 +37,13 @@ Future<void> main() async {
   debugDisableClipLayers = false;
   debugDisablePhysicalShapeLayers = false;
 
+  // Decoded-image budget for the framework's cache. Kept deliberately modest:
+  // the image pipeline already holds raw bytes in its own tightly bounded
+  // caches, so a large decoded cache here would double-count memory. Grid
+  // tiles are decoded small (cacheWidth) and re-decode cheaply from those
+  // cached bytes if evicted.
   PaintingBinding.instance.imageCache
-    ..maximumSizeBytes = 150 * 1024 * 1024
+    ..maximumSizeBytes = 64 * 1024 * 1024
     ..maximumSize = 200;
 
   final session = Session();

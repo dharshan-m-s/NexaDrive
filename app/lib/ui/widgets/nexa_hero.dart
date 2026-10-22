@@ -57,6 +57,7 @@ class NexaHero extends StatelessWidget {
                         color: onGradient.withValues(alpha: 0.72),
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.1,
+                        // Subtle gradient-aware tint for light mode
                       ),
                     ),
                     const SizedBox(height: AppDimens.space4),

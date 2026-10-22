@@ -288,9 +288,8 @@ class _PhotoViewerState extends State<PhotoViewer> {
 
   void _shareCurrent() {
     final p = _photos[_current];
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
+    showNexaFormSheet<void>(
+      context,
       builder: (_) => FileShareSheet(
         api: widget.api,
         files: [FileEntry.fromJson(Map<String, dynamic>.from(p))],

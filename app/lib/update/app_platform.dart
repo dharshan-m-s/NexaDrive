@@ -269,6 +269,12 @@ class ArtifactSelector {
       case AppPlatform.linux:
         switch (installation) {
           case InstallationKind.deb:
+          case InstallationKind.installed:
+            // A /usr package layout takes the system package even when dpkg
+            // could not confirm it. `_installOnLinux` hands every non-AppImage
+            // artifact to the package manager, so choosing the portable
+            // AppImage here would download the wrong artifact and then print a
+            // `sudo dpkg -i <AppImage>` instruction — the wrong command.
             return 'deb';
           case InstallationKind.appimage:
             return 'appimage';
@@ -276,7 +282,9 @@ class ArtifactSelector {
           case InstallationKind.unknown:
             return null;
           default:
-            return 'appimage';
+            // An unknown layout (e.g. a stray `portable` kind) must not be
+            // silently served a binary it cannot install.
+            return null;
         }
       default:
         return null;

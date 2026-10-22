@@ -238,8 +238,11 @@ void main() {
       expect(selector.kindFor(AppPlatform.linux, InstallationKind.deb), 'deb');
       expect(selector.kindFor(AppPlatform.linux, InstallationKind.appimage),
           'appimage');
+      // A /usr layout that dpkg could not confirm still takes the system
+      // package: the install flow hands non-AppImage artifacts to the package
+      // manager, so serving the portable AppImage would break the handoff.
       expect(selector.kindFor(AppPlatform.linux, InstallationKind.installed),
-          'appimage');
+          'deb');
       expect(
           selector.kindFor(AppPlatform.linux, InstallationKind.source), isNull);
       expect(selector.kindFor(AppPlatform.linux, InstallationKind.unknown),
@@ -267,6 +270,16 @@ void main() {
       final linuxAppImage = selector.select(m, AppPlatform.linux,
           ArchNames.desktopX64, InstallationKind.appimage)!;
       expect(linuxAppImage.url.endsWith('.AppImage'), isTrue);
+    });
+
+    test('select sends an unconfirmed /usr install the .deb, not the AppImage',
+        () {
+      // Regression: a /usr package layout whose dpkg probe failed used to be
+      // offered the AppImage, then handed a `sudo dpkg -i <AppImage>` command.
+      final m = _fullManifest();
+      final linuxInstalled = selector.select(m, AppPlatform.linux,
+          ArchNames.desktopX64, InstallationKind.installed)!;
+      expect(linuxInstalled.url.endsWith('-linux-amd64.deb'), isTrue);
     });
 
     test('select prefers the explicit Linux choice over the fallback', () {

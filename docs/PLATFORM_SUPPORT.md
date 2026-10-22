@@ -8,7 +8,7 @@ Supported platforms, install types, and the update flow per platform.
 
 | Platform | Arch | Install type | Update mechanism |
 | --- | --- | --- | --- |
-| Android | arm64-v8a, armeabi-v7a, x86, x86_64 | APK (single universal build) | System package installer via FileProvider |
+| Android | arm64-v8a, armeabi-v7a, x86, x86_64 | APK (single universal build) | System package installer (`PackageInstaller` session) |
 | Windows | x64 | Installed (Inno Setup) | .exe installer |
 | Windows | x64 | Portable (ZIP) | Staged unpack + detached swap helper |
 | Linux | x86_64 | AppImage | Atomic rename over live image |

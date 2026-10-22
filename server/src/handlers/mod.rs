@@ -3,6 +3,7 @@ pub(crate) mod backup;
 pub(crate) mod download;
 pub(crate) mod files;
 pub(crate) mod notifications;
+pub(crate) mod sessions;
 pub(crate) mod sharing;
 pub(crate) mod storage;
 pub(crate) mod sync;

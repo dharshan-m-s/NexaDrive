@@ -157,12 +157,13 @@ Future<void> _assertController(
     ctrl.resolvedPlatform!,
     ctrl.archLabel!,
     ctrl.installationKind!,
+    explicitLinuxKind: ctrl.linuxPackageChoice,
   );
   ctrl.installerKind = ctrl.selector.kindFor(
         ctrl.resolvedPlatform!,
         ctrl.installationKind!,
       ) ??
-      _defaultKindForLinux(manifest, ctrl.archLabel!, null);
+      _defaultKindForLinux(manifest, ctrl.archLabel!, ctrl.linuxPackageChoice);
 }
 
 String? _defaultKindForLinux(UpdateManifest m, String arch, String? explicit) {
@@ -371,6 +372,37 @@ void main() {
       expect(ctrl.installerKind, 'deb');
       expect(ctrl.selectedArtifact!.url, contains('.deb'));
       expect(notified, isTrue);
+    });
+
+    test('chooseLinuxPackage persists the choice across a new controller',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = UpdatePreferences(await SharedPreferences.getInstance());
+      final detector = _FakeLinuxDetector(install: InstallationKind.unknown);
+      final source = UpdateSource(client: _NeverClient(), baseUrl: _baseUrl);
+      UpdateController build() => UpdateController(
+            source: source,
+            downloader:
+                UpdateDownloader(client: _NeverClient(), source: source),
+            detector: detector,
+            selector: const ArtifactSelector(),
+            preferences: prefs,
+            router: const UpdateRouter(),
+            loadCurrentVersion: () async => '1.1.0',
+          );
+
+      final first = build();
+      await _assertController(first, manifest: _linuxManifest('1.3.0'));
+      await first.chooseLinuxPackage('deb');
+      expect(prefs.linuxPackageChoice, 'deb');
+
+      // A fresh controller (app relaunch) must remember the choice and preselect
+      // the .deb instead of the AppImage default.
+      final second = build();
+      expect(second.linuxPackageChoice, 'deb');
+      await _assertController(second, manifest: _linuxManifest('1.3.0'));
+      expect(second.installerKind, 'deb');
+      expect(second.selectedArtifact!.url, contains('.deb'));
     });
   });
 }

@@ -66,31 +66,40 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
             AppDimens.pageMargin,
             AppDimens.space24,
           ),
-          body: _loading
-              ? const NexaLoadingBlock()
-              : _entries.isEmpty
-                  ? const NexaEmptyState(
-                      icon: Icons.receipt_long_outlined,
-                      title: 'No audit entries',
-                      hint: 'Security events will be listed here.',
-                    )
-                  : NexaGroupedList(
-                      withDividers: true,
-                      children: [
-                        for (final entry in _entries)
-                          _AuditRow(
-                            action: entry['action']?.toString() ?? '',
-                            path: entry['path']?.toString() ?? '',
-                            username: entry['username']?.toString(),
-                            createdAt: entry['created_at']?.toString(),
-                            brightness: brightness,
-                          ),
-                      ],
-                    ),
+          body: NexaStateSwitcher(
+            stateKey: ValueKey(_bodyState),
+            child: _loading
+                ? const NexaLoadingBlock()
+                : _entries.isEmpty
+                    ? const NexaEmptyState(
+                        icon: Icons.receipt_long_outlined,
+                        title: 'No audit entries',
+                        hint: 'Security events will be listed here.',
+                      )
+                    : NexaGroupedList(
+                        withDividers: true,
+                        children: [
+                          for (final entry in _entries)
+                            _AuditRow(
+                              action: entry['action']?.toString() ?? '',
+                              path: entry['path']?.toString() ?? '',
+                              username: entry['username']?.toString(),
+                              createdAt: entry['created_at']?.toString(),
+                              brightness: brightness,
+                            ),
+                        ],
+                      ),
+          ),
         ),
       ),
     );
   }
+
+  String get _bodyState => _loading
+      ? 'loading'
+      : _entries.isEmpty
+          ? 'empty'
+          : 'content';
 }
 
 /// A single audit entry rendered as a standard One UI grouped row.

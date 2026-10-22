@@ -135,9 +135,8 @@ abstract final class FileOpener {
               label: const Text('Share link'),
               onPressed: () {
                 Navigator.pop(sheetContext);
-                showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
+                showNexaFormSheet<void>(
+                  context,
                   builder: (_) => FileShareSheet(api: api, files: [entry]),
                 );
               },

@@ -105,7 +105,7 @@ Identical in CI, manifest, docs, and the Update Center:
 ### Android (APK)
 
 1. The verified APK is downloaded into the app-private cache (`<cache>/nexadrive_updates/`).
-2. The app hands the file to the **system package installer** through a `FileProvider` content URI — never a raw filesystem path. No silent install, no root, no modified security settings.
+2. The app streams the verified APK into a **`PackageInstaller` session** (`MODE_FULL_INSTALL`) and commits it — the installer receives the bytes directly, so no content URI or raw path is exposed to another app. No silent install, no root, no modified security settings.
 3. The user confirms in the stock install dialog. If Android blocks the source, the Update Center switches to a *permission needed* state, explains it, and deep-links to **Settings → Install unknown apps** for this app (per-source consent — not a global security disable).
 4. On return to the app, reconciliation compares the installed version with the manifest; completion is only declared when the OS reports the new version.
 5. Signing: the release APK must be signed with the production keystore; tag CI **fails** without `KEYSTORE_BASE64`. Same application ID (`io.nexadrive.app`) + same signing cert are what make Android accept the install as an upgrade.
@@ -182,7 +182,7 @@ A development/source build reports "You are running a development/source build�
 | Malicious filename / traversal | Filenames sanitized to basenames; fixed cache directories |
 | Partial download | `.part` file committed only after verification; interrupted downloads cleaned |
 | Disk exhaustion | 300 MB / 21-day bounded cache with pruning |
-| Installer replacement | Verified installer launched from the app-private cache; APK handed off via FileProvider content URI |
+| Installer replacement | Verified installer launched from the app-private cache; APK streamed into a `PackageInstaller` session |
 | Privilege escalation | No automatic sudo/root; OS handles elevation; per-user installers |
 | Malicious release notes | Sanitized to plain text; never rendered as HTML |
 
@@ -214,7 +214,7 @@ excluded from `/releases/latest` and ignored by the auto-updater.
 
 ## 8. Testing
 
-- `app/test/update/` — 97+ tests: SemVer precedence, manifest parsing/validation, platform/arch/installation-kind selection, download engine (checksum mismatch, size mismatch, cancellation, redirects, stale-download abort), controller state machine (check policy, mandatory vs optional, cancel-during-mandatory, install hand-off, reconciliation, portable-zip Windows flow, Linux source-build rejection, server-version compatibility), stall regression tests (body read timeout, idle download watchdog), offline/HTTP failure mapping, and cache policy.
+- `app/test/update/` — 120 tests: SemVer precedence, manifest parsing/validation, platform/arch/installation-kind selection, download engine (checksum mismatch, size mismatch, cancellation, redirects, stale-download abort), controller state machine (check policy, mandatory vs optional, cancel-during-mandatory, install hand-off, reconciliation, portable-zip Windows flow, Linux source-build rejection, server-version compatibility), stall regression tests (body read timeout, idle download watchdog), offline/HTTP failure mapping, and cache policy.
 - `scripts/update-manifest.sh` and `scripts/verify-update-manifest.py` are exercised in CI on every release; negative cases (tampered checksum, missing artifact, version/tag mismatch) fail the release.
 - `server/src/main.rs` has 21 tests; `cargo test` + `cargo clippy` run in CI.
 - Integration flows (check → download → verify → hand-off) run against mocked HTTP; CI never depends on live GitHub availability.

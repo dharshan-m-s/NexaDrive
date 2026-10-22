@@ -1,7 +1,48 @@
 import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
+import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
+
+/// Reveals a bar by sliding it in and fading it, so entering and leaving a mode
+/// (selection, breadcrumb, a pinned action) reads as a settle instead of the
+/// element slamming in and jumping the content around it.
+///
+/// Its height animates too, so neighbouring content grows and shrinks smoothly
+/// to make room. [alignment] anchors the reveal: [Alignment.bottomLeft] rises
+/// from the bottom (the default, for a bottom action bar); [Alignment.topLeft]
+/// descends from the top (for a breadcrumb or top bar). Reduced motion shows
+/// and hides it instantly.
+class NexaRevealBar extends StatelessWidget {
+  const NexaRevealBar({
+    super.key,
+    required this.visible,
+    required this.child,
+    this.alignment = Alignment.bottomLeft,
+  });
+
+  final bool visible;
+  final Widget child;
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: AppMotion.resolve(context, AppMotion.normal),
+      reverseDuration: AppMotion.resolve(context, AppMotion.fast),
+      switchInCurve: AppMotion.curveFor(context, AppMotion.standardCurve),
+      switchOutCurve: AppMotion.curveFor(context, AppMotion.standardCurve),
+      transitionBuilder: (child, animation) => SizeTransition(
+        sizeFactor: animation,
+        alignment: alignment,
+        child: FadeTransition(opacity: animation, child: child),
+      ),
+      child: visible
+          ? KeyedSubtree(key: const ValueKey('shown'), child: child)
+          : const SizedBox.shrink(key: ValueKey('hidden')),
+    );
+  }
+}
 
 /// Contextual action bar (appears during selection).
 class NexaActionBar extends StatelessWidget {

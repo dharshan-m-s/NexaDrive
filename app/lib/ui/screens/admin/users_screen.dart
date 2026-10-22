@@ -5,18 +5,17 @@ import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../services/api.dart';
 import '../../../services/session.dart';
-import '../../widgets/nexa_empty_state.dart';
-import '../../widgets/nexa_page.dart';
+import '../../widgets/nexa_components.dart';
 import 'admin_user_rules.dart';
 import 'user_sheets.dart';
 import 'users_controller.dart';
 
-/// Users administration, rebuilt from scratch.
+/// Users administration — an iOS-style grouped account list.
 ///
 /// Architecture: the page renders [UsersController] state. All account
 /// mutations go through the controller; the UI owns presentation only.
 ///
-/// Presentation contract: one editing surface (a One UI bottom sheet on every
+/// Presentation contract: one editing surface (a bottom sheet on every
 /// platform), one actions surface (a bottom-sheet menu), explicit text styles
 /// everywhere, and no text that inherits a decoration.
 class UsersScreen extends StatefulWidget {
@@ -29,6 +28,7 @@ class UsersScreen extends StatefulWidget {
 
 class _UsersScreenState extends State<UsersScreen> {
   late final UsersController _controller = UsersController(widget.api);
+  final TextEditingController _search = TextEditingController();
 
   @override
   void initState() {
@@ -39,6 +39,7 @@ class _UsersScreenState extends State<UsersScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _search.dispose();
     super.dispose();
   }
 
@@ -70,16 +71,7 @@ class _UsersScreenState extends State<UsersScreen> {
   Widget _buildLoading() {
     return ListView(
       children: const [
-        SizedBox(height: 96),
-        Center(
-          child: Column(
-            children: [
-              CircularProgressIndicator(strokeWidth: 2),
-              SizedBox(height: AppDimens.space16),
-              Text('Loading accounts…'),
-            ],
-          ),
-        ),
+        NexaLoadingBlock(label: 'Loading accounts…'),
       ],
     );
   }
@@ -100,17 +92,10 @@ class _UsersScreenState extends State<UsersScreen> {
   Widget _buildEmpty(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     return ListView(
-      padding: const EdgeInsets.only(bottom: AppDimens.space24),
+      padding: const EdgeInsets.only(top: AppDimens.space8),
       children: [
-        const _SummaryStrip(
-            summary: UserSummary(total: 0, admins: 0, blocked: 0)),
-        const SizedBox(height: AppDimens.space8),
-        Container(
+        NexaSurface(
           padding: const EdgeInsets.all(AppDimens.space16),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceFor(Theme.of(context).brightness),
-            borderRadius: BorderRadius.circular(AppDimens.radiusCard),
-          ),
           child: Row(
             children: [
               Icon(
@@ -125,20 +110,21 @@ class _UsersScreenState extends State<UsersScreen> {
                   children: [
                     Text(
                       'No accounts yet',
-                      style: NexaTypography.rowTitle.copyWith(
+                      style: AppTextStyle.rowTitle.copyWith(
                         color: AppColors.labelPrimaryFor(brightness),
                       ),
                     ),
                     const SizedBox(height: AppDimens.space2),
                     Text(
                       'Add the first account to let people in.',
-                      style: NexaTypography.caption.copyWith(
+                      style: AppTextStyle.caption.copyWith(
                         color: AppColors.labelSecondaryFor(brightness),
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: AppDimens.space12),
               FilledButton(
                 onPressed: () => _showCreateSheet(context),
                 child: const Text('Add user'),
@@ -157,33 +143,49 @@ class _UsersScreenState extends State<UsersScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: AppDimens.space24),
         children: [
-          SearchBar(
-            hintText: 'Search accounts',
-            leading: const Icon(Icons.search_rounded),
-            elevation: const WidgetStatePropertyAll(0),
-            constraints: const BoxConstraints(minHeight: 48),
-            onChanged: c.setQuery,
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppDimens.space12),
+            child: NexaSearchField(
+              controller: _search,
+              hint: 'Search accounts',
+              onChanged: c.setQuery,
+              onClear: () {
+                _search.clear();
+                c.setQuery('');
+              },
+            ),
           ),
-          const SizedBox(height: AppDimens.space8),
           if (c.visible.isEmpty)
             NexaEmptyState(
               icon: Icons.search_off_rounded,
               title: 'No accounts match "${c.query}"',
               hint: 'Clear the search to see all accounts.',
               actionLabel: 'Clear search',
-              onAction: () => c.setQuery(''),
+              onAction: () {
+                _search.clear();
+                c.setQuery('');
+              },
             )
           else ...[
             _SummaryStrip(summary: c.summary),
-            const SizedBox(height: AppDimens.space8),
-            for (final user in c.visible)
-              _UserRow(
-                user: user,
-                session: c.session,
-                isAdminSelf: user.isAdmin && user.isSelf(c.session),
-                onOpen: () => _showEditSheet(context, user),
-                onActions: () => _showActionsSheet(context, user),
-              ),
+            const SizedBox(height: AppDimens.space16),
+            NexaSectionHeader('Accounts'),
+            NexaGroupedList(
+              withDividers: false,
+              children: [
+                for (var i = 0; i < c.visible.length; i++) ...[
+                  _UserRow(
+                    user: c.visible[i],
+                    session: c.session,
+                    isAdminSelf:
+                        c.visible[i].isAdmin && c.visible[i].isSelf(c.session),
+                    onOpen: () => _showEditSheet(context, c.visible[i]),
+                    onActions: () => _showActionsSheet(context, c.visible[i]),
+                  ),
+                  if (i < c.visible.length - 1) const NexaDivider.inset(),
+                ],
+              ],
+            ),
           ],
         ],
       ),
@@ -347,7 +349,8 @@ class _UsersScreenState extends State<UsersScreen> {
   }
 }
 
-/// Compact role summary strip: accounts / administrators / blocked.
+/// Compact role summary: accounts / administrators / blocked, in one surface
+/// separated by hairlines rather than three competing cards.
 class _SummaryStrip extends StatelessWidget {
   final UserSummary summary;
   const _SummaryStrip({required this.summary});
@@ -357,72 +360,56 @@ class _SummaryStrip extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     String plural(int n, String word) => '$n $word${n == 1 ? '' : 's'}';
 
-    return Row(
-      children: [
-        Expanded(
-          child: _SummaryTile(
-            icon: Icons.people_outline_rounded,
-            color: AppColors.accentFor(brightness),
-            label: plural(summary.total, 'account'),
+    Widget cell(IconData icon, Color color, String label) => Expanded(
+          child: Row(
+            children: [
+              Icon(icon, size: AppDimens.iconSmall, color: color),
+              const SizedBox(width: AppDimens.space8),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyle.caption.copyWith(
+                    color: AppColors.labelPrimaryFor(brightness),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(width: AppDimens.space8),
-        Expanded(
-          child: _SummaryTile(
-            icon: Icons.admin_panel_settings_outlined,
-            color: AppColors.onAccentFor(brightness),
-            label: plural(summary.admins, 'administrator'),
-          ),
-        ),
-        const SizedBox(width: AppDimens.space8),
-        Expanded(
-          child: _SummaryTile(
-            icon: Icons.block_rounded,
-            color: AppColors.warningFor(brightness),
-            label: plural(summary.blocked, 'blocked'),
-          ),
-        ),
-      ],
-    );
-  }
-}
+        );
 
-class _SummaryTile extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String label;
-
-  const _SummaryTile({
-    required this.icon,
-    required this.color,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
+    return NexaSurface(
+      level: NexaSurfaceLevel.grouped,
       padding: const EdgeInsets.symmetric(
         horizontal: AppDimens.space12,
-        vertical: AppDimens.space10,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceFor(Theme.of(context).brightness),
-        borderRadius: BorderRadius.circular(AppDimens.radiusTile),
+        vertical: AppDimens.space12,
       ),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: AppDimens.space8),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: NexaTypography.caption.copyWith(
-                color: AppColors.labelPrimaryFor(Theme.of(context).brightness),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+          cell(
+            Icons.people_outline_rounded,
+            AppColors.accentFor(brightness),
+            plural(summary.total, 'account'),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppDimens.space8),
+            child: NexaVerticalDivider(height: 20),
+          ),
+          cell(
+            Icons.admin_panel_settings_outlined,
+            AppColors.accentTextFor(brightness),
+            plural(summary.admins, 'administrator'),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppDimens.space8),
+            child: NexaVerticalDivider(height: 20),
+          ),
+          cell(
+            Icons.block_rounded,
+            AppColors.warningFor(brightness),
+            plural(summary.blocked, 'blocked'),
           ),
         ],
       ),
@@ -430,7 +417,9 @@ class _SummaryTile extends StatelessWidget {
   }
 }
 
-/// One account row: avatar, identity, chips, and the actions affordance.
+/// One account row: avatar, identity with status chips, storage subtitle, and
+/// the actions affordance. Inside the grouped panel this reads as a single
+/// iOS Settings-style row.
 class _UserRow extends StatelessWidget {
   final UserProfile user;
   final Session session;
@@ -460,139 +449,93 @@ class _UserRow extends StatelessWidget {
         'Unlimited storage',
     ];
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppDimens.space8),
-      child: Material(
-        color: AppColors.surfaceFor(brightness),
-        borderRadius: BorderRadius.circular(AppDimens.radiusTile),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppDimens.radiusTile),
-          onTap: onOpen,
-          child: Padding(
-            padding: const EdgeInsets.all(AppDimens.space12),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: AppDimens.iconTile / 2,
-                  backgroundColor: disabled
-                      ? AppColors.surfaceAltLight
-                      : accent.withValues(alpha: 0.14),
-                  foregroundColor: disabled
-                      ? AppColors.labelTertiaryFor(brightness)
-                      : accent,
-                  child: Text(
-                    _initial(user.displayName),
-                    style: NexaTypography.buttonSmall,
-                  ),
-                ),
-                const SizedBox(width: AppDimens.space12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              user.displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: NexaTypography.rowTitle.copyWith(
-                                color: AppColors.labelPrimaryFor(brightness),
-                              ),
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.pageMargin,
+            vertical: AppDimens.space12,
+          ),
+          child: Row(
+            children: [
+              NexaAvatar(
+                name: user.displayName,
+                radius: AppDimens.iconTileLarge / 2,
+                backgroundColor: disabled
+                    ? AppColors.fillFor(brightness)
+                    : accent.withValues(alpha: 0.14),
+                foregroundColor:
+                    disabled ? AppColors.labelTertiaryFor(brightness) : accent,
+              ),
+              const SizedBox(width: AppDimens.space12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            user.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyle.rowTitle.copyWith(
+                              color: disabled
+                                  ? AppColors.labelTertiaryFor(brightness)
+                                  : AppColors.labelPrimaryFor(brightness),
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
-                          if (user.isAdmin) ...[
-                            const SizedBox(width: AppDimens.space6),
-                            _Chip(
-                              label: 'Admin',
-                              foreground: AppColors.onAccentFor(brightness),
-                              background: accent.withValues(alpha: 0.12),
-                            ),
-                          ],
-                          if (isAdminSelf) ...[
-                            const SizedBox(width: AppDimens.space6),
-                            _Chip(
-                              label: 'You',
-                              foreground: AppColors.successFor(brightness),
-                              background: AppColors.successFor(brightness)
-                                  .withValues(alpha: 0.14),
-                            ),
-                          ],
-                          if (disabled) ...[
-                            const SizedBox(width: AppDimens.space6),
-                            _Chip(
-                              label: 'Blocked',
-                              foreground: AppColors.errorFor(brightness),
-                              background: AppColors.errorFor(brightness)
-                                  .withValues(alpha: 0.12),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: AppDimens.space2),
-                      Text(
-                        metaParts.join(' · '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: NexaTypography.caption.copyWith(
-                          color: AppColors.labelSecondaryFor(brightness),
                         ),
+                        if (user.isAdmin) ...[
+                          const SizedBox(width: AppDimens.space6),
+                          NexaChip.filled(label: 'Admin'),
+                        ],
+                        if (isAdminSelf) ...[
+                          const SizedBox(width: AppDimens.space6),
+                          NexaChip.tonal(
+                            label: 'You',
+                            tintColor:
+                                AppColors.successContainerFor(brightness),
+                            tintForeground:
+                                AppColors.onSuccessContainerFor(brightness),
+                          ),
+                        ],
+                        if (disabled) ...[
+                          const SizedBox(width: AppDimens.space6),
+                          NexaChip.tonal(
+                            label: 'Blocked',
+                            tintColor: AppColors.errorContainerFor(brightness),
+                            tintForeground:
+                                AppColors.onErrorContainerFor(brightness),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: AppDimens.space2),
+                    Text(
+                      metaParts.join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyle.caption.copyWith(
+                        color: AppColors.labelSecondaryFor(brightness),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: AppDimens.space8),
-                IconButton(
-                  tooltip: 'Account actions',
-                  onPressed: onActions,
-                  icon: Icon(
-                    Icons.more_vert_rounded,
-                    color: AppColors.labelSecondaryFor(brightness),
-                  ),
+              ),
+              IconButton(
+                tooltip: 'Account actions',
+                onPressed: onActions,
+                icon: Icon(
+                  Icons.more_vert_rounded,
+                  color: AppColors.labelSecondaryFor(brightness),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ),
-      ),
-    );
-  }
-
-  String _initial(String name) {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return '?';
-    return String.fromCharCode(trimmed.runes.first).toUpperCase();
-  }
-}
-
-class _Chip extends StatelessWidget {
-  final String label;
-  final Color foreground;
-  final Color background;
-
-  const _Chip({
-    required this.label,
-    required this.foreground,
-    required this.background,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space8,
-        vertical: 2,
-      ),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-      ),
-      child: Text(
-        label,
-        style: NexaTypography.micro.copyWith(
-          color: foreground,
-          fontWeight: FontWeight.w700,
         ),
       ),
     );

@@ -257,12 +257,14 @@ void main() {
 
     testWidgets('search narrows the list and can be cleared', (tester) async {
       await _pump(tester, scripted());
-      await tester.enterText(find.byType(SearchBar), 'grace');
+      // The rebuilt screen uses NexaSearchField (a themed TextField) rather
+      // than the Material SearchBar; it is the only text field on the page.
+      await tester.enterText(find.byType(TextField), 'grace');
       await tester.pumpAndSettle();
       expect(find.text('Grace Hopper'), findsOneWidget);
       expect(find.text('Alex'), findsNothing);
 
-      await tester.enterText(find.byType(SearchBar), 'nobody');
+      await tester.enterText(find.byType(TextField), 'nobody');
       await tester.pumpAndSettle();
       expect(find.textContaining('No accounts match'), findsOneWidget);
     });

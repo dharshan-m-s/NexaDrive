@@ -377,7 +377,7 @@ both are now regression-tested.
 - Docs: `docs/UPDATE_SYSTEM.md` (architecture, manifest schema, security
   model, troubleshooting) and an Update Center section in
   `docs/FINAL_PRODUCTION_AUDIT.md`.
-- Tests: 61 update tests (`app/test/update/`) covering semver, manifest
+- Tests: 120 update tests (`app/test/update/`) covering semver, manifest
   parsing/rejection, download engine (mismatch/cancel/redirects), controller
   state machine and check policy; CI manifest gates negative-tested.
 

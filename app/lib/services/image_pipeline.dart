@@ -124,7 +124,7 @@ class ImageRepository {
     this.api, {
     this.diskCache,
     this.maxThumbBytes = 24 * 1024 * 1024,
-    this.maxOriginalBytes = 96 * 1024 * 1024,
+    this.maxOriginalBytes = 64 * 1024 * 1024,
     this.maxThumbEntries = 256,
     this.maxOriginalEntries = 6,
   });
@@ -148,8 +148,23 @@ class ImageRepository {
   final _LruByteCache _originals = _LruByteCache();
 
   /// Resolved failures, so a broken file does not retry on every rebuild.
+  ///
+  /// Bounded: a folder full of unreadable files must not grow these sets
+  /// without limit for the lifetime of the repository. Oldest entries are
+  /// evicted first; a re-viewed file simply retries once more.
+  static const int _maxFailures = 512;
   final Set<ImageKey> _failedOriginals = <ImageKey>{};
   final Set<ImageKey> _failedThumbs = <ImageKey>{};
+
+  /// Records [key] as failed, keeping the set insertion-ordered and bounded.
+  static void _rememberFailure(Set<ImageKey> set, ImageKey key) {
+    // Re-insert so the entry moves to the most-recently-seen end.
+    set.remove(key);
+    set.add(key);
+    while (set.length > _maxFailures) {
+      set.remove(set.first);
+    }
+  }
 
   /// Builds the canonical key for a photo descriptor returned by the server.
   static ImageKey keyFor(
@@ -241,7 +256,7 @@ class ImageRepository {
       _failedOriginals.remove(key);
       return ImageData(bytes, key: key);
     } catch (e) {
-      _failedOriginals.add(key);
+      _rememberFailure(_failedOriginals, key);
       rethrow;
     }
   }
@@ -284,11 +299,11 @@ class ImageRepository {
       unawaited(disk?.write(namespace, _diskKey(resolved), bytes));
       return ImageData(bytes, key: resolved);
     } on ApiException catch (e) {
-      _failedThumbs.add(resolved);
+      _rememberFailure(_failedThumbs, resolved);
       if (e.status == 415) throw ThumbnailUnavailable(resolved.path);
       rethrow;
     } catch (_) {
-      _failedThumbs.add(resolved);
+      _rememberFailure(_failedThumbs, resolved);
       rethrow;
     }
   }

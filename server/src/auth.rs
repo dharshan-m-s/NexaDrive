@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::{
     config::Config,
     error::AppError,
-    handlers::admin::audit,
+    handlers::{admin::audit, sync::normalize_platform},
     models::{LoginRequest, LoginResponse, UserResponse},
     state::{AppState, LoginAttempt},
 };
@@ -165,6 +165,15 @@ pub(crate) fn bearer(headers: &HeaderMap) -> Option<String> {
         .map(str::to_string)
 }
 
+/// The id of the session that authenticated the current request.
+///
+/// Inserted into the request extensions by [auth_middleware] next to the user
+/// id. Handlers that need to reason about "the session making this request"
+/// (session lists, revoking other sessions) must compare against this instead
+/// of guessing from the database, where any row of the user could be picked.
+#[derive(Clone, Copy)]
+pub(crate) struct CurrentSessionId(pub(crate) Uuid);
+
 pub(crate) async fn auth_middleware(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -191,9 +200,23 @@ pub(crate) async fn auth_middleware(
             return Err(AppError::Unauthorized);
         }
     };
+    let session_id: Uuid = row.get("session_id");
     request
         .extensions_mut()
         .insert(row.get::<Uuid, _>("user_id"));
+    request
+        .extensions_mut()
+        .insert(CurrentSessionId(session_id));
+    // Refresh the session's idle timestamp at most once a minute. The predicate
+    // keeps a busy client from writing the database on every request while
+    // still giving the session list a truthful "last activity".
+    let _ = sqlx::query(
+        "UPDATE sessions SET last_activity_at=CURRENT_TIMESTAMP \
+         WHERE id=$1 AND (last_activity_at IS NULL OR last_activity_at < datetime('now','-60 seconds'))",
+    )
+    .bind(session_id)
+    .execute(&state.db)
+    .await;
     Ok(next.run(request).await)
 }
 
@@ -226,8 +249,15 @@ pub(crate) async fn login(
         role: row.get("role"),
     };
     let token = new_token();
-    sqlx::query(r#"INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, datetime('now', '+30 days'))"#)
-        .bind(Uuid::new_v4()).bind(user.id).bind(token_hash(&token)).execute(&state.db).await?;
+    let device_name = payload
+        .device_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| v.chars().take(64).collect::<String>());
+    let platform = normalize_platform(payload.platform.as_deref());
+    sqlx::query(r#"INSERT INTO sessions (id, user_id, token_hash, expires_at, last_activity_at, device_name, platform) VALUES ($1, $2, $3, datetime('now', '+30 days'), CURRENT_TIMESTAMP, $4, $5)"#)
+        .bind(Uuid::new_v4()).bind(user.id).bind(token_hash(&token)).bind(device_name).bind(platform).execute(&state.db).await?;
     audit(&state.db, user.id, "login", None).await?;
     Ok(Json(LoginResponse { token, user }))
 }
@@ -238,8 +268,9 @@ pub(crate) async fn logout(
     user_id: axum::extract::Extension<Uuid>,
 ) -> Result<StatusCode, AppError> {
     if let Some(token) = bearer(&headers) {
-        sqlx::query("DELETE FROM sessions WHERE token_hash = $1")
+        sqlx::query("DELETE FROM sessions WHERE token_hash = $1 AND user_id = $2")
             .bind(token_hash(&token))
+            .bind(*user_id)
             .execute(&state.db)
             .await?;
     }

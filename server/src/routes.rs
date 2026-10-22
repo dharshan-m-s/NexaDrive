@@ -21,9 +21,13 @@ use crate::{
             rename_file, search_files,
         },
         notifications::{list_notifications, mark_notifications_read},
+        sessions::{
+            current_session, list_sessions, revoke_other_sessions, revoke_session,
+            sign_out_everywhere,
+        },
         sharing::{
             create_share, delete_share, download_shared_file, list_shared, list_shared_items,
-            list_shares, public_share_download, shared_action,
+            list_shares, public_share_download, resolve_username, shared_action,
         },
         storage::{list_trash, permanently_delete_trash, restore_trash, storage},
         sync::{
@@ -33,7 +37,7 @@ use crate::{
         system::{health, server_status},
         upload::{upload_chunk, upload_file, upload_status},
     },
-    middleware::security_headers,
+    middleware::{security_headers, track_metrics},
     state::AppState,
 };
 
@@ -48,6 +52,13 @@ pub(crate) fn app(state: AppState, config: &Config) -> Router {
 
     let protected = Router::new()
         .route("/api/auth/logout", post(logout))
+        .route("/api/auth/session", get(current_session))
+        .route(
+            "/api/auth/sessions",
+            get(list_sessions).post(revoke_other_sessions),
+        )
+        .route("/api/auth/sessions/revoke", post(revoke_session))
+        .route("/api/auth/sign-out-everywhere", post(sign_out_everywhere))
         .route("/api/me", get(me))
         .route("/api/admin/users", get(list_users).post(create_user))
         .route(
@@ -67,6 +78,7 @@ pub(crate) fn app(state: AppState, config: &Config) -> Router {
         .route("/api/shared/items", get(list_shared_items))
         .route("/api/shared/download", get(download_shared_file))
         .route("/api/shared/action", post(shared_action))
+        .route("/api/shared/resolve-user", get(resolve_username))
         .route("/api/files", get(list_files).delete(delete_file))
         .route("/api/files/search", get(search_files))
         .route("/api/files/rename", post(rename_file))
@@ -136,8 +148,9 @@ pub(crate) fn app(state: AppState, config: &Config) -> Router {
 
     public
         .merge(protected)
-        .with_state(state)
+        .with_state(state.clone())
         .layer(cors)
         .layer(middleware::from_fn(security_headers))
+        .layer(middleware::from_fn_with_state(state, track_metrics))
         .layer(TraceLayer::new_for_http())
 }

@@ -1,8 +1,52 @@
 import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
+import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
 import 'nexa_progress.dart';
+
+/// Cross-fades between mutually exclusive page bodies — loading to content,
+/// content to error — so a resolved request settles in place instead of
+/// swapping the screen out from under the reader.
+///
+/// Give [stateKey] a value that identifies the state (for example
+/// `const ValueKey('empty')`). It must change only when the body actually
+/// changes, so paging between records never re-triggers the fade.
+///
+/// Layout is passed through untouched: each state receives exactly the
+/// constraints it would have got standing alone, so a state that fills a scroll
+/// region keeps filling it and nothing grows or shrink-wraps unexpectedly.
+/// Reduced motion swaps instantly.
+class NexaStateSwitcher extends StatelessWidget {
+  const NexaStateSwitcher({
+    super.key,
+    required this.stateKey,
+    required this.child,
+  });
+
+  /// Identifies the current state; changes retrigger the cross-fade.
+  final Key stateKey;
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: AppMotion.resolve(context, AppMotion.normal),
+      switchInCurve: AppMotion.curveFor(context, AppMotion.enter),
+      switchOutCurve: AppMotion.curveFor(context, AppMotion.exit),
+      reverseDuration: AppMotion.resolve(context, AppMotion.fast),
+      layoutBuilder: (currentChild, previousChildren) => Stack(
+        fit: StackFit.passthrough,
+        children: <Widget>[
+          ...previousChildren,
+          if (currentChild != null) currentChild,
+        ],
+      ),
+      child: KeyedSubtree(key: stateKey, child: child),
+    );
+  }
+}
 
 /// Standard loading block with reserved space.
 class NexaLoadingBlock extends StatelessWidget {

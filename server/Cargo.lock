@@ -1394,6 +1394,7 @@ dependencies = [
  "dotenvy",
  "futures-util",
  "image",
+ "libc",
  "rand 0.10.3",
  "serde",
  "serde_json",

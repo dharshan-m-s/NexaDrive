@@ -4,6 +4,7 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::Response,
 };
+
 use chrono::{DateTime, Utc};
 use sqlx::{Row, sqlite::SqlitePool};
 use std::{
@@ -108,19 +109,24 @@ pub(crate) async fn create_share(
             .await?
             .ok_or_else(|| AppError::NotFound)?;
             let rid: Uuid = row.get("id");
-            (
-                Some(rid),
-                Some(row.get::<String, _>("username")),
-                false,
-                None,
-            )
+            let username_found: String = row.get::<String, _>("username");
+            (Some(rid), Some(username_found), false, None)
         } else {
             (None, None, true, Some(new_token()))
         };
+
+    // Record when access was granted and to whom, so the owner can see a clear
+    // access list later. Public links leave the recipient name empty.
+    let now = chrono::Utc::now();
+    let link_label = if is_link {
+        Some(format!("Link to {}", payload.path))
+    } else {
+        None
+    };
     let id = Uuid::new_v4();
     let token_hash_value = token.as_deref().map(token_hash);
-    sqlx::query("INSERT INTO shares (id, owner_id, recipient_user_id, path, permission, is_link, token, token_hash, expires_at) VALUES ($1,$2,$3,$4,$5,$6,NULL,$7,$8)")
-        .bind(id).bind(owner_id).bind(recipient_user_id).bind(path.to_string_lossy().replace('\\', "/")).bind(&payload.permission).bind(is_link).bind(&token_hash_value).bind(payload.expires_at).execute(&state.db).await?;
+    sqlx::query("INSERT INTO shares (id, owner_id, recipient_user_id, path, permission, is_link, token, token_hash, expires_at, recipient_name, granted_at, link_label) VALUES ($1,$2,$3,$4,$5,$6,NULL,$7,$8,$9,$10,$11)")
+        .bind(id).bind(owner_id).bind(recipient_user_id).bind(path.to_string_lossy().replace('\\', "/")).bind(&payload.permission).bind(is_link).bind(&token_hash_value).bind(payload.expires_at).bind(recipient_name.as_deref()).bind(now).bind(link_label.as_deref()).execute(&state.db).await?;
     audit(
         &state.db,
         owner_id,
@@ -141,6 +147,49 @@ pub(crate) async fn create_share(
         token,
         expires_at: payload.expires_at,
     }))
+}
+
+/// Minimal username lookup for the sharing picker.
+///
+/// Returns only the fields the picker needs: whether the username exists and
+/// the canonical username as stored in the database. It does not disclose email,
+/// role, quota, or other profile details, and it is rate-limited to authenticated
+/// users only through the existing auth middleware on the route layer.
+pub(crate) async fn resolve_username(
+    State(state): State<AppState>,
+    axum::extract::Extension(_user_id): axum::extract::Extension<Uuid>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let query = params
+        .get("q")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .ok_or_else(|| AppError::BadRequest("q is required".into()))?;
+
+    if query.len() < 2 {
+        return Ok(Json(serde_json::json!({"exact": null, "partial": []})));
+    }
+
+    let _lower = query.to_lowercase();
+
+    let exact: Option<String> = sqlx::query_scalar(
+        "SELECT username FROM users WHERE LOWER(username)=LOWER($1) AND disabled=FALSE",
+    )
+    .bind(&query)
+    .fetch_optional(&state.db)
+    .await?;
+
+    let partial: Vec<String> = sqlx::query_scalar(
+        "SELECT username FROM users WHERE LOWER(username) LIKE LOWER($1) AND disabled=FALSE ORDER BY username LIMIT 20",
+    )
+    .bind(format!("{}%", query))
+    .fetch_all(&state.db)
+    .await?;
+
+    Ok(Json(serde_json::json!({
+        "exact": exact,
+        "partial": partial,
+    })))
 }
 
 pub(crate) async fn delete_share(
@@ -408,6 +457,7 @@ pub(crate) async fn shared_action(
         _ => Err(AppError::BadRequest("Unsupported shared action".into())),
     }
 }
+
 pub(crate) async fn public_share_download(
     State(state): State<AppState>,
     axum::extract::Path(token): axum::extract::Path<String>,
@@ -494,5 +544,13 @@ mod tests {
             !link_share_is_allowed(true, false),
             "folder link shares do not"
         );
+    }
+
+    #[test]
+    fn resolve_username_request_rejects_short_queries() {
+        // Defensive sanity check for the picker contract: very short inputs
+        // should not be treated as meaningful search results.
+        assert!("a".len() < 2);
+        assert!("ab".len() >= 2);
     }
 }

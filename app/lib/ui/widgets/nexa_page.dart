@@ -49,35 +49,37 @@ class NexaPage extends StatelessWidget {
 
     return Material(
       type: MaterialType.transparency,
-      color: bg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header / Viewing Area
-          _Header(
-            title: title,
-            subtitle: subtitle,
-            leading: leading,
-            action: headerAction,
-            actions: actions,
-            largeTitle: largeTitle,
-            foreground: fg,
-          ),
-          // Body
-          Expanded(
-            child: scrollable
-                ? SingleChildScrollView(
-                    padding: padding,
-                    child: _constrain(body),
-                  )
-                : Padding(
-                    padding: padding,
-                    child: _constrain(body),
-                  ),
-          ),
-          // Bottom bar
-          if (bottomBar != null) _BottomBar(bottomBar: bottomBar!),
-        ],
+      child: ColoredBox(
+        color: bg,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header / Viewing Area
+            _Header(
+              title: title,
+              subtitle: subtitle,
+              leading: leading,
+              action: headerAction,
+              actions: actions,
+              largeTitle: largeTitle,
+              foreground: fg,
+            ),
+            // Body
+            Expanded(
+              child: scrollable
+                  ? SingleChildScrollView(
+                      padding: padding,
+                      child: _constrain(body),
+                    )
+                  : Padding(
+                      padding: padding,
+                      child: _constrain(body),
+                    ),
+            ),
+            // Bottom bar
+            if (bottomBar != null) _BottomBar(bottomBar: bottomBar!),
+          ],
+        ),
       ),
     );
   }

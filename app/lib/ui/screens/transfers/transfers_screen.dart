@@ -118,7 +118,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
             AppDimens.pageMargin,
             AppDimens.space24,
           ),
-          body: _buildBody(),
+          body: _body(),
         ),
       ),
     );
@@ -132,6 +132,18 @@ class _TransfersScreenState extends State<TransfersScreen> {
     if (active == 0) return '${_items.length} completed';
     return '$active active of ${_items.length}';
   }
+
+  /// The body, cross-faded between states so a resolved queue settles in.
+  Widget _body() => NexaStateSwitcher(
+        stateKey: ValueKey(_bodyState),
+        child: _buildBody(),
+      );
+
+  String get _bodyState => _loading
+      ? 'loading'
+      : _items.isEmpty
+          ? 'empty'
+          : 'content';
 
   Widget _buildBody() {
     if (_loading) {

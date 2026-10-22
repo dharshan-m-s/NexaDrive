@@ -63,8 +63,8 @@ class UpdateDownloader {
   /// Where final installers live. Shared by cache management.
   ///
   /// Uses the platform's app-private temp/cache directory (per-user on
-  /// desktop, private to the app on Android, where it also matches the
-  /// FileProvider `<cache-path>` exposed to the system package installer).
+  /// desktop, private to the app on Android, where the installer session
+  /// reads the verified APK directly from this app-private path).
   /// Falls back to the OS temp dir in bare VMs/tests where the plugin
   /// registry is unavailable.
   static Future<Directory> cacheDirectory() async {
@@ -131,6 +131,11 @@ class UpdateDownloader {
   /// actually on disk; anything else restarts cleanly, and a server that
   /// ignores `Range` and answers `200` is detected and restarted rather than
   /// appended to.
+  ///
+  /// [onVerifying] fires when the downloader enters a verification phase —
+  /// re-hashing the already-downloaded bytes of a resumed file, or checking
+  /// the final digest — so the UI can leave the "downloading" state instead of
+  /// appearing frozen on a large resume.
   Future<DownloadedArtifact> download(
     ArtifactInfo info, {
     required String artifactFileName,
@@ -139,6 +144,7 @@ class UpdateDownloader {
     bool Function()? isCancelled,
     bool Function()? isPaused,
     int resumeFrom = 0,
+    void Function()? onVerifying,
   }) async {
     final uri = _source.resolveArtifact(info);
     final dir = cacheProvider?.call() ?? await cacheDirectory();
@@ -225,6 +231,7 @@ class UpdateDownloader {
         // Re-hash the bytes already on disk so the final digest still covers
         // the whole artifact. Streamed in chunks, so memory stays bounded
         // regardless of how large the resumed file is.
+        onVerifying?.call();
         await for (final chunk in part.openRead(0, received)) {
           conversion.add(chunk);
         }
@@ -342,6 +349,7 @@ class UpdateDownloader {
         );
       }
 
+      onVerifying?.call();
       final digestHex = accumulator.result?.toString() ?? '';
       if (digestHex.isEmpty) {
         throw const UpdateException(

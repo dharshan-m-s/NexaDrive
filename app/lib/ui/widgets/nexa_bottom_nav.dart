@@ -59,8 +59,12 @@ class NexaBottomNav extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+        // Only the horizontal insets (landscape cutouts) are consumed here; the
+        // shell floats the capsule above the bottom safe area, so the pill keeps
+        // its own height instead of growing by the gesture inset.
         child: SafeArea(
           top: false,
+          bottom: false,
           child: SizedBox(
             height: AppDimens.bottomNavHeight,
             child: _NavRow(
@@ -185,15 +189,40 @@ class _NavItem extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: AppDimens.iconMedium, color: iconColor),
+                // The glyph cross-fades between its outlined and filled forms
+                // with a gentle scale, so selection reads as a settle rather
+                // than a hard swap.
+                AnimatedSwitcher(
+                  duration: AppMotion.resolve(context, AppMotion.fast),
+                  switchInCurve: AppMotion.curveFor(context, AppMotion.enter),
+                  switchOutCurve: AppMotion.curveFor(context, AppMotion.exit),
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.82, end: 1.0)
+                          .animate(animation),
+                      child: child,
+                    ),
+                  ),
+                  child: Icon(
+                    icon,
+                    key: ValueKey<bool>(isSelected),
+                    size: AppDimens.iconMedium,
+                    color: iconColor,
+                  ),
+                ),
                 const SizedBox(height: AppDimens.space2),
-                Text(
-                  item.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                AnimatedDefaultTextStyle(
+                  duration: AppMotion.resolve(context, AppMotion.fast),
+                  curve: AppMotion.curveFor(context, AppMotion.standardCurve),
                   style: AppTextStyle.navLabel.copyWith(
                     color: labelColor,
                     fontWeight: labelWeight,
+                  ),
+                  child: Text(
+                    item.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

@@ -11,6 +11,7 @@ use uuid::Uuid;
 use crate::{
     auth::{hash_password, require_admin, validate_role},
     error::AppError,
+    handlers::sessions::revoke_all_for_user,
     models::{
         AdminUserResponse, AuditResponse, CreateUserRequest, RevokeSessionsResponse,
         UpdateUserRequest,
@@ -30,18 +31,37 @@ pub(crate) async fn list_audit(
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(200)
         .clamp(1, 500);
+    let offset = query
+        .get("offset")
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(0)
+        .max(0);
+    let action = query
+        .get("action")
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty() && v.len() <= 64);
     let rows = sqlx::query(
-        "SELECT id, action, path, created_at FROM audit_logs ORDER BY created_at DESC LIMIT $1",
+        "SELECT a.id, a.action, a.path, a.target, a.outcome, a.detail, a.created_at, \
+         u.username AS actor \
+         FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id \
+         WHERE ($1 IS NULL OR a.action = $1) \
+         ORDER BY a.created_at DESC LIMIT $2 OFFSET $3",
     )
+    .bind(action.as_deref())
     .bind(limit)
+    .bind(offset)
     .fetch_all(&state.db)
     .await?;
     Ok(Json(
         rows.into_iter()
             .map(|r| AuditResponse {
                 id: r.get("id"),
+                actor: r.get("actor"),
                 action: r.get("action"),
                 path: r.get("path"),
+                target: r.get("target"),
+                outcome: r.get("outcome"),
+                detail: r.get("detail"),
                 created_at: r.get("created_at"),
             })
             .collect(),
@@ -262,10 +282,13 @@ pub(crate) async fn update_user(
     }
     if payload.password.is_some() {
         // A password change revokes every active session for that user.
-        sqlx::query("DELETE FROM sessions WHERE user_id=$1")
-            .bind(id)
-            .execute(&state.db)
-            .await?;
+        revoke_all_for_user(
+            &state.db,
+            id,
+            admin_id,
+            "revoke_user_sessions_after_password_change",
+        )
+        .await?;
     }
     audit(&state.db, admin_id, "update_user", Some(&id.to_string())).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -369,13 +392,41 @@ pub(crate) async fn audit(
     action: &str,
     path: Option<&str>,
 ) -> Result<(), AppError> {
-    sqlx::query("INSERT INTO audit_logs (id, user_id, action, path) VALUES ($1,$2,$3,$4)")
+    // Preserve the historical contract: `path` carries the acted-on path/id and
+    // is what existing clients read.
+    sqlx::query("INSERT INTO audit_logs (id, user_id, action, path, outcome) VALUES ($1,$2,$3,$4,'success')")
         .bind(Uuid::new_v4())
         .bind(user_id)
         .bind(action)
         .bind(path)
         .execute(db)
         .await?;
+    Ok(())
+}
+
+/// Records a security-sensitive action with actor, target, outcome and a short
+/// non-secret detail. `target` names the object acted on (a username, an id, a
+/// scope); `outcome` is one of `success` / `denied` / `failed`.
+pub(crate) async fn audit_event(
+    db: &SqlitePool,
+    user_id: Uuid,
+    action: &str,
+    target: Option<&str>,
+    outcome: &str,
+    detail: Option<&str>,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO audit_logs (id, user_id, action, path, target, outcome, detail) \
+         VALUES ($1,$2,$3,NULL,$4,$5,$6)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(user_id)
+    .bind(action)
+    .bind(target)
+    .bind(outcome)
+    .bind(detail)
+    .execute(db)
+    .await?;
     Ok(())
 }
 

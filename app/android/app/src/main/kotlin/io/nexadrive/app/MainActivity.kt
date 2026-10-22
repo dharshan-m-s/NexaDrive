@@ -11,7 +11,6 @@ import android.os.Build
 import android.provider.Settings
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
-import androidx.core.content.FileProvider
 import androidx.fragment.app.FragmentActivity
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -20,6 +19,8 @@ import java.io.File
 import java.io.FileInputStream
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
+
+
 
 /// Host-side bridge for two platform features.
 ///
@@ -40,6 +41,10 @@ import java.util.concurrent.Executors
 /// [BiometricPrompt] requires a FragmentActivity host.
 class MainActivity : FlutterFragmentActivity() {
 
+    /// Serializes APK staging off the platform thread so a large installer
+    /// never blocks the UI while the session is written.
+    private val installerExecutor: Executor = Executors.newSingleThreadExecutor()
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
@@ -47,7 +52,7 @@ class MainActivity : FlutterFragmentActivity() {
         MethodChannel(messenger, UPDATER_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "currentAbi" -> result.success(Build.SUPPORTED_ABIS.firstOrNull())
-                "installApk" -> result.success(installApk(call.argument<String>("path")))
+                "installApk" -> installApk(call.argument<String>("path"), result)
                 "openUnknownSourceSettings" -> {
                     openUnknownSourceSettings()
                     result.success(null)
@@ -75,22 +80,31 @@ class MainActivity : FlutterFragmentActivity() {
     // ------------------------------------------------------------- updater
 
     /// Streams the verified APK into a PackageInstaller session and commits
-    /// it. Returns true only when the system installer actually took over
-    /// (or staged the session and asked the user to confirm). The user always
-    /// confirms; no root, no silent install.
+    /// it. Returns true only when the system installer accepted the commit and
+    /// the session is staged. The user still confirms in the system dialog;
+    /// no root, no silent install.
     ///
-    /// For a sideloaded (non-Play) app the session flow surfaces Android's
-    /// "install unknown apps" consent as a system dialog; when the device
-    /// answers that dialog with a refusal the ActivityResult comes back as
-    /// RESULT_CANCELED, which Flutter maps to its needsUserAction state.
-    private fun installApk(path: String?): Boolean {
-        val file = path?.let { File(it) } ?: return false
-        if (!file.exists() || !file.isFile || file.length() == 0L) return false
+    /// The stream/commit runs on a background executor because an APK is tens
+    /// of megabytes and doing that I/O on the platform thread freezes the UI
+    /// (and can trip an ANR) while the dialog is being scheduled.
+    private fun installApk(path: String?, result: MethodChannel.Result) {
+        val file = path?.let { File(it) }
+        if (file == null || !file.exists() || !file.isFile || file.length() == 0L) {
+            result.success(false)
+            return
+        }
+        installerExecutor.execute {
+            val launched = stageAndCommit(file)
+            runOnUiThread { result.success(launched) }
+        }
+    }
 
+    private fun stageAndCommit(file: File): Boolean {
         val packageInstaller = packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(
             PackageInstaller.SessionParams.MODE_FULL_INSTALL,
         )
+        params.setAppPackageName(packageName)
         val sessionId: Int
         try {
             sessionId = packageInstaller.createSession(params)
@@ -101,10 +115,15 @@ class MainActivity : FlutterFragmentActivity() {
             return false
         }
 
+        // The status receiver must be an explicit component so it survives
+        // Android 14's implicit-broadcast restrictions; see
+        // InstallResultReceiver, which launches the confirmation dialog.
+        val statusIntent = Intent(this, InstallResultReceiver::class.java)
+            .setAction(ACTION_INSTALL_STATUS)
         val statusReceiver = PendingIntent.getBroadcast(
             this,
             sessionId,
-            Intent(ACTION_INSTALL_STATUS).setPackage(packageName),
+            statusIntent,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
             } else {
@@ -148,6 +167,11 @@ class MainActivity : FlutterFragmentActivity() {
             } catch (_: Exception) {
             }
             return false
+        } finally {
+            try {
+                session.close()
+            } catch (_: Exception) {
+            }
         }
     }
 
@@ -254,6 +278,6 @@ class MainActivity : FlutterFragmentActivity() {
     companion object {
         private const val UPDATER_CHANNEL = "nexadrive/updater"
         private const val APP_LOCK_CHANNEL = "nexadrive/app_lock"
-        private const val ACTION_INSTALL_STATUS = "io.nexadrive.app.INSTALL_STATUS"
+        const val ACTION_INSTALL_STATUS = "io.nexadrive.app.INSTALL_STATUS"
     }
 }

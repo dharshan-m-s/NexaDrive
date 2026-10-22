@@ -67,6 +67,30 @@ void main() {
         reason: 'one tap must dispatch one action, not one per stacked button');
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a staged installer retries the install, never a re-download',
+      (tester) async {
+    for (final status in const [
+      UpdateStatus.needsUserAction,
+      UpdateStatus.failed,
+    ]) {
+      final controller = await _controller();
+      controller.status = status;
+      controller.installerKind = 'apk';
+      controller.downloadedPath = '/tmp/nexadrive_updates/nexadrive_1.4.0.apk';
+      await _pump(tester, controller);
+
+      final button = find.widgetWithText(FilledButton, 'Install now');
+      expect(button, findsOneWidget,
+          reason: '$status: the staged APK must offer a direct install retry');
+
+      await tester.tap(button);
+      await tester.pump();
+      expect(controller.installCalls, 1);
+      expect(controller.downloadCalls, 0,
+          reason: '$status: a present installer must not re-download');
+    }
+  });
 }
 
 Future<_CountingController> _controller() async {
@@ -140,9 +164,21 @@ class _CountingController extends UpdateController {
   }) : super(loadCurrentVersion: () async => '1.2.1');
 
   int resumeCalls = 0;
+  int installCalls = 0;
+  int downloadCalls = 0;
 
   @override
   Future<void> resume() async {
     resumeCalls++;
+  }
+
+  @override
+  Future<void> install() async {
+    installCalls++;
+  }
+
+  @override
+  Future<void> download({int resumeFrom = 0}) async {
+    downloadCalls++;
   }
 }

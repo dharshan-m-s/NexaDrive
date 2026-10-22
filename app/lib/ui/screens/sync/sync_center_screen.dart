@@ -269,108 +269,112 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
             AppDimens.pageMargin,
             AppDimens.space24,
           ),
-          body: _loading
-              ? const NexaLoadingBlock()
-              : RefreshIndicator(
-                  onRefresh: _init,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.only(top: AppDimens.space8),
-                    children: [
-                      _StatusCard(
-                        enabled: _syncing,
-                        hasFolder: _folderPath != null,
-                        supported: _syncSupported,
-                        lastSyncAt: _lastSyncAt,
-                        currentActivity: _syncing ? _progress : null,
-                        conflicts: _conflicts,
-                      ),
-                      if (!_syncSupported) ...[
-                        const SizedBox(height: AppDimens.space16),
-                        const _Notice(
-                          icon: Icons.info_outline_rounded,
-                          title: 'Folder sync runs on desktop',
-                          body:
-                              'Windows, Linux and macOS keep a local folder in step '
-                              'with your cloud. On Android, uploads are queued and '
-                              'resumed instead.',
+          body: NexaStateSwitcher(
+            stateKey: ValueKey(_loading ? 'loading' : 'content'),
+            child: _loading
+                ? const NexaLoadingBlock()
+                : RefreshIndicator(
+                    onRefresh: _init,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.only(top: AppDimens.space8),
+                      children: [
+                        _StatusCard(
+                          enabled: _syncing,
+                          hasFolder: _folderPath != null,
+                          supported: _syncSupported,
+                          lastSyncAt: _lastSyncAt,
+                          currentActivity: _syncing ? _progress : null,
+                          conflicts: _conflicts,
                         ),
-                      ],
-                      const SizedBox(height: AppDimens.space24),
-                      const _SectionLabel('SYNCED FOLDER'),
-                      const SizedBox(height: AppDimens.space8),
-                      _FolderCard(
-                        folder: _folderPath,
-                        onChoose: _chooseFolder,
-                        onClear: _clearFolder,
-                      ),
-                      const SizedBox(height: AppDimens.space24),
-                      SizedBox(
-                        height: 52,
-                        child: FilledButton.icon(
-                          onPressed:
-                              _syncing || _folderPath == null || !_syncSupported
-                                  ? null
-                                  : _runSync,
-                          icon: _syncing
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.sync_rounded),
-                          label: Text(_syncing ? 'Syncing…' : 'Sync now'),
+                        if (!_syncSupported) ...[
+                          const SizedBox(height: AppDimens.space16),
+                          const _Notice(
+                            icon: Icons.info_outline_rounded,
+                            title: 'Folder sync runs on desktop',
+                            body:
+                                'Windows, Linux and macOS keep a local folder in step '
+                                'with your cloud. On Android, uploads are queued and '
+                                'resumed instead.',
+                          ),
+                        ],
+                        const SizedBox(height: AppDimens.space24),
+                        const _SectionLabel('SYNCED FOLDER'),
+                        const SizedBox(height: AppDimens.space8),
+                        _FolderCard(
+                          folder: _folderPath,
+                          onChoose: _chooseFolder,
+                          onClear: _clearFolder,
                         ),
-                      ),
-                      if (_lastResult != null) ...[
-                        const SizedBox(height: AppDimens.space16),
-                        _LastRunCard(result: _lastResult!),
-                      ],
-                      if (_conflicts > 0) ...[
-                        const SizedBox(height: AppDimens.space16),
-                        _ConflictCard(api: widget.api, onResolved: _init),
-                      ],
-                      const SizedBox(height: AppDimens.space28),
-                      const _SectionLabel('LINKED DEVICES'),
-                      const SizedBox(height: AppDimens.space4),
-                      Text(
-                        'Devices that have synced with this account.',
-                        style: AppTextStyle.caption.copyWith(
-                          color: AppColors.textSecondaryFor(
-                            Theme.of(context).brightness,
+                        const SizedBox(height: AppDimens.space24),
+                        SizedBox(
+                          height: 52,
+                          child: FilledButton.icon(
+                            onPressed: _syncing ||
+                                    _folderPath == null ||
+                                    !_syncSupported
+                                ? null
+                                : _runSync,
+                            icon: _syncing
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.sync_rounded),
+                            label: Text(_syncing ? 'Syncing…' : 'Sync now'),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: AppDimens.space12),
-                      if (_loadError != null)
-                        _Notice(
-                          icon: Icons.cloud_off_rounded,
-                          title: 'Device list unavailable',
-                          body: _loadError!,
-                        )
-                      else if (_devices.isEmpty)
-                        const NexaEmptyState(
-                          icon: Icons.devices_other_rounded,
-                          title: 'No linked devices yet',
-                          hint:
-                              'Run a sync from a computer and it will appear here.',
-                        )
-                      else
-                        for (final device in _devices)
-                          Padding(
-                            padding:
-                                const EdgeInsets.only(bottom: AppDimens.space8),
-                            child: _DeviceRow(
-                              device: device,
-                              isThisDevice: device['id'] == _thisDeviceId,
-                              onRename: () => _renameDevice(device),
-                              onRevoke: () => _revokeDevice(device),
+                        if (_lastResult != null) ...[
+                          const SizedBox(height: AppDimens.space16),
+                          _LastRunCard(result: _lastResult!),
+                        ],
+                        if (_conflicts > 0) ...[
+                          const SizedBox(height: AppDimens.space16),
+                          _ConflictCard(api: widget.api, onResolved: _init),
+                        ],
+                        const SizedBox(height: AppDimens.space28),
+                        const _SectionLabel('LINKED DEVICES'),
+                        const SizedBox(height: AppDimens.space4),
+                        Text(
+                          'Devices that have synced with this account.',
+                          style: AppTextStyle.caption.copyWith(
+                            color: AppColors.textSecondaryFor(
+                              Theme.of(context).brightness,
                             ),
                           ),
-                    ],
+                        ),
+                        const SizedBox(height: AppDimens.space12),
+                        if (_loadError != null)
+                          _Notice(
+                            icon: Icons.cloud_off_rounded,
+                            title: 'Device list unavailable',
+                            body: _loadError!,
+                          )
+                        else if (_devices.isEmpty)
+                          const NexaEmptyState(
+                            icon: Icons.devices_other_rounded,
+                            title: 'No linked devices yet',
+                            hint:
+                                'Run a sync from a computer and it will appear here.',
+                          )
+                        else
+                          for (final device in _devices)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                  bottom: AppDimens.space8),
+                              child: _DeviceRow(
+                                device: device,
+                                isThisDevice: device['id'] == _thisDeviceId,
+                                onRename: () => _renameDevice(device),
+                                onRevoke: () => _revokeDevice(device),
+                              ),
+                            ),
+                      ],
+                    ),
                   ),
-                ),
+          ),
         ),
       ),
     );

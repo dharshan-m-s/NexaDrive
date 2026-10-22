@@ -26,6 +26,7 @@
     <application
         android:label="NexaDrive"
         android:name="${applicationName}"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:icon="@mipmap/ic_launcher">
         <!-- App Lock hosts androidx.biometric's authentication prompt, which
              requires a FragmentActivity. -->
@@ -57,17 +58,14 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- Update Center: exposes a downloaded, verified APK to the system
-             installer via a content URI. Authorities follow the app id. -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths"/>
-        </provider>
+        <!-- Update Center: receives the PackageInstaller session status. When
+             Android requires the user to confirm an install it replies with
+             STATUS_PENDING_USER_ACTION to this receiver, which must then launch
+             the confirmation dialog (Intent.EXTRA_INTENT). Without it the
+             install prompt never appears. -->
+        <receiver
+            android:name=".InstallResultReceiver"
+            android:exported="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

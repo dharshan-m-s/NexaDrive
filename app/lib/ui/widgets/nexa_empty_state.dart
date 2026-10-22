@@ -48,7 +48,7 @@ class NexaEmptyState extends StatelessWidget {
             decoration: BoxDecoration(
               color: brightness == Brightness.dark
                   ? accent.withValues(alpha: 0.16)
-                  : accent.withValues(alpha: 0.10),
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
             ),
             child: Icon(icon, size: iconSize * 0.45, color: accent),

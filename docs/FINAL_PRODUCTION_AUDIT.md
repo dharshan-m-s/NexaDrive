@@ -129,11 +129,12 @@ Full design and threat model: `docs/UPDATE_SYSTEM.md`.
 - **Release manifest**: `nexadrive-update-manifest.json` generated and
   verified by CI on every tag; schema documented in `docs/UPDATE_SYSTEM.md`;
   URLs restricted to HTTPS github.com; checksums and sizes embedded.
-- **Android updates**: verified APK → system package installer via FileProvider
-  content URI; user confirms in the stock dialog; no silent install, no root.
-  Missing "install unknown apps" consent surfaces a permission state with a
-  deep link to the per-source settings screen. Tag CI fails without the
-  release keystore, so published APKs always carry the production signing
+- **Android updates**: verified APK streamed into a `PackageInstaller` session
+  (`MODE_FULL_INSTALL`); user confirms in the stock dialog; no silent install, no
+  root, no shared content URI. Missing "install unknown apps" consent surfaces a
+  permission state with a deep link to the per-source settings screen. Tag CI
+  fails without the release keystore, so published APKs always carry the
+  production signing
   identity.
 - **Windows updates**: verified Inno Setup installer launched detached; the
   user completes it; Windows handles elevation.

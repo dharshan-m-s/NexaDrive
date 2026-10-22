@@ -80,6 +80,7 @@ class UpdatePreferences {
   static const _manifestEtag = 'nexadrive_update_manifest_etag';
   static const _manifestLastModified =
       'nexadrive_update_manifest_last_modified';
+  static const _linuxPackageChoice = 'nexadrive_update_linux_package_choice';
 
   final SharedPreferences _prefs;
   UpdatePreferences(this._prefs);
@@ -144,6 +145,22 @@ class UpdatePreferences {
       return UpdateManifest.fromJsonString(json);
     } catch (_) {
       return null;
+    }
+  }
+
+  /// The user's remembered Linux package choice ('appimage' | 'deb'), or null
+  /// when they have not chosen. Persisted so the preference survives a restart;
+  /// any other stored value is ignored (older/corrupt data).
+  String? get linuxPackageChoice {
+    final raw = _prefs.getString(_linuxPackageChoice);
+    return (raw == 'appimage' || raw == 'deb') ? raw : null;
+  }
+
+  set linuxPackageChoice(String? value) {
+    if (value == null) {
+      _prefs.remove(_linuxPackageChoice);
+    } else {
+      _prefs.setString(_linuxPackageChoice, value);
     }
   }
 
@@ -315,7 +332,8 @@ class UpdateController extends ChangeNotifier {
     required this.router,
     UpdateCheckPolicy? policy,
     Future<String> Function()? loadCurrentVersion,
-  })  : policy = policy ?? UpdateCheckPolicy(),
+  })  : linuxPackageChoice = preferences.linuxPackageChoice,
+        policy = policy ?? UpdateCheckPolicy(),
         loadCurrentVersion = loadCurrentVersion ?? _loadVersionFromPackages;
 
   static Future<String> _loadVersionFromPackages() async {
@@ -576,6 +594,11 @@ class UpdateController extends ChangeNotifier {
             artifactFileName: fileName,
             installerKind: installerKind ?? 'generic',
             onProgress: (received, total) {
+              // Leaving the verification phase (resuming a re-hash) once bytes
+              // start arriving keeps the label honest on a large resume.
+              if (status == UpdateStatus.verifying) {
+                status = UpdateStatus.downloading;
+              }
               receivedBytes = received;
               totalBytes = total;
               progress = total == null || total <= 0 ? 0.0 : received / total;
@@ -584,6 +607,10 @@ class UpdateController extends ChangeNotifier {
             isCancelled: () => _cancelRequested,
             isPaused: () => _pauseRequested,
             resumeFrom: offset,
+            onVerifying: () {
+              status = UpdateStatus.verifying;
+              notifyListeners();
+            },
           );
           status = UpdateStatus.readyToInstall;
           downloadedPath = result.file.path;
@@ -797,6 +824,16 @@ class UpdateController extends ChangeNotifier {
           status = UpdateStatus.unsupported;
           errorMessage = 'Updates are not supported on this platform.';
       }
+    } on UpdateException catch (e) {
+      // The Android handoff (`UpdaterMethodChannel.installApk`) and the
+      // package-manager helpers can raise `installFailed`/`blocked`. Without
+      // this catch the exception escaped `install()` as an unhandled async
+      // error while the UI stayed stuck on `readyToInstall`.
+      _applyError(e);
+    } catch (_) {
+      status = UpdateStatus.failed;
+      errorMessage = 'The update could not be installed. Please try again.';
+      retryable = true;
     } finally {
       _busy = false;
       notifyListeners();
@@ -1147,17 +1184,30 @@ class UpdateController extends ChangeNotifier {
       retryable = false;
       _clearInstallerCache();
     } else {
-      // APK not applied yet (user came back to the app first). Resume the
-      // Update Center in a state where they can finish or retry.
-      status = _isMandatory(manifest!)
-          ? UpdateStatus.mandatory
-          : UpdateStatus.updateAvailable;
-      infoMessage =
-          'The update is not installed yet. Please finish the setup, or '
-          'download again.';
+      // The installer handoff did not result in an upgraded app (the user
+      // dismissed the dialog, the handoff silently failed, or they came back
+      // early). If the verified artifact is still on disk, keep it and return
+      // to readyToInstall so "Install" can be retried directly — forcing a
+      // fresh download of an already-verified, byte-identical file was the
+      // exact failure mode that made a failed install look like it had reset.
+      final staged = downloadedPath;
+      final stagedOnDisk = staged != null && File(staged).existsSync();
+      if (stagedOnDisk) {
+        status = UpdateStatus.readyToInstall;
+        infoMessage =
+            'The update is not installed yet. Tap Install now to try again.';
+      } else {
+        downloadedPath = null;
+        status = _isMandatory(manifest!)
+            ? UpdateStatus.mandatory
+            : UpdateStatus.updateAvailable;
+        infoMessage =
+            'The update is not installed yet. Please finish the setup, or '
+            'download again.';
+      }
       retryable = false;
-      // Nothing was installed, so the downloaded installer is still the one
-      // worth keeping; only stale partials and expired downloads are pruned.
+      // Only stale partials and expired downloads are pruned; the just-staged
+      // installer is the one worth keeping.
       try {
         await UpdateCache.prune();
       } catch (_) {}
@@ -1216,6 +1266,8 @@ class UpdateController extends ChangeNotifier {
       return;
     }
     linuxPackageChoice = kind;
+    // Remembered across restarts so the user is not asked again next launch.
+    preferences.linuxPackageChoice = kind;
     selectedArtifact = manifest!.artifacts['linux']?[archLabel!]?[kind];
     installerKind = kind;
     downloadedPath = null;

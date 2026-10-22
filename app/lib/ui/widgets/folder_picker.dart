@@ -23,9 +23,8 @@ class FolderPicker extends StatefulWidget {
     required String title,
     String initialPath = '',
   }) async {
-    final path = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
+    final path = await showNexaFormSheet<String>(
+      context,
       builder: (_) => FolderPickerBody(
         api: api,
         title: title,

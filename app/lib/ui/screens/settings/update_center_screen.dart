@@ -529,6 +529,15 @@ class _ActionArea extends StatelessWidget {
             const SizedBox(height: AppDimens.space12),
           ];
         }
+        if (controller.infoMessage != null) {
+          return [
+            _Notice(
+              tone: _NoticeTone.info,
+              text: controller.infoMessage!,
+            ),
+            const SizedBox(height: AppDimens.space12),
+          ];
+        }
         return const [];
       case UpdateStatus.updateAvailable:
       case UpdateStatus.mandatory:
@@ -646,20 +655,39 @@ class _ActionArea extends StatelessWidget {
           ),
         ];
       case UpdateStatus.failed:
-      case UpdateStatus.offline:
-      case UpdateStatus.unsupported:
       case UpdateStatus.needsUserAction:
-        final wasDownloading = controller.selectedArtifact != null &&
-            controller.downloadedPath == null &&
-            controller.status == UpdateStatus.failed;
+        // A verified installer already on disk means the download succeeded and
+        // only the install step needs another try. Retrying the install avoids
+        // re-downloading an artifact that is byte-for-byte what the manifest
+        // promised.
+        if (controller.downloadedPath != null) {
+          return [
+            _PrimaryButton(
+              onPressed: controller.install,
+              label: _installLabel(),
+            ),
+          ];
+        }
+        if (controller.selectedArtifact != null) {
+          return [
+            _PrimaryButton(
+              onPressed: controller.retryDownload,
+              label: 'Retry download',
+            ),
+          ];
+        }
         return [
           _PrimaryButton(
-            onPressed: wasDownloading && status == UpdateStatus.failed
-                ? controller.retryDownload
-                : () => controller.checkForUpdates(manual: true),
-            label: wasDownloading && status == UpdateStatus.failed
-                ? 'Retry download'
-                : 'Try again',
+            onPressed: () => controller.checkForUpdates(manual: true),
+            label: 'Try again',
+          ),
+        ];
+      case UpdateStatus.offline:
+      case UpdateStatus.unsupported:
+        return [
+          _PrimaryButton(
+            onPressed: () => controller.checkForUpdates(manual: true),
+            label: 'Try again',
           ),
         ];
     }

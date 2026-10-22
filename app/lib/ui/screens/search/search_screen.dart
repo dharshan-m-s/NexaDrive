@@ -112,11 +112,23 @@ class _SearchScreenState extends State<SearchScreen> {
                 ],
               ),
             ),
-            Expanded(child: _buildResults(row)),
+            Expanded(
+              child: NexaStateSwitcher(
+                stateKey: ValueKey(_resultState),
+                child: _buildResults(row),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  /// A stable identity for whichever result state is showing.
+  String get _resultState {
+    if (!_searched) return 'idle';
+    if (_loading && _results.isEmpty) return 'loading';
+    return _results.isEmpty ? 'empty' : 'content';
   }
 
   Widget _buildResults(Widget Function(FileEntry) row) {

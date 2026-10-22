@@ -87,19 +87,39 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<List<FileEntry>> _readRecent() async {
     // The API root is '' — the server rejects '/' as an absolute path.
     final raw = await widget.api.listFiles('');
-    final entries = raw
-        .map(FileEntry.fromJson)
-        .where((e) => !e.isFolder && e.modified != null)
-        .toList()
-      ..sort((a, b) => b.modified!.compareTo(a.modified!));
-    return entries.take(5).toList();
+    // Keep only the five newest as we scan, rather than materializing a
+    // FileEntry for every file in the root and sorting the whole list. On a
+    // large root that avoids a transient spike the user would never see.
+    final recent = <FileEntry>[];
+    for (final json in raw) {
+      final entry = FileEntry.fromJson(json);
+      final modified = entry.modified;
+      if (entry.isFolder || modified == null) continue;
+      if (recent.length < 5) {
+        recent.add(entry);
+        recent.sort(_newestFirst);
+      } else if (modified.isAfter(recent.last.modified!)) {
+        recent[recent.length - 1] = entry;
+        recent.sort(_newestFirst);
+      }
+    }
+    return recent;
   }
+
+  static int _newestFirst(FileEntry a, FileEntry b) =>
+      b.modified!.compareTo(a.modified!);
 
   String _greeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) return 'Good morning';
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
+  }
+
+  /// A stable identity for whichever storage-hero state is showing.
+  String get _heroState {
+    if (_storage != null) return 'ready';
+    return _loading ? 'loading' : 'error';
   }
 
   @override
@@ -121,26 +141,28 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ------------------------------------------------- storage hero
-          if (storage != null)
-            _StorageHero(
-              storage: storage,
-              onTap: () => widget.onNavigate(1),
-            )
-          else if (_loading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.only(top: AppDimens.space40),
-                child: NexaCircularProgress(size: 20),
-              ),
-            )
-          else
-            NexaEmptyState(
-              icon: Icons.cloud_off_rounded,
-              title: 'Can\'t reach your server',
-              hint: _error ?? 'Check your connection and try again.',
-              actionLabel: 'Retry',
-              onAction: load,
-            ),
+          NexaStateSwitcher(
+            stateKey: ValueKey(_heroState),
+            child: storage != null
+                ? _StorageHero(
+                    storage: storage,
+                    onTap: () => widget.onNavigate(1),
+                  )
+                : _loading
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.only(top: AppDimens.space40),
+                          child: NexaCircularProgress(size: 20),
+                        ),
+                      )
+                    : NexaEmptyState(
+                        icon: Icons.cloud_off_rounded,
+                        title: 'Can\'t reach your server',
+                        hint: _error ?? 'Check your connection and try again.',
+                        actionLabel: 'Retry',
+                        onAction: load,
+                      ),
+          ),
           const SizedBox(height: AppDimens.space24),
 
           // ------------------------------------- quick actions (focus blocks)

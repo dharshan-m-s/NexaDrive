@@ -258,9 +258,8 @@ class _PhotosScreenState extends State<PhotosScreen> {
         .toList();
     if (entries.isEmpty) return;
     if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
+    await showNexaFormSheet<void>(
+      context,
       builder: (_) => FileShareSheet(api: widget.api, files: entries),
     );
     if (mounted) _exitSelection();
@@ -344,9 +343,23 @@ class _PhotosScreenState extends State<PhotosScreen> {
               icon: Icon(Icons.refresh_rounded,
                   color: AppColors.accentFor(brightness)),
             ),
-      body: _buildBody(),
+      body: _body(),
     );
   }
+
+  /// The body, cross-faded between states so a resolved library settles in.
+  Widget _body() => NexaStateSwitcher(
+        stateKey: ValueKey(_bodyState),
+        child: _buildBody(),
+      );
+
+  String get _bodyState => _loading
+      ? 'loading'
+      : _error != null
+          ? 'error'
+          : _photos.isEmpty
+              ? 'empty'
+              : 'content';
 
   Widget _buildBody() {
     if (_loading) {
@@ -423,8 +436,9 @@ class _PhotosScreenState extends State<PhotosScreen> {
             ),
           ),
         ),
-        if (_selecting)
-          NexaActionBar(
+        NexaRevealBar(
+          visible: _selecting,
+          child: NexaActionBar(
             leading: IconButton(
               tooltip: 'Cancel selection',
               onPressed: _exitSelection,
@@ -445,6 +459,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
               ),
             ],
           ),
+        ),
       ],
     );
   }

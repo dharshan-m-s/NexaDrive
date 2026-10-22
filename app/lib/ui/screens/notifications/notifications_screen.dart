@@ -107,27 +107,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ),
               ),
               Expanded(
-                child: _loading
-                    ? const NexaLoadingBlock()
-                    : _items.isEmpty
-                        ? const NexaEmptyState(
-                            icon: Icons.notifications_none_rounded,
-                            title: 'No notifications',
-                            hint:
-                                'Backup and account alerts will show up here.',
-                          )
-                        : ListView.separated(
-                            padding: EdgeInsets.zero,
-                            itemCount: _items.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: AppDimens.space2),
-                            itemBuilder: (context, i) => _NotificationCard(
-                              item: _items[i],
-                              brightness: brightness,
-                              onMarkRead: () =>
-                                  _markRead(_items[i]['id'] as String),
+                child: NexaStateSwitcher(
+                  stateKey: ValueKey(_bodyState),
+                  child: _loading
+                      ? const NexaLoadingBlock()
+                      : _items.isEmpty
+                          ? const NexaEmptyState(
+                              icon: Icons.notifications_none_rounded,
+                              title: 'No notifications',
+                              hint:
+                                  'Backup and account alerts will show up here.',
+                            )
+                          : ListView.separated(
+                              padding: EdgeInsets.zero,
+                              itemCount: _items.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: AppDimens.space2),
+                              itemBuilder: (context, i) => _NotificationCard(
+                                item: _items[i],
+                                brightness: brightness,
+                                onMarkRead: () =>
+                                    _markRead(_items[i]['id'] as String),
+                              ),
                             ),
-                          ),
+                ),
               ),
             ],
           ),
@@ -135,6 +138,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       ),
     );
   }
+
+  String get _bodyState => _loading
+      ? 'loading'
+      : _items.isEmpty
+          ? 'empty'
+          : 'content';
 }
 
 /// One notification as a standard One UI surface row.

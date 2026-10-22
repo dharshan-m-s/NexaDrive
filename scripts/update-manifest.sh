@@ -21,6 +21,11 @@
 #   NEXADRIVE_MIN_SERVER_VERSION  optional minimum server release this client
 #                           works with. Client warns "update your server" when
 #                           the running server is older.
+#   NEXADRIVE_MIN_SUPPORTED_VERSION  optional forced-upgrade floor. When set,
+#                           clients strictly older than this SemVer are forced
+#                           into the mandatory update state. Must be a valid
+#                           SemVer and must not exceed <version>. Unset →
+#                           advisory release (no floor).
 #   NEXADRIVE_SERVER_API_VERSION  optional server API-surface token the client
 #                           reports (e.g. the server's API_VERSION constant).
 #
@@ -94,21 +99,42 @@ else
 fi
 
 MANIFEST="nexadrive-update-manifest.json"
+# Generate into a temp file and only move it into place once every check
+# passes, so a failed validation (e.g. a bad NEXADRIVE_MIN_SUPPORTED_VERSION)
+# can never leave a truncated or empty manifest beside the artifacts.
+MANIFEST_TMP="$MANIFEST.tmp.$$"
+trap 'rm -f "$MANIFEST_TMP"' EXIT
 
 NEXADRIVE_RELEASE_REPO="$REPO" \
 NOTES_JSON="$NOTES_JSON" \
 NEXADRIVE_MIN_SERVER_VERSION="${NEXADRIVE_MIN_SERVER_VERSION:-}" \
+NEXADRIVE_MIN_SUPPORTED_VERSION="${NEXADRIVE_MIN_SUPPORTED_VERSION:-}" \
 NEXADRIVE_SERVER_API_VERSION="${NEXADRIVE_SERVER_API_VERSION:-}" \
 python3 - "$PRERELEASE" "$VERSION" \
   "$APK" "$(sha "$APK")" "$(size "$APK")" \
   "$EXE" "$(sha "$EXE")" "$(size "$EXE")" \
   "$ZIP" "$(sha "$ZIP")" "$(size "$ZIP")" \
   "$APPIMAGE" "$(sha "$APPIMAGE")" "$(size "$APPIMAGE")" \
-  "$DEB" "$(sha "$DEB")" "$(size "$DEB")" > "$MANIFEST" <<'PY'
-import json, os, sys, datetime
+  "$DEB" "$(sha "$DEB")" "$(size "$DEB")" > "$MANIFEST_TMP" <<'PY'
+import json, os, re, sys, datetime
 
 prerelease, version, arg = sys.argv[1], sys.argv[2], ""
 args = sys.argv[3:]
+
+def semver_key(value):
+    """Order two SemVer strings by precedence (build metadata ignored).
+
+    Mirrors SemVer 2.0.0 §11 so this gate agrees with the Dart client.
+    """
+    core, _, _build = value.partition("+")
+    core, _, pre = core.partition("-")
+    major, minor, patch = (int(p) for p in core.split("."))
+    if not pre:
+        # A version with no pre-release sorts above any pre-release of it.
+        return (major, minor, patch, 1, ())
+    ids = tuple((0, int(p), "") if p.isdigit() else (1, 0, p)
+                for p in pre.split("."))
+    return (major, minor, patch, 0, ids)
 
 def take():
     global args
@@ -139,13 +165,31 @@ for section, items in notes.items():
     if items:
         clean_notes[str(section)] = [i for i in items if i.strip()]
 
+# Optional forced-upgrade floor. When set, clients older than this version are
+# put into the mandatory update state instead of the advisory one. Omitting the
+# variable keeps releases advisory (the historical default).
+min_supported_raw = os.environ.get("NEXADRIVE_MIN_SUPPORTED_VERSION", "").strip()
+min_supported = None
+if min_supported_raw:
+    # Must be a plain SemVer triple; the client parses with the same rules.
+    if not re.fullmatch(r"0|[1-9]\d*" + r"\.(?:0|[1-9]\d*)" + r"\.(?:0|[1-9]\d*)"
+                        r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+                        r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?", min_supported_raw):
+        sys.exit(f"NEXADRIVE_MIN_SUPPORTED_VERSION is not valid SemVer: {min_supported_raw!r}")
+    # UpdateManifest.fromJson rejects a floor above the release itself, so
+    # fail here rather than publishing a manifest no client will accept.
+    if semver_key(min_supported_raw) > semver_key(version):
+        sys.exit(f"NEXADRIVE_MIN_SUPPORTED_VERSION {min_supported_raw} "
+                 f"is greater than release version {version}")
+    min_supported = min_supported_raw
+
 manifest = {
     "version": version,
     "tag": f"v{version}",
     "releaseDate": datetime.datetime.now(datetime.timezone.utc)
         .replace(microsecond=0).isoformat().replace("+00:00", "Z"),
     "prerelease": prerelease == "1",
-    "minimumSupportedVersion": None,
+    "minimumSupportedVersion": min_supported,
     "minimumServerVersion": os.environ.get("NEXADRIVE_MIN_SERVER_VERSION") or None,
     "serverApiVersion": os.environ.get("NEXADRIVE_SERVER_API_VERSION") or None,
     "releaseNotes": clean_notes,
@@ -170,7 +214,7 @@ PY
 
 # Independent gate (defense in depth): re-derive every digest from disk and
 # confirm the manifest references exactly the artifacts beside it.
-python3 - "$VERSION" "$MANIFEST" <<'PY'
+python3 - "$VERSION" "$MANIFEST_TMP" <<'PY'
 import hashlib, json, os, sys
 
 version, path = sys.argv[1], sys.argv[2]
@@ -202,4 +246,5 @@ assert "deb" in data["artifacts"]["linux"]["x64"]
 print(f"Verification OK: {path} matches on-disk artifacts for v{version}")
 PY
 
+mv -f "$MANIFEST_TMP" "$MANIFEST"
 echo "Wrote $OUT/$MANIFEST"

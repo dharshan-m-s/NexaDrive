@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NexaDrive connects to a user-configured server URL. HTTPS (e.g. Tailscale
+     Serve) is the recommended deployment and is unaffected by this file.
+
+     The only cleartext exception is the device's own loopback interface, which
+     is what `adb reverse tcp:8080 tcp:8080` exposes during development and
+     on-device testing: traffic never leaves the phone, and the host server
+     still binds to 127.0.0.1 only. Cleartext to LAN or public hosts stays
+     blocked (Android's default for targetSdk >= 28). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">::1</domain>
+    </domain-config>
+</network-security-config>

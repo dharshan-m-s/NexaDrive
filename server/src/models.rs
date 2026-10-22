@@ -41,8 +41,17 @@ pub(crate) struct NotificationReadRequest {
 #[derive(Serialize)]
 pub(crate) struct AuditResponse {
     pub(crate) id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) actor: Option<String>,
     pub(crate) action: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) target: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) outcome: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) detail: Option<String>,
     pub(crate) created_at: DateTime<Utc>,
 }
 
@@ -74,6 +83,12 @@ pub(crate) struct BackupSnapshotResponse {
 pub(crate) struct LoginRequest {
     pub(crate) username: String,
     pub(crate) password: String,
+    /// Optional client-reported metadata shown in session lists. Never used
+    /// for authorization decisions.
+    #[serde(default)]
+    pub(crate) device_name: Option<String>,
+    #[serde(default)]
+    pub(crate) platform: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -139,6 +154,44 @@ pub(crate) struct ShareResponse {
     pub(crate) is_link: bool,
     pub(crate) token: Option<String>,
     pub(crate) expires_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize)]
+pub(crate) struct SessionInfoResponse {
+    pub(crate) session_id: Uuid,
+    pub(crate) created_at: DateTime<Utc>,
+    pub(crate) last_activity_at: DateTime<Utc>,
+    pub(crate) expires_at: DateTime<Utc>,
+    pub(crate) is_current: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) device_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) platform: Option<String>,
+}
+
+#[derive(Serialize)]
+pub(crate) struct SessionsListResponse {
+    pub(crate) sessions: Vec<SessionInfoResponse>,
+}
+
+#[derive(Serialize)]
+pub(crate) struct RevokeSessionResponse {
+    pub(crate) revoked: u64,
+}
+
+#[derive(serde::Deserialize)]
+pub(crate) struct SessionsQuery {
+    pub(crate) include_current: Option<bool>,
+}
+
+#[derive(serde::Deserialize)]
+pub(crate) struct RevokeSessionQuery {
+    pub(crate) session_id: Option<Uuid>,
+}
+
+#[derive(serde::Deserialize)]
+pub(crate) struct RevokeOtherSessionsQuery {
+    pub(crate) exclude_current: Option<bool>,
 }
 
 #[derive(Deserialize)]

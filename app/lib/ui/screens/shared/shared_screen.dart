@@ -123,9 +123,24 @@ class _SharedScreenState extends State<SharedScreen> {
         onSelectionChanged: (v) => setState(() => _mine = v.first),
         showSelectedIcon: false,
       ),
-      body: _buildBody(),
+      body: _body(),
       scrollable: false,
     );
+  }
+
+  /// The body, cross-faded between states so a resolved share list settles in.
+  Widget _body() => NexaStateSwitcher(
+        stateKey: ValueKey(_bodyState),
+        child: _buildBody(),
+      );
+
+  String get _bodyState {
+    final scope = _mine ? 'mine' : 'shared';
+    if (_loading) return '$scope:loading';
+    if (_error != null) return '$scope:error';
+    return (_mine ? _shares : _shared).isEmpty
+        ? '$scope:empty'
+        : '$scope:content';
   }
 
   Widget _buildBody() {

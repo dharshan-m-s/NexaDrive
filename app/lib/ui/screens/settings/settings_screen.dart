@@ -8,6 +8,7 @@ import '../../../core/design/app_typography.dart';
 import '../../../services/api.dart';
 import '../../../services/app_lock.dart';
 import '../../../services/session.dart';
+import 'security_screen.dart';
 import '../../../update/update_controller.dart';
 import '../../widgets/nexa_grouped_list.dart';
 import '../../widgets/nexa_list_tile.dart';
@@ -234,6 +235,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Appearance',
                 subtitle: _themeLabel(session.themeMode),
                 onTap: () => _changeTheme(context),
+              ),
+              NexaListTile(
+                icon: Icons.security_rounded,
+                title: 'Security',
+                subtitle: 'Sessions and sign-in devices',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => SecurityScreen(
+                        session: session,
+                        api: widget.api,
+                      ),
+                    ),
+                  );
+                },
               ),
               if (Platform.isAndroid && _appLockEnabled != null)
                 NexaListTile(

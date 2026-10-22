@@ -23,8 +23,8 @@ import '../../widgets/upload_progress_dialog.dart';
 import '../scanner/scanner_screen.dart';
 import '../search/search_screen.dart';
 import '../../navigation/file_opener.dart';
-import 'file_details_sheet.dart';
 import 'file_share_sheet.dart';
+import 'file_properties_sheet.dart';
 
 enum _Sort { name, size, newOld, oldNew }
 
@@ -529,8 +529,10 @@ class _FilesScreenState extends State<FilesScreen> {
                     if (saved == true) load();
                   }),
         ),
-        if (!_selecting && _path.isNotEmpty)
-          _Breadcrumb(
+        NexaRevealBar(
+          visible: !_selecting && _path.isNotEmpty,
+          alignment: Alignment.topLeft,
+          child: _Breadcrumb(
             path: _path,
             accent: accent,
             onBreadcrumb: (p) {
@@ -538,9 +540,11 @@ class _FilesScreenState extends State<FilesScreen> {
               load();
             },
           ),
-        Expanded(child: _buildBody()),
-        if (_selecting)
-          NexaActionBar(
+        ),
+        Expanded(child: _body()),
+        NexaRevealBar(
+          visible: _selecting,
+          child: NexaActionBar(
             leading: IconButton(
               tooltip: 'Cancel selection',
               onPressed: _exitSelection,
@@ -576,6 +580,7 @@ class _FilesScreenState extends State<FilesScreen> {
               ),
             ],
           ),
+        ),
       ],
     );
   }
@@ -621,13 +626,28 @@ class _FilesScreenState extends State<FilesScreen> {
   Future<void> _shareSelected() async {
     final entries = _items.where((e) => _selected.contains(e.path)).toList();
     if (entries.isEmpty) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
+    await showNexaFormSheet<void>(
+      context,
       builder: (_) => FileShareSheet(api: widget.api, files: entries),
     );
     if (mounted) _exitSelection();
   }
+
+  /// The body, cross-faded between states so a resolved listing settles in
+  /// place instead of replacing the screen outright.
+  Widget _body() => NexaStateSwitcher(
+        stateKey: ValueKey(_bodyState),
+        child: _buildBody(),
+      );
+
+  /// A stable identity for whichever body state is showing.
+  String get _bodyState => _loading
+      ? 'loading'
+      : _error != null
+          ? 'error'
+          : _items.isEmpty
+              ? 'empty'
+              : 'content:${_grid ? 'grid' : 'list'}';
 
   Widget _buildBody() {
     if (_loading) {
@@ -778,14 +798,13 @@ class _FilesScreenState extends State<FilesScreen> {
             ),
             NexaSheetAction(
               icon: Icons.info_outline_rounded,
-              title: 'Details',
+              title: 'Properties',
               onTap: () {
                 Navigator.pop(sheetContext);
-                showNexaSheet<void>(
+                showNexaFormSheet<void>(
                   context,
-                  isScrollControlled: true,
                   builder: (_) =>
-                      FileDetailsSheet(file: entry, api: widget.api),
+                      FilePropertiesSheet(entry: entry, api: widget.api),
                 );
               },
             ),
@@ -794,9 +813,8 @@ class _FilesScreenState extends State<FilesScreen> {
               title: 'Share',
               onTap: () {
                 Navigator.pop(sheetContext);
-                showNexaSheet<void>(
+                showNexaFormSheet<void>(
                   context,
-                  isScrollControlled: true,
                   builder: (_) =>
                       FileShareSheet(api: widget.api, files: [entry]),
                 );

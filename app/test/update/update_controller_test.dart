@@ -9,6 +9,7 @@ import 'package:http/testing.dart';
 import 'package:nexadrive/update/app_platform.dart';
 import 'package:nexadrive/update/update_controller.dart';
 import 'package:nexadrive/update/update_downloader.dart';
+import 'package:nexadrive/update/update_manifest.dart';
 import 'package:nexadrive/update/update_source.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -80,10 +81,13 @@ class _FakeDetector extends AppPlatformDetector {
 class _FakeRouter extends UpdateRouter {
   bool androidLaunchAttempted = false;
   bool androidLaunchResult = true;
+  Object? androidLaunchError;
 
   @override
   Future<bool> launchAndroidInstaller(String path) async {
     androidLaunchAttempted = true;
+    final error = androidLaunchError;
+    if (error != null) throw error;
     return androidLaunchResult;
   }
 }
@@ -495,7 +499,31 @@ void main() {
       expect(ctrl.infoMessage, isNotNull);
     });
 
-    test('resume reconciliation confirms a completed install', () async {
+    test('an android install exception is caught and reported, not thrown',
+        () async {
+      // Regression: the Android handoff has a try/finally but used to have no
+      // catch, so a channel failure escaped `install()` as an unhandled async
+      // error while the UI stayed stuck on `readyToInstall`.
+      final router = _FakeRouter()
+        ..androidLaunchError = const UpdateException(
+          UpdateErrorKind.installFailed,
+          'The installer was rejected.',
+        );
+      final ctrl = await _controller(
+        client: _serve(version: '1.2.0'),
+        router: router,
+        version: _MutableVersion('1.1.0'),
+      );
+      await ctrl.checkForUpdates();
+      await ctrl.download();
+      await ctrl.install(); // must not throw
+      expect(router.androidLaunchAttempted, isTrue);
+      expect(ctrl.status, UpdateStatus.failed);
+      expect(ctrl.errorMessage, 'The installer was rejected.');
+    });
+
+    test('resume reconciliation keeps the verified installer for a retry',
+        () async {
       final version = _MutableVersion('1.1.0');
       final router = _FakeRouter();
       final ctrl = await _controller(
@@ -507,15 +535,59 @@ void main() {
       await ctrl.download();
       await ctrl.install();
       expect(ctrl.status, UpdateStatus.installingHandoff);
+      final staged = ctrl.downloadedPath;
+      expect(staged, isNotNull);
 
-      // User backed out without installing: still old version on resume.
+      // User backed out without installing (or the handoff silently failed):
+      // the app is still the old version on resume, but the verified installer
+      // is still on disk, so the Update Center must offer a direct retry
+      // instead of forcing another download.
       await ctrl.reconcileAfterResume();
-      expect(ctrl.status, UpdateStatus.updateAvailable);
+      expect(ctrl.status, UpdateStatus.readyToInstall);
+      expect(ctrl.downloadedPath, staged);
+      expect(File(staged!).existsSync(), isTrue);
 
       // Now simulate completion.
       version.version = '1.2.0';
       await ctrl.reconcileAfterResume();
       expect(ctrl.status, UpdateStatus.completed);
+    });
+
+    test('resume reconciliation drops a missing installer', () async {
+      final version = _MutableVersion('1.1.0');
+      final ctrl = await _controller(
+        client: _serve(version: '1.2.0'),
+        router: _FakeRouter(),
+        version: version,
+      );
+      await ctrl.checkForUpdates();
+      await ctrl.download();
+      await ctrl.install();
+      final staged = ctrl.downloadedPath!;
+
+      // The staged artifact vanished (cache cleared externally): only then
+      // should reconciliation fall all the way back to "download again".
+      File(staged).deleteSync();
+      await ctrl.reconcileAfterResume();
+      expect(ctrl.status, UpdateStatus.updateAvailable);
+      expect(ctrl.downloadedPath, isNull);
+    });
+
+    test('blocked android launch keeps the installer for a direct install',
+        () async {
+      final router = _FakeRouter()..androidLaunchResult = false;
+      final ctrl = await _controller(
+        client: _serve(version: '1.2.0'),
+        router: router,
+        version: _MutableVersion('1.1.0'),
+      );
+      await ctrl.checkForUpdates();
+      await ctrl.download();
+      final staged = ctrl.downloadedPath;
+      await ctrl.install();
+      expect(ctrl.status, UpdateStatus.needsUserAction);
+      // The retry must reuse the verified APK rather than re-download it.
+      expect(ctrl.downloadedPath, staged);
     });
   });
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
+import '../../../core/design/app_motion.dart';
 import '../../../services/api.dart';
 import '../../../services/session.dart';
 import '../../../services/transfer_queue.dart';
@@ -419,9 +420,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // bottom edge but are padded up by the pill's footprint so content is never
     // obscured behind it, while the pill still floats over the page like glass.
     // Each page clears the status bar through [_PageHost]'s safe area.
-    final pillInset = AppDimens.space10 * 2 +
-        AppDimens.bottomNavHeight +
-        MediaQuery.paddingOf(context).bottom;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final pillInset =
+        AppDimens.space10 * 2 + AppDimens.bottomNavHeight + bottomInset;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundFor(
@@ -441,7 +442,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           Positioned(
             left: 0,
             right: 0,
-            bottom: AppDimens.space10,
+            // Float the capsule above the gesture area rather than stretching
+            // its glass into it, so the pill stays slim on edge-to-edge phones.
+            bottom: AppDimens.space10 + bottomInset,
             child: NexaBottomNav(
               currentIndex: index >= 4 ? 4 : index,
               onTap: (value) {
@@ -467,10 +470,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 /// its request. Unvisited destinations render nothing, so they cost nothing
 /// until first opened.
 ///
+/// A tab switch reveals the destination with a short fade-through rather than a
+/// hard cut. The [IndexedStack] itself is never rebuilt, so the incoming page
+/// fades in over the one it replaces without losing scroll position or an
+/// in-flight request. Reduced motion skips the fade entirely.
+///
 /// The page host clears the status bar for every destination; the bottom inset
 /// that keeps content above the floating [NexaBottomNav] is applied by the
 /// shell, so it is not consumed here.
-class _PageHost extends StatelessWidget {
+class _PageHost extends StatefulWidget {
   final int index;
   final Set<int> visited;
   final List<Widget> pages;
@@ -482,16 +490,58 @@ class _PageHost extends StatelessWidget {
   });
 
   @override
+  State<_PageHost> createState() => _PageHostState();
+}
+
+class _PageHostState extends State<_PageHost>
+    with SingleTickerProviderStateMixin {
+  // Drives the fade-through. Starts settled so the first frame paints the shell
+  // at full opacity; every later index change replays it once.
+  late final AnimationController _reveal = AnimationController(
+    vsync: this,
+    duration: AppMotion.fast,
+    value: 1,
+  );
+
+  late final Animation<double> _opacity = CurvedAnimation(
+    parent: _reveal,
+    curve: AppMotion.fadeCurve,
+  );
+
+  @override
+  void didUpdateWidget(covariant _PageHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.index != widget.index) {
+      _reveal.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _reveal.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final stack = IndexedStack(
+      index: widget.index,
+      children: [
+        for (var i = 0; i < widget.pages.length; i++)
+          if (widget.visited.contains(i))
+            widget.pages[i]
+          else
+            const SizedBox.shrink(),
+      ],
+    );
+
+    if (AppMotion.reducedMotion(context)) {
+      return SafeArea(bottom: false, child: stack);
+    }
+
     return SafeArea(
       bottom: false,
-      child: IndexedStack(
-        index: index,
-        children: [
-          for (var i = 0; i < pages.length; i++)
-            if (visited.contains(i)) pages[i] else const SizedBox.shrink(),
-        ],
-      ),
+      child: FadeTransition(opacity: _opacity, child: stack),
     );
   }
 }

@@ -106,7 +106,7 @@ abstract final class AppDimens {
 
   // -------------------------------------------------------------- chrome
   static const double navRailWidth = 236;
-  static const double bottomNavHeight = 64;
+  static const double bottomNavHeight = 56;
   static const double navBarHeight = 49;
   static const double navBarHeightLarge = 83;
   static const double toolbarHeight = 44;

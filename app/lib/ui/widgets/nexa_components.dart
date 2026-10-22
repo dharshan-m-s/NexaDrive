@@ -1,8 +1,8 @@
 /// NexaDrive component library (Nexa*)
-///
+
 /// Single implementation, many usages. All components consume the centralized
 /// design system (AppColors, AppDimens, AppTextStyle, AppMotion).
-///
+
 /// Do NOT create screen-specific variants of these components.
 library;
 
@@ -28,3 +28,4 @@ export 'nexa_hero.dart';
 export 'nexa_focus_block.dart';
 export 'nexa_status_pod.dart';
 export 'nexa_grouped_list.dart';
+export 'nexa_confirmation.dart';

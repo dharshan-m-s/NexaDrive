@@ -28,6 +28,37 @@ Future<T?> showNexaSheet<T>(
   );
 }
 
+/// Opens a sheet whose content owns its own layout — a form or multi-section
+/// sheet that already provides its own [SafeArea], padding and scrolling — and
+/// relies on the theme surface for its background (rounded top, drag handle).
+///
+/// Use this for self-contained bodies such as [FileShareSheet] or [FolderPicker].
+/// Use [showNexaSheet] with a [NexaSheetBody] instead for menu/action sheets:
+/// that variant paints a transparent modal so [NexaSheetBody] can own the
+/// surface. Passing such a self-contained body to [showNexaSheet] would leave it
+/// with no background at all.
+Future<T?> showNexaFormSheet<T>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+  bool isScrollControlled = true,
+  bool isDismissible = true,
+  bool enableDrag = true,
+  Color? barrierColor,
+  double? maxHeight,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: isScrollControlled,
+    isDismissible: isDismissible,
+    enableDrag: enableDrag,
+    barrierColor:
+        barrierColor ?? AppColors.scrimFor(Theme.of(context).brightness),
+    constraints:
+        maxHeight != null ? BoxConstraints(maxHeight: maxHeight) : null,
+    builder: builder,
+  );
+}
+
 /// Sheet header with title and optional subtitle.
 class NexaSheetHeader extends StatelessWidget {
   final String title;
@@ -270,7 +301,7 @@ class _ActionSheetWrapper extends StatelessWidget {
 
   const _ActionSheetWrapper({
     required this.title,
-    this.message,
+    required this.message,
     required this.child,
   });
 

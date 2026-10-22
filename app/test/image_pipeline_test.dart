@@ -419,6 +419,48 @@ void main() {
       }
       expect(hits, lessThanOrEqualTo(4));
     });
+
+    test('the failure records are bounded (a broken folder cannot grow them)',
+        () async {
+      final session = Session()
+        ..serverUrl = 'https://cloud.example.test'
+        ..username = 'tester'
+        ..token = 'test-token';
+      final api = Api(
+        session,
+        client: MockClient((request) async => http.Response(
+              jsonEncode({'error': 'boom'}),
+              500,
+              headers: {'content-type': 'application/json'},
+            )),
+      );
+      final repo = ImageRepository(api);
+
+      ImageKey keyFor(int i) => ImageKey(
+            namespace: kNamespace,
+            path: 'Broken/$i.jpg',
+            rendition: ImageRendition.original,
+          );
+
+      // 513 distinct failures — one past the 512-entry bound.
+      for (var i = 0; i < 513; i++) {
+        await expectLater(
+          repo.original(keyFor(i)),
+          throwsA(isA<ApiException>()),
+        );
+      }
+
+      expect(
+        repo.hasFailed(keyFor(0)),
+        isFalse,
+        reason: 'the oldest failure is evicted once the bound is exceeded',
+      );
+      expect(
+        repo.hasFailed(keyFor(512)),
+        isTrue,
+        reason: 'the most recent failure is retained',
+      );
+    });
   });
 
   group('the photo viewer requests originals, never thumbnails', () {

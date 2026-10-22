@@ -92,8 +92,12 @@ void main() {
       expect(
           capturedUri.toString(), 'https://server.example.com/api/auth/login');
       expect(capturedHeaders['Content-Type'], 'application/json');
-      expect(jsonDecode(capturedBody),
-          {'username': 'alice', 'password': 'test-pass-123'});
+      final sent = jsonDecode(capturedBody) as Map<String, dynamic>;
+      expect(sent['username'], 'alice');
+      expect(sent['password'], 'test-pass-123');
+      // The client reports its platform (and a device label when the OS
+      // exposes a meaningful one) so the session list can name devices.
+      expect(sent['platform'], isNotEmpty);
       expect(result['token'], 'abc123token');
       expect((result['user'] as Map)['username'], 'alice');
     });

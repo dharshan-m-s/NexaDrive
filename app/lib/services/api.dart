@@ -82,7 +82,16 @@ class Api {
     final response = await _client.post(
       Uri.parse('$base/api/auth/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'username': username, 'password': password}),
+      body: jsonEncode({
+        'username': username,
+        'password': password,
+        // Client-reported session metadata: the server echoes it back in the
+        // session list so people can recognise and revoke stray devices.
+        // The server treats it purely as display data, never for authz, and
+        // normalises `platform` to its own small set.
+        'platform': _platform,
+        if (_deviceName != null) 'device_name': _deviceName,
+      }),
     );
 
     if (response.statusCode != 200) {
@@ -90,6 +99,25 @@ class Api {
     }
 
     return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  /// The platform token sent with login. Mirrors the server's
+  /// `normalize_platform` vocabulary (android / windows / linux / macos).
+  static String get _platform {
+    if (Platform.isAndroid) return 'android';
+    if (Platform.isWindows) return 'windows';
+    if (Platform.isMacOS) return 'macos';
+    return 'linux';
+  }
+
+  /// Best-effort human label for this device. On desktop hosts the OS
+  /// hostname is meaningful; on mobile the hostname is just "localhost",
+  /// which would render as a worse-than-useless session name — the server
+  /// and UI fall back to the platform label instead.
+  static String? get _deviceName {
+    final name = Platform.localHostname.trim();
+    if (name.isEmpty || name == 'localhost' || name == 'unknown') return null;
+    return name;
   }
 
   Future<List<Map<String, dynamic>>> listFiles(String path) async {
@@ -665,6 +693,53 @@ class Api {
       );
     }
     await session.clear();
+  }
+
+  /// Session-management helpers used by the Security screen.
+  ///
+  /// The server wraps the list as `{ "sessions": [...] }`; older proxies
+  /// sometimes forward the bare array, so both shapes are accepted.
+  Future<List<Map<String, dynamic>>> sessions() async {
+    final response = await _client.get(
+      _uri('/api/auth/sessions', {'include_current': 'true'}),
+      headers: _headers,
+    );
+    _check(response);
+    final decoded = jsonDecode(response.body);
+    final List<dynamic> list;
+    if (decoded is Map<String, dynamic>) {
+      final sessions = decoded['sessions'];
+      if (sessions is! List) {
+        throw ApiException(response.statusCode, 'Malformed session list');
+      }
+      list = sessions;
+    } else if (decoded is List) {
+      list = decoded;
+    } else {
+      throw ApiException(response.statusCode, 'Malformed session list');
+    }
+    return list.cast<Map<String, dynamic>>();
+  }
+
+  Future<void> revokeSession(String sessionId) async {
+    final response = await _client.post(
+        _uri('/api/auth/sessions/revoke', {'session_id': sessionId}),
+        headers: _headers);
+    _check(response);
+  }
+
+  Future<void> revokeOtherSessions() async {
+    final response = await _client.post(
+        _uri('/api/auth/sessions', {'exclude_current': 'true'}),
+        headers: {..._headers, 'Content-Type': 'application/json'},
+        body: jsonEncode({'exclude_current': true}));
+    _check(response);
+  }
+
+  Future<void> signOutEverywhere() async {
+    final response = await _client.post(_uri('/api/auth/sign-out-everywhere'),
+        headers: _headers);
+    _check(response);
   }
 
   void _check(http.Response response) {

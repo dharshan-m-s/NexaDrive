@@ -14,17 +14,42 @@ storage/
 backups/
 logs/
 temp/
+*.db
 *.db-wal
 *.db-shm
+*.sqlite
+*.sqlite3
 
 # --- Server configuration secrets ------------------------------------------
 server/.env
 .env
 .env.*
+*.env
+*.env.local
+*.env.*.local
 !.env.example
+
+# --- Private keys, certificates and credential material ---------------------
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+key.properties
+id_rsa
+id_rsa.*
+id_ed25519
+id_ecdsa
+id_dsa
+*.ppk
+.netrc
+.aws/
+.ssh/
 
 # --- Rust build output -----------------------------------------------------
 server/target/
+target/
 
 # --- Flutter / Dart ---------------------------------------------------------
 app/.dart_tool/
@@ -42,9 +67,17 @@ app/android/**/*.jks
 app/android/**/*.keystore
 app/linux/flutter/ephemeral/
 app/windows/flutter/ephemeral/
+**/GeneratedPluginRegistrant.java
+**/GeneratedPluginRegistrant.kt
 coverage/
 *.symbols
 *.map.json
+
+# --- Node / frontend build output -------------------------------------------
+node_modules/
+dashboard/dist/
+*.tsbuildinfo
+*.local
 
 # --- Release artifacts produced by local/CI packaging ----------------------
 dist/
@@ -68,8 +101,16 @@ Thumbs.db
 *.dll
 *.exe
 
-# --- Opencode / local tooling ------------------------------------------------
+# --- Agent / AI tooling (local only, never commit) --------------------------
+# Skill packs, prompts, per-tool caches and machine-local agent state.
+.agents/
+.claude/
 .opencode/
+.cursor/
+.aider*
+.freebuff/
+skills-lock.json
+.claude.json
 
 # --- Screenshots and large binary captures -----------------------------------
 screenshots/

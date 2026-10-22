@@ -1,12 +1,16 @@
 mod auth;
 mod config;
+mod console;
 mod error;
 mod handlers;
+mod logbuf;
+mod metrics;
 mod middleware;
 mod models;
 mod paths;
 mod routes;
 mod state;
+mod storage_stats;
 
 use std::{
     collections::HashMap,
@@ -17,13 +21,14 @@ use std::{
 use chrono::Utc;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tokio::fs;
-use tracing::info;
+use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::{
     auth::bootstrap_admin,
     config::Config,
     handlers::upload::{cleanup_stale_uploads, recover_upload_jobs},
+    logbuf::LogBuffer,
     state::AppState,
 };
 
@@ -36,8 +41,11 @@ pub(crate) const API_VERSION: &str = "1.0.0";
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
     let config = Arc::new(Config::from_env());
+    let logs = LogBuffer::new();
     tracing_subscriber::fmt()
         .with_env_filter(config.rust_log.clone())
+        .with_ansi(false)
+        .with_writer(logbuf::LogMakeWriter::new(logs.clone()))
         .init();
 
     if let Some(parent) = std::path::Path::new(&config.database_path).parent() {
@@ -78,13 +86,57 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         public_url: config.public_url.clone(),
         thumb_cache: Arc::new(Mutex::new(HashMap::new())),
         config: Arc::clone(&config),
+        metrics: Arc::new(metrics::Metrics::new()),
+        logs,
+        console_attempts: Arc::new(Mutex::new(HashMap::new())),
+        storage_cache: Arc::new(Mutex::new(None)),
     };
 
-    let app = routes::app(state, &config);
+    metrics::spawn_sampler(
+        Arc::clone(&state.metrics),
+        state.db.clone(),
+        (*state.storage_root).clone(),
+        config.database_path.clone(),
+    );
+
+    let app = routes::app(state.clone(), &config);
+
+    // The console is loopback-only. Bind it first so a misconfiguration fails
+    // fast at startup instead of silently exposing a control plane. The public
+    // listener is never affected by console availability.
+    let console_listener = if config.console_enabled() {
+        if !config::is_loopback_bind(&config.console_bind_addr) {
+            return Err(format!(
+                "CONSOLE_BIND_ADDR '{}' is not a loopback address; refusing to start the console",
+                config.console_bind_addr
+            )
+            .into());
+        }
+        let listener = tokio::net::TcpListener::bind(&config.console_bind_addr).await?;
+        info!(
+            addr = %config.console_bind_addr,
+            dist = %config.console_dist_dir.display(),
+            "NexaDrive console listening (loopback only)"
+        );
+        Some(listener)
+    } else {
+        info!("console disabled (CONSOLE_BIND_ADDR=off)");
+        None
+    };
 
     let bind_addr = config.bind_addr.clone();
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
     info!(%bind_addr, "NexaDrive listening");
+
+    if let Some(console_listener) = console_listener {
+        let console_app = console::router(state.clone());
+        tokio::spawn(async move {
+            if let Err(err) = axum::serve(console_listener, console_app).await {
+                error!(error = %err, "console server stopped");
+            }
+        });
+    }
+
     axum::serve(listener, app).await?;
     Ok(())
 }
