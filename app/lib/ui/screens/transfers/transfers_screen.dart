@@ -18,6 +18,10 @@ class TransfersScreen extends StatefulWidget {
 class _TransfersScreenState extends State<TransfersScreen> {
   late final UploadManager _manager;
 
+  /// Whether the queue is in multi-select mode.
+  bool _selecting = false;
+  final Set<String> _selected = <String>{};
+
   @override
   void initState() {
     super.initState();
@@ -33,7 +37,12 @@ class _TransfersScreenState extends State<TransfersScreen> {
   }
 
   void _refresh() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final ids = _manager.items().map((UploadItem item) => item.id).toSet();
+    setState(() {
+      _selected.removeWhere((String id) => !ids.contains(id));
+      if (ids.isEmpty) _selecting = false;
+    });
   }
 
   Future<void> _toggle(UploadItem item) async {
@@ -86,6 +95,100 @@ class _TransfersScreenState extends State<TransfersScreen> {
     _refresh();
   }
 
+  Future<void> _pauseAll() async {
+    await _manager.pauseAll();
+    _refresh();
+  }
+
+  Future<void> _resumeAll() async {
+    await _manager.resumeAll();
+    _refresh();
+  }
+
+  void _enterSelection() {
+    setState(() {
+      _selecting = true;
+      _selected.clear();
+    });
+  }
+
+  void _exitSelection() {
+    setState(() {
+      _selecting = false;
+      _selected.clear();
+    });
+  }
+
+  void _toggleSelected(String id) {
+    setState(() {
+      if (!_selected.remove(id)) _selected.add(id);
+    });
+  }
+
+  void _toggleSelectAll(List<UploadItem> items) {
+    setState(() {
+      if (_selected.length == items.length) {
+        _selected.clear();
+      } else {
+        _selected
+          ..clear()
+          ..addAll(items.map((UploadItem item) => item.id));
+      }
+    });
+  }
+
+  Future<bool> _confirmDelete(int count, {required bool all}) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(all ? 'Delete all transfers?' : 'Delete transfers?'),
+            content: Text(
+              all
+                  ? 'This cancels active uploads and clears all $count '
+                      'transfers from the queue. Files already uploaded stay '
+                      'on the server.'
+                  : 'Remove the $count selected '
+                      '${count == 1 ? 'transfer' : 'transfers'} from the queue? '
+                      'Active uploads will be cancelled.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                ),
+                child: Text(all ? 'Delete all' : 'Delete'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _deleteSelected() async {
+    if (_selected.isEmpty) return;
+    if (!await _confirmDelete(_selected.length, all: false)) return;
+    final ids = _selected.toList(growable: false);
+    for (final id in ids) {
+      await _manager.remove(id);
+    }
+    _exitSelection();
+    _refresh();
+  }
+
+  Future<void> _deleteAll() async {
+    final count = _manager.items().length;
+    if (count == 0) return;
+    if (!await _confirmDelete(count, all: true)) return;
+    await _manager.removeAll();
+    _exitSelection();
+    _refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = _manager.items();
@@ -94,27 +197,102 @@ class _TransfersScreenState extends State<TransfersScreen> {
         bottom: false,
         child: NexaPage(
           title: 'Transfers',
-          subtitle: _summary(items),
+          subtitle: _selecting
+              ? '${_selected.length} of ${items.length} selected'
+              : _summary(items),
           leading: const NexaBackButton(),
-          headerAction: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (items
-                  .any((UploadItem item) => item.state == UploadState.failed))
-                IconButton(
-                  tooltip: 'Retry failed',
-                  onPressed: _retryAll,
-                  icon: const Icon(Icons.refresh_rounded),
+          headerAction: _selecting
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: _selected.length == items.length
+                          ? 'Deselect all'
+                          : 'Select all',
+                      onPressed:
+                          items.isEmpty ? null : () => _toggleSelectAll(items),
+                      icon: Icon(
+                        _selected.length == items.length && items.isNotEmpty
+                            ? Icons.deselect_rounded
+                            : Icons.select_all_rounded,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Delete selected',
+                      onPressed: _selected.isEmpty ? null : _deleteSelected,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    ),
+                    IconButton(
+                      tooltip: 'Cancel selection',
+                      onPressed: _exitSelection,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (items.any((UploadItem item) =>
+                        item.state == UploadState.uploading ||
+                        item.state == UploadState.queued ||
+                        item.state == UploadState.retrying))
+                      IconButton(
+                        tooltip: 'Pause all',
+                        onPressed: _pauseAll,
+                        icon: const Icon(Icons.pause_circle_outline_rounded),
+                      )
+                    else if (items.any(
+                        (UploadItem item) => item.state == UploadState.paused))
+                      IconButton(
+                        tooltip: 'Resume all',
+                        onPressed: _resumeAll,
+                        icon: const Icon(Icons.play_circle_outline_rounded),
+                      ),
+                    IconButton(
+                      tooltip: 'Select transfers',
+                      onPressed: items.isEmpty ? null : _enterSelection,
+                      icon: const Icon(Icons.checklist_rounded),
+                    ),
+                    PopupMenuButton<String>(
+                      tooltip: 'Queue actions',
+                      icon: const Icon(Icons.more_vert_rounded),
+                      onSelected: (value) {
+                        switch (value) {
+                          case 'deleteAll':
+                            _deleteAll();
+                          case 'retry':
+                            _retryAll();
+                          case 'clear':
+                            _clearCompleted();
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        if (items.any((UploadItem item) =>
+                            item.state == UploadState.failed))
+                          const PopupMenuItem(
+                            value: 'retry',
+                            child: Text('Retry failed'),
+                          ),
+                        if (items.any((UploadItem item) =>
+                            item.state == UploadState.completed))
+                          const PopupMenuItem(
+                            value: 'clear',
+                            child: Text('Clear completed'),
+                          ),
+                        if (items.isNotEmpty)
+                          PopupMenuItem(
+                            value: 'deleteAll',
+                            child: Text(
+                              'Delete all transfers',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
-              if (items.any(
-                  (UploadItem item) => item.state == UploadState.completed))
-                IconButton(
-                  tooltip: 'Clear completed',
-                  onPressed: _clearCompleted,
-                  icon: const Icon(Icons.delete_sweep_outlined),
-                ),
-            ],
-          ),
           padding: const EdgeInsets.fromLTRB(
             AppDimens.pageMargin,
             0,
@@ -193,18 +371,38 @@ class _TransfersScreenState extends State<TransfersScreen> {
               '${Format.bytes(active.fold<int>(0, (int s, UploadItem e) => s + e.transferred))} '
                   'of ${Format.bytes(active.fold<int>(0, (int s, UploadItem e) => s + e.size))}'),
         for (final item in active)
-          _TransferRow(item: item, onToggle: _toggle, onRemove: _remove),
+          _TransferRow(
+            item: item,
+            selecting: _selecting,
+            selected: _selected.contains(item.id),
+            onSelect: _toggleSelected,
+            onToggle: _toggle,
+            onRemove: _remove,
+          ),
         if (failed.isNotEmpty) ...[
           const SizedBox(height: AppDimens.space16),
           _Section('Needs attention', '${failed.length} failed'),
           for (final item in failed)
-            _TransferRow(item: item, onToggle: _toggle, onRemove: _remove),
+            _TransferRow(
+              item: item,
+              selecting: _selecting,
+              selected: _selected.contains(item.id),
+              onSelect: _toggleSelected,
+              onToggle: _toggle,
+              onRemove: _remove,
+            ),
         ],
         if (completed.isNotEmpty) ...[
           const SizedBox(height: AppDimens.space16),
           _Section('Completed', '${completed.length} done'),
           for (final item in completed)
-            _TransferRow(item: item, onToggle: null, onRemove: _remove),
+            _TransferRow(
+              item: item,
+              selecting: _selecting,
+              selected: _selected.contains(item.id),
+              onSelect: _toggleSelected,
+              onRemove: _remove,
+            ),
         ],
       ],
     );
@@ -250,10 +448,20 @@ class _Section extends StatelessWidget {
 
 class _TransferRow extends StatelessWidget {
   final UploadItem item;
+  final bool selecting;
+  final bool selected;
+  final ValueChanged<String>? onSelect;
   final Future<void> Function(UploadItem)? onToggle;
   final Future<void> Function(UploadItem)? onRemove;
 
-  const _TransferRow({required this.item, this.onToggle, this.onRemove});
+  const _TransferRow({
+    required this.item,
+    this.selecting = false,
+    this.selected = false,
+    this.onSelect,
+    this.onToggle,
+    this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -315,28 +523,41 @@ class _TransferRow extends StatelessWidget {
         AppDimens.space8,
         AppDimens.space12,
       ),
+      onTap: selecting && onSelect != null ? () => onSelect!(item.id) : null,
       child: Row(
         children: [
-          SizedBox(
-            width: 22,
-            child: uploading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(
-                    completed
-                        ? Icons.check_circle_outline_rounded
-                        : failed
-                            ? Icons.error_outline_rounded
-                            : paused
-                                ? Icons.pause_circle_outline_rounded
-                                : Icons.schedule_rounded,
-                    size: 20,
-                    color: statusColor,
-                  ),
-          ),
+          if (selecting) ...[
+            SizedBox(
+              width: 44,
+              child: Checkbox(
+                value: selected,
+                semanticLabel: 'Select ${item.name}',
+                onChanged: onSelect == null ? null : (_) => onSelect!(item.id),
+              ),
+            ),
+            const SizedBox(width: AppDimens.space4),
+          ] else ...[
+            SizedBox(
+              width: 22,
+              child: uploading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      completed
+                          ? Icons.check_circle_outline_rounded
+                          : failed
+                              ? Icons.error_outline_rounded
+                              : paused
+                                  ? Icons.pause_circle_outline_rounded
+                                  : Icons.schedule_rounded,
+                      size: 20,
+                      color: statusColor,
+                    ),
+            ),
+          ],
           const SizedBox(width: AppDimens.space12),
           Expanded(
             child: Column(
@@ -376,7 +597,7 @@ class _TransferRow extends StatelessWidget {
               ],
             ),
           ),
-          trailing,
+          if (!selecting) trailing,
         ],
       ),
     );

@@ -23,6 +23,15 @@ ExecStart=__NEXADRIVE_HOME__/server/target/release/nexadrive-server
 Restart=on-failure
 RestartSec=3
 
+# Keep the server ahead of incidental desktop/container work. systemd applies
+# these before dropping privileges; CPUWeight is the cgroup v2 maximum and is
+# not realtime scheduling, so a runaway server still cannot starve the host.
+Nice=-10
+CPUAccounting=true
+CPUWeight=10000
+IOSchedulingClass=best-effort
+IOSchedulingPriority=4
+
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

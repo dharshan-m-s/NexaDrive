@@ -71,6 +71,13 @@ ExecStart=<install-path>/server/target/release/nexadrive-server
 Restart=on-failure
 RestartSec=3
 
+# Keep the server ahead of incidental desktop/container work.
+Nice=-10
+CPUAccounting=true
+CPUWeight=10000
+IOSchedulingClass=best-effort
+IOSchedulingPriority=4
+
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
@@ -94,7 +101,11 @@ WantedBy=multi-user.target
 - **ProtectSystem=strict:** Root filesystem is read-only
 - **ProtectHome:** /home, /root, /run/user are not accessible
 - **ReadWritePaths:** Explicitly whitelist only necessary directories
+- **CPU priority:** `Nice=-10` plus the maximum cgroup v2 `CPUWeight`, so uploads and media serving are not starved by unrelated processes; not realtime scheduling
 - **RequiresMountsFor:** (used when the data disk is a separate mount) ensures it is mounted before starting
+
+After changing the unit on an installed server, apply it with
+`sudo systemctl daemon-reload && sudo systemctl restart nexadrive`.
 
 ## Tailscale
 

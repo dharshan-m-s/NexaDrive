@@ -56,8 +56,15 @@ class UploadItem {
   /// transfer keeps its session.
   final String id;
 
-  /// Absolute path of the local file that is being uploaded.
+  /// Absolute path of the local file that is being uploaded, or the Android
+  /// document URI when [sourceUri] is set.
   final String localPath;
+
+  /// Android Storage Access Framework URI for a folder-upload file.
+  ///
+  /// When set, bytes are streamed directly from the provider with
+  /// [ContentSource] and no copy is made in app storage.
+  final String? sourceUri;
 
   /// File name as it should appear on the server.
   final String name;
@@ -81,7 +88,8 @@ class UploadItem {
   final int attempts;
 
   /// Whether [localPath] points into a temporary directory that the app owns
-  /// and may delete (a materialised copy of an Android document).
+  /// and may delete (a legacy copied Android document). New folder picks
+  /// stream from their document URI instead.
   final bool temporarySource;
 
   final DateTime createdAt;
@@ -90,6 +98,7 @@ class UploadItem {
   const UploadItem({
     required this.id,
     required this.localPath,
+    this.sourceUri,
     required this.name,
     required this.folder,
     required this.size,
@@ -114,6 +123,7 @@ class UploadItem {
   /// silently keeps a stale failure message.
   UploadItem copyWith({
     String? localPath,
+    String? sourceUri,
     String? name,
     String? folder,
     int? size,
@@ -128,6 +138,7 @@ class UploadItem {
     return UploadItem(
       id: id,
       localPath: localPath ?? this.localPath,
+      sourceUri: sourceUri ?? this.sourceUri,
       name: name ?? this.name,
       folder: folder ?? this.folder,
       size: size ?? this.size,
@@ -144,6 +155,7 @@ class UploadItem {
   Map<String, dynamic> toJson() => {
         'id': id,
         'localPath': localPath,
+        if (sourceUri != null) 'sourceUri': sourceUri,
         'name': name,
         'folder': folder,
         'size': size,
@@ -159,6 +171,7 @@ class UploadItem {
   factory UploadItem.fromJson(Map<String, dynamic> json) => UploadItem(
         id: json['id'] as String,
         localPath: json['localPath'] as String? ?? '',
+        sourceUri: json['sourceUri'] as String?,
         name: json['name'] as String? ?? '',
         folder: json['folder'] as String? ?? '',
         size: (json['size'] as num?)?.toInt() ?? 0,

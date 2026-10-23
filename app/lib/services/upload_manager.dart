@@ -8,13 +8,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import 'api.dart';
+import 'content_source.dart';
 import 'upload_item.dart';
 import 'upload_store.dart';
 
 /// A local file that is ready to be uploaded.
 ///
-/// The queue works with paths rather than picker objects so the same code
-/// serves a desktop file, a materialised Android document and a test fixture.
+/// The queue works with plain values rather than picker objects so the same
+/// code serves a local file, an Android document URI, and a test fixture.
 class UploadSource {
   const UploadSource({
     required this.path,
@@ -22,10 +23,17 @@ class UploadSource {
     required this.size,
     this.relativePath = '',
     this.temporary = false,
+    this.sourceUri,
   });
 
-  /// Absolute path of the file on this device.
+  /// Absolute path of the file on this device, or its Android document URI
+  /// when [sourceUri] is set.
   final String path;
+
+  /// Android Storage Access Framework document URI, when this file came from
+  /// a picked folder. Bytes are streamed from the provider and never copied
+  /// into app storage.
+  final String? sourceUri;
 
   /// Name the file should have on the server.
   final String name;
@@ -141,7 +149,10 @@ class UploadManager extends ChangeNotifier {
   int concurrency = 3;
 
   /// Chunk size used for the resumable chunk endpoint.
-  static const int chunkSize = 8 * 1024 * 1024;
+  ///
+  /// 16 MB amortises connection setup, TLS and one fsync per chunk while
+  /// keeping the worst-case re-send on a dropped connection tolerable.
+  static const int chunkSize = 16 * 1024 * 1024;
 
   /// How many times a transfer is retried after a transient failure.
   static const int maxAttempts = 3;
@@ -200,6 +211,10 @@ class UploadManager extends ChangeNotifier {
       // Keep the fallback journal.
     }
     await _reload();
+    // Older app versions copied folder uploads into the app cache. Remove
+    // such copies when no queued item references them (for example after the
+    // app was killed between copying a folder and persisting the queue).
+    await _cleanupOwnedFolderCache();
     if (!_readyCompleter.isCompleted) _readyCompleter.complete();
   }
 
@@ -225,16 +240,19 @@ class UploadManager extends ChangeNotifier {
       // A transfer that was running when the app died is picked back up.
       // The server holds the authoritative offset, so the worker asks for it
       // before sending anything.
-      if (item.state == UploadState.uploading ||
-          item.state == UploadState.retrying) {
-        final resumed = item.copyWith(
+      var current = item;
+      if (current.state == UploadState.uploading ||
+          current.state == UploadState.retrying) {
+        current = current.copyWith(
           state: UploadState.queued,
           clearError: true,
         );
-        _items[item.id] = resumed;
-        await _persist(resumed);
+        _items[item.id] = current;
+        await _persist(current);
       }
-      if (item.state == UploadState.queued) _waiting.add(item.id);
+      // Use the post-transition state: an interrupted transfer is queued now
+      // and must join the waiting list, or nothing would ever pick it up.
+      if (current.state == UploadState.queued) _waiting.add(item.id);
     }
     _ready = true;
     notifyListeners();
@@ -257,6 +275,15 @@ class UploadManager extends ChangeNotifier {
     while (_active.isNotEmpty) {
       await Future<void>.delayed(const Duration(milliseconds: 200));
     }
+    // URI-backed folder items need the foreground Activity host for the
+    // content-provider channel. They stay queued and are reported as done for
+    // this background run so WorkManager does not spin on them.
+    if (!_claimsForeground) {
+      return _items.values
+          .where((UploadItem item) =>
+              item.state.isPending && item.sourceUri == null)
+          .length;
+    }
     return pendingCount;
   }
 
@@ -275,6 +302,7 @@ class UploadManager extends ChangeNotifier {
     final item = UploadItem(
       id: const Uuid().v4(),
       localPath: source.path,
+      sourceUri: source.sourceUri,
       name: source.name,
       folder: destination,
       size: source.size,
@@ -316,6 +344,7 @@ class UploadManager extends ChangeNotifier {
       final item = UploadItem(
         id: const Uuid().v4(),
         localPath: source.path,
+        sourceUri: source.sourceUri,
         name: source.name,
         folder: destination,
         size: source.size,
@@ -451,8 +480,13 @@ class UploadManager extends ChangeNotifier {
   Future<int> requeueInterrupted() async {
     final stuck = _items.values
         .where((UploadItem item) =>
-            item.state == UploadState.uploading ||
-            item.state == UploadState.retrying)
+            // An item whose worker is alive in *this* process is not stuck.
+            // Re-queueing it used to start a second worker for the same id,
+            // so two chunk requests raced each other and the server answered
+            // one of them with a unique-constraint 500.
+            !_active.contains(item.id) &&
+            (item.state == UploadState.uploading ||
+                item.state == UploadState.retrying))
         .toList(growable: false);
     for (final item in stuck) {
       final queued = item.copyWith(state: UploadState.queued, clearError: true);
@@ -479,12 +513,25 @@ class UploadManager extends ChangeNotifier {
     return failed.length;
   }
 
-  /// Drops a transfer from the queue without touching the server.
+  /// Drops a transfer from the queue.
+  ///
+  /// Completed uploads stay on the server (removing the row never deletes a
+  /// user file). An unfinished transfer with a server session is cancelled
+  /// best-effort so its staging file does not linger until it expires.
   Future<void> remove(String id) async {
     final item = _items[id];
     if (item == null) return;
     _waiting.remove(id);
     _items.remove(id);
+    _lastPersisted.remove(id);
+    final hasSession = item.transferred > 0 ||
+        item.state == UploadState.uploading ||
+        item.state == UploadState.retrying ||
+        item.state == UploadState.failed;
+    if (item.state != UploadState.completed && hasSession) {
+      _cancelled.add(id);
+      unawaited(_cancelRemote(_api, id));
+    }
     await _store.remove(id);
     _notify();
     if (item.temporarySource) _deleteTemporarySource(item);
@@ -501,6 +548,117 @@ class UploadManager extends ChangeNotifier {
       if (item.temporarySource) _deleteTemporarySource(item);
     }
     _notify();
+  }
+
+  /// Pauses every transfer that is waiting or running.
+  ///
+  /// A running chunk is allowed to finish so the server's confirmed offset
+  /// stays consistent; no further chunk is started for the item.
+  Future<int> pauseAll() async {
+    final paused = <UploadItem>[];
+    for (final item in _items.values) {
+      if (item.state != UploadState.queued &&
+          item.state != UploadState.uploading &&
+          item.state != UploadState.retrying) {
+        continue;
+      }
+      _waiting.remove(item.id);
+      final next = item.copyWith(state: UploadState.paused);
+      _items[item.id] = next;
+      paused.add(next);
+    }
+    if (paused.isNotEmpty) {
+      await _persistAll(paused);
+      _notify();
+    }
+    return paused.length;
+  }
+
+  /// Releases every paused transfer and restarts the queue.
+  Future<int> resumeAll() async {
+    final resumed = <UploadItem>[];
+    for (final item in _items.values) {
+      if (item.state != UploadState.paused) continue;
+      final next = item.copyWith(state: UploadState.queued, clearError: true);
+      _items[item.id] = next;
+      if (!_waiting.contains(item.id)) _waiting.add(item.id);
+      resumed.add(next);
+    }
+    if (resumed.isNotEmpty) {
+      await _persistAll(resumed);
+      _notify();
+      _pump();
+    }
+    return resumed.length;
+  }
+
+  /// Removes every item from the queue.
+  ///
+  /// Active server sessions are cancelled (best effort) so their staging
+  /// files are dropped instead of lingering until they expire. Completed
+  /// uploads are already on the server, so removing their queue rows never
+  /// deletes user files.
+  Future<int> removeAll() async {
+    if (_items.isEmpty) return 0;
+    final removed = _items.values.toList(growable: false);
+    _items.clear();
+    _waiting.clear();
+    for (final item in removed) {
+      _lastPersisted.remove(item.id);
+    }
+
+    final api = _api;
+    final cancelIds = <String>[];
+    for (final item in removed) {
+      // A queued item that never sent a byte has no server session, so a
+      // thousand-item queue clear does not fire a thousand HTTP requests.
+      final hasSession = item.transferred > 0 ||
+          (item.state != UploadState.queued &&
+              item.state != UploadState.cancelled);
+      if (item.state != UploadState.completed && hasSession) {
+        _cancelled.add(item.id);
+        cancelIds.add(item.id);
+      }
+      if (item.temporarySource) _deleteTemporarySource(item);
+    }
+    unawaited(_cancelRemoteBatch(api, cancelIds));
+
+    try {
+      await _store.clear();
+    } catch (_) {
+      // The in-memory queue is already empty; a journal rewrite failure must
+      // not make the UI disagree with what the user just did.
+    }
+    _notify();
+    return removed.length;
+  }
+
+  Future<void> _cancelRemoteBatch(Api? api, List<String> ids) async {
+    if (ids.isEmpty) return;
+    var next = 0;
+    Future<void> worker() async {
+      while (next < ids.length) {
+        final id = ids[next++];
+        await _cancelRemote(api, id);
+      }
+    }
+
+    await Future.wait(
+      List<Future<void>>.generate(
+        min(4, ids.length),
+        (_) => worker(),
+      ),
+    );
+  }
+
+  Future<void> _cancelRemote(Api? api, String id) async {
+    try {
+      await api?.cancelUpload(id);
+    } catch (_) {
+      // The server drops stale sessions on its own.
+    } finally {
+      _cancelled.remove(id);
+    }
   }
 
   /// Runs one transfer to completion.
@@ -554,9 +712,11 @@ class UploadManager extends ChangeNotifier {
       return;
     }
 
-    // The server owns the offset. Asking for it first means a resumed
-    // transfer continues at the byte the server actually stored.
-    var offset = await _serverOffset(api, id);
+    // The server owns the offset. A brand-new item, or one whose journal
+    // never recorded progress, starts at zero without paying for a status
+    // round trip; if the server actually has more, its offset_mismatch reply
+    // puts us back on the right byte.
+    var offset = item.transferred > 0 ? await _serverOffset(api, id) : 0;
     if (offset < 0 || offset > item.size) offset = 0;
 
     var attempts = 0;
@@ -667,11 +827,37 @@ class UploadManager extends ChangeNotifier {
   }
 
   Stream<List<int>> _chunkStream(UploadItem item, int start, int end) {
+    final sourceUri = item.sourceUri;
+    if (sourceUri != null) {
+      return _contentChunkStream(sourceUri, start, end);
+    }
     final file = File(item.localPath);
     if (!file.existsSync()) {
       throw const FileSystemException('The local file is no longer available');
     }
     return file.openRead(start, end);
+  }
+
+  /// Streams a chunk straight from an Android document URI.
+  ///
+  /// Each HTTP chunk is one provider read. Nothing is written to the cache:
+  /// the only copy outside the original document is the transient chunk the
+  /// HTTP client is sending.
+  Stream<List<int>> _contentChunkStream(String uri, int start, int end) async* {
+    // Read in small slices so each platform-channel message stays cheap; the
+    // provider stream is still only read, never copied to app storage.
+    var position = start;
+    while (position < end) {
+      final length = min(ContentSource.maxRange, end - position);
+      final bytes = await ContentSource.readRange(uri, position, length);
+      if (bytes.length != length) {
+        throw const FileSystemException(
+          'The document ended before the requested byte range',
+        );
+      }
+      position += length;
+      yield bytes;
+    }
   }
 
   /// Removes a temporary source the app owns.
@@ -680,8 +866,86 @@ class UploadManager extends ChangeNotifier {
     try {
       final file = File(item.localPath);
       if (file.existsSync()) file.deleteSync();
+      _removeEmptyOwnedParents(file.path);
     } catch (_) {
       // A leftover temporary file is not worth failing an upload over.
+    }
+  }
+
+  /// The `nexadrive-uploads` directory that owns [filePath], if any.
+  ///
+  /// Legacy folder picks copied a tree under
+  /// `<cache>/nexadrive-uploads/<timestamp>/`. Only directories inside that
+  /// marker are ever removed here, so this can never delete a user file.
+  static Directory? _ownedUploadBase(String filePath) {
+    var dir = File(filePath).parent;
+    while (true) {
+      final parent = dir.parent;
+      if (parent.path == dir.path) return null;
+      if (dir.path.split(Platform.pathSeparator).last == 'nexadrive-uploads') {
+        return dir;
+      }
+      dir = parent;
+    }
+  }
+
+  /// Deletes now-empty directories below the folder-upload cache root.
+  static void _removeEmptyOwnedParents(String filePath) {
+    final base = _ownedUploadBase(filePath);
+    if (base == null) return;
+    var dir = File(filePath).parent;
+    while (dir.path != base.path && dir.path.startsWith(base.path)) {
+      try {
+        if (dir.listSync(followLinks: false).isNotEmpty) return;
+        dir.deleteSync();
+      } catch (_) {
+        return;
+      }
+      final parent = dir.parent;
+      if (parent.path == dir.path) return;
+      dir = parent;
+    }
+  }
+
+  /// Removes legacy folder-upload copies that the journal no longer
+  /// references.
+  ///
+  /// A cancelled picker, a crash during enqueue, or an old app version can
+  /// leave multi-gigabyte folder copies in the cache. Only directories below
+  /// `<temp>/nexadrive-uploads` that are older than [_orphanSourceAge] and are
+  /// not named by a queued item are eligible, so an upload that is still
+  /// resumable is never touched.
+  static const Duration _orphanSourceAge = Duration(minutes: 30);
+
+  Future<void> _cleanupOwnedFolderCache() async {
+    try {
+      final temp = await getTemporaryDirectory();
+      final base = Directory(
+        '${temp.path}${Platform.pathSeparator}nexadrive-uploads',
+      );
+      if (!await base.exists()) return;
+
+      final referenced = <String>{};
+      for (final item in _items.values) {
+        if (!item.temporarySource) continue;
+        final owner = _ownedUploadBase(item.localPath);
+        if (owner != null) referenced.add(owner.path);
+      }
+
+      final now = DateTime.now();
+      await for (final entity in base.list(followLinks: false)) {
+        if (entity is! Directory) continue;
+        if (referenced.contains(entity.path)) continue;
+        try {
+          final modified = (await entity.stat()).modified;
+          if (now.difference(modified) < _orphanSourceAge) continue;
+          await entity.delete(recursive: true);
+        } catch (_) {
+          // A directory that vanished or is busy next time is harmless.
+        }
+      }
+    } catch (_) {
+      // Cleanup is best-effort; it must never block the queue from loading.
     }
   }
 
@@ -706,10 +970,31 @@ class UploadManager extends ChangeNotifier {
       final item = _items[id];
       if (item == null) continue;
       if (item.state != UploadState.queued) continue;
+      // A background isolate has no Activity host for the content-provider
+      // channel. Leave URI-backed items for the next foreground run instead
+      // of failing them or copying their bytes into the cache.
+      if (!_claimsForeground && item.sourceUri != null) continue;
       if (_cancelled.contains(id)) continue;
+      // A worker already owns this id. This can happen if a foreground resume
+      // queued the item while its original chunk request was still in flight.
+      if (_active.contains(id)) continue;
       return id;
     }
     return null;
+  }
+
+  /// Writes a batch of state changes as one journal append.
+  Future<void> _persistAll(List<UploadItem> items) async {
+    if (items.isEmpty) return;
+    try {
+      await _store.appendAll(items);
+      final now = DateTime.now();
+      for (final item in items) {
+        _lastPersisted[item.id] = now;
+      }
+    } catch (_) {
+      // A journal write must never abort an operation the user requested.
+    }
   }
 
   /// Writes the item to the journal.

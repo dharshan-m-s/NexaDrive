@@ -220,10 +220,14 @@ Any 401 fires `api.onUnauthorized` → hard redirect to Login. Server owns autho
   `<path>.conflict-<epoch>`; durable state in SharedPreferences key `sync_state_v1`;
   device id/name keys `sync_device_id_v1`, `sync_device_name_v1`; folder key
   `sync_folder_v1`.
-- `ThumbnailCache` (`services/thumbnail_cache.dart`): disk cache under
-  `getApplicationCacheDirectory()/thumbnails`, file keys = `md5('<serverUrl>|<path>')`,
-  `.jpg`, 7-day TTL, 512-entry cap (pruned oldest-first at open), `readSync` for
-  build-time resolution. Server URL is part of the key so switching servers never leaks.
+- `ThumbnailCache` (`services/thumbnail_cache.dart`): the only client-side media
+  cache. Disk cache under `getApplicationCacheDirectory()/thumbnails`, file keys =
+  `md5('<serverUrl>|<path>')`, `.jpg`, 7-day TTL, 64 MB / 512-entry cap (expired and
+  oldest entries pruned at open and after every write), `readSync` for build-time
+  resolution. Server URL is part of the key so switching servers never leaks.
+- `MediaProxy` (`services/media_proxy.dart`): loopback-only HTTP bridge used by the
+  audio player because the platform backend cannot attach an Authorization header.
+  Range requests are relayed, and the stream is never written to disk.
 
 ---
 

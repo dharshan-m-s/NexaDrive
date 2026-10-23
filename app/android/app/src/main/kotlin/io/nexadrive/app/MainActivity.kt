@@ -45,10 +45,14 @@ class MainActivity : FlutterFragmentActivity() {
     /// never blocks the UI while the session is written.
     private val installerExecutor: Executor = Executors.newSingleThreadExecutor()
 
-    /// The folder picker hands back a tree URI. The tree is materialised into
-    /// the app cache on this executor so a large folder never blocks the
-    /// platform thread.
+    /// Listing a tree is metadata-only and runs off the platform thread so a
+    /// huge folder never blocks the UI.
     private val folderExecutor: Executor = Executors.newSingleThreadExecutor()
+
+    /// Content-provider reads run in parallel: one upload chunk per worker.
+    /// A range is read into memory only for the duration of that chunk; the
+    /// folder is never copied into app storage.
+    private val sourceExecutor: Executor = Executors.newFixedThreadPool(4)
 
     /// The pending result of an open tree picker.
     private var pendingFolderResult: MethodChannel.Result? = null
@@ -87,8 +91,14 @@ class MainActivity : FlutterFragmentActivity() {
         MethodChannel(messenger, FOLDER_PICKER_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "pickFolder" -> pickFolder(result)
-                "materializeFolder" -> materializeFolder(
+                "listFolder" -> listFolder(
                     call.argument<String>("uri"),
+                    result,
+                )
+                "readSourceRange" -> readSourceRange(
+                    call.argument<String>("uri"),
+                    (call.argument<Number>("offset"))?.toLong(),
+                    call.argument<Number>("length")?.toInt(),
                     result,
                 )
                 else -> result.notImplemented()
@@ -125,12 +135,12 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     /**
-     * Copies the picked tree into the app cache and reports the copied files.
+     * Lists the picked tree without copying it.
      *
-     * The upload queue reads local files, so the tree is materialised once
-     * instead of asking the platform for every byte of every chunk.
+     * Each file carries its document URI, so the upload queue can stream the
+     * bytes later, directly from the provider.
      */
-    private fun materializeFolder(uri: String?, result: MethodChannel.Result) {
+    private fun listFolder(uri: String?, result: MethodChannel.Result) {
         if (uri.isNullOrEmpty()) {
             result.error("invalid", "No folder was picked", null)
             return
@@ -139,15 +149,16 @@ class MainActivity : FlutterFragmentActivity() {
         folderExecutor.execute {
             try {
                 val bridge = FolderPickerBridge(this)
-                val root = File(
-                    File(cacheDir, "nexadrive-uploads"),
-                    System.currentTimeMillis().toString(),
-                )
-                root.mkdirs()
-                val files = bridge.materialize(treeUri, root)
+                val files = bridge.readTree(treeUri).map { entry ->
+                    mapOf(
+                        "path" to entry.relativePath,
+                        "name" to entry.name,
+                        "size" to entry.size,
+                        "sourceUri" to entry.uri,
+                    )
+                }
                 val payload = mapOf(
                     "name" to bridge.displayName(treeUri),
-                    "root" to root.absolutePath,
                     "files" to files,
                 )
                 runOnUiThread { result.success(payload) }
@@ -157,6 +168,74 @@ class MainActivity : FlutterFragmentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Reads one upload chunk (at most 32 MiB) from a document URI.
+     *
+     * The provider stream is opened per request and skipped/seeded to
+     * [offset], so a resumed upload does not re-read the earlier bytes. No
+     * part of the tree is written to the app cache.
+     */
+    private fun readSourceRange(
+        uri: String?,
+        offset: Long?,
+        length: Int?,
+        result: MethodChannel.Result,
+    ) {
+        if (uri.isNullOrEmpty() || offset == null || offset < 0 ||
+            length == null || length < 0 || length > 32 * 1024 * 1024
+        ) {
+            result.error("invalid", "Invalid content range", null)
+            return
+        }
+        sourceExecutor.execute {
+            try {
+                val descriptor = contentResolver.openFileDescriptor(
+                    android.net.Uri.parse(uri),
+                    "r",
+                ) ?: throw IllegalStateException("The document is no longer available")
+                val bytes = descriptor.use { pfd ->
+                    FileInputStream(pfd.fileDescriptor).use { input ->
+                        var seekable = true
+                        try {
+                            input.channel.position(offset)
+                        } catch (_: Exception) {
+                            seekable = false
+                        }
+                        if (!seekable) skipFully(input, offset)
+                        readExactly(input, length)
+                    }
+                }
+                runOnUiThread { result.success(bytes) }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    result.error("read_failed", e.message ?: "The document could not be read", null)
+                }
+            }
+        }
+    }
+
+    private fun skipFully(input: FileInputStream, offset: Long) {
+        var remaining = offset
+        val buffer = ByteArray(64 * 1024)
+        while (remaining > 0) {
+            val wanted = if (remaining > buffer.size) buffer.size else remaining.toInt()
+            val read = input.read(buffer, 0, wanted)
+            if (read < 0) throw java.io.EOFException("The document ended before the resume offset")
+            remaining -= read
+        }
+    }
+
+    private fun readExactly(input: FileInputStream, length: Int): ByteArray {
+        val buffer = ByteArray(length)
+        var total = 0
+        while (total < length) {
+            val read = input.read(buffer, total, length - total)
+            if (read < 0) break
+            total += read
+        }
+        return if (total == length) buffer else buffer.copyOf(total)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -169,8 +248,8 @@ class MainActivity : FlutterFragmentActivity() {
             result.success(null)
             return
         }
-        // Keep read access for the session so the tree stays readable after
-        // the picker closes.
+        // Keep read access across restarts so a queued folder upload can still
+        // stream from the tree after the app is killed and reopened.
         try {
             contentResolver.takePersistableUriPermission(
                 uri,

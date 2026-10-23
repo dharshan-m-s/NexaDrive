@@ -35,6 +35,13 @@ pub(crate) struct AppState {
     /// Slots for in-flight upload streams. The server, not the client, decides
     /// how many transfers may run at once.
     pub(crate) upload_slots: Arc<Semaphore>,
+    /// One async lock per upload id.
+    ///
+    /// A client retry can overlap the request it is retrying (the old socket
+    /// is still being drained), and the Android foreground/background workers
+    /// can briefly race. Two chunk handlers for the same id must never append
+    /// to the same staging file or race the select-then-insert of its job row.
+    pub(crate) upload_locks: Arc<Mutex<HashMap<Uuid, Arc<tokio::sync::Mutex<()>>>>>,
     /// Short-lived cache of each user's on-disk usage, so the quota check does
     /// not re-walk the whole tree on every single upload.
     pub(crate) quota_cache: Arc<Mutex<HashMap<Uuid, QuotaCacheEntry>>>,

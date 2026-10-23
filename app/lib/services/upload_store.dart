@@ -111,6 +111,12 @@ class UploadStore {
     return _write(jsonEncode({'id': id, 'deleted': true}));
   }
 
+  /// Forgets every item and empties the journal in one rewrite.
+  Future<void> clear() {
+    _latest.clear();
+    return _serialized(() => _compactLocked(const <UploadItem>[]));
+  }
+
   /// Rewrites the journal so it holds exactly [items].
   Future<void> compact([List<UploadItem>? items]) {
     final snapshot = items ?? _latest.values.toList(growable: false);

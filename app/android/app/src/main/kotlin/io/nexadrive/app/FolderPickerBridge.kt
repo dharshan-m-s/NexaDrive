@@ -11,9 +11,9 @@ import java.io.File
  *
  * Android has no "give me a folder path" API: the system picker hands back a
  * tree URI, and the bytes behind it are only reachable through the content
- * resolver. The Flutter side therefore asks for a tree, and this bridge
- * materialises it into the app cache so the upload queue can stream it with
- * ordinary file I/O.
+ * resolver. This bridge lists the tree (names, sizes and document URIs) and
+ * later serves byte ranges straight from the provider. It never copies the
+ * tree into app storage.
  *
  * The bridge never asks for a storage permission: the user grants access to
  * exactly one tree through the system picker, and that grant is what makes
@@ -93,41 +93,6 @@ internal class FolderPickerBridge(private val context: Context) {
             }
         }
         return entries
-    }
-
-    /**
-     * Copies the tree [treeUri] into [target] and returns the copied files.
-     *
-     * The copy happens on a background executor, so a large tree never blocks
-     * the platform thread.
-     */
-    fun materialize(treeUri: Uri, target: File): List<Map<String, Any?>> {
-        val copied = mutableListOf<Map<String, Any?>>()
-        for (entry in readTree(treeUri)) {
-            val destination = File(target, entry.relativePath)
-            destination.parentFile?.mkdirs()
-            try {
-                val input = resolver.openInputStream(Uri.parse(entry.uri)) ?: continue
-                input.use { source ->
-                    destination.outputStream().use { sink ->
-                        source.copyTo(sink, 256 * 1024)
-                    }
-                }
-                copied.add(
-                    mapOf(
-                        "path" to entry.relativePath,
-                        "name" to entry.name,
-                        "size" to destination.length(),
-                        "localPath" to destination.absolutePath,
-                    ),
-                )
-            } catch (e: Exception) {
-                // A document that cannot be read is skipped; the rest of the
-                // tree still uploads.
-                destination.delete()
-            }
-        }
-        return copied
     }
 
     /** The display name of the picked tree, used as the top-level folder. */

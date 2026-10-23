@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
@@ -12,18 +11,17 @@ import '../../../core/models/file_entry.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../../services/download_service.dart';
-import '../../../services/media_cache.dart';
+import '../../../services/media_proxy.dart';
 import '../../widgets/nexa_components.dart';
 
 /// One UI music player.
 ///
 /// ## Large-file behaviour
 ///
-/// Tracks are streamed to a bounded on-disk cache ([MediaCache]) and played by
-/// the platform audio backend from a real file. At no point is a whole track
-/// held in memory, and the cache evicts least-recently-used entries past its
-/// budget. The very first play of a track therefore shows an honest buffering
-/// percentage instead of pretending to stream instantly.
+/// Tracks are streamed from the server through a loopback-only proxy
+/// ([MediaProxy]) that attaches the session token. The platform audio backend
+/// sees an HTTP URL and can seek with range requests, while no track bytes are
+/// written to the device: the server remains the only place media is stored.
 ///
 /// ## Metadata
 ///
@@ -56,9 +54,8 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
 
   final List<StreamSubscription<Object?>> _subscriptions = [];
 
-  MediaCache? _cache;
-  File? _localFile;
-  double? _loadProgress;
+  MediaProxy? _proxy;
+  bool _ready = false;
   bool _preparing = true;
   String? _error;
 
@@ -117,6 +114,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
     }
     _cancel?.cancel();
     _player.dispose();
+    unawaited(_proxy?.close());
     super.dispose();
   }
 
@@ -129,18 +127,12 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
             (fraction.clamp(0.0, 1.0) * _duration.inMilliseconds).round(),
       );
 
-  String get _namespace => widget.api.session.cacheNamespace;
-
-  String _fingerprint(FileEntry entry) =>
-      '${entry.modifiedAt ?? ''}|${entry.size ?? ''}';
-
   Future<void> _prepare({bool autoplay = true}) async {
     final entry = _current;
     setState(() {
       _preparing = true;
       _error = null;
-      _loadProgress = null;
-      _localFile = null;
+      _ready = false;
       _position = Duration.zero;
       _duration = Duration.zero;
     });
@@ -149,26 +141,21 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
     _cancel = cancel;
 
     try {
-      final cache = _cache ??= await MediaCache.open(widget.api);
-      final file = await cache.fetch(
-        namespace: _namespace,
-        remotePath: entry.path,
-        fingerprint: _fingerprint(entry),
-        cancel: cancel,
-        onProgress: (received, total) {
-          if (!mounted || total == null || total <= 0) return;
-          setState(() => _loadProgress = received / total);
-        },
-      );
+      final proxy = _proxy ??= await MediaProxy.start(widget.api);
+      if (!mounted) {
+        if (identical(_proxy, proxy)) _proxy = null;
+        await proxy.close();
+        return;
+      }
+      if (cancel.isCancelled) return;
+      await _player.setReleaseMode(ReleaseMode.stop);
+      await _player.setSourceUrl(proxy.urlFor(entry.path));
+      await _player.setPlaybackRate(_speed);
       if (!mounted || cancel.isCancelled) return;
       setState(() {
-        _localFile = file;
+        _ready = true;
         _preparing = false;
-        _loadProgress = null;
       });
-      await _player.setReleaseMode(ReleaseMode.stop);
-      await _player.setSourceDeviceFile(file.path);
-      await _player.setPlaybackRate(_speed);
       if (autoplay) await _player.resume();
     } on SaveCancelled {
       // Superseded by another track; the new prepare() owns the state.
@@ -198,7 +185,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
   }
 
   Future<void> _togglePlay() async {
-    if (_localFile == null) {
+    if (!_ready) {
       await _prepare();
       return;
     }
@@ -341,7 +328,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                   onAction: () => _prepare(),
                 )
               else if (_preparing)
-                _Buffering(progress: _loadProgress, title: title)
+                _Buffering(title: title)
               else
                 _Controls(
                   playing: _playing,
@@ -471,45 +458,29 @@ class _Artwork extends StatelessWidget {
   }
 }
 
-/// Honest buffering state: shows real byte progress when the server reported a
-/// content length, and an indeterminate spinner when it did not.
+/// Connecting state while the platform backend opens the stream.
 class _Buffering extends StatelessWidget {
-  final double? progress;
   final String title;
-  const _Buffering({required this.progress, required this.title});
+  const _Buffering({required this.title});
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final percent = progress == null ? null : (progress! * 100).round();
     return Column(
       children: [
-        SizedBox(
+        const SizedBox(
           height: 52,
           child: Center(
-            child: percent == null
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(
-                    '$percent%',
-                    style: AppTextStyle.metricValue.copyWith(
-                      color: AppColors.textPrimaryFor(brightness),
-                    ),
-                  ),
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
           ),
         ),
         const SizedBox(height: AppDimens.space12),
-        if (progress != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppDimens.space24),
-            child: LinearProgressIndicator(value: progress),
-          ),
-        const SizedBox(height: AppDimens.space12),
         Text(
-          'Preparing “$title” for playback…',
+          'Connecting to “$title”…',
           textAlign: TextAlign.center,
           style: AppTextStyle.caption
               .copyWith(color: AppColors.textSecondaryFor(brightness)),

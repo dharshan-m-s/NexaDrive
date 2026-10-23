@@ -55,7 +55,7 @@ class Session extends ChangeNotifier {
     return username?.trim().toLowerCase() == mine;
   }
 
-  /// Cache namespace for on-disk thumbnails and cached media.
+  /// Cache namespace for on-disk thumbnails.
   ///
   /// Includes the signed-in account, not just the server: two users on the
   /// same server have identical relative paths ("Camera/IMG_1.jpg"), so a

@@ -31,7 +31,7 @@ import 'file_properties_sheet.dart';
 enum _Sort { name, size, newOld, oldNew }
 
 /// A one-shot action another screen wants My files to perform.
-enum FilesIntent { upload, newFolder }
+enum FilesIntent { upload, uploadFolder, newFolder }
 
 class FilesScreen extends StatefulWidget {
   final Api api;
@@ -95,6 +95,8 @@ class _FilesScreenState extends State<FilesScreen> {
       switch (intent) {
         case FilesIntent.upload:
           _pickAndUpload();
+        case FilesIntent.uploadFolder:
+          _pickAndUploadFolder();
         case FilesIntent.newFolder:
           _createFolder();
       }
@@ -227,7 +229,8 @@ class _FilesScreenState extends State<FilesScreen> {
     final sources = <UploadSource>[];
     for (final file in selection.files) {
       sources.add(UploadSource(
-        path: file.localPath,
+        path: file.location,
+        sourceUri: file.sourceUri,
         name: file.name,
         size: file.size,
         relativePath: file.relativePath,
@@ -988,7 +991,7 @@ class _ViewArea extends StatelessWidget {
               IconButton(
                 tooltip: 'Upload folder',
                 onPressed: onUploadFolder,
-                icon: const Icon(Icons.create_new_folder_outlined),
+                icon: const Icon(Icons.drive_folder_upload_outlined),
               ),
             IconButton(
               tooltip: 'Search files',

@@ -309,6 +309,12 @@ class _QuickActionsGrid extends StatelessWidget {
         onTap: () => _request(FilesIntent.upload),
       ),
       NexaFocusBlock(
+        icon: Icons.drive_folder_upload_outlined,
+        title: 'Upload folder',
+        layout: NexaFocusBlockLayout.vertical,
+        onTap: () => _request(FilesIntent.uploadFolder),
+      ),
+      NexaFocusBlock(
         icon: Icons.create_new_folder_outlined,
         title: 'New folder',
         layout: NexaFocusBlockLayout.vertical,

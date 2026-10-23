@@ -71,8 +71,7 @@ void main() {
     await writeSink.close();
     final size = src.lengthSync();
     expect(size, greaterThan(UploadManager.chunkSize),
-        reason:
-            'file must span at least two chunks (UploadManager.chunkSize = 8 MB)');
+        reason: 'file must span at least two chunks (UploadManager.chunkSize)');
     final expectedDigest = (await _sha256File(src));
 
     // Drive the upload-progress dialog for a real multi-chunk upload to root.

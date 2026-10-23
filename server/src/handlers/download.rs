@@ -166,6 +166,10 @@ fn async_stream_range(
 }
 
 const THUMB_CACHE_MAX_ENTRIES: usize = 1024;
+/// A 2048 px preview is a few hundred KB, so the entry ceiling alone could
+/// pin hundreds of megabytes. The byte budget keeps the cache useful on a
+/// small server.
+const THUMB_CACHE_MAX_BYTES: usize = 128 * 1024 * 1024;
 const THUMB_CACHE_TTL: Duration = Duration::from_secs(600);
 
 /// Serves a small JPEG thumbnail of an image, generated server-side and
@@ -191,7 +195,9 @@ pub(crate) async fn thumbnail(
     if !is_photo(&absolute) {
         return Err(AppError::BadRequest("Not an image".into()));
     }
-    let max = query.max.unwrap_or(512).clamp(32, 1024);
+    // 512 is the grid size. The photo viewer asks for a larger, still bounded
+    // preview (2048) instead of downloading and decoding the full original.
+    let max = query.max.unwrap_or(512).clamp(32, 2048);
     let modified_secs = metadata
         .modified()
         .ok()
@@ -229,9 +235,13 @@ pub(crate) async fn thumbnail(
         img.apply_orientation(orientation);
     }
     let thumb = img.thumbnail(max, max);
+    // Grid thumbnails are small enough that 84 is visually lossless; the
+    // viewer's larger preview gets a higher quality so zooming does not show
+    // JPEG blocking.
+    let quality = if max > 1024 { 90 } else { 84 };
     let mut out = Cursor::new(Vec::new());
     thumb
-        .write_with_encoder(JpegEncoder::new_with_quality(&mut out, 84))
+        .write_with_encoder(JpegEncoder::new_with_quality(&mut out, quality))
         .map_err(|_| AppError::Internal)?;
     let bytes = out.into_inner();
 
@@ -244,6 +254,26 @@ pub(crate) async fn thumbnail(
                 bytes: bytes.clone(),
             },
         );
+        if guard.len() > THUMB_CACHE_MAX_ENTRIES {
+            let now = Instant::now();
+            guard.retain(|_, cached| now.duration_since(cached.generated) < THUMB_CACHE_TTL);
+        }
+        let mut total: usize = guard.values().map(|cached| cached.bytes.len()).sum();
+        if total > THUMB_CACHE_MAX_BYTES {
+            let mut oldest: Vec<(String, Instant)> = guard
+                .iter()
+                .map(|(key, cached)| (key.clone(), cached.generated))
+                .collect();
+            oldest.sort_by_key(|(_, generated)| *generated);
+            for (key, _) in oldest {
+                if total <= THUMB_CACHE_MAX_BYTES {
+                    break;
+                }
+                if let Some(removed) = guard.remove(&key) {
+                    total = total.saturating_sub(removed.bytes.len());
+                }
+            }
+        }
     }
     Ok(thumb_response(bytes))
 }

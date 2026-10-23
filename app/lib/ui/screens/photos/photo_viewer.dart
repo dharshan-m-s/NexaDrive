@@ -16,31 +16,31 @@ import '../../../services/image_decoder.dart';
 import '../../../services/image_pipeline.dart';
 import '../files/file_share_sheet.dart';
 
-/// Full-resolution photo viewer.
+/// Full-screen photo viewer.
 ///
-/// ## IMAGE QUALITY CONTRACT
+/// ## Image quality and memory contract
 /// (regression-tested in `test/image_pipeline_test.dart` and
 /// `test/image_decode_policy_test.dart`)
 ///
-/// 1. Every displayed frame comes from [ImageRepository.original] — the
-///    ORIGINAL bytes served by `/api/files/download`. The thumbnail endpoint is
-///    never called here.
-/// 2. Original and thumbnail requests use disjoint cache keys
-///    ([ImageRendition] is part of [ImageKey]), so a thumbnail can never be
-///    substituted for an original.
-/// 3. Decoding goes through [ImageDecoder], which decodes photos at their
-///    natural size so every original pixel reaches the GPU. Only genuinely
-///    huge photos — or a natural decode that failed on a memory-constrained
-///    device — fall back to a bounded size that is still at least 4K and at
-///    least twice the viewport, never a thumbnail.
-/// 4. Filter quality follows the current scale: mipmapped while minifying
-///    (bicubic without mipmaps aliases when downscaling a large photo by more
-///    than 2x) and bicubic once the image is at or above 1:1.
-/// 5. A decode failure is reported with a retry action. It is never swallowed,
+/// 1. The viewer displays a bounded server preview (longest edge
+///    [_previewMaxEdge]) rather than downloading the full original into
+///    memory. A 12 MP photo is not held as a 48 MB RGBA frame just to fill a
+///    phone screen.
+/// 2. Preview and grid-thumbnail requests use disjoint cache keys
+///    ([ImageRendition] plus `maxEdge` is part of [ImageKey]), so warming the
+///    grid can never substitute its 512 px thumbnail for the viewer image.
+/// 3. For formats the server cannot preview (HEIC/AVIF without a codec), the
+///    viewer falls back to [ImageRepository.original] and never shows a
+///    blurry grid thumbnail in place of the photo.
+/// 4. Decoding goes through [ImageDecoder]. The preview is already bounded;
+///    a fallback original uses the natural/bounded policy.
+/// 5. Filter quality follows the current scale: mipmapped while minifying and
+///    bicubic once the image is at or above 1:1.
+/// 6. A failure is reported with a retry action. It is never swallowed,
 ///    because a swallowed failure leaves the viewer sitting on the loading
-///    placeholder — which is exactly what "the photo looks blurry" means.
-/// 6. The thumbnail is used ONLY as a blurred, dimmed ambient backdrop behind
-///    the loading indicator, so it can never be mistaken for the final image.
+///    placeholder.
+/// 7. The grid thumbnail is used ONLY as a blurred, dimmed ambient backdrop
+///    behind the loading indicator.
 class PhotoViewer extends StatefulWidget {
   final List<Map<String, dynamic>> photos;
   final int initialIndex;
@@ -50,8 +50,8 @@ class PhotoViewer extends StatefulWidget {
   /// and the viewer reuse one bounded cache.
   final ImageRepository images;
 
-  /// Optional low-res preview for a page, shown while the original downloads.
-  /// Grid thumbnails flow in here; originals never do.
+  /// Optional low-res placeholder for a page, shown while the viewer preview
+  /// downloads. Grid thumbnails flow in here; viewer previews never do.
   final Uint8List? Function(String path)? thumbnailLookup;
 
   /// Called after a photo is moved to Trash so the grid can refresh.
@@ -77,11 +77,16 @@ class _PhotoViewerState extends State<PhotoViewer> {
   /// How many pages either side of the current one may stay decoded.
   static const _decodeWindow = 1;
 
+  /// Longest edge requested for the displayed rendition. Large enough to stay
+  /// sharp on a phone or laptop, small enough that a square image is ~16 MB
+  /// of RGBA instead of the original's 48 MB (or more).
+  static const int _previewMaxEdge = 2048;
+
   late PageController _controller;
   late List<Map<String, dynamic>> _photos;
   late int _current;
 
-  /// Decoded ORIGINAL frames. The visible page always stays; speculative
+  /// Decoded preview frames. The visible page always stays; speculative
   /// neighbours are dropped once the pixel budget is reached.
   final Map<String, ui.Image> _decoded = {};
   final Set<String> _inFlight = {};
@@ -112,6 +117,14 @@ class _PhotoViewerState extends State<PhotoViewer> {
 
   String _pathAt(int index) => (_photos[index]['path'] ?? '').toString();
 
+  ImageKey _previewKey(int index) => ImageRepository.keyFor(
+        _photos[index],
+        namespace: widget.api.session.cacheNamespace,
+        rendition: ImageRendition.thumbnail,
+        maxEdge: _previewMaxEdge,
+      );
+
+  /// Full original, only used when the server cannot generate a preview.
   ImageKey _originalKey(int index) => ImageRepository.keyFor(
         _photos[index],
         namespace: widget.api.session.cacheNamespace,
@@ -135,11 +148,24 @@ class _PhotoViewerState extends State<PhotoViewer> {
 
   void _warmBytes(int index) {
     if (index < 0 || index >= _photos.length) return;
-    final key = _originalKey(index);
-    if (widget.images.peekOriginal(key) != null) return;
+    final key = _previewKey(index);
+    if (widget.images.peekThumbnail(key) != null) return;
     widget.images
-        .original(key)
+        .thumbnail(key, max: _previewMaxEdge)
         .catchError((Object _) => ImageData(Uint8List(0), key: key));
+  }
+
+  /// Loads the displayed bytes: a bounded preview, or the original when the
+  /// server cannot make one for this format.
+  Future<ImageData> _viewerBytes(int index) async {
+    try {
+      return await widget.images.thumbnail(
+        _previewKey(index),
+        max: _previewMaxEdge,
+      );
+    } on ThumbnailUnavailable {
+      return widget.images.original(_originalKey(index));
+    }
   }
 
   Future<void> _ensureDecoded(int index, {bool speculative = false}) async {
@@ -148,9 +174,8 @@ class _PhotoViewerState extends State<PhotoViewer> {
     if (_decoded.containsKey(path) || _inFlight.contains(path)) return;
     _inFlight.add(path);
     try {
-      // ORIGINAL bytes — never the thumbnail endpoint, never the thumbnail
-      // cache. This is the line that guarantees viewer sharpness.
-      final data = await widget.images.original(_originalKey(index));
+      // A large bounded preview, never the grid thumbnail.
+      final data = await _viewerBytes(index);
       if (!mounted) return;
       final size = MediaQuery.sizeOf(context);
       final image = await _decoder.decode(
@@ -235,7 +260,9 @@ class _PhotoViewerState extends State<PhotoViewer> {
     // Drop the cached bytes too: re-decoding what we already hold would fail
     // exactly the same way, so a Retry that only reset the error flag would be
     // a button that can never succeed.
-    widget.images.forget(_originalKey(index));
+    widget.images
+      ..forget(_previewKey(index))
+      ..forget(_originalKey(index));
     setState(() {
       _errors.remove(path);
       _decoded.remove(path)?.dispose();
@@ -250,7 +277,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
       return e.message;
     }
     if (e is SaveException) return e.message;
-    return 'The original photo could not be downloaded. Check your connection.';
+    return 'The photo could not be loaded. Check your connection.';
   }
 
   void _onPageChanged(int index) {
@@ -457,7 +484,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
   }
 }
 
-/// Placeholder shown while the ORIGINAL downloads.
+/// Placeholder shown while the viewer preview downloads.
 ///
 /// The grid thumbnail, when available, is drawn strongly blurred and dimmed
 /// behind the spinner — the standard "progressive loading" treatment. That
@@ -618,7 +645,7 @@ class _BottomBar extends StatelessWidget {
   }
 }
 
-/// Pans/zooms a decoded original while keeping its pixels sharp.
+/// Pans/zooms the decoded preview while keeping its pixels sharp.
 ///
 /// The [RawImage] lays out at *native* resolution and the
 /// [InteractiveViewer]'s transform provides the scale, so the only resampling

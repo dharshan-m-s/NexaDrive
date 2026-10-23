@@ -155,7 +155,7 @@ Last Updated: 2026-09-27 (Post-Reengineering)
 - Title/artist from filename parsing
 - Playback controls: slider, play/pause, prev/next, speed chips (0.5x–2x)
 - Queue list (folder siblings)
-- Streaming via `MediaCache` (bounded disk cache)
+- Streaming through a loopback-only `MediaProxy` that attaches the session token; no track bytes are stored on the device
 
 ### Video Player (`video_player_screen.dart`)
 - Immersive black, `VideoPlayerController.networkUrl` with auth headers

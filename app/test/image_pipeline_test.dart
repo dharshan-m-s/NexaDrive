@@ -14,15 +14,18 @@ import 'package:nexadrive/ui/screens/photos/photo_viewer.dart';
 /// NexaDrive image-quality regression suite.
 ///
 /// This file exists because the application once displayed blurred photos:
-/// the viewer rendered a server thumbnail (or a downscaled decode) instead of
-/// the original pixels. Every assertion below pins one link of the chain
-/// UPLOAD -> STORAGE -> THUMBNAIL -> GRID -> VIEWER -> DECODE -> RENDER.
+/// the viewer rendered the grid thumbnail (or a downscaled decode) instead of
+/// a proper display rendition. Every assertion below pins one link of the
+/// chain UPLOAD -> STORAGE -> PREVIEW -> GRID -> VIEWER -> DECODE -> RENDER.
 ///
-/// If a future change makes the viewer request, cache, or decode anything
-/// other than the original bytes, these tests fail.
+/// The viewer now asks the server for a large bounded preview (2048 px) so a
+/// 12 MP photo is not held as a 48 MB RGBA frame. It must never reuse the
+/// 512 px grid thumbnail, and it still falls back to the original for formats
+/// the server cannot preview.
 const int kOriginalWidth = 1600;
 const int kOriginalHeight = 1200;
 const int kThumbnailMaxEdge = 512;
+const int kPreviewMaxEdge = 2048;
 
 /// Account namespace the test session signs in as: the API keys caches by
 /// server URL **and** account, so the assertion keys must match.
@@ -58,10 +61,23 @@ Uint8List serverThumbnail(Uint8List originalBytes) {
   return img.encodeJpg(thumb, quality: 84);
 }
 
+/// The larger rendition the photo viewer requests.
+Uint8List serverPreview(Uint8List originalBytes) {
+  final decoded = img.decodeImage(originalBytes);
+  if (decoded == null) throw StateError('test fixture is not decodable');
+  final preview = decoded.width >= decoded.height
+      ? img.copyResize(decoded,
+          width: kPreviewMaxEdge, interpolation: img.Interpolation.average)
+      : img.copyResize(decoded,
+          height: kPreviewMaxEdge, interpolation: img.Interpolation.average);
+  return img.encodeJpg(preview, quality: 90);
+}
+
 /// Records which endpoints were hit so a test can assert the viewer never
-/// touched the thumbnail endpoint (and vice versa).
+/// touched the grid-thumbnail rendition (and vice versa).
 class _RecordingApi {
   final List<String> hits = <String>[];
+  final List<int> thumbnailMaxes = <int>[];
 
   int get downloadCount => hits.where((h) => h == 'download').length;
   int get thumbnailCount => hits.where((h) => h == 'thumbnail').length;
@@ -89,6 +105,9 @@ class _RecordingApi {
       }
       if (path.endsWith('/api/files/thumbnail')) {
         hits.add('thumbnail');
+        thumbnailMaxes.add(
+          int.tryParse(request.url.queryParameters['max'] ?? '') ?? 512,
+        );
         if (thumbnailStatus != 200 || thumbnailBytes == null) {
           return http.Response(
             '{"error":"Thumbnail not available"}',
@@ -127,6 +146,7 @@ void main() {
   late Uint8List pngBytes;
   late Uint8List webpBytes;
   late Uint8List jpegThumbBytes;
+  late Uint8List jpegPreviewBytes;
 
   setUpAll(() {
     source = buildTestImage();
@@ -134,6 +154,7 @@ void main() {
     pngBytes = Uint8List.fromList(img.encodePng(source));
     webpBytes = Uint8List.fromList(img.encodeWebP(source));
     jpegThumbBytes = serverThumbnail(jpegBytes);
+    jpegPreviewBytes = serverPreview(jpegBytes);
   });
 
   group('fixtures are genuinely high resolution', () {
@@ -463,14 +484,15 @@ void main() {
     });
   });
 
-  group('the photo viewer requests originals, never thumbnails', () {
+  group('the photo viewer requests a bounded preview, never the grid thumbnail',
+      () {
     testWidgets(
-        'viewer fetches /api/files/download and not the thumbnail endpoint',
-        (tester) async {
+        'viewer asks the thumbnail endpoint for a 2048 px preview and never '
+        'downloads the full original', (tester) async {
       final recorder = _RecordingApi();
       final api = recorder.build(
         originalBytes: jpegBytes,
-        thumbnailBytes: jpegThumbBytes,
+        thumbnailBytes: jpegPreviewBytes,
       );
       final repo = ImageRepository(api);
       final entry = photoEntry(size: jpegBytes.length);
@@ -482,27 +504,56 @@ void main() {
             initialIndex: 0,
             api: api,
             images: repo,
-            // A grid thumbnail is offered; the viewer must still load the
-            // original for display and only use this as a placeholder.
+            // The grid thumbnail is the loading backdrop only.
             thumbnailLookup: (_) => jpegThumbBytes,
           ),
         ),
       );
 
-      // Let the fetch and decode complete.
       for (var i = 0; i < 12; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
 
-      expect(recorder.downloadCount, greaterThanOrEqualTo(1));
-      expect(recorder.thumbnailCount, 0);
+      expect(recorder.downloadCount, 0,
+          reason: 'the full original must not be loaded for the viewer');
+      expect(recorder.thumbnailCount, greaterThanOrEqualTo(1));
+      expect(recorder.thumbnailMaxes, everyElement(kPreviewMaxEdge));
 
-      final originalKey = ImageRepository.keyFor(
+      final previewKey = ImageRepository.keyFor(
         entry,
         namespace: kNamespace,
-        rendition: ImageRendition.original,
+        rendition: ImageRendition.thumbnail,
+        maxEdge: kPreviewMaxEdge,
       );
-      expect(repo.peekOriginal(originalKey), equals(jpegBytes));
+      expect(repo.peekThumbnail(previewKey), equals(jpegPreviewBytes));
+      expect(find.text('1 of 1'), findsOneWidget);
+    });
+
+    testWidgets('viewer falls back to the original when no preview exists',
+        (tester) async {
+      final recorder = _RecordingApi();
+      final api =
+          recorder.build(originalBytes: jpegBytes, thumbnailStatus: 415);
+      final repo = ImageRepository(api);
+      final entry = photoEntry(size: jpegBytes.length);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PhotoViewer(
+            photos: [entry],
+            initialIndex: 0,
+            api: api,
+            images: repo,
+          ),
+        ),
+      );
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      expect(recorder.thumbnailMaxes, everyElement(kPreviewMaxEdge));
+      expect(recorder.downloadCount, greaterThanOrEqualTo(1),
+          reason: 'unsupported previews use the original, never a 512 blur');
       expect(find.text('1 of 1'), findsOneWidget);
     });
 

@@ -9,12 +9,14 @@ use futures_util::StreamExt;
 use sha2::{Digest, Sha256};
 use sqlx::{Row, sqlite::SqlitePool};
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
+    sync::Arc,
     time::{Duration, Instant},
 };
 use tokio::{
     fs,
-    io::{AsyncSeekExt, AsyncWriteExt},
+    io::{AsyncSeekExt, AsyncWriteExt, BufWriter},
 };
 use tracing::error;
 use uuid::Uuid;
@@ -45,6 +47,58 @@ const QUOTA_CACHE_TTL: Duration = Duration::from_secs(5);
 /// How long a client may wait for an upload slot before the server sheds the
 /// request with 503 (which clients treat as retryable).
 const UPLOAD_SLOT_WAIT: Duration = Duration::from_secs(120);
+
+type UploadLocks = Arc<std::sync::Mutex<HashMap<Uuid, Arc<tokio::sync::Mutex<()>>>>>;
+
+/// Owned per-upload lock that also removes its idle map entry on drop.
+///
+/// Without the cleanup the map would grow by one entry for every upload for
+/// the lifetime of the process. The entry is only removed while the map lock
+/// is held and no other request holds a reference, so a waiter can never be
+/// orphaned with a lock nobody else can see.
+struct UploadLockGuard {
+    locks: UploadLocks,
+    upload_id: Uuid,
+    guard: Option<tokio::sync::OwnedMutexGuard<()>>,
+}
+
+impl Drop for UploadLockGuard {
+    fn drop(&mut self) {
+        // Drop the async guard first so the strong count reflects only the
+        // map's Arc and any request that is already waiting on it.
+        self.guard.take();
+        let Ok(mut locks) = self.locks.lock() else {
+            return;
+        };
+        if locks
+            .get(&self.upload_id)
+            .is_some_and(|lock| Arc::strong_count(lock) == 1)
+        {
+            locks.remove(&self.upload_id);
+        }
+    }
+}
+
+/// Serialises all work for one upload id.
+///
+/// Two requests for the same id run one after the other instead of both
+/// creating the job row (the UNIQUE-constraint 500) and both seeking the
+/// staging file.
+async fn lock_upload(state: &AppState, upload_id: Uuid) -> Result<UploadLockGuard, AppError> {
+    let locks = state.upload_locks.clone();
+    let lock = {
+        let mut map = locks.lock().map_err(|_| AppError::Internal)?;
+        map.entry(upload_id)
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone()
+    };
+    let guard = lock.lock_owned().await;
+    Ok(UploadLockGuard {
+        locks,
+        upload_id,
+        guard: Some(guard),
+    })
+}
 
 /// Whether a directory entry is a partially uploaded file rather than a real
 /// user file.
@@ -241,6 +295,7 @@ pub(crate) async fn upload_file(
 
         let upload_id =
             upload_id.ok_or_else(|| AppError::BadRequest("upload_id is required".into()))?;
+        let _upload_guard = lock_upload(&state, upload_id).await?;
         if let Some(row) = sqlx::query("SELECT path, size_bytes FROM upload_jobs WHERE id=$1 AND user_id=$2 AND status='completed'")
             .bind(upload_id).bind(user_id).fetch_optional(&state.db).await? {
             let path: String = row.get("path");
@@ -265,8 +320,13 @@ pub(crate) async fn upload_file(
             fs::create_dir_all(parent).await?;
         }
 
-        sqlx::query(r#"INSERT INTO upload_jobs (id,user_id,path,size_bytes,status,updated_at) VALUES ($1,$2,$3,0,'receiving',CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET path=EXCLUDED.path,status='receiving',updated_at=CURRENT_TIMESTAMP"#)
+        let claimed = sqlx::query(r#"INSERT INTO upload_jobs (id,user_id,path,size_bytes,status,updated_at) VALUES ($1,$2,$3,0,'receiving',CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET path=EXCLUDED.path,status='receiving',updated_at=CURRENT_TIMESTAMP WHERE upload_jobs.user_id=excluded.user_id"#)
             .bind(upload_id).bind(user_id).bind(&relative_text).execute(&state.db).await?;
+        if claimed.rows_affected() == 0 {
+            // The id belongs to another account. Never let one user adopt or
+            // overwrite another user's upload job, even with a guessed id.
+            return Err(AppError::Conflict("Upload id is already in use".into()));
+        }
 
         let staging = staging_path(&absolute, &upload_id);
         let mut file = fs::File::create(&staging).await?;
@@ -343,6 +403,12 @@ pub(crate) async fn upload_chunk(
     headers: HeaderMap,
     body: Body,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    let upload_id = query.upload_id;
+    // Serialise by upload id *before* taking a global slot: a duplicate
+    // request for an id that is already being written must wait for that
+    // request, not occupy a slot and race its staging file.
+    let _upload_guard = lock_upload(&state, upload_id).await?;
+
     // The server, not the client, decides how many transfers run at once.
     let permit = tokio::time::timeout(UPLOAD_SLOT_WAIT, state.upload_slots.clone().acquire_owned())
         .await
@@ -350,7 +416,6 @@ pub(crate) async fn upload_chunk(
         .map_err(|_| AppError::ServiceUnavailable)?;
     let _permit = permit;
 
-    let upload_id = query.upload_id;
     let folder = safe_relative_path(&query.path)?;
     require_write_access(&state, user_id, &folder).await?;
     if query.name.trim().is_empty() {
@@ -398,8 +463,15 @@ pub(crate) async fn upload_chunk(
         ),
         None => {
             ensure_quota(&state, user_id, total, Some(upload_id)).await?;
-            sqlx::query("INSERT INTO upload_jobs (id,user_id,path,size_bytes,status,bytes_received,total_bytes,updated_at) VALUES ($1,$2,$3,0,'receiving',0,$4,CURRENT_TIMESTAMP)")
+            // The per-upload lock makes this the only writer for this id in
+            // this process, but ON CONFLICT still protects against a second
+            // server process or a stale row. A row owned by another account
+            // must never be adopted.
+            let claimed = sqlx::query("INSERT INTO upload_jobs (id,user_id,path,size_bytes,status,bytes_received,total_bytes,updated_at) VALUES ($1,$2,$3,0,'receiving',0,$4,CURRENT_TIMESTAMP) ON CONFLICT (id) DO NOTHING")
                 .bind(upload_id).bind(user_id).bind(&relative_text).bind(total as i64).execute(&state.db).await?;
+            if claimed.rows_affected() == 0 {
+                return Err(AppError::Conflict("Upload id is already in use".into()));
+            }
             (relative_text.clone(), "receiving".into(), 0, Some(total))
         }
     };
@@ -462,6 +534,9 @@ pub(crate) async fn upload_chunk(
         .open(&staging)
         .await?;
     file.seek(std::io::SeekFrom::Start(offset)).await?;
+    // HTTP bodies arrive in many small frames. Buffering turns those into a
+    // handful of larger writes instead of one syscall per frame.
+    let mut file = BufWriter::with_capacity(1024 * 1024, file);
     let mut stream = body.into_data_stream();
     let mut written = 0u64;
     while let Some(chunk) = stream.next().await {
@@ -475,10 +550,18 @@ pub(crate) async fn upload_chunk(
         ));
     }
     file.flush().await?;
-    file.sync_all().await?;
-    drop(file);
-
     let new_received = received.saturating_add(written);
+    // Only the final chunk needs to be durable before it is moved into
+    // place. Intermediate chunks stay in the page cache: if the process dies,
+    // reconciliation compares the staging file length with the confirmed
+    // offset and rewinds safely, so an fsync per chunk only adds latency.
+    if new_received >= total {
+        let file = file.into_inner();
+        file.sync_all().await?;
+    } else {
+        drop(file);
+    }
+
     if new_received > total {
         return Err(AppError::BadRequest("Upload exceeds declared size".into()));
     }
@@ -745,6 +828,45 @@ pub(crate) async fn sweep_expired_uploads(
 mod tests {
     use super::*;
     use std::path::Path;
+
+    #[tokio::test]
+    async fn an_idle_upload_lock_is_removed_from_the_map() {
+        let locks: UploadLocks = Arc::new(std::sync::Mutex::new(HashMap::new()));
+        let id = Uuid::new_v4();
+        let lock = Arc::new(tokio::sync::Mutex::new(()));
+        locks.lock().unwrap().insert(id, lock.clone());
+        let guard = UploadLockGuard {
+            locks: locks.clone(),
+            upload_id: id,
+            guard: Some(lock.lock_owned().await),
+        };
+        assert!(locks.lock().unwrap().contains_key(&id));
+        drop(guard);
+        assert!(!locks.lock().unwrap().contains_key(&id));
+    }
+
+    #[tokio::test]
+    async fn a_waiting_request_keeps_the_upload_lock_entry_alive() {
+        let locks: UploadLocks = Arc::new(std::sync::Mutex::new(HashMap::new()));
+        let id = Uuid::new_v4();
+        let lock = Arc::new(tokio::sync::Mutex::new(()));
+        locks.lock().unwrap().insert(id, lock.clone());
+        let waiter = lock.clone();
+        let first = UploadLockGuard {
+            locks: locks.clone(),
+            upload_id: id,
+            guard: Some(lock.lock_owned().await),
+        };
+        drop(first);
+        assert!(locks.lock().unwrap().contains_key(&id));
+        let second = UploadLockGuard {
+            locks: locks.clone(),
+            upload_id: id,
+            guard: Some(waiter.lock_owned().await),
+        };
+        drop(second);
+        assert!(!locks.lock().unwrap().contains_key(&id));
+    }
 
     #[test]
     fn staging_files_are_recognised_by_their_marker() {

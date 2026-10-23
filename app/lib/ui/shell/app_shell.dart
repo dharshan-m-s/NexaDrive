@@ -119,6 +119,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       router: const UpdateRouter(),
     );
     _pruneUpdateCache();
+    MediaCache.purgeLegacy().catchError((_) {});
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkServerAndQueue();
       _autoSync();
@@ -331,9 +332,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     );
   }
 
-  /// Removes everything this account cached on the device: thumbnails, cached
-  /// media and decoded frames. A shared device must not hand the next account
-  /// another user's images.
+  /// Removes everything this account cached on the device: thumbnails, any
+  /// legacy media cache and decoded frames. A shared device must not hand the
+  /// next account another user's images.
   Future<void> _purgeLocalCaches() async {
     PaintingBinding.instance.imageCache
       ..clear()
@@ -342,7 +343,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       await (await ThumbnailCache.open()).clear();
     } catch (_) {}
     try {
-      await (await MediaCache.open(api)).clear();
+      await MediaCache.purgeLegacy();
     } catch (_) {}
   }
 

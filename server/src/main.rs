@@ -91,6 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         console_attempts: Arc::new(Mutex::new(HashMap::new())),
         storage_cache: Arc::new(Mutex::new(None)),
         upload_slots: Arc::new(tokio::sync::Semaphore::new(config.max_concurrent_uploads)),
+        upload_locks: Arc::new(Mutex::new(HashMap::new())),
         quota_cache: Arc::new(Mutex::new(HashMap::new())),
     };
 

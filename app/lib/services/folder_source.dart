@@ -11,7 +11,8 @@ class FolderFile {
     required this.relativePath,
     required this.name,
     required this.size,
-    required this.localPath,
+    this.localPath,
+    this.sourceUri,
   });
 
   /// Path of the file relative to the picked folder, using `/` separators.
@@ -23,8 +24,16 @@ class FolderFile {
   /// Size in bytes.
   final int size;
 
-  /// Absolute path the upload queue reads the bytes from.
-  final String localPath;
+  /// Absolute path on desktop platforms, where folders are ordinary
+  /// directories.
+  final String? localPath;
+
+  /// Android Storage Access Framework document URI. The upload queue streams
+  /// from this directly; the file is never copied into the app cache.
+  final String? sourceUri;
+
+  /// The value the upload queue stores as its source location.
+  String get location => localPath ?? sourceUri ?? '';
 }
 
 /// A folder the user picked, ready to be queued.
@@ -42,8 +51,8 @@ class FolderSelection {
   /// Every file in the folder, with its relative path.
   final List<FolderFile> files;
 
-  /// The temporary directory that holds the materialised files, when the
-  /// platform had to copy them first.
+  /// Legacy: the temporary directory older Android builds used to
+  /// materialise a picked tree into. New selections have no root.
   final String? root;
 
   /// Total number of bytes in the folder.
@@ -61,7 +70,8 @@ class FolderSelection {
 ///
 /// Desktop platforms can walk a directory directly. Android has no folder
 /// path at all — the system picker hands back a tree URI — so the tree is
-/// materialised into the app cache first.
+/// listed and each document URI is queued; bytes are streamed from the
+/// provider on demand and never copied into the app cache.
 class FolderUploadPicker {
   const FolderUploadPicker();
 
@@ -97,7 +107,7 @@ class FolderUploadPicker {
     final uri = await _channel.invokeMethod<String>('pickFolder');
     if (uri == null) return null;
     final payload =
-        await _channel.invokeMapMethod<String, dynamic>('materializeFolder', {
+        await _channel.invokeMapMethod<String, dynamic>('listFolder', {
       'uri': uri,
     });
     if (payload == null) return null;
@@ -107,12 +117,15 @@ class FolderUploadPicker {
       if (raw is! Map) continue;
       final map = Map<String, dynamic>.from(raw);
       final localPath = map['localPath'] as String?;
-      if (localPath == null || localPath.isEmpty) continue;
+      final sourceUri = map['sourceUri'] as String?;
+      final location = localPath ?? sourceUri;
+      if (location == null || location.isEmpty) continue;
       files.add(FolderFile(
         relativePath: map['path'] as String? ?? '',
-        name: map['name'] as String? ?? p.basename(localPath),
+        name: map['name'] as String? ?? p.basename(location),
         size: (map['size'] as num?)?.toInt() ?? 0,
         localPath: localPath,
+        sourceUri: sourceUri,
       ));
     }
     if (files.isEmpty) return null;

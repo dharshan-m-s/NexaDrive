@@ -88,21 +88,26 @@ class ThumbnailCache {
     } catch (_) {}
   }
 
-  /// Enforces [ThumbnailCache._maxBytes] and [ThumbnailCache._maxEntries] by
-  /// deleting the oldest entries first. Called on open and after every write,
-  /// so the budget can never slip for long.
+  /// Drops expired entries, then enforces [ThumbnailCache._maxBytes] and
+  /// [ThumbnailCache._maxEntries] by deleting the oldest entries first.
+  /// Called on open and after every write, so thumbnails that are never read
+  /// again still disappear once they age out.
   Future<void> _shrink() async {
     try {
       final entities = await _dir.list().toList();
       final files = <File>[];
       var total = 0;
+      final now = DateTime.now();
       for (final e in entities) {
-        if (e is File) {
+        if (e is! File) continue;
+        try {
+          if (now.difference(e.lastModifiedSync()) > _maxAge) {
+            await e.delete();
+            continue;
+          }
           files.add(e);
-          try {
-            total += e.lengthSync();
-          } catch (_) {}
-        }
+          total += e.lengthSync();
+        } catch (_) {}
       }
       if (files.length <= _maxEntries && total <= _maxBytes) return;
 
