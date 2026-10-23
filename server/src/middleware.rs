@@ -8,6 +8,7 @@ use axum::{
 };
 
 use crate::state::AppState;
+use tracing::info;
 
 /// Records request count, error count and latency into the process metrics.
 /// Placed outermost so it observes every response, including rejections.
@@ -17,7 +18,24 @@ pub(crate) async fn track_metrics(
     next: middleware::Next,
 ) -> Response {
     let started = Instant::now();
+    let method = request.method().clone();
+    let path = request.uri().path().to_owned();
+    let content_length = request
+        .headers()
+        .get(header::CONTENT_LENGTH)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok());
     let response = next.run(request).await;
+    if path == "/api/uploads/chunk" || !response.status().is_success() {
+        info!(
+            %method,
+            %path,
+            status = response.status().as_u16(),
+            content_length,
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "http request completed"
+        );
+    }
     state
         .metrics
         .record(response.status().as_u16(), started.elapsed());

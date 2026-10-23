@@ -88,15 +88,17 @@ class NexaActionBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
               children: [
                 if (leading != null) ...[
                   leading!,
                   const SizedBox(width: AppDimens.space8),
                 ],
-                Flexible(
+                Expanded(
                   child: Text(
                     title,
                     maxLines: 1,
@@ -107,29 +109,24 @@ class NexaActionBar extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: AppDimens.space12),
-                Flexible(
-                  flex: 2,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    reverse: true,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (final action in actions)
-                          Padding(
-                            padding:
-                                const EdgeInsets.only(left: AppDimens.space6),
-                            child: action,
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
               ],
-            );
-          },
+            ),
+            if (actions.isNotEmpty) ...[
+              const SizedBox(height: AppDimens.space4),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final action in actions)
+                      Padding(
+                        padding: const EdgeInsets.only(right: AppDimens.space6),
+                        child: action,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

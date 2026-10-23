@@ -18,7 +18,7 @@ use tokio::{
     fs,
     io::{AsyncSeekExt, AsyncWriteExt, BufWriter},
 };
-use tracing::error;
+use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::{
@@ -551,6 +551,14 @@ pub(crate) async fn upload_chunk(
     }
     file.flush().await?;
     let new_received = received.saturating_add(written);
+    info!(
+        upload_id = %upload_id,
+        offset,
+        bytes_received = written,
+        total,
+        received = new_received,
+        "upload chunk body written"
+    );
     // Only the final chunk needs to be durable before it is moved into
     // place. Intermediate chunks stay in the page cache: if the process dies,
     // reconciliation compares the staging file length with the confirmed

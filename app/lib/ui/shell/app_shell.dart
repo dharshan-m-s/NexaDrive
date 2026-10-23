@@ -80,6 +80,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     });
   }
 
+  void _handleSystemBack(bool didPop) {
+    if (!didPop && index != 0 && index != 1) _goTo(0);
+  }
+
   /// Opens My files and asks it to start [intent], so a Home shortcut performs
   /// the action it names rather than just navigating.
   void _openFiles(FilesIntent intent) {
@@ -373,6 +377,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         ),
         FilesScreen(
           api: api,
+          onBackAtRoot: () => _goTo(0),
           intent: _filesIntent,
           onIntentHandled: () {
             if (_filesIntent != null) setState(() => _filesIntent = null);
@@ -400,33 +405,36 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     // Desktop: persistent sidebar rail.
     if (desktop) {
-      return Scaffold(
-        body: Row(
-          children: [
-            SideNavigation(
-              index: index,
-              onSelected: _goTo,
-              onSync: _openSyncCenter,
-              onTransfers: _openTransfers,
-              onNotifications: _openNotifications,
-            ),
-            Expanded(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: AppDimens.contentMaxWidth,
-                  ),
-                  child: _PageHost(
-                    index: index,
-                    visited: _visited,
-                    pages: pages,
+      return PopScope(
+          canPop: index == 0,
+          onPopInvokedWithResult: (didPop, _) => _handleSystemBack(didPop),
+          child: Scaffold(
+            body: Row(
+              children: [
+                SideNavigation(
+                  index: index,
+                  onSelected: _goTo,
+                  onSync: _openSyncCenter,
+                  onTransfers: _openTransfers,
+                  onNotifications: _openNotifications,
+                ),
+                Expanded(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: AppDimens.contentMaxWidth,
+                      ),
+                      child: _PageHost(
+                        index: index,
+                        visited: _visited,
+                        pages: pages,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      );
+          ));
     }
 
     // Mobile: a floating iOS-style pill. Pages paint edge-to-edge down to the
@@ -437,42 +445,45 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final pillInset =
         AppDimens.space10 * 2 + AppDimens.bottomNavHeight + bottomInset;
 
-    return Scaffold(
-      backgroundColor: AppColors.backgroundFor(
-        Theme.of(context).brightness,
-      ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Padding(
-            padding: EdgeInsets.only(bottom: pillInset),
-            child: _PageHost(
-              index: index,
-              visited: _visited,
-              pages: pages,
-            ),
+    return PopScope(
+        canPop: index == 0,
+        onPopInvokedWithResult: (didPop, _) => _handleSystemBack(didPop),
+        child: Scaffold(
+          backgroundColor: AppColors.backgroundFor(
+            Theme.of(context).brightness,
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            // Float the capsule above the gesture area rather than stretching
-            // its glass into it, so the pill stays slim on edge-to-edge phones.
-            bottom: AppDimens.space10 + bottomInset,
-            child: NexaBottomNav(
-              currentIndex: index >= 4 ? 4 : index,
-              onTap: (value) {
-                if (value == 4) {
-                  _showMoreSheet();
-                } else {
-                  _goTo(value);
-                }
-              },
-              items: NexaBottomNavItems.primary,
-            ),
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              Padding(
+                padding: EdgeInsets.only(bottom: pillInset),
+                child: _PageHost(
+                  index: index,
+                  visited: _visited,
+                  pages: pages,
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                // Float the capsule above the gesture area rather than stretching
+                // its glass into it, so the pill stays slim on edge-to-edge phones.
+                bottom: AppDimens.space10 + bottomInset,
+                child: NexaBottomNav(
+                  currentIndex: index >= 4 ? 4 : index,
+                  onTap: (value) {
+                    if (value == 4) {
+                      _showMoreSheet();
+                    } else {
+                      _goTo(value);
+                    }
+                  },
+                  items: NexaBottomNavItems.primary,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        ));
   }
 }
 

@@ -738,6 +738,7 @@ class UploadManager extends ChangeNotifier {
           total: item.size,
           bytes: _chunkStream(item, offset, end),
           contentLength: end - offset,
+          onProgress: (sent) => unawaited(_progress(id, offset + sent)),
         );
         final confirmed = (result['offset'] as num?)?.toInt() ?? end;
         offset = confirmed < 0 ? end : confirmed;

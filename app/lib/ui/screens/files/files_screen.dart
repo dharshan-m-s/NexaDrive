@@ -44,6 +44,7 @@ class FilesScreen extends StatefulWidget {
 
   /// Called once [intent] has been started.
   final VoidCallback? onIntentHandled;
+  final VoidCallback? onBackAtRoot;
 
   const FilesScreen({
     super.key,
@@ -51,6 +52,7 @@ class FilesScreen extends StatefulWidget {
     this.initialPath = '',
     this.intent,
     this.onIntentHandled,
+    this.onBackAtRoot,
   });
 
   @override
@@ -238,6 +240,18 @@ class _FilesScreenState extends State<FilesScreen> {
       ));
     }
     if (sources.isEmpty) return;
+    // Keep the selected folder as a visible destination, even when empty.
+    try {
+      await widget.api.createFolder(selection.destination(_path));
+    } catch (e) {
+      if (e is ApiException && e.status == 409) {
+        // An existing folder is a valid merge target for this folder upload.
+      } else {
+        if (mounted) _toast(e.toString());
+        return;
+      }
+    }
+    if (!mounted) return;
     await UploadProgressDialog.showSources(
       context,
       sources: sources,
@@ -275,6 +289,34 @@ class _FilesScreenState extends State<FilesScreen> {
       _selecting = false;
       _selected.clear();
     });
+  }
+
+  void _toggleSelectAll() {
+    setState(() {
+      if (_items.isNotEmpty && _selected.length == _items.length) {
+        _selected.clear();
+      } else {
+        _selected
+          ..clear()
+          ..addAll(_items.map((entry) => entry.path));
+      }
+      _selecting = _selected.isNotEmpty;
+    });
+  }
+
+  bool _handleBack() {
+    if (_selecting) {
+      _exitSelection();
+      return true;
+    }
+    if (_path.isNotEmpty) {
+      final slash = _path.lastIndexOf('/');
+      setState(() => _path = slash < 0 ? '' : _path.substring(0, slash));
+      load();
+      return true;
+    }
+    widget.onBackAtRoot?.call();
+    return true;
   }
 
   void _openEntry(FileEntry entry) {
@@ -516,102 +558,117 @@ class _FilesScreenState extends State<FilesScreen> {
     final accent = AppColors.accentFor(brightness);
     final crumb = _path.isEmpty ? 'My files' : _path.split('/').last;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _ViewArea(
-          title: crumb,
-          subtitle: _path.isEmpty ? 'Browse your private cloud' : _path,
-          selecting: _selecting,
-          selectedCount: _selected.length,
-          accent: accent,
-          onBackToRoot: _path.isEmpty
-              ? null
-              : () {
-                  setState(() => _path = '');
-                  load();
-                },
-          onExitSelection: _exitSelection,
-          onToggleView: () => setState(() => _grid = !_grid),
-          isGrid: _grid,
-          onNewFolder: _selecting ? null : _createFolder,
-          onUpload: _selecting ? null : _pickAndUpload,
-          onUploadFolder: _selecting ? null : _pickAndUploadFolder,
-          onSearch: _selecting
-              ? null
-              : () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                        builder: (_) => SearchScreen(api: widget.api)),
-                  ),
-          onSort: _selecting ? null : _pickSort,
-          onScan: _selecting
-              ? null
-              : () => Navigator.of(context)
-                      .push(
-                    MaterialPageRoute(
-                      builder: (_) => ScannerScreen(
-                        api: widget.api,
-                        folder: _path,
-                      ),
-                    ),
-                  )
-                      .then((saved) {
-                    if (saved == true) load();
-                  }),
-        ),
-        NexaRevealBar(
-          visible: !_selecting && _path.isNotEmpty,
-          alignment: Alignment.topLeft,
-          child: _Breadcrumb(
-            path: _path,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ViewArea(
+            title: crumb,
+            subtitle: _path.isEmpty ? 'Browse your private cloud' : _path,
+            selecting: _selecting,
+            selectedCount: _selected.length,
             accent: accent,
-            onBreadcrumb: (p) {
-              setState(() => _path = p);
-              load();
-            },
+            onBackToRoot: _path.isEmpty
+                ? null
+                : () {
+                    setState(() => _path = '');
+                    load();
+                  },
+            onExitSelection: _exitSelection,
+            onToggleView: () => setState(() => _grid = !_grid),
+            isGrid: _grid,
+            onNewFolder: _selecting ? null : _createFolder,
+            onUpload: _selecting ? null : _pickAndUpload,
+            onUploadFolder: _selecting ? null : _pickAndUploadFolder,
+            onSearch: _selecting
+                ? null
+                : () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => SearchScreen(api: widget.api)),
+                    ),
+            onSort: _selecting ? null : _pickSort,
+            onScan: _selecting
+                ? null
+                : () => Navigator.of(context)
+                        .push(
+                      MaterialPageRoute(
+                        builder: (_) => ScannerScreen(
+                          api: widget.api,
+                          folder: _path,
+                        ),
+                      ),
+                    )
+                        .then((saved) {
+                      if (saved == true) load();
+                    }),
           ),
-        ),
-        Expanded(child: _body()),
-        NexaRevealBar(
-          visible: _selecting,
-          child: NexaActionBar(
-            leading: IconButton(
-              tooltip: 'Cancel selection',
-              onPressed: _exitSelection,
-              icon: const Icon(Icons.close_rounded),
+          NexaRevealBar(
+            visible: !_selecting && _path.isNotEmpty,
+            alignment: Alignment.topLeft,
+            child: _Breadcrumb(
+              path: _path,
+              accent: accent,
+              onBreadcrumb: (p) {
+                setState(() => _path = p);
+                load();
+              },
             ),
-            title: Format.count(_selected.length, 'item'),
-            actions: [
-              NexaActionItem(
-                icon: Icons.delete_outline_rounded,
-                label: 'Trash',
-                color: AppColors.errorFor(Theme.of(context).brightness),
-                onTap: () => _deleteItems(),
-              ),
-              NexaActionItem(
-                icon: Icons.drive_file_move_outlined,
-                label: 'Move',
-                onTap: () => _moveItems(),
-              ),
-              NexaActionItem(
-                icon: Icons.copy_rounded,
-                label: 'Copy',
-                onTap: () => _copyItems(),
-              ),
-              NexaActionItem(
-                icon: Icons.share_outlined,
-                label: 'Share',
-                onTap: () => _shareSelected(),
-              ),
-              NexaActionItem(
-                icon: Icons.download_outlined,
-                label: 'Save',
-                onTap: () => _downloadSelected(),
-              ),
-            ],
           ),
-        ),
-      ],
+          Expanded(child: _body()),
+          NexaRevealBar(
+            visible: _selecting,
+            child: NexaActionBar(
+              leading: IconButton(
+                tooltip: 'Cancel selection',
+                onPressed: _exitSelection,
+                icon: const Icon(Icons.close_rounded),
+              ),
+              title: Format.count(_selected.length, 'item'),
+              actions: [
+                NexaActionItem(
+                  icon: _items.isNotEmpty && _selected.length == _items.length
+                      ? Icons.deselect_rounded
+                      : Icons.select_all_rounded,
+                  label: _items.isNotEmpty && _selected.length == _items.length
+                      ? 'Clear'
+                      : 'Select all',
+                  onTap: _toggleSelectAll,
+                ),
+                NexaActionItem(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Trash',
+                  color: AppColors.errorFor(Theme.of(context).brightness),
+                  onTap: () => _deleteItems(),
+                ),
+                NexaActionItem(
+                  icon: Icons.drive_file_move_outlined,
+                  label: 'Move',
+                  onTap: () => _moveItems(),
+                ),
+                NexaActionItem(
+                  icon: Icons.copy_rounded,
+                  label: 'Copy',
+                  onTap: () => _copyItems(),
+                ),
+                NexaActionItem(
+                  icon: Icons.share_outlined,
+                  label: 'Share',
+                  onTap: () => _shareSelected(),
+                ),
+                NexaActionItem(
+                  icon: Icons.download_outlined,
+                  label: 'Save',
+                  onTap: () => _downloadSelected(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

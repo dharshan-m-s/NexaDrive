@@ -326,12 +326,6 @@ class _QuickActionsGrid extends StatelessWidget {
         layout: NexaFocusBlockLayout.vertical,
         onTap: () => onNavigate(3),
       ),
-      NexaFocusBlock(
-        icon: Icons.delete_outline_rounded,
-        title: 'Trash',
-        layout: NexaFocusBlockLayout.vertical,
-        onTap: () => onNavigate(4),
-      ),
     ];
 
     return LayoutBuilder(

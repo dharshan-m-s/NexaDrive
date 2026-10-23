@@ -210,6 +210,19 @@ class _PhotosScreenState extends State<PhotosScreen> {
     });
   }
 
+  void _toggleSelectAll() {
+    setState(() {
+      if (_photos.isNotEmpty && _selected.length == _photos.length) {
+        _selected.clear();
+      } else {
+        _selected
+          ..clear()
+          ..addAll(_photos.map((photo) => (photo['path'] ?? '').toString()));
+      }
+      _selecting = _selected.isNotEmpty;
+    });
+  }
+
   String _pathAt(int index) => (_photos[index]['path'] ?? '').toString();
 
   Future<void> _deleteSelected() async {
@@ -446,6 +459,15 @@ class _PhotosScreenState extends State<PhotosScreen> {
             ),
             title: Format.count(_selected.length, 'photo'),
             actions: [
+              NexaActionItem(
+                icon: _photos.isNotEmpty && _selected.length == _photos.length
+                    ? Icons.deselect_rounded
+                    : Icons.select_all_rounded,
+                label: _photos.isNotEmpty && _selected.length == _photos.length
+                    ? 'Clear'
+                    : 'Select all',
+                onTap: _toggleSelectAll,
+              ),
               NexaActionItem(
                 icon: Icons.share_outlined,
                 label: 'Share',

@@ -40,9 +40,13 @@ class UploadProgressDialog extends StatefulWidget {
     final sources = <UploadSource>[];
     for (final file in files) {
       final path = file.path;
-      if (path == null) continue;
+      final uri = file.uri;
       sources.add(UploadSource(
-        path: path,
+        // The picker reports metadata without opening the file. A provider
+        // URI is retained by file_picker as identifier on Android; paths are
+        // used directly on native file-backed selections.
+        path: path ?? uri.toString(),
+        sourceUri: path == null ? uri.toString() : null,
         name: file.name,
         size: file.lengthSync() ?? 0,
       ));
@@ -60,6 +64,9 @@ class UploadProgressDialog extends StatefulWidget {
     if (sources.isEmpty) return;
     final manager = UploadManager.current;
     if (api != null) manager.attach(api);
+    // Yield once so the selection screen can paint before the journal batch
+    // and queue notifications are processed.
+    await Future<void>.delayed(Duration.zero);
     final ids = await manager.enqueueAll(sources, folder);
     if (!context.mounted) return;
     if (ids.isEmpty) return;

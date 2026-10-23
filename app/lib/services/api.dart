@@ -221,6 +221,7 @@ class Api {
     required int total,
     required Stream<List<int>> bytes,
     required int contentLength,
+    void Function(int sentBytes)? onProgress,
   }) async {
     final request = http.StreamedRequest(
         'POST',
@@ -241,7 +242,16 @@ class Api {
     // so it is preferred over the resulting socket error.
     Object? bodyError;
     try {
-      await request.sink.addStream(bytes);
+      var sent = 0;
+      await request.sink.addStream(bytes.transform(
+        StreamTransformer<List<int>, List<int>>.fromHandlers(
+          handleData: (chunk, sink) {
+            sent += chunk.length;
+            onProgress?.call(sent);
+            sink.add(chunk);
+          },
+        ),
+      ));
       await request.sink.close();
     } catch (error) {
       bodyError = error;
