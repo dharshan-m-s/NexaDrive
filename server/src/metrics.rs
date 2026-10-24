@@ -172,16 +172,6 @@ impl Metrics {
             return;
         };
         let now = Instant::now();
-        if s.prev_at.is_none() {
-            s.prev_at = Some(now);
-            // Initialize baselines
-            s.prev_cpu = read_system_cpu().ok();
-            s.prev_proc_ticks = read_proc_cpu_ticks().ok();
-            s.prev_requests = self.requests_total.load(Ordering::Relaxed);
-            s.prev_errors = self.errors_total.load(Ordering::Relaxed);
-            s.prev_latency_micros = self.latency_micros_total.load(Ordering::Relaxed);
-            return;
-        }
         let elapsed = s.prev_at.map(|p| now.duration_since(p)).unwrap_or_default();
         if elapsed.as_secs_f64() < 0.5 {
             return;

@@ -123,8 +123,7 @@ class MainActivity : FlutterFragmentActivity() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
             addFlags(
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_PREFIX_URI_PERMISSION or
-                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
+                    Intent.FLAG_GRANT_PREFIX_URI_PERMISSION,
             )
         }
         try {
@@ -405,8 +404,6 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    private var authExecutor: Executor? = null
-
     private fun authenticate(result: MethodChannel.Result, reason: String) {
         val activity: Activity = this
         if (activity !is FragmentActivity) {
@@ -425,7 +422,6 @@ class MainActivity : FlutterFragmentActivity() {
         }
 
         val executor: Executor = Executors.newSingleThreadExecutor()
-        authExecutor = executor
         val prompt = BiometricPrompt(
             activity,
             executor,
@@ -433,11 +429,6 @@ class MainActivity : FlutterFragmentActivity() {
                 override fun onAuthenticationSucceeded(
                     authenticationResult: BiometricPrompt.AuthenticationResult,
                 ) {
-                    try {
-                        (executor as? java.util.concurrent.ExecutorService)?.shutdown()
-                    } catch (_: Exception) {
-                    }
-                    authExecutor = null
                     result.success(true)
                 }
 
@@ -445,11 +436,6 @@ class MainActivity : FlutterFragmentActivity() {
                     errorCode: Int,
                     errString: CharSequence,
                 ) {
-                    try {
-                        (executor as? java.util.concurrent.ExecutorService)?.shutdown()
-                    } catch (_: Exception) {
-                    }
-                    authExecutor = null
                     if (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
                         errorCode == BiometricPrompt.ERROR_USER_CANCELED
                     ) {
@@ -457,10 +443,6 @@ class MainActivity : FlutterFragmentActivity() {
                     } else {
                         result.error("auth_error", errString.toString(), null)
                     }
-                }
-
-                override fun onAuthenticationFailed() {
-                    // Do not shut down here; user may retry
                 }
             },
         )

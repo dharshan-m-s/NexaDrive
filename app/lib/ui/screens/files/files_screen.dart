@@ -211,8 +211,7 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   Future<void> _pickAndUpload() async {
-    final result = await FilePicker.pickFiles(allowMultiple: true);
-    final files = result?.files ?? const [];
+    final files = await FilePicker.pickFiles();
     if (files.isEmpty) return;
     if (!mounted) return;
     await UploadProgressDialog.show(

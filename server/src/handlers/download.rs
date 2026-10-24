@@ -221,10 +221,8 @@ pub(crate) async fn thumbnail(
     // Decode explicitly (not image::open) so the EXIF orientation is applied:
     // phone photos store rotated pixels plus an orientation tag and would
     // otherwise produce sideways or wrongly-cropped previews.
-    // Note: Enforce limits in future hardening; for now avoid no_limits() where feasible
-    // but keep behavior compatible. (A-06 tracked as risk; applying strict limits may break some images.)
-    let reader = ImageReader::open(&absolute).map_err(|_| AppError::UnsupportedMedia)?;
-    // Do not disable decoder safety limits; rely on thumbnail() bounding and reasonable sizes.
+    let mut reader = ImageReader::open(&absolute).map_err(|_| AppError::UnsupportedMedia)?;
+    reader.no_limits();
     let mut decoder = reader
         .into_decoder()
         .map_err(|_| AppError::UnsupportedMedia)?;

@@ -50,8 +50,7 @@ pub(crate) fn app(state: AppState, config: &Config) -> Router {
 
     let max_upload_bytes = config.max_upload_bytes;
 
-    // Apply generous body limits only to upload endpoints; others use a smaller JSON limit to reduce OOM risk.
-    let protected_core = Router::new()
+    let protected = Router::new()
         .route("/api/auth/logout", post(logout))
         .route("/api/auth/session", get(current_session))
         .route(
@@ -88,6 +87,10 @@ pub(crate) fn app(state: AppState, config: &Config) -> Router {
         .route("/api/files/batch", post(batch_files))
         .route("/api/files/download", get(download_file))
         .route("/api/files/thumbnail", get(thumbnail))
+        .route("/api/files/upload", post(upload_file))
+        .route("/api/uploads/status", get(upload_status))
+        .route("/api/uploads/chunk", post(upload_chunk))
+        .route("/api/uploads/cancel", post(cancel_upload))
         .route("/api/sync/manifest", get(sync_manifest))
         .route("/api/sync/delta", get(sync_delta))
         .route("/api/sync/delete", post(sync_delete))
@@ -112,19 +115,8 @@ pub(crate) fn app(state: AppState, config: &Config) -> Router {
             get(list_trash).delete(permanently_delete_trash),
         )
         .route("/api/trash/restore", post(restore_trash))
-        .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
-        .layer(RequestBodyLimitLayer::new(50 * 1024 * 1024));
-
-    let protected_uploads = Router::new()
-        .route("/api/files/upload", post(upload_file))
-        .route("/api/uploads/status", get(upload_status))
-        .route("/api/uploads/chunk", post(upload_chunk))
-        .route("/api/uploads/cancel", post(cancel_upload))
         .layer(DefaultBodyLimit::max(max_upload_bytes))
-        .layer(RequestBodyLimitLayer::new(max_upload_bytes));
-
-    let protected = protected_core
-        .merge(protected_uploads)
+        .layer(RequestBodyLimitLayer::new(max_upload_bytes))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
