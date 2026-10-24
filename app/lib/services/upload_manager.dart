@@ -228,6 +228,9 @@ class UploadManager extends ChangeNotifier {
     return next;
   }
 
+  /// Public reload for background/foreground service use.
+  Future<void> reload() => _reload();
+
   Future<void> _loadFromJournal() async {
     final loaded = await _store.load();
     _items
@@ -422,7 +425,11 @@ class UploadManager extends ChangeNotifier {
     if (item.state != UploadState.paused) return;
     final queued = item.copyWith(state: UploadState.queued, clearError: true);
     _items[id] = queued;
-    if (!_waiting.contains(id)) _waiting.add(id);
+    if (_active.contains(id)) {
+      if (!_waiting.contains(id)) _waiting.add(id);
+    } else if (!_waiting.contains(id)) {
+      _waiting.add(id);
+    }
     await _persist(queued);
     _notify();
     _pump();
@@ -683,7 +690,7 @@ class UploadManager extends ChangeNotifier {
     } catch (error) {
       final current = _items[id];
       if (current == null) return;
-      if (current.state == UploadState.cancelled) return;
+      if (current.state == UploadState.cancelled || current.state == UploadState.paused) return;
       final failed = current.copyWith(
         state: UploadState.failed,
         error: _describe(error),
@@ -691,6 +698,9 @@ class UploadManager extends ChangeNotifier {
       _items[id] = failed;
       await _persist(failed);
       _notify();
+    } finally {
+      // Ensure pump runs to pick up next items
+      _pump();
     }
   }
 
@@ -784,12 +794,17 @@ class UploadManager extends ChangeNotifier {
   Future<void> _backoff(String id, int attempt) async {
     final current = _items[id];
     if (current == null) return;
+    if (current.state == UploadState.cancelled || current.state == UploadState.paused) return;
     final retrying = current.copyWith(state: UploadState.retrying);
     _items[id] = retrying;
     await _persist(retrying);
     _notify();
     final index = min(max(attempt, 0), backoffSeconds.length - 1);
     await Future<void>.delayed(Duration(seconds: backoffSeconds[index]));
+    final after = _items[id];
+    if (after == null || after.state == UploadState.cancelled || after.state == UploadState.paused) {
+      return;
+    }
   }
 
   /// Records the confirmed byte count.
@@ -993,7 +1008,8 @@ class UploadManager extends ChangeNotifier {
       for (final item in items) {
         _lastPersisted[item.id] = now;
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Upload journal persistAll failed: $e');
       // A journal write must never abort an operation the user requested.
     }
   }
@@ -1003,7 +1019,8 @@ class UploadManager extends ChangeNotifier {
     try {
       await _store.append(item);
       _lastPersisted[item.id] = DateTime.now();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Upload journal persist failed: $e');
       // A journal write must never abort a transfer that is already running.
     }
   }

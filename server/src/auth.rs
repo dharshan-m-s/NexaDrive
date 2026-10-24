@@ -47,6 +47,19 @@ pub(crate) fn register_failed_login(state: &AppState, key: &str) -> Result<(), A
         };
     }
     entry.failures = entry.failures.saturating_add(1);
+    // Bound map size to avoid unbounded growth from probes
+    if guard.len() > 4096 {
+        // Evict oldest entries by window start
+        let mut items: Vec<(String, Instant)> = guard
+            .iter()
+            .map(|(k, v)| (k.clone(), v.window_started))
+            .collect();
+        items.sort_by_key(|(_, t)| *t);
+        let to_remove: Vec<String> = items.into_iter().take(1024).map(|(k, _)| k).collect();
+        for k in to_remove {
+            guard.remove(&k);
+        }
+    }
     Ok(())
 }
 
@@ -91,6 +104,17 @@ pub(crate) fn register_failed_share_download(state: &AppState, key: &str) {
             };
         }
         entry.failures = entry.failures.saturating_add(1);
+        if guard.len() > 4096 {
+            let mut items: Vec<(String, Instant)> = guard
+                .iter()
+                .map(|(k, v)| (k.clone(), v.window_started))
+                .collect();
+            items.sort_by_key(|(_, t)| *t);
+            let to_remove: Vec<String> = items.into_iter().take(1024).map(|(k, _)| k).collect();
+            for k in to_remove {
+                guard.remove(&k);
+            }
+        }
     }
 }
 

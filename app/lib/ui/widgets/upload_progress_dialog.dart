@@ -40,15 +40,42 @@ class UploadProgressDialog extends StatefulWidget {
     final sources = <UploadSource>[];
     for (final file in files) {
       final path = file.path;
-      final uri = file.uri;
+      final uri = file.uri?.toString();
+      // Never assume file.path points to the original file. On Android,
+      // file_picker may materialize a cache copy; prefer content URIs when
+      // available and only use a local path if it looks like a real file path
+      // that we can stream directly.
+      final String sourcePath;
+      String? sourceUri;
+      if (uri != null && uri.isNotEmpty && (uri.startsWith('content://') || uri.startsWith('file://'))) {
+        // Prefer URI when it's a content URI; also use URI if path might be cached
+        sourcePath = uri;
+        if (uri.startsWith('content://')) {
+          sourceUri = uri;
+        } else if (path == null || path.isEmpty) {
+          sourceUri = uri;
+        } else {
+          sourcePath = path;
+        }
+      } else if (path != null && path.isNotEmpty) {
+        sourcePath = path;
+        // Only use as URI if it's actually a content URI
+        if (path.startsWith('content://')) {
+          sourceUri = path;
+        }
+      } else if (uri != null && uri.isNotEmpty) {
+        sourcePath = uri;
+        if (uri.startsWith('content://')) {
+          sourceUri = uri;
+        }
+      } else {
+        continue;
+      }
       sources.add(UploadSource(
-        // The picker reports metadata without opening the file. A provider
-        // URI is retained by file_picker as identifier on Android; paths are
-        // used directly on native file-backed selections.
-        path: path ?? uri.toString(),
-        sourceUri: path == null ? uri.toString() : null,
+        path: sourcePath,
+        sourceUri: sourceUri,
         name: file.name,
-        size: file.lengthSync() ?? 0,
+        size: file.size,
       ));
     }
     await showSources(context, sources: sources, folder: folder);

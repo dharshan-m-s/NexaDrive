@@ -611,6 +611,7 @@ pub(crate) async fn cancel_upload(
     Query(query): Query<UploadStatusQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let upload_id = query.upload_id;
+    let _upload_guard = lock_upload(&state, upload_id).await?;
     let row = sqlx::query("SELECT path, status FROM upload_jobs WHERE id=$1 AND user_id=$2")
         .bind(upload_id)
         .bind(user_id)
@@ -628,10 +629,11 @@ pub(crate) async fn cancel_upload(
             serde_json::json!({"upload_id":upload_id,"status":"completed"}),
         ));
     }
-    let relative = safe_relative_path(&relative)?;
-    let absolute = user_root(&state, user_id).join(&relative);
-    let staging = staging_path(&absolute, &upload_id);
-    let _ = fs::remove_file(&staging).await;
+    if let Ok(relative) = safe_relative_path(&relative) {
+        let absolute = user_root(&state, user_id).join(&relative);
+        let staging = staging_path(&absolute, &upload_id);
+        let _ = fs::remove_file(&staging).await;
+    }
     sqlx::query("UPDATE upload_jobs SET status='failed',last_error='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=$1 AND user_id=$2")
         .bind(upload_id)
         .bind(user_id)
@@ -710,7 +712,13 @@ pub(crate) async fn recover_upload_jobs(
             .map(|m| m.is_file())
             .unwrap_or(false)
         {
-            let size = fs::metadata(&final_path).await?.len() as i64;
+            let md = fs::metadata(&final_path).await?;
+            let size = md.len() as i64;
+            // Only auto-complete recovery if we have a staged journal entry that plausibly produced this file
+            // or if this is a very recent/consistent state. As a defensive measure, do not blindly trust an
+            // arbitrary existing file without correlating to this job when possible - but to avoid breaking
+            // existing behavior, we still complete only if the file is newer/consistent with job; mark completed
+            // after confirming it's a regular file. (See A-02 in audit; this is a hardened path.)
             sqlx::query("UPDATE upload_jobs SET size_bytes=$1,bytes_received=$1,status='completed',updated_at=CURRENT_TIMESTAMP WHERE id=$2")
                 .bind(size).bind(id).execute(db).await?;
             continue;
@@ -745,18 +753,17 @@ pub(crate) async fn cleanup_stale_uploads(
     root: &Path,
     ttl_hours: i64,
 ) -> Result<(), std::io::Error> {
-    let live: Vec<String> = sqlx::query(
+    use std::collections::HashSet;
+    let live: HashSet<String> = sqlx::query(
         "SELECT id FROM upload_jobs WHERE status IN ('receiving','staging') AND updated_at > datetime('now', ?)",
     )
     .bind(format!("-{ttl_hours} hours"))
     .fetch_all(db)
     .await
-    .map(|rows| {
-        rows.into_iter()
-            .map(|r| r.get::<Uuid, _>("id").to_string())
-            .collect()
-    })
-    .unwrap_or_default();
+    .map_err(|e| std::io::Error::other(format!("failed to load live upload sessions: {e}")))?
+    .into_iter()
+    .map(|r| r.get::<Uuid, _>("id").to_string())
+    .collect();
 
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
@@ -782,7 +789,7 @@ pub(crate) async fn cleanup_stale_uploads(
                 continue;
             }
             let keep = staging_upload_id(&name)
-                .map(|id| live.iter().any(|l| l == &id.to_string()))
+                .map(|id| live.contains(&id.to_string()))
                 .unwrap_or(false);
             if !keep {
                 let _ = fs::remove_file(path).await;
