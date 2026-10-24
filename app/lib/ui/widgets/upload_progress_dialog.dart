@@ -40,39 +40,15 @@ class UploadProgressDialog extends StatefulWidget {
     final sources = <UploadSource>[];
     for (final file in files) {
       final path = file.path;
-      final uri = file.uri?.toString();
-      String sourcePath;
-      String? sourceUri;
-      if (uri != null &&
-          uri.isNotEmpty &&
-          (uri.startsWith('content://') || uri.startsWith('file://'))) {
-        sourcePath = uri;
-        if (uri.startsWith('content://')) {
-          sourceUri = uri;
-        } else if (path == null || path.isEmpty) {
-          sourceUri = uri;
-        } else {
-          sourcePath = path;
-        }
-      } else if (path != null && path.isNotEmpty) {
-        sourcePath = path;
-        if (path.startsWith('content://')) {
-          sourceUri = path;
-        }
-      } else if (uri != null && uri.isNotEmpty) {
-        sourcePath = uri;
-        if (uri.startsWith('content://')) {
-          sourceUri = uri;
-        }
-      } else {
-        continue;
-      }
-      final size = file.lengthSync() ?? 0;
+      final uri = file.uri;
       sources.add(UploadSource(
-        path: sourcePath,
-        sourceUri: sourceUri,
+        // The picker reports metadata without opening the file. A provider
+        // URI is retained by file_picker as identifier on Android; paths are
+        // used directly on native file-backed selections.
+        path: path ?? uri.toString(),
+        sourceUri: path == null ? uri.toString() : null,
         name: file.name,
-        size: size,
+        size: file.lengthSync() ?? 0,
       ));
     }
     await showSources(context, sources: sources, folder: folder);
