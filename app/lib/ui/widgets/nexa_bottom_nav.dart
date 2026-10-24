@@ -31,18 +31,12 @@ class NexaBottomNav extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
 
     return Container(
-      // The pill floats: horizontal gutters at the screen edges and a clear
-      // gap above the bottom edge so it reads as a capsule, not docked chrome.
-      margin: const EdgeInsets.fromLTRB(
-        AppDimens.pageMargin,
-        AppDimens.space10,
-        AppDimens.pageMargin,
-        AppDimens.space10,
-      ),
+      // True floating pill: no full-width strip, just a compact capsule
+      // with transparent area around it (provided by shell padding).
       decoration: BoxDecoration(
         // Translucent glass fill; the page behind it is padded away by the
         // shell, so no backdrop filter is needed and nothing bleeds.
-        color: AppColors.surfaceFor(brightness).withValues(alpha: 0.9),
+        color: AppColors.surfaceFor(brightness).withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(AppDimens.radiusPill),
         border: Border.all(
           color: AppColors.dividerFor(brightness),
@@ -59,20 +53,13 @@ class NexaBottomNav extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        // Only the horizontal insets (landscape cutouts) are consumed here; the
-        // shell floats the capsule above the bottom safe area, so the pill keeps
-        // its own height instead of growing by the gesture inset.
-        child: SafeArea(
-          top: false,
-          bottom: false,
-          child: SizedBox(
-            height: AppDimens.bottomNavHeight,
-            child: _NavRow(
-              items: items,
-              currentIndex: currentIndex,
-              onTap: onTap,
-              brightness: brightness,
-            ),
+        child: SizedBox(
+          height: AppDimens.bottomNavHeight,
+          child: _NavRow(
+            items: items,
+            currentIndex: currentIndex,
+            onTap: onTap,
+            brightness: brightness,
           ),
         ),
       ),
