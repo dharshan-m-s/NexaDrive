@@ -51,13 +51,21 @@ void main() {
         await pumpShell(tester, dark: dark);
 
         expect(find.byType(NexaBottomNav), findsOneWidget);
-        // The docked bar must not blur the page behind it.
+        // The solid pill has no Liquid Glass blur inside or wrapped around it.
         expect(
           find.descendant(
             of: find.byType(NexaBottomNav),
             matching: find.byType(BackdropFilter),
           ),
           findsNothing,
+        );
+        expect(
+          find.ancestor(
+            of: find.byType(NexaBottomNav),
+            matching: find.byType(BackdropFilter),
+          ),
+          findsNothing,
+          reason: 'the pill must not be wrapped in a backdrop blur',
         );
         // Every destination is present and hit-testable.
         for (final label in ['Home', 'Files', 'Shared', 'Photos', 'More']) {
@@ -67,7 +75,7 @@ void main() {
       });
     }
 
-    testWidgets('the tab bar floats and content is padded to clear it',
+    testWidgets('the solid pill floats over a full-height page',
         (tester) async {
       await pumpShell(tester);
       // The pill is not Scaffold chrome: it floats over the body.
@@ -81,8 +89,8 @@ void main() {
           tester.view.physicalSize.height / tester.view.devicePixelRatio;
       // The widget's outer box carries its float margins around the capsule.
       final pill = tester.getRect(find.byType(NexaBottomNav));
-      expect(pill.left, closeTo(0, 1.0));
-      expect(pill.right, closeTo(width, 1.0));
+      expect(pill.left, closeTo(AppDimens.pageMargin, 1.0));
+      expect(pill.right, closeTo(width - AppDimens.pageMargin, 1.0));
       expect(pill.bottom, closeTo(height - AppDimens.space10, 1.0),
           reason: 'a clear gap lifts the pill above the bottom edge');
       final capsule = tester.getRect(
@@ -98,7 +106,9 @@ void main() {
       expect(capsule.right, closeTo(width - AppDimens.pageMargin, 1.0));
       expect(capsule.height, closeTo(AppDimens.bottomNavHeight, 1.0));
 
-      // Page content sits above the pill's footprint, never behind it.
+      // The page host fills the available screen behind the independently
+      // positioned pill. Scrollable pages add bottom scroll clearance so their
+      // final items can still be read above the pill.
       final page = tester.getRect(
         find
             .descendant(
@@ -107,9 +117,10 @@ void main() {
             )
             .first,
       );
-      expect(page.bottom,
-          lessThanOrEqualTo(capsule.bottom - AppDimens.bottomNavHeight + 1.0),
-          reason: 'content must end above the floating pill');
+      expect(page.bottom, closeTo(height, 1.0),
+          reason: 'the page must continue behind the floating pill');
+      expect(page.bottom, greaterThan(capsule.top),
+          reason: 'the pill overlays the page instead of reserving a sheet');
     });
 
     testWidgets('the pill floats above the bottom inset without growing',
