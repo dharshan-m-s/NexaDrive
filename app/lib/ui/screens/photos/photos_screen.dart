@@ -399,6 +399,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
     }
 
     final groups = _groups;
+    final bottomClearance = MediaQuery.paddingOf(context).bottom;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -407,9 +408,6 @@ class _PhotosScreenState extends State<PhotosScreen> {
           child: RefreshIndicator(
             onRefresh: load,
             child: CustomScrollView(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.paddingOf(context).bottom,
-              ),
               slivers: [
                 for (final (label, indices) in groups) ...[
                   SliverToBoxAdapter(
@@ -446,8 +444,12 @@ class _PhotosScreenState extends State<PhotosScreen> {
                     child: SizedBox(height: AppDimens.space16),
                   ),
                 ],
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: AppDimens.space24),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: bottomClearance > AppDimens.space24
+                        ? bottomClearance
+                        : AppDimens.space24,
+                  ),
                 ),
               ],
             ),

@@ -7,6 +7,7 @@ import 'package:nexadrive/core/design/nexa_surfaces.dart';
 import 'package:nexadrive/main.dart';
 import 'package:nexadrive/services/session.dart';
 import 'package:nexadrive/ui/widgets/nexa_bottom_nav.dart';
+import 'package:nexadrive/ui/widgets/nexa_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Runtime checks that the redesign's material and navigation layers are
