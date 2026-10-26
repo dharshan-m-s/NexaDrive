@@ -437,10 +437,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           ));
     }
 
-    // Mobile: a floating iOS-style pill. Pages paint edge-to-edge down to the
-    // bottom edge but are padded up by the pill's footprint so content is never
-    // obscured behind it, while the pill still floats over the page like glass.
-    // Each page clears the status bar through [_PageHost]'s safe area.
+    // Mobile: the page fills the screen behind an independently positioned,
+    // solid floating pill. The shell exposes bottom clearance through MediaQuery
+    // so scrollable content can reach a position above the pill without painting
+    // a full-width navigation sheet.
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final pillInset =
         AppDimens.space10 * 2 + AppDimens.bottomNavHeight + bottomInset;
@@ -449,16 +449,23 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         canPop: index == 0,
         onPopInvokedWithResult: (didPop, _) => _handleSystemBack(didPop),
         child: Scaffold(
-          // Transparent background so the page extends naturally behind the
-          // floating pill — no opaque sheet at the scaffold level.
-          backgroundColor: Colors.transparent,
+          // This is the app canvas, not a navigation bar: the page fills the
+          // screen and paints behind the independently positioned pill.
+          backgroundColor: AppColors.backgroundFor(
+            Theme.of(context).brightness,
+          ),
           body: Stack(
             fit: StackFit.expand,
             children: [
-              Padding(
-                // Reduced bottom padding: content now extends naturally behind
-                // the pill area. The pill floats above with its own glass appearance.
-                padding: EdgeInsets.only(bottom: AppDimens.space10 + bottomInset),
+              MediaQuery(
+                // Keep the page at full height so its background/content can
+                // continue behind the pill. This inset is a scroll-clearance
+                // hint only; the pill itself remains the only bottom overlay.
+                data: MediaQuery.of(context).copyWith(
+                  padding: MediaQuery.paddingOf(context).copyWith(
+                    bottom: pillInset,
+                  ),
+                ),
                 child: _PageHost(
                   index: index,
                   visited: _visited,
@@ -481,13 +488,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                         padding: const EdgeInsets.symmetric(
                           horizontal: AppDimens.pageMargin,
                         ),
-                        child: BackdropFilter(
-                          // Restrained Liquid Glass blur: subtle frosted effect
-                          // clipped to the pill shape below.
-                          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                          // The glass pill itself sits on top; this blur only affects
-                          // the area behind it (the page content).
-                          child: NexaBottomNav(
+                        child: NexaBottomNav(
                             currentIndex: index >= 4 ? 4 : index,
                             onTap: (value) {
                               if (value == 4) {
@@ -498,7 +499,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                             },
                             items: NexaBottomNavItems.primary,
                           ),
-                        ),
                       ),
                     ),
                   ),
@@ -522,9 +522,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 /// fades in over the one it replaces without losing scroll position or an
 /// in-flight request. Reduced motion skips the fade entirely.
 ///
-/// The page host clears the status bar for every destination; the bottom inset
-/// that keeps content above the floating [NexaBottomNav] is applied by the
-/// shell, so it is not consumed here.
+/// The page host keeps normal content below the status bar. The shell passes
+/// bottom navigation clearance through MediaQuery, allowing scrollable pages
+/// to scroll their last items above the pill while the page still paints behind it.
 class _PageHost extends StatefulWidget {
   final int index;
   final Set<int> visited;

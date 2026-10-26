@@ -32,7 +32,7 @@ class NexaPage extends StatelessWidget {
     this.bottomBar,
     this.padding = const EdgeInsets.fromLTRB(
       AppDimens.pageMargin,
-      32, // Sufficient top padding so content doesn't go under notification panel on all devices
+      0,
       AppDimens.pageMargin,
       0,
     ),
@@ -46,6 +46,13 @@ class NexaPage extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     final bg = backgroundColor ?? AppColors.backgroundFor(brightness);
     final fg = headerForeground ?? AppColors.labelPrimaryFor(brightness);
+    final pagePadding = padding.resolve(Directionality.of(context));
+    final bottomClearance = MediaQuery.paddingOf(context).bottom;
+    final scrollPadding = pagePadding.copyWith(
+      bottom: pagePadding.bottom > bottomClearance
+          ? pagePadding.bottom
+          : bottomClearance,
+    );
 
     return SafeArea(
       top: true,
@@ -70,7 +77,7 @@ class NexaPage extends StatelessWidget {
               Expanded(
                 child: scrollable
                     ? SingleChildScrollView(
-                      padding: padding,
+                      padding: scrollPadding,
                       child: _constrain(body),
                     )
                     : Padding(
@@ -124,9 +131,9 @@ class _Header extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.fromLTRB(
           AppDimens.pageMargin,
-          AppDimens.space32,
+          AppDimens.space8,
           AppDimens.pageMargin,
-          AppDimens.space20,
+          AppDimens.space8,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,7 +184,7 @@ class _Header extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
-        AppDimens.space32, // Increased top padding so content doesn't go under notification panel
+        AppDimens.space8,
         AppDimens.pageMargin,
         AppDimens.space4,
       ),

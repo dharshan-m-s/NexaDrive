@@ -737,6 +737,7 @@ class _FilesScreenState extends State<FilesScreen> {
               : 'content:${_grid ? 'grid' : 'list'}';
 
   Widget _buildBody() {
+    final bottomClearance = MediaQuery.paddingOf(context).bottom;
     if (_loading) {
       return const NexaLoadingState();
     }
@@ -753,6 +754,7 @@ class _FilesScreenState extends State<FilesScreen> {
       return RefreshIndicator(
         onRefresh: load,
         child: ListView(
+          padding: EdgeInsets.only(bottom: bottomClearance),
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             SizedBox(height: MediaQuery.sizeOf(context).height * 0.16),
@@ -782,11 +784,13 @@ class _FilesScreenState extends State<FilesScreen> {
       onRefresh: load,
       child: _grid
           ? GridView.builder(
-              padding: const EdgeInsets.fromLTRB(
+              padding: EdgeInsets.fromLTRB(
                 AppDimens.pageMargin,
                 AppDimens.spaceSm,
                 AppDimens.pageMargin,
-                AppDimens.spaceLg,
+                bottomClearance > AppDimens.spaceLg
+                    ? bottomClearance
+                    : AppDimens.spaceLg,
               ),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                 maxCrossAxisExtent: 170,
@@ -808,11 +812,13 @@ class _FilesScreenState extends State<FilesScreen> {
               },
             )
           : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(
+              padding: EdgeInsets.fromLTRB(
                 AppDimens.pageMargin,
                 AppDimens.spaceXs,
                 AppDimens.pageMargin,
-                AppDimens.spaceLg,
+                bottomClearance > AppDimens.spaceLg
+                    ? bottomClearance
+                    : AppDimens.spaceLg,
               ),
               itemCount: (folders.isEmpty ? 0 : folders.length + 1) +
                   (files.isEmpty ? 0 : files.length + 1),

@@ -406,6 +406,9 @@ class _PhotosScreenState extends State<PhotosScreen> {
           child: RefreshIndicator(
             onRefresh: load,
             child: CustomScrollView(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.paddingOf(context).bottom,
+              ),
               slivers: [
                 for (final (label, indices) in groups) ...[
                   SliverToBoxAdapter(
