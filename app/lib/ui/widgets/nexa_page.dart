@@ -235,15 +235,15 @@ class _BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
-
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
+      // The child SafeArea supplies the system/host bottom inset exactly once.
+      // Keep only visual spacing here to avoid doubling the inset.
+      padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
         AppDimens.space8,
         AppDimens.pageMargin,
-        AppDimens.space8 + bottomInset,
+        AppDimens.space8,
       ),
       child: SafeArea(top: false, child: bottomBar),
     );
