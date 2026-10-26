@@ -131,7 +131,8 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       const gestureInset = 34.0;
-      const pillInset = AppDimens.space10 * 2 +
+      const pillInset =
+          AppDimens.space10 * 2 +
           AppDimens.bottomNavHeight +
           gestureInset;
 

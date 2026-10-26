@@ -92,9 +92,9 @@ class NexaPage extends StatelessWidget {
                       child: _constrain(body),
                     )
                     : Padding(
-                      padding: padding,
-                      child: _constrain(body),
-                    ),
+                        padding: padding,
+                        child: _constrain(body),
+                      ),
               ),
               // Bottom bar
               if (bottomBar != null) _BottomBar(bottomBar: bottomBar!),
