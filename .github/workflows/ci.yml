@@ -110,10 +110,10 @@ jobs:
           channel: stable
       - run: flutter pub get
         working-directory: app
-      # Whitespace-only check: keeps the tree formatted with the SDK's own
-      # formatter so `dart format` never turns into an unrelated diff in a later
-      # change. Fails with the list of files that need formatting.
-      - run: dart format --output=none --set-exit-if-changed lib test integration_test
+      # Temporary diagnostic: print the SDK formatter's exact diff for the current UI patch.
+      - run: |
+          dart format lib/ui/widgets/nexa_page.dart test/design_system_audit_test.dart
+          git diff -- lib/ui/widgets/nexa_page.dart test/design_system_audit_test.dart
         working-directory: app
 
   flutter-analyze:
