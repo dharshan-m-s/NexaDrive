@@ -132,9 +132,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       const gestureInset = 34.0;
       const pillInset =
-          AppDimens.space10 * 2 +
-          AppDimens.bottomNavHeight +
-          gestureInset;
+          AppDimens.space10 * 2 + AppDimens.bottomNavHeight + gestureInset;
 
       await tester.pumpWidget(
         MaterialApp(
