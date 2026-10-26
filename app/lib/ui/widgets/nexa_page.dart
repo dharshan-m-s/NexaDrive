@@ -32,7 +32,7 @@ class NexaPage extends StatelessWidget {
     this.bottomBar,
     this.padding = const EdgeInsets.fromLTRB(
       AppDimens.pageMargin,
-      0,
+      32, // Sufficient top padding so content doesn't go under notification panel on all devices
       AppDimens.pageMargin,
       0,
     ),
@@ -47,38 +47,41 @@ class NexaPage extends StatelessWidget {
     final bg = backgroundColor ?? AppColors.backgroundFor(brightness);
     final fg = headerForeground ?? AppColors.labelPrimaryFor(brightness);
 
-    return Material(
-      type: MaterialType.transparency,
-      child: ColoredBox(
-        color: bg,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Header / Viewing Area
-            _Header(
-              title: title,
-              subtitle: subtitle,
-              leading: leading,
-              action: headerAction,
-              actions: actions,
-              largeTitle: largeTitle,
-              foreground: fg,
-            ),
-            // Body
-            Expanded(
-              child: scrollable
-                  ? SingleChildScrollView(
+    return SafeArea(
+      top: true,
+      child: Material(
+        type: MaterialType.transparency,
+        child: ColoredBox(
+          color: bg,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header / Viewing Area
+              _Header(
+                title: title,
+                subtitle: subtitle,
+                leading: leading,
+                action: headerAction,
+                actions: actions,
+                largeTitle: largeTitle,
+                foreground: fg,
+              ),
+              // Body
+              Expanded(
+                child: scrollable
+                    ? SingleChildScrollView(
                       padding: padding,
                       child: _constrain(body),
                     )
-                  : Padding(
+                    : Padding(
                       padding: padding,
                       child: _constrain(body),
                     ),
-            ),
-            // Bottom bar
-            if (bottomBar != null) _BottomBar(bottomBar: bottomBar!),
-          ],
+              ),
+              // Bottom bar
+              if (bottomBar != null) _BottomBar(bottomBar: bottomBar!),
+            ],
+          ),
         ),
       ),
     );
@@ -121,9 +124,9 @@ class _Header extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.fromLTRB(
           AppDimens.pageMargin,
-          AppDimens.space8,
+          AppDimens.space32,
           AppDimens.pageMargin,
-          AppDimens.space8,
+          AppDimens.space20,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,7 +177,7 @@ class _Header extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
-        AppDimens.space8,
+        AppDimens.space32, // Increased top padding so content doesn't go under notification panel
         AppDimens.pageMargin,
         AppDimens.space4,
       ),

@@ -449,14 +449,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         canPop: index == 0,
         onPopInvokedWithResult: (didPop, _) => _handleSystemBack(didPop),
         child: Scaffold(
-          backgroundColor: AppColors.backgroundFor(
-            Theme.of(context).brightness,
-          ),
+          // Transparent background so the page extends naturally behind the
+          // floating pill — no opaque sheet at the scaffold level.
+          backgroundColor: Colors.transparent,
           body: Stack(
             fit: StackFit.expand,
             children: [
               Padding(
-                padding: EdgeInsets.only(bottom: pillInset),
+                // Reduced bottom padding: content now extends naturally behind
+                // the pill area. The pill floats above with its own glass appearance.
+                padding: EdgeInsets.only(bottom: AppDimens.space10 + bottomInset),
                 child: _PageHost(
                   index: index,
                   visited: _visited,
@@ -479,16 +481,23 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                         padding: const EdgeInsets.symmetric(
                           horizontal: AppDimens.pageMargin,
                         ),
-                        child: NexaBottomNav(
-                          currentIndex: index >= 4 ? 4 : index,
-                          onTap: (value) {
-                            if (value == 4) {
-                              _showMoreSheet();
-                            } else {
-                              _goTo(value);
-                            }
-                          },
-                          items: NexaBottomNavItems.primary,
+                        child: BackdropFilter(
+                          // Restrained Liquid Glass blur: subtle frosted effect
+                          // clipped to the pill shape below.
+                          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                          // The glass pill itself sits on top; this blur only affects
+                          // the area behind it (the page content).
+                          child: NexaBottomNav(
+                            currentIndex: index >= 4 ? 4 : index,
+                            onTap: (value) {
+                              if (value == 4) {
+                                _showMoreSheet();
+                              } else {
+                                _goTo(value);
+                              }
+                            },
+                            items: NexaBottomNavItems.primary,
+                          ),
                         ),
                       ),
                     ),
@@ -574,10 +583,11 @@ class _PageHostState extends State<_PageHost>
     );
 
     if (AppMotion.reducedMotion(context)) {
-      return SafeArea(bottom: false, child: stack);
+      return SafeArea(top: true, bottom: false, child: stack);
     }
 
     return SafeArea(
+      top: true,
       bottom: false,
       child: FadeTransition(opacity: _opacity, child: stack),
     );

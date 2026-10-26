@@ -30,37 +30,22 @@ class NexaBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
 
-    return Container(
-      // True floating pill: no full-width strip, just a compact capsule
-      // with transparent area around it (provided by shell padding).
-      decoration: BoxDecoration(
-        // Translucent glass fill; the page behind it is padded away by the
-        // shell, so no backdrop filter is needed and nothing bleeds.
-        color: AppColors.surfaceFor(brightness).withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        border: Border.all(
-          color: AppColors.dividerFor(brightness),
-          width: 0.5,
-        ),
-        boxShadow: [
-          // Soft, spread shadow that lifts the pill off the page.
-          BoxShadow(
-            color: AppColors.shadowColorFor(brightness),
-            blurRadius: 28,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        child: SizedBox(
-          height: AppDimens.bottomNavHeight,
-          child: _NavRow(
-            items: items,
-            currentIndex: currentIndex,
-            onTap: onTap,
-            brightness: brightness,
-          ),
+    // The pill's glass appearance is provided by the parent BackdropFilter
+    // in app_shell.dart. Here we only clip to the pill radius and paint
+    // a restrained translucent fill so icons and labels remain readable.
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+      child: Container(
+        height: AppDimens.bottomNavHeight,
+        // Restrained translucent fill — the glass blur comes from the parent
+        // BackdropFilter. The low alpha ensures the page behind remains
+        // visible while keeping ink legible.
+        color: AppColors.surfaceFor(brightness).withValues(alpha: 0.3),
+        child: _NavRow(
+          items: items,
+          currentIndex: currentIndex,
+          onTap: onTap,
+          brightness: brightness,
         ),
       ),
     );
