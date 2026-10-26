@@ -111,6 +111,7 @@ class _SharedScreenState extends State<SharedScreen> {
   Widget build(BuildContext context) {
     return NexaPage(
       title: _mine ? 'My shares' : 'Shared with me',
+      bottomSafeArea: false,
       subtitle: _mine
           ? 'Links and access you have granted'
           : 'Files and folders shared with you',
@@ -145,6 +146,7 @@ class _SharedScreenState extends State<SharedScreen> {
 
   Widget _buildBody() {
     final brightness = Theme.of(context).brightness;
+    final bottomClearance = MediaQuery.paddingOf(context).bottom;
     if (_loading) {
       return const NexaLoadingBlock();
     }
@@ -171,7 +173,11 @@ class _SharedScreenState extends State<SharedScreen> {
     return RefreshIndicator(
       onRefresh: load,
       child: ListView.separated(
-        padding: const EdgeInsets.only(bottom: AppDimens.space24),
+        padding: EdgeInsets.only(
+          bottom: bottomClearance > AppDimens.space24
+              ? bottomClearance
+              : AppDimens.space24,
+        ),
         itemCount: items.length,
         separatorBuilder: (_, __) => const SizedBox(height: AppDimens.space2),
         itemBuilder: (context, i) {

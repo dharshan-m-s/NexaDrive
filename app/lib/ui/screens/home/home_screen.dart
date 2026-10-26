@@ -147,6 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return NexaPage(
       title: '${_greeting()}, $name',
+      bottomSafeArea: false,
       subtitle: storage == null
           ? 'Your private cloud'
           : '${Format.bytes(storage.usedBytes)} used · '

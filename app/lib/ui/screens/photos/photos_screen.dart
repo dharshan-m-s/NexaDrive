@@ -339,6 +339,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
     return NexaPage(
       title: _selecting ? Format.count(_selected.length, 'photo') : 'Photos',
+      bottomSafeArea: false,
       subtitle: _selecting
           ? 'Tap photos to include or exclude'
           : photoCount == 0
@@ -398,6 +399,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
     }
 
     final groups = _groups;
+    final bottomClearance = MediaQuery.paddingOf(context).bottom;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -442,8 +444,12 @@ class _PhotosScreenState extends State<PhotosScreen> {
                     child: SizedBox(height: AppDimens.space16),
                   ),
                 ],
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: AppDimens.space24),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: bottomClearance > AppDimens.space24
+                        ? bottomClearance
+                        : AppDimens.space24,
+                  ),
                 ),
               ],
             ),

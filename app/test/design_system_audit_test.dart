@@ -7,6 +7,7 @@ import 'package:nexadrive/core/design/nexa_surfaces.dart';
 import 'package:nexadrive/main.dart';
 import 'package:nexadrive/services/session.dart';
 import 'package:nexadrive/ui/widgets/nexa_bottom_nav.dart';
+import 'package:nexadrive/ui/widgets/nexa_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Runtime checks that the redesign's material and navigation layers are
@@ -51,13 +52,21 @@ void main() {
         await pumpShell(tester, dark: dark);
 
         expect(find.byType(NexaBottomNav), findsOneWidget);
-        // The docked bar must not blur the page behind it.
+        // The solid pill has no Liquid Glass blur inside or wrapped around it.
         expect(
           find.descendant(
             of: find.byType(NexaBottomNav),
             matching: find.byType(BackdropFilter),
           ),
           findsNothing,
+        );
+        expect(
+          find.ancestor(
+            of: find.byType(NexaBottomNav),
+            matching: find.byType(BackdropFilter),
+          ),
+          findsNothing,
+          reason: 'the pill must not be wrapped in a backdrop blur',
         );
         // Every destination is present and hit-testable.
         for (final label in ['Home', 'Files', 'Shared', 'Photos', 'More']) {
@@ -67,7 +76,7 @@ void main() {
       });
     }
 
-    testWidgets('the tab bar floats and content is padded to clear it',
+    testWidgets('the solid pill floats over a full-height page',
         (tester) async {
       await pumpShell(tester);
       // The pill is not Scaffold chrome: it floats over the body.
@@ -79,10 +88,10 @@ void main() {
           tester.view.physicalSize.width / tester.view.devicePixelRatio;
       final height =
           tester.view.physicalSize.height / tester.view.devicePixelRatio;
-      // The widget's outer box carries its float margins around the capsule.
+      // The pill itself is inset; transparent page space surrounds it.
       final pill = tester.getRect(find.byType(NexaBottomNav));
-      expect(pill.left, closeTo(0, 1.0));
-      expect(pill.right, closeTo(width, 1.0));
+      expect(pill.left, closeTo(AppDimens.pageMargin, 1.0));
+      expect(pill.right, closeTo(width - AppDimens.pageMargin, 1.0));
       expect(pill.bottom, closeTo(height - AppDimens.space10, 1.0),
           reason: 'a clear gap lifts the pill above the bottom edge');
       final capsule = tester.getRect(
@@ -98,7 +107,9 @@ void main() {
       expect(capsule.right, closeTo(width - AppDimens.pageMargin, 1.0));
       expect(capsule.height, closeTo(AppDimens.bottomNavHeight, 1.0));
 
-      // Page content sits above the pill's footprint, never behind it.
+      // The page host fills the available screen behind the independently
+      // positioned pill. Scrollable pages add bottom scroll clearance so their
+      // final items can still be read above the pill.
       final page = tester.getRect(
         find
             .descendant(
@@ -107,9 +118,78 @@ void main() {
             )
             .first,
       );
-      expect(page.bottom,
-          lessThanOrEqualTo(capsule.bottom - AppDimens.bottomNavHeight + 1.0),
-          reason: 'content must end above the floating pill');
+      expect(page.bottom, closeTo(height, 1.0),
+          reason: 'the page must continue behind the floating pill');
+      expect(page.bottom, greaterThan(capsule.top),
+          reason: 'the pill overlays the page instead of reserving a sheet');
+    });
+
+    testWidgets('last scroll item can be reached above the floating pill',
+        (tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const gestureInset = 34.0;
+      const pillInset =
+          AppDimens.space10 * 2 + AppDimens.bottomNavHeight + gestureInset;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: MediaQuery(
+              data: const MediaQueryData(
+                padding: EdgeInsets.only(bottom: pillInset),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  NexaPage(
+                    title: 'Files',
+                    scrollable: true,
+                    bottomSafeArea: false,
+                    maxWidth: null,
+                    body: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < 40; i++)
+                          SizedBox(height: 56, child: Text('row $i')),
+                        const SizedBox(height: 40, child: Text('LAST ITEM')),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    left: AppDimens.pageMargin,
+                    right: AppDimens.pageMargin,
+                    bottom: AppDimens.space10 + gestureInset,
+                    child: NexaBottomNav(
+                      currentIndex: 0,
+                      onTap: (_) {},
+                      items: NexaBottomNavItems.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byType(SingleChildScrollView),
+        const Offset(0, -10000),
+      );
+      await tester.pumpAndSettle();
+
+      final lastItem = tester.getRect(find.text('LAST ITEM'));
+      final pill = tester.getRect(find.byType(NexaBottomNav));
+      expect(
+        lastItem.bottom,
+        lessThanOrEqualTo(pill.top),
+        reason: 'scrollable content must finish above the overlay pill',
+      );
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('the pill floats above the bottom inset without growing',

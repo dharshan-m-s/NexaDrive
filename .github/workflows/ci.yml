@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, test]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -110,9 +110,7 @@ jobs:
           channel: stable
       - run: flutter pub get
         working-directory: app
-      # Whitespace-only check: keeps the tree formatted with the SDK's own
-      # formatter so `dart format` never turns into an unrelated diff in a later
-      # change. Fails with the list of files that need formatting.
+      # Whitespace-only check: keep the tree formatted with the SDK's own formatter.
       - run: dart format --output=none --set-exit-if-changed lib test integration_test
         working-directory: app
 

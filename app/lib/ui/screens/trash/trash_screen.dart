@@ -97,9 +97,11 @@ class _TrashScreenState extends State<TrashScreen> {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final bottomClearance = MediaQuery.paddingOf(context).bottom;
 
     return NexaPage(
       title: 'Trash',
+      bottomSafeArea: false,
       subtitle: 'Deleted items are kept for 30 days',
       body: NexaStateSwitcher(
         stateKey: ValueKey(_bodyState),
@@ -122,8 +124,11 @@ class _TrashScreenState extends State<TrashScreen> {
                     : RefreshIndicator(
                         onRefresh: load,
                         child: ListView.separated(
-                          padding:
-                              const EdgeInsets.only(bottom: AppDimens.space24),
+                          padding: EdgeInsets.only(
+                            bottom: bottomClearance > AppDimens.space24
+                                ? bottomClearance
+                                : AppDimens.space24,
+                          ),
                           itemCount: _items.length,
                           separatorBuilder: (_, __) =>
                               const SizedBox(height: AppDimens.space2),

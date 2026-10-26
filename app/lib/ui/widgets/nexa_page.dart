@@ -12,6 +12,11 @@ class NexaPage extends StatelessWidget {
   final List<Widget>? actions;
   final bool largeTitle;
   final bool scrollable;
+
+  /// Whether this page should consume the device bottom safe area. The main
+  /// tab pages disable it so their background extends behind the floating pill;
+  /// standalone routes keep the default safe-area behavior.
+  final bool bottomSafeArea;
   final Widget body;
   final Widget? bottomBar;
   final EdgeInsetsGeometry padding;
@@ -28,11 +33,12 @@ class NexaPage extends StatelessWidget {
     this.headerAction,
     this.largeTitle = true,
     this.scrollable = false,
+    this.bottomSafeArea = true,
     required this.body,
     this.bottomBar,
     this.padding = const EdgeInsets.fromLTRB(
       AppDimens.pageMargin,
-      32, // Sufficient top padding so content doesn't go under notification panel on all devices
+      0,
       AppDimens.pageMargin,
       0,
     ),
@@ -46,9 +52,21 @@ class NexaPage extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     final bg = backgroundColor ?? AppColors.backgroundFor(brightness);
     final fg = headerForeground ?? AppColors.labelPrimaryFor(brightness);
+    final pagePadding = padding.resolve(Directionality.of(context));
+    final bottomClearance = MediaQuery.paddingOf(context).bottom;
+    final scrollPadding = bottomSafeArea
+        ? pagePadding
+        : pagePadding.copyWith(
+            bottom: pagePadding.bottom > bottomClearance
+                ? pagePadding.bottom
+                : bottomClearance,
+          );
 
     return SafeArea(
+      // Main tabs let the page continue behind the floating pill. Standalone
+      // routes retain normal bottom-inset protection through the default flag.
       top: true,
+      bottom: bottomSafeArea,
       child: Material(
         type: MaterialType.transparency,
         child: ColoredBox(
@@ -70,13 +88,13 @@ class NexaPage extends StatelessWidget {
               Expanded(
                 child: scrollable
                     ? SingleChildScrollView(
-                      padding: padding,
-                      child: _constrain(body),
-                    )
+                        padding: scrollPadding,
+                        child: _constrain(body),
+                      )
                     : Padding(
-                      padding: padding,
-                      child: _constrain(body),
-                    ),
+                        padding: padding,
+                        child: _constrain(body),
+                      ),
               ),
               // Bottom bar
               if (bottomBar != null) _BottomBar(bottomBar: bottomBar!),
@@ -124,9 +142,9 @@ class _Header extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.fromLTRB(
           AppDimens.pageMargin,
-          AppDimens.space32,
+          AppDimens.space8,
           AppDimens.pageMargin,
-          AppDimens.space20,
+          AppDimens.space8,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,7 +195,7 @@ class _Header extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
-        AppDimens.space32, // Increased top padding so content doesn't go under notification panel
+        AppDimens.space8,
         AppDimens.pageMargin,
         AppDimens.space4,
       ),
@@ -224,15 +242,15 @@ class _BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
-
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
+      // The child SafeArea supplies the system/host bottom inset exactly once.
+      // Keep only visual spacing here to avoid doubling the inset.
+      padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
         AppDimens.space8,
         AppDimens.pageMargin,
-        AppDimens.space8 + bottomInset,
+        AppDimens.space8,
       ),
       child: SafeArea(top: false, child: bottomBar),
     );
