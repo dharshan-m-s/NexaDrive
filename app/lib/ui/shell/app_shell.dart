@@ -475,8 +475,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               Positioned(
                 left: 0,
                 right: 0,
-                // Float the capsule above the gesture area rather than stretching
-                // its glass into it, so the pill stays slim on edge-to-edge phones.
+                // Keep the pill separate from the system gesture area; the pill's
+                // own surface, outline, and shadow create its floating appearance.
                 bottom: AppDimens.space10 + bottomInset,
                 child: SafeArea(
                   top: false,
@@ -489,16 +489,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                           horizontal: AppDimens.pageMargin,
                         ),
                         child: NexaBottomNav(
-                            currentIndex: index >= 4 ? 4 : index,
-                            onTap: (value) {
-                              if (value == 4) {
-                                _showMoreSheet();
-                              } else {
-                                _goTo(value);
-                              }
-                            },
-                            items: NexaBottomNavItems.primary,
-                          ),
+                          currentIndex: index >= 4 ? 4 : index,
+                          onTap: (value) {
+                            if (value == 4) {
+                              _showMoreSheet();
+                            } else {
+                              _goTo(value);
+                            }
+                          },
+                          items: NexaBottomNavItems.primary,
+                        ),
                       ),
                     ),
                   ),
