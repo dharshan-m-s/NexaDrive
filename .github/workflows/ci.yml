@@ -110,10 +110,8 @@ jobs:
           channel: stable
       - run: flutter pub get
         working-directory: app
-      # Temporary diagnostic: print the SDK formatter's exact diff for the current UI patch.
-      - run: |
-          dart format lib/ui/widgets/nexa_page.dart test/design_system_audit_test.dart
-          git diff -- lib/ui/widgets/nexa_page.dart test/design_system_audit_test.dart
+      # Whitespace-only check: keep the tree formatted with the SDK's own formatter.
+      - run: dart format --output=none --set-exit-if-changed lib test integration_test
         working-directory: app
 
   flutter-analyze:

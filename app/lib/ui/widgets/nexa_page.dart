@@ -88,9 +88,9 @@ class NexaPage extends StatelessWidget {
               Expanded(
                 child: scrollable
                     ? SingleChildScrollView(
-                      padding: scrollPadding,
-                      child: _constrain(body),
-                    )
+                        padding: scrollPadding,
+                        child: _constrain(body),
+                      )
                     : Padding(
                         padding: padding,
                         child: _constrain(body),
