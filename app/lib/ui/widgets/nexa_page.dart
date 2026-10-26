@@ -55,7 +55,11 @@ class NexaPage extends StatelessWidget {
     );
 
     return SafeArea(
+      // The shell owns bottom navigation clearance. Do not consume that inset
+      // here; scrollables need to see it to keep their final items reachable
+      // above the floating pill while the page itself continues behind it.
       top: true,
+      bottom: false,
       child: Material(
         type: MaterialType.transparency,
         child: ColoredBox(
