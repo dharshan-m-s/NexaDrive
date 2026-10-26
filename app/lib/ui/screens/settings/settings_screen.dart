@@ -184,6 +184,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return NexaPage(
       title: 'Settings',
+      bottomSafeArea: false,
       subtitle: session.username ?? '',
       scrollable: true,
       body: Column(

@@ -111,6 +111,7 @@ class _SharedScreenState extends State<SharedScreen> {
   Widget build(BuildContext context) {
     return NexaPage(
       title: _mine ? 'My shares' : 'Shared with me',
+      bottomSafeArea: false,
       subtitle: _mine
           ? 'Links and access you have granted'
           : 'Files and folders shared with you',

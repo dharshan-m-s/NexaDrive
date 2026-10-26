@@ -101,6 +101,7 @@ class _TrashScreenState extends State<TrashScreen> {
 
     return NexaPage(
       title: 'Trash',
+      bottomSafeArea: false,
       subtitle: 'Deleted items are kept for 30 days',
       body: NexaStateSwitcher(
         stateKey: ValueKey(_bodyState),

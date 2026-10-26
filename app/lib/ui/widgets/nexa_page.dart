@@ -12,6 +12,11 @@ class NexaPage extends StatelessWidget {
   final List<Widget>? actions;
   final bool largeTitle;
   final bool scrollable;
+
+  /// Whether this page should consume the device bottom safe area. The main
+  /// tab pages disable it so their background extends behind the floating pill;
+  /// standalone routes keep the default safe-area behavior.
+  final bool bottomSafeArea;
   final Widget body;
   final Widget? bottomBar;
   final EdgeInsetsGeometry padding;
@@ -28,6 +33,7 @@ class NexaPage extends StatelessWidget {
     this.headerAction,
     this.largeTitle = true,
     this.scrollable = false,
+    this.bottomSafeArea = true,
     required this.body,
     this.bottomBar,
     this.padding = const EdgeInsets.fromLTRB(
@@ -48,18 +54,19 @@ class NexaPage extends StatelessWidget {
     final fg = headerForeground ?? AppColors.labelPrimaryFor(brightness);
     final pagePadding = padding.resolve(Directionality.of(context));
     final bottomClearance = MediaQuery.paddingOf(context).bottom;
-    final scrollPadding = pagePadding.copyWith(
-      bottom: pagePadding.bottom > bottomClearance
-          ? pagePadding.bottom
-          : bottomClearance,
-    );
+    final scrollPadding = bottomSafeArea
+        ? pagePadding
+        : pagePadding.copyWith(
+            bottom: pagePadding.bottom > bottomClearance
+                ? pagePadding.bottom
+                : bottomClearance,
+          );
 
     return SafeArea(
-      // The shell owns bottom navigation clearance. Do not consume that inset
-      // here; scrollables need to see it to keep their final items reachable
-      // above the floating pill while the page itself continues behind it.
+      // Main tabs let the page continue behind the floating pill. Standalone
+      // routes retain normal bottom-inset protection through the default flag.
       top: true,
-      bottom: false,
+      bottom: bottomSafeArea,
       child: Material(
         type: MaterialType.transparency,
         child: ColoredBox(

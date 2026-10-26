@@ -339,6 +339,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
     return NexaPage(
       title: _selecting ? Format.count(_selected.length, 'photo') : 'Photos',
+      bottomSafeArea: false,
       subtitle: _selecting
           ? 'Tap photos to include or exclude'
           : photoCount == 0

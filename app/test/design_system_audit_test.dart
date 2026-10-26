@@ -148,6 +148,7 @@ void main() {
                   NexaPage(
                     title: 'Files',
                     scrollable: true,
+                    bottomSafeArea: false,
                     maxWidth: null,
                     body: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
