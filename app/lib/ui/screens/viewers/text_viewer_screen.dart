@@ -1,5 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_dimensions.dart';
 import '../../../../core/design/app_typography.dart';
@@ -20,6 +24,7 @@ class TextViewerScreen extends StatefulWidget {
 }
 
 class _TextViewerScreenState extends State<TextViewerScreen> {
+  static const int _maxPreviewBytes = 8 * 1024 * 1024;
   String? _text;
   String? _error;
 
@@ -30,8 +35,29 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
   }
 
   Future<void> _load() async {
+    File? temporary;
     try {
-      final bytes = await widget.api.download(widget.file.path);
+      if ((widget.file.size ?? 0) > _maxPreviewBytes) {
+        throw StateError(
+          'This file is larger than the 8 MB in-app text preview limit. '
+          'Download it to open with a dedicated editor.',
+        );
+      }
+      final directory = await getTemporaryDirectory();
+      temporary = File(
+        '${directory.path}/nexadrive-text-${DateTime.now().microsecondsSinceEpoch}.tmp',
+      );
+      // Stream the response to disk first so a unexpectedly large file cannot
+      // fill the Dart heap before its actual size is checked.
+      await widget.api.downloadToFile(widget.file.path, temporary.path);
+      final length = await temporary.length();
+      if (length > _maxPreviewBytes) {
+        throw StateError(
+          'This file is larger than the 8 MB in-app text preview limit. '
+          'Download it to open with a dedicated editor.',
+        );
+      }
+      final bytes = await temporary.readAsBytes();
       final decoded =
           utf8.decode(bytes, allowMalformed: true).replaceAll('\uFFFD', '');
       if (!mounted) return;
@@ -39,7 +65,21 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
+    } finally {
+      try {
+        await temporary?.delete();
+      } catch (_) {}
     }
+  }
+
+  Future<void> _copyText() async {
+    final value = _text;
+    if (value == null) return;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(const SnackBar(content: Text('Text copied')));
   }
 
   @override
@@ -54,6 +94,13 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
           subtitle:
               widget.file.size == null ? null : Format.bytes(widget.file.size),
           leading: const NexaBackButton(),
+          headerAction: _text == null
+              ? null
+              : IconButton(
+                  tooltip: 'Copy all text',
+                  onPressed: _copyText,
+                  icon: const Icon(Icons.copy_all_outlined),
+                ),
           body: switch ((_text, _error)) {
             (null, null) => const NexaLoadingBlock(),
             (_, final String error) => NexaEmptyState(
@@ -75,14 +122,41 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
                 color: brightness == Brightness.dark
                     ? AppColors.surfaceDark
                     : AppColors.surfaceLight,
-                padding: const EdgeInsets.all(AppDimens.pageMargin),
-                child: SingleChildScrollView(
-                  child: SelectableText(
-                    text,
-                    style: AppTextStyle.code.copyWith(
-                      color: AppColors.textPrimaryFor(brightness),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppDimens.pageMargin,
+                        AppDimens.space12,
+                        AppDimens.pageMargin,
+                        AppDimens.space8,
+                      ),
+                      child: Text(
+                        '${text.isEmpty ? 0 : '\n'.allMatches(text).length + 1} lines · '
+                        '${text.length} characters',
+                        style: AppTextStyle.caption.copyWith(
+                          color: AppColors.textSecondaryFor(brightness),
+                        ),
+                      ),
                     ),
-                  ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppDimens.pageMargin,
+                          AppDimens.space8,
+                          AppDimens.pageMargin,
+                          AppDimens.pageMargin,
+                        ),
+                        child: SelectableText(
+                          text,
+                          style: AppTextStyle.code.copyWith(
+                            color: AppColors.textPrimaryFor(brightness),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
           },

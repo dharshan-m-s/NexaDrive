@@ -22,6 +22,7 @@ export function usePolling<T>(
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
   const hasDataRef = useRef(false);
+  const inFlightRef = useRef(false);
   const [tick, setTick] = useState(0);
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
@@ -31,6 +32,15 @@ export function usePolling<T>(
     let timer: number | undefined;
 
     const run = async () => {
+      // A manual refresh or dependency change can restart this effect while
+      // the previous request is still in flight. Do not overlap those calls.
+      if (inFlightRef.current) {
+        if (!cancelled && intervalMs > 0) {
+          timer = window.setTimeout(() => void run(), intervalMs);
+        }
+        return;
+      }
+      inFlightRef.current = true;
       try {
         const value = await loaderRef.current();
         if (cancelled) return;
@@ -43,15 +53,20 @@ export function usePolling<T>(
           setError(err instanceof Error ? err.message : "Request failed");
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        inFlightRef.current = false;
+        if (!cancelled) {
+          setLoading(false);
+          if (intervalMs > 0) {
+            timer = window.setTimeout(() => void run(), intervalMs);
+          }
+        }
       }
     };
 
     void run();
-    if (intervalMs > 0) timer = window.setInterval(run, intervalMs);
     return () => {
       cancelled = true;
-      if (timer !== undefined) window.clearInterval(timer);
+      if (timer !== undefined) window.clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intervalMs, tick, ...deps]);

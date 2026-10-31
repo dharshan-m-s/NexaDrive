@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -146,6 +147,19 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       await controller.play();
       _scheduleHide(restart: true);
     }
+  }
+
+  Future<void> _seekRelative(
+    VideoPlayerController controller,
+    Duration position,
+    Duration offset,
+  ) async {
+    final target = position + offset;
+    final milliseconds = target.inMilliseconds
+        .clamp(0, controller.value.duration.inMilliseconds)
+        .toInt();
+    await controller.seekTo(Duration(milliseconds: milliseconds));
+    _scheduleHide(restart: true);
   }
 
   Future<void> _toggleFullscreen() async {
@@ -298,24 +312,35 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         children: [
           Positioned.fill(child: video),
           Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
+            left: AppDimens.space12,
+            right: AppDimens.space12,
+            bottom: AppDimens.space12,
             child: AnimatedOpacity(
               opacity: _controlsVisible ? 1 : 0,
               duration: AppMotion.resolve(context, AppMotion.fast),
               curve: AppMotion.standard,
               child: IgnorePointer(
                 ignoring: !_controlsVisible,
-                child: Container(
-                  color: Colors.black.withValues(alpha: 0.66),
-                  padding: const EdgeInsets.fromLTRB(
-                    AppDimens.space8,
-                    AppDimens.space8,
-                    AppDimens.space8,
-                    0,
-                  ),
-                  child: Column(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppDimens.radiusCard),
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.62),
+                        borderRadius:
+                            BorderRadius.circular(AppDimens.radiusCard),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.14),
+                        ),
+                      ),
+                      padding: const EdgeInsets.fromLTRB(
+                        AppDimens.space8,
+                        AppDimens.space8,
+                        AppDimens.space8,
+                        AppDimens.space4,
+                      ),
+                      child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Row(
@@ -331,10 +356,42 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                   : Icons.play_arrow_rounded,
                             ),
                           ),
+                          IconButton(
+                            tooltip: 'Back 10 seconds',
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 36,
+                              height: 36,
+                            ),
+                            onPressed: () => _seekRelative(
+                              controller,
+                              value.position,
+                              const Duration(seconds: -10),
+                            ),
+                            color: Colors.white70,
+                            icon: const Icon(Icons.replay_10_rounded, size: 22),
+                          ),
                           Text(
                             Format.duration(shownPosition),
                             style: AppTextStyle.micro
                                 .copyWith(color: Colors.white70),
+                          ),
+                          IconButton(
+                            tooltip: 'Forward 10 seconds',
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 36,
+                              height: 36,
+                            ),
+                            onPressed: () => _seekRelative(
+                              controller,
+                              value.position,
+                              const Duration(seconds: 10),
+                            ),
+                            color: Colors.white70,
+                            icon: const Icon(Icons.forward_10_rounded, size: 22),
                           ),
                           Expanded(
                             child: SliderTheme(
@@ -431,8 +488,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                               ),
                         ],
                       ),
-                      const SizedBox(height: AppDimens.space4),
-                    ],
+                        const SizedBox(height: AppDimens.space4),
+                      ],
+                    ),
                   ),
                 ),
               ),
