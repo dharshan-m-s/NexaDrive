@@ -443,7 +443,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // a full-width navigation sheet.
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final pillInset =
-        AppDimens.space10 * 2 + AppDimens.bottomNavHeight + bottomInset;
+        AppDimens.space12 * 2 + AppDimens.bottomNavHeight + bottomInset + 18;
 
     return PopScope(
         canPop: index == 0,
@@ -475,9 +475,33 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               Positioned(
                 left: 0,
                 right: 0,
+                bottom: 0,
+                height: 176,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          AppColors.backgroundFor(
+                            Theme.of(context).brightness,
+                          ).withValues(alpha: 0),
+                          AppColors.backgroundFor(
+                            Theme.of(context).brightness,
+                          ).withValues(alpha: 0.82),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
                 // Keep the pill separate from the system gesture area; the pill's
                 // own surface, outline, and shadow create its floating appearance.
-                bottom: AppDimens.space10 + bottomInset,
+                bottom: AppDimens.space12 + bottomInset,
                 child: SafeArea(
                   top: false,
                   bottom: false,

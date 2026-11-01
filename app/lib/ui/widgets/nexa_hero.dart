@@ -29,10 +29,12 @@ class NexaHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final onGradient = AppColors.heroTextOnGradient(brightness);
+    final onGradient = AppColors.labelPrimaryFor(brightness);
+    final accent = AppColors.accentFor(brightness);
 
     return NexaSurface(
       level: NexaSurfaceLevel.floating,
+      color: AppColors.surfaceElevatedFor(brightness),
       radius: AppDimens.radiusXLarge,
       onTap: onTap,
       padding: const EdgeInsets.fromLTRB(
@@ -54,7 +56,7 @@ class NexaHero extends StatelessWidget {
                     Text(
                       label.toUpperCase(),
                       style: AppTextStyle.caption2.copyWith(
-                        color: onGradient.withValues(alpha: 0.72),
+                        color: AppColors.labelSecondaryFor(brightness),
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.1,
                         // Subtle gradient-aware tint for light mode
@@ -73,7 +75,7 @@ class NexaHero extends StatelessWidget {
                       Text(
                         secondary!,
                         style: AppTextStyle.metricValue.copyWith(
-                          color: onGradient.withValues(alpha: 0.92),
+                          color: AppColors.labelSecondaryFor(brightness),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -89,8 +91,8 @@ class NexaHero extends StatelessWidget {
                   fraction: fraction,
                   size: 88,
                   stroke: 6,
-                  color: onGradient,
-                  track: onGradient.withValues(alpha: 0.22),
+                  color: accent,
+                  track: accent.withValues(alpha: 0.18),
                 ),
             ],
           ),
@@ -107,8 +109,8 @@ class NexaHero extends StatelessWidget {
               builder: (context, v, _) => LinearProgressIndicator(
                 value: v,
                 minHeight: 6,
-                color: AppColors.surfaceFor(brightness),
-                backgroundColor: onGradient.withValues(alpha: 0.25),
+                color: accent,
+                backgroundColor: accent.withValues(alpha: 0.16),
               ),
             ),
           ),
@@ -118,7 +120,7 @@ class NexaHero extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyle.caption1.copyWith(
-              color: onGradient.withValues(alpha: 0.90),
+              color: AppColors.labelSecondaryFor(brightness),
               fontWeight: FontWeight.w500,
             ),
           ),

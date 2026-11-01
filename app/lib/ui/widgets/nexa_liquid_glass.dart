@@ -5,12 +5,11 @@ import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 
-/// A refractive material for the app's navigation and transient chrome.
+/// Live optical material for navigation and transient controls.
 ///
-/// On Impeller, the backdrop is processed by a GPU fragment shader: the
-/// background is sampled with a small optical displacement, subtle channel
-/// separation and a restrained edge Fresnel. Other renderers use a clipped
-/// blur fallback rather than attempting an unsupported image-filter shader.
+/// The clipped surface samples the page beneath it, softens that image, then
+/// applies an Impeller refraction shader. Other renderers use a real backdrop
+/// blur and restrained tint. Foreground content is painted after the material.
 class NexaLiquidGlass extends StatefulWidget {
   final Widget child;
   final BorderRadiusGeometry borderRadius;
@@ -28,7 +27,7 @@ class NexaLiquidGlass extends StatefulWidget {
       Radius.circular(AppDimens.radiusMedium),
     ),
     this.padding = const EdgeInsets.all(AppDimens.space12),
-    this.blurSigma = 14,
+    this.blurSigma = 8,
     this.enabled = true,
     this.forceOpaque = false,
     this.showHighlight = true,
@@ -40,15 +39,23 @@ class NexaLiquidGlass extends StatefulWidget {
 }
 
 class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
-  ui.FragmentShader? _glassShader;
+  ui.FragmentShader? _shader;
 
   @override
   void initState() {
     super.initState();
-    _loadGlassShader();
+    _loadShader();
   }
 
-  Future<void> _loadGlassShader() async {
+  @override
+  void didUpdateWidget(covariant NexaLiquidGlass oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.enabled && widget.enabled && _shader == null) {
+      _loadShader();
+    }
+  }
+
+  Future<void> _loadShader() async {
     if (!widget.enabled || !ui.ImageFilter.isShaderFilterSupported) return;
     try {
       final program = await ui.FragmentProgram.fromAsset(
@@ -59,34 +66,30 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
         shader.dispose();
         return;
       }
-      setState(() => _glassShader = shader);
+      setState(() => _shader = shader);
     } catch (_) {
-      // Shader compilation/loading can fail on a device-specific backend.
-      // The clipped blur path below remains a fully supported fallback.
+      // The renderer-specific blur fallback remains functional.
     }
   }
 
   @override
   void dispose() {
-    _glassShader?.dispose();
+    _shader?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final highContrast = widget.forceOpaque ||
+    final opaque = widget.forceOpaque ||
         (MediaQuery.maybeOf(context)?.highContrast ?? false);
-    final filterEnabled = widget.enabled && !highContrast;
-    final tint = AppColors.glassSurfaceFor(brightness);
-    final highlight = AppColors.glassHighlightFor(brightness);
-    final edge = AppColors.glassBorderFor(brightness);
-    final tintOpacity = highContrast
-        ? 0.98
-        : brightness == Brightness.dark
-            ? 0.20
-            : 0.15;
-    final shader = _glassShader;
+    final active = widget.enabled && !opaque;
+    final dark = brightness == Brightness.dark;
+    final tint = dark ? const Color(0xFF171A22) : const Color(0xFFF7F9FF);
+    final edge = dark
+        ? Colors.white.withValues(alpha: 0.13)
+        : Colors.white.withValues(alpha: 0.48);
+    final shader = _shader;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -94,12 +97,10 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
         boxShadow: widget.showShadow
             ? [
                 BoxShadow(
-                  color: AppColors.shadowColorFor(brightness).withValues(
-                    alpha: brightness == Brightness.dark ? 0.62 : 0.72,
-                  ),
-                  blurRadius: 24,
-                  spreadRadius: -5,
-                  offset: const Offset(0, 9),
+                  color: Colors.black.withValues(alpha: dark ? 0.34 : 0.10),
+                  blurRadius: 28,
+                  spreadRadius: -9,
+                  offset: const Offset(0, 12),
                 ),
               ]
             : const [],
@@ -110,43 +111,49 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
         child: Stack(
           fit: StackFit.passthrough,
           children: [
-            if (filterEnabled)
-              Positioned.fill(
-                child: BackdropFilter(
-                  filter: shader != null
-                      ? ui.ImageFilter.shader(shader)
-                      : ui.ImageFilter.blur(
-                          sigmaX: widget.blurSigma,
-                          sigmaY: widget.blurSigma,
-                        ),
-                  child: const SizedBox.expand(),
-                ),
-              ),
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: tint.withValues(alpha: tintOpacity),
+                  color: opaque
+                      ? AppColors.surfaceFor(brightness)
+                      : tint.withValues(alpha: dark ? 0.30 : 0.24),
                 ),
               ),
             ),
-            Padding(padding: widget.padding, child: widget.child),
-            if (widget.showHighlight)
+            if (active)
               Positioned.fill(
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(
+                    sigmaX: widget.blurSigma,
+                    sigmaY: widget.blurSigma,
+                  ),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            if (active && shader != null)
+              Positioned.fill(
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.shader(shader),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            Padding(padding: widget.padding, child: widget.child),
+            // The Impeller shader paints the directional Fresnel and
+            // specular response itself. Only the non-shader fallback needs a
+            // tiny top catch-light; never lay a broad white gradient over glass.
+            if (widget.showHighlight && active && shader == null)
+              Positioned(
+                left: 1,
+                right: 1,
+                top: 0,
                 child: IgnorePointer(
-                  child: DecoratedBox(
+                  child: Container(
+                    height: 1,
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        stops: const [0, 0.22, 0.62],
-                        colors: [
-                          highlight.withValues(
-                            alpha: highContrast ? 0.10 : 0.24,
-                          ),
-                          Colors.transparent,
-                          Colors.transparent,
-                        ],
+                      color: Colors.white.withValues(
+                        alpha: dark ? 0.075 : 0.18,
                       ),
+                      borderRadius: widget.borderRadius,
                     ),
                   ),
                 ),
@@ -156,10 +163,7 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: widget.borderRadius,
-                    border: Border.all(
-                      color: edge.withValues(alpha: highContrast ? 0.95 : 0.70),
-                      width: 0.8,
-                    ),
+                    border: Border.all(color: edge, width: 0.65),
                   ),
                 ),
               ),

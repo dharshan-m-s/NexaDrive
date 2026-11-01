@@ -26,7 +26,7 @@ class NexaEmptyState extends StatelessWidget {
     this.secondary,
     this.centered = false,
     this.actionIcon = Icons.add_rounded,
-    this.iconSize = 64,
+    this.iconSize = 52,
   });
 
   @override
@@ -37,7 +37,7 @@ class NexaEmptyState extends StatelessWidget {
     final content = Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppDimens.space32,
-        vertical: AppDimens.space24,
+        vertical: AppDimens.space16,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -47,33 +47,33 @@ class NexaEmptyState extends StatelessWidget {
             height: iconSize,
             decoration: BoxDecoration(
               color: brightness == Brightness.dark
-                  ? accent.withValues(alpha: 0.16)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+                  ? accent.withValues(alpha: 0.12)
+                  : accent.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
             ),
             child: Icon(icon, size: iconSize * 0.45, color: accent),
           ),
-          const SizedBox(height: AppDimens.space16),
+          const SizedBox(height: AppDimens.space12),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: AppTextStyle.sectionHeader.copyWith(
+            style: AppTextStyle.title3.copyWith(
               color: AppColors.labelPrimaryFor(brightness),
             ),
           ),
           if (hint != null) ...[
-            const SizedBox(height: AppDimens.space8),
+            const SizedBox(height: AppDimens.space4),
             Text(
               hint!,
               textAlign: TextAlign.center,
-              style: AppTextStyle.caption1.copyWith(
+              style: AppTextStyle.subheadline.copyWith(
                 color: AppColors.labelSecondaryFor(brightness),
               ),
             ),
           ],
           if (actionLabel != null && onAction != null) ...[
-            const SizedBox(height: AppDimens.space20),
-            NexaFilledButton(
+            const SizedBox(height: AppDimens.space12),
+            NexaTextButton(
               onPressed: onAction,
               icon: Icon(actionIcon, size: AppDimens.iconSmall),
               child: Text(actionLabel!),

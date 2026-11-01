@@ -104,7 +104,9 @@ class NexaSurface extends StatelessWidget {
       case NexaSurfaceLevel.grouped:
         return AppColors.surfaceGroupedFor(brightness);
       case NexaSurfaceLevel.floating:
-        return AppColors.surfaceFor(brightness).withValues(alpha: 0.82);
+        return AppColors.surfaceFor(brightness).withValues(
+          alpha: brightness == Brightness.dark ? 0.94 : 0.96,
+        );
       case NexaSurfaceLevel.modal:
         return AppColors.surfaceFor(brightness);
     }
@@ -133,9 +135,21 @@ class NexaSurface extends StatelessWidget {
   }
 
   static Border? _borderFor(NexaSurfaceLevel l, Brightness b) {
-    if ((l == NexaSurfaceLevel.grouped || l == NexaSurfaceLevel.surface) &&
-        b == Brightness.dark) {
-      return Border.all(color: AppColors.separatorFor(b), width: 0.5);
+    if (l == NexaSurfaceLevel.grouped || l == NexaSurfaceLevel.surface) {
+      return Border.all(
+        color: AppColors.separatorFor(b).withValues(
+          alpha: b == Brightness.dark ? 0.78 : 0.62,
+        ),
+        width: 0.55,
+      );
+    }
+    if (l == NexaSurfaceLevel.floating) {
+      return Border.all(
+        color: b == Brightness.dark
+            ? Colors.white.withValues(alpha: 0.075)
+            : Colors.black.withValues(alpha: 0.045),
+        width: 0.6,
+      );
     }
     return null;
   }

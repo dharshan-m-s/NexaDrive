@@ -143,18 +143,12 @@ class _HomeScreenState extends State<HomeScreen> {
       subtitle: 'Your private cloud, at a glance',
       bottomSafeArea: false,
       scrollable: true,
-      headerAction: NexaLiquidGlass(
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        padding: EdgeInsets.zero,
-        blurSigma: 12,
-        showShadow: false,
-        child: IconButton(
-          tooltip: 'Refresh overview',
-          onPressed: _loading ? null : load,
-          icon: Icon(
-            Icons.refresh_rounded,
-            color: AppColors.accentTextFor(brightness),
-          ),
+      headerAction: IconButton(
+        tooltip: 'Refresh overview',
+        onPressed: _loading ? null : load,
+        icon: Icon(
+          Icons.refresh_rounded,
+          color: AppColors.accentTextFor(brightness),
         ),
       ),
       body: Column(
@@ -175,12 +169,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: NexaCircularProgress(size: 20),
                         ),
                       )
-                    : NexaEmptyState(
-                        icon: Icons.cloud_off_rounded,
-                        title: 'Can\'t reach your server',
-                        hint: _error ?? 'Check your connection and try again.',
-                        actionLabel: 'Retry',
-                        onAction: load,
+                    : _HomeConnectionNotice(
+                        message: _error ?? 'Check your connection and try again.',
+                        onRetry: load,
                       ),
           ),
           const SizedBox(height: AppDimens.space24),
@@ -306,50 +297,153 @@ class _QuickActionsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = <NexaFocusBlock>[
-      NexaFocusBlock(
-        icon: Icons.cloud_upload_outlined,
-        title: 'Upload',
-        layout: NexaFocusBlockLayout.vertical,
-        onTap: () => _request(FilesIntent.upload),
-      ),
-      NexaFocusBlock(
-        icon: Icons.drive_folder_upload_outlined,
-        title: 'Upload folder',
-        layout: NexaFocusBlockLayout.vertical,
-        onTap: () => _request(FilesIntent.uploadFolder),
-      ),
-      NexaFocusBlock(
-        icon: Icons.create_new_folder_outlined,
-        title: 'New folder',
-        layout: NexaFocusBlockLayout.vertical,
-        onTap: () => _request(FilesIntent.newFolder),
-      ),
-      NexaFocusBlock(
-        icon: Icons.photo_library_outlined,
-        title: 'Photo library',
-        layout: NexaFocusBlockLayout.vertical,
-        onTap: () => onNavigate(3),
-      ),
+    final items = <_QuickActionData>[
+      _QuickActionData(Icons.cloud_upload_outlined, 'Upload files',
+          'Add files to your cloud', () => _request(FilesIntent.upload)),
+      _QuickActionData(Icons.drive_folder_upload_outlined, 'Upload folder',
+          'Keep folders together', () => _request(FilesIntent.uploadFolder)),
+      _QuickActionData(Icons.create_new_folder_outlined, 'New folder',
+          'Organise your files', () => _request(FilesIntent.newFolder)),
+      _QuickActionData(Icons.photo_library_outlined, 'Photos',
+          'Browse your memories', () => onNavigate(3)),
     ];
-
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth;
-        final columns = maxWidth >= 800 ? 4 : 2;
-        const spacing = AppDimens.space12;
-        final width = (maxWidth - (columns - 1) * spacing) / columns;
+        final columns = constraints.maxWidth >= 720 ? 4 : 2;
+        const spacing = AppDimens.space10;
+        final width =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
         return Wrap(
           spacing: spacing,
           runSpacing: spacing,
           children: [
-            for (final item in items) SizedBox(width: width, child: item),
+            for (final item in items)
+              SizedBox(width: width, child: _QuickActionTile(data: item)),
           ],
         );
       },
     );
   }
 }
+
+class _QuickActionData {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  const _QuickActionData(this.icon, this.title, this.subtitle, this.onTap);
+}
+
+class _QuickActionTile extends StatelessWidget {
+  final _QuickActionData data;
+  const _QuickActionTile({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    return Material(
+      color: AppColors.surfaceFor(brightness),
+      borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+      child: InkWell(
+        onTap: data.onTap,
+        borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space12,
+            vertical: AppDimens.space14,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.accentContainerFor(brightness),
+                  borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+                ),
+                child: Icon(data.icon, size: 21,
+                    color: AppColors.accentFor(brightness)),
+              ),
+              const SizedBox(width: AppDimens.space10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(data.title, maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyle.subheadline.copyWith(
+                          color: AppColors.labelPrimaryFor(brightness),
+                          fontWeight: FontWeight.w600,
+                        )),
+                    const SizedBox(height: AppDimens.space2),
+                    Text(data.subtitle, maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyle.caption2.copyWith(
+                          color: AppColors.labelSecondaryFor(brightness),
+                        )),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeConnectionNotice extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _HomeConnectionNotice({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    return Container(
+      padding: const EdgeInsets.all(AppDimens.space16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceFor(brightness),
+        borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+        border: Border.all(color: AppColors.dividerFor(brightness)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.errorContainerFor(brightness),
+              borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+            ),
+            child: Icon(Icons.cloud_off_rounded,
+                color: AppColors.errorFor(brightness)),
+          ),
+          const SizedBox(width: AppDimens.space12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Server unavailable',
+                    style: AppTextStyle.title3.copyWith(
+                      color: AppColors.labelPrimaryFor(brightness),
+                    )),
+                const SizedBox(height: AppDimens.space4),
+                Text(message,
+                    style: AppTextStyle.caption1.copyWith(
+                      color: AppColors.labelSecondaryFor(brightness),
+                    )),
+              ],
+            ),
+          ),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
+    );
+  }
+}
+
 
 /// Real recently-modified files from the root folder, with a friendly empty
 /// state that never pretends data is loading.

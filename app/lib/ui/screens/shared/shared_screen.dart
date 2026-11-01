@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_motion.dart';
+import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
 import '../../../services/api.dart';
 import '../../widgets/nexa_components.dart';
@@ -58,7 +59,7 @@ class _SharedScreenState extends State<SharedScreen> {
       if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _loading = false;
-        _error = e.toString();
+        _error = 'Check your server connection and try again.';
       });
     }
   }
@@ -140,16 +141,10 @@ class _SharedScreenState extends State<SharedScreen> {
       title: 'Shared',
       subtitle: '$count ${_mine ? 'active shares' : 'shared items'}',
       bottomSafeArea: false,
-      headerAction: NexaLiquidGlass(
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        padding: EdgeInsets.zero,
-        blurSigma: 12,
-        showShadow: false,
-        child: IconButton(
-          tooltip: 'Refresh',
-          onPressed: _loading ? null : load,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
+      headerAction: IconButton(
+        tooltip: 'Refresh',
+        onPressed: _loading ? null : load,
+        icon: const Icon(Icons.refresh_rounded),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -188,13 +183,7 @@ class _SharedScreenState extends State<SharedScreen> {
     if (_loading) return const NexaLoadingBlock();
 
     if (_error != null) {
-      return NexaEmptyState(
-        icon: Icons.cloud_off_rounded,
-        title: 'Shares unavailable',
-        hint: _error,
-        actionLabel: 'Try again',
-        onAction: load,
-      );
+      return _SharedConnectionNotice(onRetry: load);
     }
 
     if (items.isEmpty) {
@@ -282,6 +271,64 @@ class _SharedScreenState extends State<SharedScreen> {
   }
 }
 
+class _SharedConnectionNotice extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _SharedConnectionNotice({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppDimens.space16),
+      child: Container(
+        padding: const EdgeInsets.all(AppDimens.space16),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceFor(brightness),
+          borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+          border: Border.all(color: AppColors.dividerFor(brightness)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.cloud_off_rounded,
+                    color: AppColors.errorFor(brightness), size: 20),
+                const SizedBox(width: AppDimens.space8),
+                Text('Connection problem',
+                    style: TextStyle(
+                      color: AppColors.labelPrimaryFor(brightness),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    )),
+              ],
+            ),
+            const SizedBox(height: AppDimens.space8),
+            Text(
+              'NexaDrive could not contact your server. Check that the server is online and your device is connected.',
+              style: TextStyle(
+                color: AppColors.labelSecondaryFor(brightness),
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: AppDimens.space12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Try again'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ShareScopeSwitch extends StatelessWidget {
   final bool mine;
   final int receivedCount;
@@ -297,27 +344,40 @@ class _ShareScopeSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NexaLiquidGlass(
-      borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-      padding: const EdgeInsets.all(AppDimens.space4),
-      blurSigma: 14,
-      showShadow: false,
-      child: Row(
-        children: [
-          _ShareScopeOption(
-            label: 'With me',
-            count: receivedCount,
-            selected: !mine,
-            onTap: () => onChanged(false),
-          ),
-          _ShareScopeOption(
-            label: 'Mine',
-            count: sentCount,
-            selected: mine,
-            onTap: () => onChanged(true),
-          ),
-        ],
-      ),
+    final brightness = Theme.of(context).brightness;
+    return Column(
+      children: [
+        Row(
+          children: [
+            _ShareScopeOption(label: 'With me', count: receivedCount,
+                selected: !mine, onTap: () => onChanged(false)),
+            const SizedBox(width: AppDimens.space24),
+            _ShareScopeOption(label: 'Shared by me', count: sentCount,
+                selected: mine, onTap: () => onChanged(true)),
+          ],
+        ),
+        const SizedBox(height: AppDimens.space8),
+        Stack(
+          children: [
+            Container(height: 1, color: AppColors.dividerFor(brightness)),
+            AnimatedAlign(
+              alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+              duration: AppMotion.resolve(context, AppMotion.normal),
+              curve: AppMotion.standardCurve,
+              child: FractionallySizedBox(
+                widthFactor: 0.5,
+                child: Container(
+                  height: 2,
+                  decoration: BoxDecoration(
+                    color: AppColors.accentFor(brightness),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -343,71 +403,41 @@ class _ShareScopeOption extends StatelessWidget {
         button: true,
         selected: selected,
         label: '$label, $count',
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            child: AnimatedContainer(
-              duration: AppMotion.resolve(context, AppMotion.fast),
-              curve: AppMotion.standardCurve,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimens.space12,
-                vertical: AppDimens.space10,
-              ),
-              decoration: BoxDecoration(
-                color: selected
-                    ? AppColors.glassSelectionFor(brightness)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                border: selected
-                    ? Border.all(
-                        color: AppColors.glassBorderFor(brightness),
-                        width: 0.7,
-                      )
-                    : null,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: AppColors.labelPrimaryFor(brightness),
-                      fontSize: 13,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                    ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppDimens.space10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(label, style: AppTextStyle.subheadline.copyWith(
+                  color: selected
+                      ? AppColors.labelPrimaryFor(brightness)
+                      : AppColors.labelSecondaryFor(brightness),
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                )),
+                const SizedBox(width: AppDimens.space8),
+                AnimatedContainer(
+                  duration: AppMotion.resolve(context, AppMotion.fast),
+                  constraints: const BoxConstraints(minWidth: 22),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space6, vertical: AppDimens.space2),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? AppColors.accentContainerFor(brightness)
+                        : AppColors.fillFor(brightness),
+                    borderRadius: BorderRadius.circular(AppDimens.radiusPill),
                   ),
-                  const SizedBox(width: AppDimens.space8),
-                  AnimatedContainer(
-                    duration: AppMotion.resolve(context, AppMotion.fast),
-                    curve: AppMotion.standardCurve,
-                    constraints: const BoxConstraints(minWidth: 22),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimens.space6,
-                      vertical: AppDimens.space2,
-                    ),
-                    decoration: BoxDecoration(
+                  child: Text('$count', textAlign: TextAlign.center,
+                    style: AppTextStyle.caption2.copyWith(
                       color: selected
-                          ? AppColors.accentContainerFor(brightness)
-                          : AppColors.surfaceAltFor(brightness),
-                      borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                    ),
-                    child: Text(
-                      '$count',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: selected
-                            ? AppColors.accentTextFor(brightness)
-                            : AppColors.labelSecondaryFor(brightness),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                          ? AppColors.accentTextFor(brightness)
+                          : AppColors.labelSecondaryFor(brightness),
+                      fontWeight: FontWeight.w700,
+                    )),
+                ),
+              ],
             ),
           ),
         ),

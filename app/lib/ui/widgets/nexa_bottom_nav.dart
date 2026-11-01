@@ -31,7 +31,7 @@ class NexaBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return NexaLiquidGlass(
       borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-      blurSigma: 16,
+      blurSigma: 8,
       padding: EdgeInsets.zero,
       child: SizedBox(
         width: double.infinity,
@@ -148,12 +148,12 @@ class _NavRowState extends State<_NavRow> with SingleTickerProviderStateMixin {
                         1,
                       ),
                       child: NexaLiquidGlass(
-                        borderRadius: BorderRadius.circular(
-                          AppDimens.radiusPill,
-                        ),
+                        borderRadius:
+                            BorderRadius.circular(AppDimens.radiusPill),
                         padding: EdgeInsets.zero,
-                        blurSigma: 8,
-                        enabled: false,
+                        blurSigma: 10,
+                        enabled: true,
+                        showHighlight: false,
                         showShadow: false,
                         child: const SizedBox.expand(),
                       ),
@@ -195,8 +195,12 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = AppColors.accentTextFor(brightness);
-    final inactiveColor = AppColors.textSecondaryFor(brightness);
+    final activeColor = brightness == Brightness.dark
+        ? Colors.white
+        : AppColors.accentTextFor(brightness);
+    final inactiveColor = AppColors.textSecondaryFor(brightness).withValues(
+      alpha: brightness == Brightness.dark ? 0.78 : 0.72,
+    );
 
     return Semantics(
       button: true,

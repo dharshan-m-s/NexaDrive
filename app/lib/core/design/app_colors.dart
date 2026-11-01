@@ -49,24 +49,24 @@ abstract final class AppColors {
   static const Color backgroundLight = Color(0xFFF2F2F7);
 
   /// Page background (dark) — true black, the iOS grouped canvas.
-  static const Color backgroundDark = Color(0xFF000000);
+  static const Color backgroundDark = Color(0xFF0A0D13);
 
   /// Primary content surface (cards, sheets, tiles) — LEVEL 1.
   static const Color surfaceLight = Color(0xFFFFFFFF);
-  static const Color surfaceDark = Color(0xFF1C1C1E);
+  static const Color surfaceDark = Color(0xFF151B24);
 
   /// Grouped/alt surface used inside panels to separate rows or hover fills
   /// — LEVEL 2 (`secondarySystemGroupedBackground`).
   static const Color surfaceAltLight = Color(0xFFF2F2F7);
-  static const Color surfaceAltDark = Color(0xFF2C2C2E);
+  static const Color surfaceAltDark = Color(0xFF1D2632);
 
   /// Slightly deeper surface for headers/toolbars over content — LEVEL 3.
   static const Color surfaceElevatedLight = Color(0xFFFFFFFF);
-  static const Color surfaceElevatedDark = Color(0xFF2C2C2E);
+  static const Color surfaceElevatedDark = Color(0xFF222D3B);
 
   /// Deepest inset surface — pressed rows, selection bar over content.
   static const Color surfacePressedLight = Color(0xFFE5E5EA);
-  static const Color surfacePressedDark = Color(0xFF3A3A3C);
+  static const Color surfacePressedDark = Color(0xFF293545);
 
   // --------------------------------------------------------------- text
   /// `label` — the one ink, at full strength.
@@ -127,13 +127,13 @@ abstract final class AppColors {
   // --------------------------------------------------------- glass material
   /// Neutral theme-aware tint for translucent app chrome.
   static const Color glassSurfaceLight = Color(0xFFF7F8FC);
-  static const Color glassSurfaceDark = Color(0xFF202129);
+  static const Color glassSurfaceDark = Color(0xFF171E29);
   static const Color glassHighlightLight = Color(0x66FFFFFF);
-  static const Color glassHighlightDark = Color(0x26FFFFFF);
+  static const Color glassHighlightDark = Color(0x1FFFFFFF);
   static const Color glassBorderLight = Color(0xBFFFFFFF);
-  static const Color glassBorderDark = Color(0x42FFFFFF);
+  static const Color glassBorderDark = Color(0x2AFFFFFF);
   static const Color glassSelectionLight = Color(0xDCE9EAF4);
-  static const Color glassSelectionDark = Color(0x35FFFFFF);
+  static const Color glassSelectionDark = Color(0x24FFFFFF);
 
   static Color glassSurfaceFor(Brightness b) =>
       b == Brightness.dark ? glassSurfaceDark : glassSurfaceLight;
@@ -258,14 +258,14 @@ abstract final class AppColors {
       b == Brightness.dark ? surfaceGroupedDark : surfaceGroupedLight;
 
   static const Color surfaceGroupedLight = Color(0xFFFFFFFF);
-  static const Color surfaceGroupedDark = Color(0xFF1C1C1E);
+  static const Color surfaceGroupedDark = Color(0xFF151B24);
 
   /// Tertiary grouped plane.
   static Color surfaceGroupedAltFor(Brightness b) =>
       b == Brightness.dark ? surfaceGroupedAltDark : surfaceGroupedAltLight;
 
   static const Color surfaceGroupedAltLight = Color(0xFFF2F2F7);
-  static const Color surfaceGroupedAltDark = Color(0xFF2C2C2E);
+  static const Color surfaceGroupedAltDark = Color(0xFF1D2632);
 
   /// Alternate surface alias used by panel internals.
   static Color surfaceAltFor(Brightness b) =>
