@@ -23,6 +23,7 @@ import '../../widgets/nexa_chip.dart';
 import '../../widgets/nexa_empty_state.dart';
 import '../../widgets/nexa_file_tile.dart';
 import '../../widgets/nexa_loading_state.dart';
+import '../../widgets/nexa_liquid_glass.dart';
 import '../../widgets/nexa_sheet.dart';
 import '../../widgets/upload_progress_dialog.dart';
 import '../scanner/scanner_screen.dart';
@@ -1112,97 +1113,113 @@ class _ViewArea extends StatelessWidget {
               onPressed: onExitSelection,
               icon: const Icon(Icons.close_rounded),
             )
-          else ...[
-            IconButton.filled(
-              tooltip: 'Upload files',
-              onPressed: onUpload,
-              icon: const Icon(Icons.upload_rounded),
-            ),
-            if (onUploadFolder != null)
-              IconButton(
-                tooltip: 'Upload folder',
-                onPressed: onUploadFolder,
-                icon: const Icon(Icons.drive_folder_upload_outlined),
+          else
+            NexaLiquidGlass(
+              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+              padding: const EdgeInsets.symmetric(horizontal: AppDimens.space2),
+              blurSigma: 12,
+              showShadow: false,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton.filled(
+                    tooltip: 'Upload files',
+                    onPressed: onUpload,
+                    icon: const Icon(Icons.upload_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Search files',
+                    onPressed: onSearch,
+                    icon: const Icon(Icons.search_rounded),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'More actions',
+                    icon: const Icon(Icons.more_vert_rounded),
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'folder':
+                          onNewFolder?.call();
+                        case 'uploadFolder':
+                          onUploadFolder?.call();
+                        case 'scan':
+                          onScan?.call();
+                        case 'sort':
+                          onSort?.call();
+                        case 'view':
+                          onToggleView();
+                        case 'up':
+                          onBackToRoot?.call();
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      if (onNewFolder != null)
+                        const PopupMenuItem(
+                          value: 'folder',
+                          child: ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.create_new_folder_outlined),
+                            title: Text('New folder'),
+                          ),
+                        ),
+                      if (onUploadFolder != null)
+                        const PopupMenuItem(
+                          value: 'uploadFolder',
+                          child: ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.drive_folder_upload_outlined),
+                            title: Text('Upload folder'),
+                          ),
+                        ),
+                      if (onScan != null)
+                        const PopupMenuItem(
+                          value: 'scan',
+                          child: ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.document_scanner_outlined),
+                            title: Text('Scan document'),
+                          ),
+                        ),
+                      if (onSort != null)
+                        const PopupMenuItem(
+                          value: 'sort',
+                          child: ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.sort_rounded),
+                            title: Text('Sort by'),
+                          ),
+                        ),
+                      PopupMenuItem(
+                        value: 'view',
+                        child: ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            isGrid
+                                ? Icons.view_list_outlined
+                                : Icons.grid_view_outlined,
+                          ),
+                          title: Text(isGrid ? 'List view' : 'Grid view'),
+                        ),
+                      ),
+                      if (onBackToRoot != null)
+                        const PopupMenuItem(
+                          value: 'up',
+                          child: ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.arrow_upward_rounded),
+                            title: Text('Back to My files'),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
               ),
-            IconButton(
-              tooltip: 'Search files',
-              onPressed: onSearch,
-              icon: const Icon(Icons.search_rounded),
             ),
-            PopupMenuButton<String>(
-              tooltip: 'More actions',
-              icon: const Icon(Icons.more_vert_rounded),
-              onSelected: (value) {
-                switch (value) {
-                  case 'folder':
-                    onNewFolder?.call();
-                  case 'scan':
-                    onScan?.call();
-                  case 'sort':
-                    onSort?.call();
-                  case 'view':
-                    onToggleView();
-                  case 'up':
-                    onBackToRoot?.call();
-                }
-              },
-              itemBuilder: (context) => [
-                if (onNewFolder != null)
-                  const PopupMenuItem(
-                    value: 'folder',
-                    child: ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.create_new_folder_outlined),
-                      title: Text('New folder'),
-                    ),
-                  ),
-                if (onScan != null)
-                  const PopupMenuItem(
-                    value: 'scan',
-                    child: ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.document_scanner_outlined),
-                      title: Text('Scan document'),
-                    ),
-                  ),
-                if (onSort != null)
-                  const PopupMenuItem(
-                    value: 'sort',
-                    child: ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.sort_rounded),
-                      title: Text('Sort by'),
-                    ),
-                  ),
-                PopupMenuItem(
-                  value: 'view',
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      isGrid
-                          ? Icons.view_list_outlined
-                          : Icons.grid_view_outlined,
-                    ),
-                    title: Text(isGrid ? 'List view' : 'Grid view'),
-                  ),
-                ),
-                if (onBackToRoot != null)
-                  const PopupMenuItem(
-                    value: 'up',
-                    child: ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.arrow_upward_rounded),
-                      title: Text('Back to My files'),
-                    ),
-                  ),
-              ],
-            ),
-          ],
         ],
       ),
     );

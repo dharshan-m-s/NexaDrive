@@ -147,29 +147,15 @@ class _NavRowState extends State<_NavRow> with SingleTickerProviderStateMixin {
                         1 - stretch * 0.45,
                         1,
                       ),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius:
-                              BorderRadius.circular(AppDimens.radiusPill),
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              AppColors.glassSelectionFor(brightness)
-                                  .withValues(alpha: 0.98),
-                              AppColors.glassSelectionFor(brightness)
-                                  .withValues(alpha: 0.72),
-                            ],
-                          ),
-                          border: Border.all(
-                            color:
-                                AppColors.glassBorderFor(brightness).withValues(
-                              alpha:
-                                  brightness == Brightness.dark ? 0.42 : 0.72,
-                            ),
-                            width: 0.65,
-                          ),
+                      child: NexaLiquidGlass(
+                        borderRadius: BorderRadius.circular(
+                          AppDimens.radiusPill,
                         ),
+                        padding: EdgeInsets.zero,
+                        blurSigma: 8,
+                        enabled: false,
+                        showShadow: false,
+                        child: const SizedBox.expand(),
                       ),
                     ),
                   ),

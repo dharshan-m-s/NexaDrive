@@ -15,6 +15,7 @@ import '../../widgets/nexa_list_tile.dart';
 import '../../widgets/nexa_page.dart';
 import '../../widgets/nexa_chip.dart';
 import '../../widgets/nexa_surface.dart';
+import '../../widgets/nexa_sheet.dart';
 import '../admin/audit_log_screen.dart';
 import '../admin/users_screen.dart';
 import 'update_center_screen.dart';
@@ -66,29 +67,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _changeTheme(BuildContext context) async {
     final current = widget.session.themeMode;
-    final value = await showDialog<String>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Appearance'),
-        children: ['system', 'light', 'dark'].map((mode) {
-          return SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, mode),
-            child: Row(
-              children: [
-                Icon(
-                  mode == 'system'
-                      ? Icons.brightness_auto_rounded
-                      : mode == 'light'
-                          ? Icons.light_mode_rounded
-                          : Icons.dark_mode_rounded,
-                  size: AppDimens.iconMd,
-                ),
-                const SizedBox(width: AppDimens.spaceSm),
-                Text(mode[0].toUpperCase() + mode.substring(1)),
-              ],
+    final value = await showNexaSheet<String>(
+      context,
+      isScrollControlled: false,
+      builder: (sheetContext) => NexaSheetBody(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const NexaSheetHeader(
+              title: 'Appearance',
+              subtitle: 'Choose how NexaDrive looks on this device',
             ),
-          );
-        }).toList(),
+            for (final mode in ['system', 'light', 'dark'])
+              NexaSheetAction(
+                icon: mode == 'system'
+                    ? Icons.brightness_auto_rounded
+                    : mode == 'light'
+                        ? Icons.light_mode_rounded
+                        : Icons.dark_mode_rounded,
+                title: mode[0].toUpperCase() + mode.substring(1),
+                subtitle: mode == current ? 'Currently selected' : null,
+                iconColor: mode == current
+                    ? AppColors.accentFor(Theme.of(sheetContext).brightness)
+                    : null,
+                onTap: () => Navigator.pop(sheetContext, mode),
+              ),
+          ],
+        ),
       ),
     );
     if (value == null || value == current) return;

@@ -136,10 +136,27 @@ class _HomeScreenState extends State<HomeScreen> {
     final pageTitle =
         MediaQuery.sizeOf(context).width >= 900 ? 'Overview' : 'NexaDrive';
 
+    final brightness = Theme.of(context).brightness;
+
     return NexaPage(
       title: pageTitle,
+      subtitle: 'Your private cloud, at a glance',
       bottomSafeArea: false,
       scrollable: true,
+      headerAction: NexaLiquidGlass(
+        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+        padding: EdgeInsets.zero,
+        blurSigma: 12,
+        showShadow: false,
+        child: IconButton(
+          tooltip: 'Refresh overview',
+          onPressed: _loading ? null : load,
+          icon: Icon(
+            Icons.refresh_rounded,
+            color: AppColors.accentTextFor(brightness),
+          ),
+        ),
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
