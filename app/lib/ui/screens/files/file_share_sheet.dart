@@ -7,6 +7,7 @@ import '../../../core/design/app_motion.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
 import '../../../services/api.dart';
+import '../../widgets/nexa_liquid_glass.dart';
 
 /// One created share link.
 class _ShareLink {
@@ -244,22 +245,28 @@ class _FileShareSheetState extends State<FileShareSheet> {
                 )
               else ...[
                 if (!_hasFolder) ...[
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(
-                        value: 'link',
-                        label: Text('Anyone with link'),
-                        icon: Icon(Icons.link_rounded),
-                      ),
-                      ButtonSegment(
-                        value: 'person',
-                        label: Text('A person'),
-                        icon: Icon(Icons.person_outline_rounded),
-                      ),
-                    ],
-                    selected: {_mode},
-                    onSelectionChanged:
-                        _busy ? null : (s) => setState(() => _mode = s.first),
+                  NexaLiquidGlass(
+                    borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                    blurSigma: 12,
+                    padding: const EdgeInsets.all(AppDimens.space4),
+                    showShadow: false,
+                    child: SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'link',
+                          label: Text('Anyone with link'),
+                          icon: Icon(Icons.link_rounded),
+                        ),
+                        ButtonSegment(
+                          value: 'person',
+                          label: Text('A person'),
+                          icon: Icon(Icons.person_outline_rounded),
+                        ),
+                      ],
+                      selected: {_mode},
+                      onSelectionChanged:
+                          _busy ? null : (s) => setState(() => _mode = s.first),
+                    ),
                   ),
                   const SizedBox(height: AppDimens.space12),
                 ],
@@ -286,23 +293,29 @@ class _FileShareSheetState extends State<FileShareSheet> {
                   ),
                   const SizedBox(height: AppDimens.space12),
                 ],
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(
-                      value: 'view',
-                      label: Text('View only'),
-                      icon: Icon(Icons.visibility_outlined),
-                    ),
-                    ButtonSegment(
-                      value: 'download',
-                      label: Text('Download'),
-                      icon: Icon(Icons.download_outlined),
-                    ),
-                  ],
-                  selected: {_permission},
-                  onSelectionChanged: _busy
-                      ? null
-                      : (s) => setState(() => _permission = s.first),
+                NexaLiquidGlass(
+                  borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                  blurSigma: 12,
+                  padding: const EdgeInsets.all(AppDimens.space4),
+                  showShadow: false,
+                  child: SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: 'view',
+                        label: Text('View only'),
+                        icon: Icon(Icons.visibility_outlined),
+                      ),
+                      ButtonSegment(
+                        value: 'download',
+                        label: Text('Download'),
+                        icon: Icon(Icons.download_outlined),
+                      ),
+                    ],
+                    selected: {_permission},
+                    onSelectionChanged: _busy
+                        ? null
+                        : (s) => setState(() => _permission = s.first),
+                  ),
                 ),
               ],
               if (_busy && _createdCount > 0) ...[
@@ -456,11 +469,19 @@ class _CreatedLinks extends StatelessWidget {
               ),
             ),
             if (links.where((l) => l.isLink).length > 1)
-              TextButton.icon(
-                onPressed: onCopyAll,
-                icon: const Icon(Icons.copy_all_rounded,
-                    size: AppDimens.iconSmall),
-                label: const Text('Copy all'),
+              NexaLiquidGlass(
+                borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                padding: EdgeInsets.zero,
+                blurSigma: 10,
+                showShadow: false,
+                child: TextButton.icon(
+                  onPressed: onCopyAll,
+                  icon: const Icon(
+                    Icons.copy_all_rounded,
+                    size: AppDimens.iconSmall,
+                  ),
+                  label: const Text('Copy all'),
+                ),
               ),
           ],
         ),
@@ -526,11 +547,21 @@ class _CreatedLinks extends StatelessWidget {
                         ),
                       ),
                       if (link.isLink)
-                        IconButton(
-                          tooltip: 'Copy link for ${link.fileName}',
-                          onPressed: () => onCopy(link),
-                          icon: const Icon(Icons.copy_rounded,
-                              size: AppDimens.iconSmall),
+                        NexaLiquidGlass(
+                          borderRadius: BorderRadius.circular(
+                            AppDimens.radiusPill,
+                          ),
+                          padding: EdgeInsets.zero,
+                          blurSigma: 10,
+                          showShadow: false,
+                          child: IconButton(
+                            tooltip: 'Copy link for ${link.fileName}',
+                            onPressed: () => onCopy(link),
+                            icon: const Icon(
+                              Icons.copy_rounded,
+                              size: AppDimens.iconSmall,
+                            ),
+                          ),
                         )
                       else
                         const Padding(

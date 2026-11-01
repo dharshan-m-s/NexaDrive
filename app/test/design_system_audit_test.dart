@@ -7,12 +7,13 @@ import 'package:nexadrive/core/design/nexa_surfaces.dart';
 import 'package:nexadrive/main.dart';
 import 'package:nexadrive/services/session.dart';
 import 'package:nexadrive/ui/widgets/nexa_bottom_nav.dart';
+import 'package:nexadrive/ui/widgets/nexa_liquid_glass.dart';
 import 'package:nexadrive/ui/widgets/nexa_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Runtime checks that the redesign's material and navigation layers are
 /// actually rendered, not merely named. These run through the real layout and
-/// paint pipeline in the test harness — they are the closest thing to runtime
+/// paint pipeline in the test harness â they are the closest thing to runtime
 /// verification available without a device.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -45,6 +46,38 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('Liquid Glass owns a clipped backdrop surface', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: const Scaffold(
+          body: Center(
+            child: NexaLiquidGlass(
+              child: Text('Glass control'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byType(NexaLiquidGlass),
+        matching: find.byType(BackdropFilter),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.ancestor(
+        of: find.byType(BackdropFilter),
+        matching: find.byType(ClipRRect),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   group('tab bar', () {
     for (final dark in [false, true]) {
       testWidgets('${dark ? 'dark' : 'light'}: renders every destination',
@@ -52,13 +85,17 @@ void main() {
         await pumpShell(tester, dark: dark);
 
         expect(find.byType(NexaBottomNav), findsOneWidget);
-        // The solid pill has no Liquid Glass blur inside or wrapped around it.
+        expect(find.text('NexaDrive'), findsOneWidget);
+        expect(find.textContaining('Good morning'), findsNothing);
+        expect(find.textContaining('Good afternoon'), findsNothing);
+        expect(find.textContaining('Good evening'), findsNothing);
+        // The dock owns one clipped backdrop blur; content surfaces stay flat.
         expect(
           find.descendant(
             of: find.byType(NexaBottomNav),
             matching: find.byType(BackdropFilter),
           ),
-          findsNothing,
+          findsOneWidget,
         );
         expect(
           find.ancestor(
@@ -66,7 +103,8 @@ void main() {
             matching: find.byType(BackdropFilter),
           ),
           findsNothing,
-          reason: 'the pill must not be wrapped in a backdrop blur',
+          reason:
+              'the clipped dock contains its own blur rather than wrapping the page',
         );
         // Every destination is present and hit-testable.
         for (final label in ['Home', 'Files', 'Shared', 'Photos', 'More']) {
@@ -76,7 +114,35 @@ void main() {
       });
     }
 
-    testWidgets('the solid pill floats over a full-height page',
+    testWidgets('high contrast uses an opaque dock fallback', (tester) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(highContrast: true),
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: Scaffold(
+              body: NexaBottomNav(
+                currentIndex: 0,
+                onTap: (_) {},
+                items: NexaBottomNavItems.primary,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byType(NexaBottomNav),
+          matching: find.byType(BackdropFilter),
+        ),
+        findsNothing,
+      );
+      expect(find.text('Home'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the glass dock floats over a full-height page',
         (tester) async {
       await pumpShell(tester);
       // The pill is not Scaffold chrome: it floats over the body.

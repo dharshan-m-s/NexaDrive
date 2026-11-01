@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdfx/pdfx.dart';
+import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_dimensions.dart';
 import '../../../../core/models/file_entry.dart';
 import '../../../../core/utils/format.dart';
@@ -34,7 +35,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   /// Opened exactly once. Creating these inside `build()` opened a fresh native
   /// pdfium document and a new controller on every frame, and nothing ever
-  /// closed them — a slow native-memory leak while the viewer stayed open.
+  /// closed them â a slow native-memory leak while the viewer stayed open.
   PdfControllerPinch? _controller;
   Future<PdfDocument>? _document;
   String? _localPdfPath;
@@ -129,26 +130,75 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: NexaPage(
-          title: widget.file.name,
-          subtitle:
-              widget.file.size == null ? null : Format.bytes(widget.file.size),
-          leading: const NexaBackButton(),
-          headerAction: (_error == null && _supported)
-              ? IconButton(
-                  tooltip: 'Download',
-                  onPressed: () => _fallback(context),
-                  icon: const Icon(Icons.download_outlined),
-                )
-              : null,
-          // The rendered page runs edge to edge; the header carries the
-          // chrome and the page itself must not be inset.
-          padding: EdgeInsets.zero,
-          body: _buildBody(Theme.of(context).brightness),
-        ),
+      backgroundColor: AppColors.backgroundFor(brightness),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: SafeArea(
+              top: false,
+              bottom: false,
+              child: _buildBody(brightness),
+            ),
+          ),
+          Positioned(
+            left: AppDimens.space12,
+            right: AppDimens.space12,
+            top: 0,
+            child: SafeArea(
+              bottom: false,
+              child: NexaLiquidGlass(
+                borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+                blurSigma: 16,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimens.space4,
+                  vertical: AppDimens.space2,
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      tooltip:
+                          MaterialLocalizations.of(context).backButtonTooltip,
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            widget.file.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (widget.file.size != null)
+                            Text(
+                              Format.bytes(widget.file.size),
+                              style: textTheme.labelSmall?.copyWith(
+                                color: AppColors.textSecondaryFor(brightness),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Download',
+                      onPressed: () => _fallback(context),
+                      icon: const Icon(Icons.download_outlined),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

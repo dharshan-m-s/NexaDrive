@@ -270,10 +270,16 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
           title: 'Now playing',
           subtitle: [artist, title].where((s) => s.isNotEmpty).join(' · '),
           leading: const NexaBackButton(),
-          headerAction: IconButton(
-            tooltip: 'Save to device',
-            onPressed: _saveToDevice,
-            icon: const Icon(Icons.download_outlined),
+          headerAction: NexaLiquidGlass(
+            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            padding: EdgeInsets.zero,
+            blurSigma: 12,
+            showShadow: false,
+            child: IconButton(
+              tooltip: 'Save to device',
+              onPressed: _saveToDevice,
+              icon: const Icon(Icons.download_outlined),
+            ),
           ),
           scrollable: true,
           padding: const EdgeInsets.fromLTRB(
@@ -330,29 +336,39 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
               else if (_preparing)
                 _Buffering(title: title)
               else
-                _Controls(
-                  playing: _playing,
-                  position: _position,
-                  duration: _duration,
-                  speed: _speed,
-                  canPrevious: _index > 0,
-                  canNext: _index + 1 < _queue.length,
-                  onToggle: _togglePlay,
-                  onPrevious: () => _openTrack(_index - 1),
-                  onNext: () => _openTrack(_index + 1),
-                  onSpeed: _setSpeed,
-                  onDragStart: () => setState(() => _dragging = true),
-                  // Track the thumb live: the elapsed-time label is driven by
-                  // `_position`, so ignoring this leaves the label frozen while
-                  // the user scrubs.
-                  onDragChanged: (v) => setState(
-                    () => _position = _positionFor(v),
+                NexaSurface(
+                  level: NexaSurfaceLevel.grouped,
+                  radius: AppDimens.radiusXLarge,
+                  padding: const EdgeInsets.fromLTRB(
+                    AppDimens.space12,
+                    AppDimens.space12,
+                    AppDimens.space12,
+                    AppDimens.space16,
                   ),
-                  onDragEnd: (v) async {
-                    setState(() => _dragging = false);
-                    setState(() => _position = _positionFor(v));
-                    await _player.seek(_positionFor(v));
-                  },
+                  child: _Controls(
+                    playing: _playing,
+                    position: _position,
+                    duration: _duration,
+                    speed: _speed,
+                    canPrevious: _index > 0,
+                    canNext: _index + 1 < _queue.length,
+                    onToggle: _togglePlay,
+                    onPrevious: () => _openTrack(_index - 1),
+                    onNext: () => _openTrack(_index + 1),
+                    onSpeed: _setSpeed,
+                    onDragStart: () => setState(() => _dragging = true),
+                    // Track the thumb live: the elapsed-time label is driven by
+                    // `_position`, so ignoring this leaves the label frozen while
+                    // the user scrubs.
+                    onDragChanged: (v) => setState(
+                      () => _position = _positionFor(v),
+                    ),
+                    onDragEnd: (v) async {
+                      setState(() => _dragging = false);
+                      setState(() => _position = _positionFor(v));
+                      await _player.seek(_positionFor(v));
+                    },
+                  ),
                 ),
               if (_queue.length > 1) ...[
                 const SizedBox(height: AppDimens.space24),
@@ -370,42 +386,33 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                   ],
                 ),
                 const SizedBox(height: AppDimens.space8),
-                NexaSurface(
-                  level: NexaSurfaceLevel.surface,
-                  radius: AppDimens.radiusCard,
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < _queue.length; i++)
-                        ListTile(
-                          selected: i == _index,
-                          selectedTileColor:
-                              AppColors.accentContainerFor(brightness),
-                          leading: Icon(
-                            i == _index && _playing
-                                ? Icons.graphic_eq_rounded
-                                : Icons.music_note_rounded,
-                            color: i == _index
-                                ? AppColors.accentTextFor(brightness)
-                                : AppColors.textTertiaryFor(brightness),
-                          ),
-                          title: Text(
-                            describe(_queue[i]).$2,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyle.rowTitle.copyWith(
-                              color: AppColors.textPrimaryFor(brightness),
-                            ),
-                          ),
-                          subtitle: Text(
-                            Format.bytes(_queue[i].size),
-                            style: AppTextStyle.caption.copyWith(
-                              color: AppColors.textSecondaryFor(brightness),
-                            ),
-                          ),
-                          onTap: () => _openTrack(i),
-                        ),
-                    ],
-                  ),
+                NexaGroupedList(
+                  header: 'Up next',
+                  children: [
+                    for (var i = 0; i < _queue.length; i++)
+                      NexaGroupTile(
+                        leadingIcon: i == _index && _playing
+                            ? Icons.graphic_eq_rounded
+                            : Icons.music_note_rounded,
+                        leadingIconColor: i == _index
+                            ? AppColors.accentTextFor(brightness)
+                            : AppColors.labelSecondaryFor(brightness),
+                        leadingBackgroundColor: i == _index
+                            ? AppColors.accentContainerFor(brightness)
+                            : AppColors.fillFor(brightness),
+                        title: describe(_queue[i]).$2,
+                        subtitle: Format.bytes(_queue[i].size),
+                        selected: i == _index,
+                        showChevron: false,
+                        trailing: i == _index
+                            ? Icon(
+                                Icons.equalizer_rounded,
+                                color: AppColors.accentTextFor(brightness),
+                              )
+                            : null,
+                        onTap: () => _openTrack(i),
+                      ),
+                  ],
                 ),
               ],
             ],
@@ -585,17 +592,23 @@ class _Controls extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppDimens.space16),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: AppDimens.space8,
-          children: [
-            for (final option in _speeds)
-              ChoiceChip(
-                label: Text(option == 1.0 ? '1×' : '$option×'),
-                selected: (speed - option).abs() < 0.001,
-                onSelected: (_) => onSpeed(option),
-              ),
-          ],
+        NexaLiquidGlass(
+          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+          padding: const EdgeInsets.all(AppDimens.space4),
+          blurSigma: 12,
+          showShadow: false,
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            spacing: AppDimens.space6,
+            children: [
+              for (final option in _speeds)
+                ChoiceChip(
+                  label: Text(option == 1.0 ? '1×' : '$option×'),
+                  selected: (speed - option).abs() < 0.001,
+                  onSelected: (_) => onSpeed(option),
+                ),
+            ],
+          ),
         ),
       ],
     );

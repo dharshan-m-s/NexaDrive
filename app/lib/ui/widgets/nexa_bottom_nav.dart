@@ -2,20 +2,19 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/physics.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
+import 'nexa_liquid_glass.dart';
 
-/// Floating iOS-style bottom navigation pill.
+/// Floating Liquid Glass navigation dock.
 ///
-/// A capsule inset from the screen edges that floats independently over the
-/// page with a solid surface, subtle outline, and soft shadow. The pill is
-/// self-contained; no full-width docked bar or backdrop blur is used.
-///
-/// The selected destination is marked by an accent capsule that slides between
-/// tabs. Honours reduced motion and keeps every destination on the 48pt touch
-/// target.
+/// The dock is intentionally the one continuously blurred surface in the
+/// shell. A clipped backdrop, theme-aware tint, directional highlight,
+/// hairline edge and soft shadow create depth without frosting page content.
+/// The selected tab travels on a spring and stretches subtly before settling.
 class NexaBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -30,105 +29,165 @@ class NexaBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-
-    return Container(
-      // True floating pill: no full-width strip, just a compact capsule
-      // with transparent area around it (provided by shell padding).
-      decoration: BoxDecoration(
-        // Near-solid surface keeps the labels readable without a backdrop filter.
-        color: AppColors.surfaceFor(brightness).withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        border: Border.all(
-          color: AppColors.dividerFor(brightness),
-          width: 0.5,
-        ),
-        boxShadow: [
-          // Soft, spread shadow that lifts the pill off the page.
-          BoxShadow(
-            color: AppColors.shadowColorFor(brightness),
-            blurRadius: 28,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        child: SizedBox(
-          height: AppDimens.bottomNavHeight,
-          child: _NavRow(
-            items: items,
-            currentIndex: currentIndex,
-            onTap: onTap,
-            brightness: brightness,
-          ),
+    return NexaLiquidGlass(
+      borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+      blurSigma: 16,
+      padding: EdgeInsets.zero,
+      child: SizedBox(
+        width: double.infinity,
+        height: AppDimens.bottomNavHeight,
+        child: _NavRow(
+          items: items,
+          currentIndex: currentIndex,
+          onTap: onTap,
         ),
       ),
     );
   }
 }
 
-/// Row of navigation destinations with a sliding selection capsule.
-class _NavRow extends StatelessWidget {
+class _NavRow extends StatefulWidget {
   final List<NexaBottomNavItem> items;
   final int currentIndex;
   final ValueChanged<int> onTap;
-  final Brightness brightness;
 
   const _NavRow({
     required this.items,
     required this.currentIndex,
     required this.onTap,
-    required this.brightness,
   });
 
   @override
+  State<_NavRow> createState() => _NavRowState();
+}
+
+class _NavRowState extends State<_NavRow> with SingleTickerProviderStateMixin {
+  late final AnimationController _selection = AnimationController.unbounded(
+    vsync: this,
+    value: _safeIndex(widget.currentIndex).toDouble(),
+    debugLabel: 'NexaBottomNav.selection',
+  );
+
+  int _safeIndex(int index) {
+    if (widget.items.isEmpty) return 0;
+    return index.clamp(0, widget.items.length - 1);
+  }
+
+  @override
+  void didUpdateWidget(covariant _NavRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentIndex != widget.currentIndex ||
+        oldWidget.items.length != widget.items.length) {
+      _moveSelection();
+    }
+  }
+
+  void _moveSelection() {
+    final target = _safeIndex(widget.currentIndex).toDouble();
+    if (AppMotion.reducedMotion(context)) {
+      _selection
+        ..stop()
+        ..value = target;
+      return;
+    }
+    _selection.animateWith(
+      SpringSimulation(
+        AppMotion.glassSpring,
+        _selection.value,
+        target,
+        _selection.velocity,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _selection.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final count = items.length;
-    final selectionColor = AppColors.accentContainerFor(brightness);
-    const capsuleInset = 12.0;
-    const capsuleHeight = 40.0;
+    final brightness = Theme.of(context).brightness;
+    final items = widget.items;
+    if (items.isEmpty) return const SizedBox.shrink();
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final count = items.length;
         final itemWidth = constraints.maxWidth / count;
-        final capsuleWidth =
-            (itemWidth - capsuleInset * 2).clamp(0.0, itemWidth);
-        final showCapsule = currentIndex >= 0 && currentIndex < count;
+        const horizontalInset = 5.0;
+        const indicatorHeight = 48.0;
+        final indicatorWidth =
+            (itemWidth - horizontalInset * 2).clamp(0.0, itemWidth);
 
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            // Selection capsule that slides between destinations.
-            if (showCapsule)
-              AnimatedPositioned(
-                duration: AppMotion.resolve(context, AppMotion.fast),
-                curve: AppMotion.resolveCurve(context, AppMotion.standardCurve),
-                left: currentIndex * itemWidth + capsuleInset,
-                top: (AppDimens.bottomNavHeight - capsuleHeight) / 2,
-                width: capsuleWidth,
-                height: capsuleHeight,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: selectionColor,
-                    borderRadius: BorderRadius.circular(AppDimens.radiusInner),
+        return AnimatedBuilder(
+          animation: _selection,
+          builder: (context, _) {
+            final selectedPosition =
+                _selection.value.clamp(0.0, (count - 1).toDouble());
+            final velocity = _selection.isAnimating ? _selection.velocity : 0.0;
+            final stretch = (velocity.abs() / 80.0).clamp(0.0, 0.16);
+            final left =
+                selectedPosition * itemWidth + (itemWidth - indicatorWidth) / 2;
+
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                if (widget.currentIndex >= 0 && widget.currentIndex < count)
+                  Positioned(
+                    left: left,
+                    top: (AppDimens.bottomNavHeight - indicatorHeight) / 2,
+                    width: indicatorWidth,
+                    height: indicatorHeight,
+                    child: Transform(
+                      alignment: Alignment.center,
+                      transform: Matrix4.diagonal3Values(
+                        1 + stretch,
+                        1 - stretch * 0.45,
+                        1,
+                      ),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius:
+                              BorderRadius.circular(AppDimens.radiusPill),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              AppColors.glassSelectionFor(brightness)
+                                  .withValues(alpha: 0.98),
+                              AppColors.glassSelectionFor(brightness)
+                                  .withValues(alpha: 0.72),
+                            ],
+                          ),
+                          border: Border.all(
+                            color:
+                                AppColors.glassBorderFor(brightness).withValues(
+                              alpha:
+                                  brightness == Brightness.dark ? 0.42 : 0.72,
+                            ),
+                            width: 0.65,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
+                Row(
+                  children: List.generate(count, (index) {
+                    return Expanded(
+                      child: _NavItem(
+                        item: items[index],
+                        isSelected: index == widget.currentIndex,
+                        onTap: () => widget.onTap(index),
+                        brightness: brightness,
+                      ),
+                    );
+                  }),
                 ),
-              ),
-            // Destination taps.
-            Row(
-              children: List.generate(count, (index) {
-                return Expanded(
-                  child: _NavItem(
-                    item: items[index],
-                    isSelected: index == currentIndex,
-                    onTap: () => onTap(index),
-                    brightness: brightness,
-                  ),
-                );
-              }),
-            ),
-          ],
+              ],
+            );
+          },
         );
       },
     );
@@ -150,18 +209,8 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = AppColors.accentFor(brightness);
+    final activeColor = AppColors.accentTextFor(brightness);
     final inactiveColor = AppColors.textSecondaryFor(brightness);
-
-    // Icon: selected is full-colour; unselected is secondary-label grey so the
-    // active tab reads first.
-    final iconColor = isSelected ? activeColor : inactiveColor;
-    final icon = isSelected ? item.selectedIcon : item.icon;
-
-    // Label: selected is the accent-coloured primary ink; unselected is quiet
-    // secondary text.
-    final labelColor = isSelected ? activeColor : inactiveColor;
-    final labelWeight = isSelected ? FontWeight.w600 : FontWeight.w500;
 
     return Semantics(
       button: true,
@@ -174,49 +223,55 @@ class _NavItem extends StatelessWidget {
             if (!isSelected) unawaited(HapticFeedback.selectionClick());
             onTap();
           },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppDimens.space6),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // The glyph cross-fades between its outlined and filled forms
-                // with a gentle scale, so selection reads as a settle rather
-                // than a hard swap.
-                AnimatedSwitcher(
-                  duration: AppMotion.resolve(context, AppMotion.fast),
-                  switchInCurve: AppMotion.curveFor(context, AppMotion.enter),
-                  switchOutCurve: AppMotion.curveFor(context, AppMotion.exit),
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: ScaleTransition(
-                      scale: Tween<double>(begin: 0.82, end: 1.0)
-                          .animate(animation),
-                      child: child,
+          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+          child: SizedBox(
+            height: AppDimens.bottomNavHeight,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.space2,
+                vertical: AppDimens.space6,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedSwitcher(
+                    duration: AppMotion.resolve(context, AppMotion.fast),
+                    switchInCurve: AppMotion.curveFor(context, AppMotion.enter),
+                    switchOutCurve: AppMotion.curveFor(context, AppMotion.exit),
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: Tween<double>(begin: 0.82, end: 1.0)
+                            .animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: Icon(
+                      isSelected ? item.selectedIcon : item.icon,
+                      key: ValueKey<bool>(isSelected),
+                      size: 22,
+                      color: isSelected ? activeColor : inactiveColor,
                     ),
                   ),
-                  child: Icon(
-                    icon,
-                    key: ValueKey<bool>(isSelected),
-                    size: AppDimens.iconMedium,
-                    color: iconColor,
+                  const SizedBox(height: AppDimens.space2),
+                  AnimatedDefaultTextStyle(
+                    duration: AppMotion.resolve(context, AppMotion.fast),
+                    curve: AppMotion.curveFor(context, AppMotion.standardCurve),
+                    style: AppTextStyle.navLabel.copyWith(
+                      fontSize: 10.5,
+                      color: isSelected ? activeColor : inactiveColor,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                    child: Text(
+                      item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppDimens.space2),
-                AnimatedDefaultTextStyle(
-                  duration: AppMotion.resolve(context, AppMotion.fast),
-                  curve: AppMotion.curveFor(context, AppMotion.standardCurve),
-                  style: AppTextStyle.navLabel.copyWith(
-                    color: labelColor,
-                    fontWeight: labelWeight,
-                  ),
-                  child: Text(
-                    item.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

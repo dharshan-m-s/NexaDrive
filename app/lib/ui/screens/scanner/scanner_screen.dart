@@ -9,6 +9,7 @@ import '../../../core/design/app_motion.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../services/api.dart';
 import '../../../services/scan_processor.dart';
+import '../../widgets/nexa_components.dart';
 import 'scan_edit_screen.dart';
 import 'scan_pages_screen.dart';
 
@@ -259,34 +260,43 @@ class _ScannerScreenState extends State<ScannerScreen>
       right: 0,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppDimens.space8),
-        child: Row(
-          children: [
-            _iconBtn(Icons.close_rounded, 'Close',
-                () => Navigator.of(context).pop()),
-            const Spacer(),
-            if (_pages.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(right: AppDimens.space8),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${_pages.length} page(s)',
-                    style: AppTextStyle.caption
-                        .copyWith(color: Colors.white, fontSize: 11),
-                  ),
+        child: Theme(
+          data: Theme.of(context).copyWith(
+            brightness: Brightness.dark,
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+                  brightness: Brightness.dark,
                 ),
-              ),
-            _iconBtn(
-              _flashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-              'Toggle torch',
-              _toggleFlash,
+          ),
+          child: NexaLiquidGlass(
+            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            blurSigma: 18,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.space4,
+              vertical: AppDimens.space2,
             ),
-          ],
+            showShadow: true,
+            child: Row(
+              children: [
+                _iconBtn(Icons.close_rounded, 'Close',
+                    () => Navigator.of(context).pop()),
+                const Spacer(),
+                if (_pages.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppDimens.space8),
+                    child: NexaChip.tonal(
+                      label: '${_pages.length} pages',
+                      leadingIcon: Icons.description_outlined,
+                      selected: true,
+                    ),
+                  ),
+                _iconBtn(
+                  _flashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+                  'Toggle torch',
+                  _toggleFlash,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

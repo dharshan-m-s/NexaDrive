@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
@@ -23,14 +24,20 @@ class FilePropertiesSheet extends StatefulWidget {
 }
 
 class _FilePropertiesSheetState extends State<FilePropertiesSheet> {
+  Future<void> _copyPath() async {
+    await Clipboard.setData(ClipboardData(text: widget.entry.path));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(const SnackBar(content: Text('Path copied')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final entry = widget.entry;
     final category = entry.category;
     final kind = FileKind.label(category);
-    final name = entry.name;
-    final path = entry.path;
     final isFolder = category == Category.folder;
 
     return SafeArea(
@@ -46,37 +53,69 @@ class _FilePropertiesSheetState extends State<FilePropertiesSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             NexaSheetHeader(
-              title: name,
-              subtitle: '$kind in ${_parentPath(path)}',
-              onClose: () => Navigator.pop(context),
-            ),
-            const SizedBox(height: AppDimens.space4),
-            Text(
-              path,
-              style: AppTextStyle.caption.copyWith(
-                color: AppColors.textSecondaryFor(brightness),
+              title: entry.name,
+              subtitle: kind,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  NexaLiquidGlass(
+                    borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                    padding: EdgeInsets.zero,
+                    blurSigma: 10,
+                    showShadow: false,
+                    child: IconButton(
+                      tooltip: 'Copy path',
+                      onPressed: _copyPath,
+                      icon: const Icon(Icons.content_copy_rounded),
+                    ),
+                  ),
+                  const SizedBox(width: AppDimens.space4),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: AppDimens.space12),
+            NexaSurface(
+              level: NexaSurfaceLevel.grouped,
+              radius: AppDimens.radiusMedium,
+              padding: const EdgeInsets.all(AppDimens.space16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'LOCATION',
+                    style: AppTextStyle.caption.copyWith(
+                      color: AppColors.textSecondaryFor(brightness),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space8),
+                  SelectableText(
+                    entry.path,
+                    style: AppTextStyle.rowTitle.copyWith(
+                      color: AppColors.textPrimaryFor(brightness),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: AppDimens.space20),
             _Section(
               header: 'Details',
               children: [
                 _InfoRow(label: 'Type', value: kind),
-                if (entry.size != null && entry.size! > 0)
-                  _InfoRow(label: 'Size', value: Format.bytes(entry.size!))
-                else if (isFolder)
-                  _InfoRow(label: 'Size', value: 'Unknown (folder)')
-                else
-                  _InfoRow(label: 'Size', value: '--'),
+                if (!isFolder && entry.size != null)
+                  _InfoRow(label: 'Size', value: Format.bytes(entry.size!)),
                 if (entry.modified != null)
                   _InfoRow(
                     label: 'Modified',
                     value: Format.shortDateTime(entry.modified!.toLocal()),
-                  )
-                else
-                  _InfoRow(label: 'Modified', value: 'Unknown'),
+                  ),
                 if (entry.offlineAvailable == true)
                   const _InfoRow(
                     label: 'Offline',
@@ -85,46 +124,10 @@ class _FilePropertiesSheetState extends State<FilePropertiesSheet> {
               ],
             ),
             const SizedBox(height: AppDimens.space16),
-            _Section(
-              header: 'Actions',
-              children: [
-                NexaSheetAction(
-                  icon: Icons.share_outlined,
-                  title: 'Share',
-                  subtitle: isFolder
-                      ? 'Share this folder with another account'
-                      : 'Share this file or create a link',
-                  onTap: () => Navigator.pop(context),
-                ),
-                NexaSheetAction(
-                  icon: Icons.download_outlined,
-                  title: isFolder ? 'Download folder' : 'Download',
-                  subtitle: isFolder
-                      ? 'Save this folder to your device'
-                      : 'Save this file to your device',
-                  onTap: () => Navigator.pop(context),
-                ),
-                if (isFolder)
-                  NexaSheetAction(
-                    icon: Icons.folder_open_rounded,
-                    title: 'Open folder',
-                    subtitle: 'Browse this folder',
-                    onTap: () => Navigator.pop(context),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppDimens.space16),
           ],
         ),
       ),
     );
-  }
-
-  String _parentPath(String path) {
-    final parts = path.split('/');
-    if (parts.length <= 1) return 'My files';
-    parts.removeLast();
-    return parts.join('/');
   }
 }
 
@@ -169,7 +172,7 @@ class _InfoRow extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     final secondary = AppColors.textSecondaryFor(brightness);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppDimens.space4),
+      padding: const EdgeInsets.symmetric(vertical: AppDimens.space6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

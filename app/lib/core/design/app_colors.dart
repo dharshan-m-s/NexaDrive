@@ -124,6 +124,26 @@ abstract final class AppColors {
   static const Color infoContainerDark = accentContainerDark;
   static const Color onInfoContainerDark = onAccentContainerDark;
 
+  // --------------------------------------------------------- glass material
+  /// Neutral theme-aware tint for translucent app chrome.
+  static const Color glassSurfaceLight = Color(0xFFF7F8FC);
+  static const Color glassSurfaceDark = Color(0xFF202129);
+  static const Color glassHighlightLight = Color(0x66FFFFFF);
+  static const Color glassHighlightDark = Color(0x26FFFFFF);
+  static const Color glassBorderLight = Color(0xBFFFFFFF);
+  static const Color glassBorderDark = Color(0x42FFFFFF);
+  static const Color glassSelectionLight = Color(0xDCE9EAF4);
+  static const Color glassSelectionDark = Color(0x35FFFFFF);
+
+  static Color glassSurfaceFor(Brightness b) =>
+      b == Brightness.dark ? glassSurfaceDark : glassSurfaceLight;
+  static Color glassHighlightFor(Brightness b) =>
+      b == Brightness.dark ? glassHighlightDark : glassHighlightLight;
+  static Color glassBorderFor(Brightness b) =>
+      b == Brightness.dark ? glassBorderDark : glassBorderLight;
+  static Color glassSelectionFor(Brightness b) =>
+      b == Brightness.dark ? glassSelectionDark : glassSelectionLight;
+
   // ------------------------------------------------------------ shadows
   /// iOS keeps depth subtle: a single soft ambient shadow for floating
   /// surfaces, plus a slightly stronger one for modals.

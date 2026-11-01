@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
+import '../../../core/design/app_motion.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
@@ -18,6 +20,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   List<Map<String, dynamic>> _items = [];
   bool _loading = true;
   bool _unreadOnly = false;
+  String? _error;
+  int _requestGeneration = 0;
 
   @override
   void initState() {
@@ -25,54 +29,119 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     load();
   }
 
+  @override
+  void dispose() {
+    _requestGeneration++;
+    super.dispose();
+  }
+
   Future<void> load() async {
-    setState(() => _loading = true);
+    final generation = ++_requestGeneration;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final items = await widget.api.notifications(unreadOnly: _unreadOnly);
-      if (!mounted) return;
+      if (!mounted || generation != _requestGeneration) return;
       setState(() {
         _items = items;
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() {
+        _loading = false;
+        _error = e is ApiException
+            ? e.message
+            : 'Notifications could not be loaded. Check your connection.';
+      });
     }
   }
 
   Future<void> _markRead(String id) async {
+    if (id.isEmpty) return;
     try {
       await widget.api.markNotificationRead(id);
-      await load();
-    } catch (_) {}
+      if (!mounted) return;
+      if (_unreadOnly) {
+        setState(() {
+          _items.removeWhere((item) => item['id']?.toString() == id);
+        });
+      } else {
+        setState(() {
+          final index =
+              _items.indexWhere((item) => item['id']?.toString() == id);
+          if (index >= 0) {
+            _items[index] = {..._items[index], 'read': true};
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) _showMessage(e.toString());
+    }
   }
 
   Future<void> _markAllRead() async {
+    if (_items.isEmpty || _loading) return;
     try {
       await widget.api.markAllNotificationsRead();
-      await load();
-    } catch (_) {}
+      if (!mounted) return;
+      if (_unreadOnly) {
+        setState(() => _items = const []);
+      } else {
+        setState(() {
+          _items = _items
+              .map((item) => {...item, 'read': true})
+              .toList(growable: false);
+        });
+      }
+    } catch (e) {
+      if (mounted) _showMessage(e.toString());
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _setScope(bool unreadOnly) {
+    if (_unreadOnly == unreadOnly) return;
+    setState(() {
+      _unreadOnly = unreadOnly;
+      _items = const [];
+    });
+    load();
   }
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final unread = _items.where((item) => item['read'] != true).length;
 
     return Scaffold(
       body: SafeArea(
         bottom: false,
         child: NexaPage(
           title: 'Notifications',
-          subtitle: _unreadOnly
-              ? 'Unread only'
-              : '${_items.length} item${_items.length == 1 ? '' : 's'}',
+          subtitle: _loading
+              ? 'Updating your inbox'
+              : _error != null
+                  ? 'Inbox unavailable'
+                  : Format.count(_items.length, 'notification'),
           leading: const NexaBackButton(),
-          headerAction: IconButton(
-            tooltip: 'Mark all read',
-            onPressed: _markAllRead,
-            icon: const Icon(Icons.done_all_rounded),
+          headerAction: NexaLiquidGlass(
+            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            padding: EdgeInsets.zero,
+            blurSigma: 12,
+            showShadow: false,
+            child: IconButton(
+              tooltip: 'Mark all as read',
+              onPressed: unread == 0 || _loading ? null : _markAllRead,
+              icon: const Icon(Icons.done_all_rounded),
+            ),
           ),
           padding: const EdgeInsets.fromLTRB(
             AppDimens.pageMargin,
@@ -83,53 +152,59 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppDimens.space12),
-                child: Row(
-                  children: [
-                    Text('Filter',
-                        style: AppTextStyle.rowSubtitle.copyWith(
-                            color: AppColors.textSecondaryFor(brightness))),
-                    const SizedBox(width: AppDimens.space12),
-                    SegmentedButton<bool>(
-                      segments: const [
-                        ButtonSegment(value: false, label: Text('All')),
-                        ButtonSegment(value: true, label: Text('Unread')),
-                      ],
-                      selected: {_unreadOnly},
-                      onSelectionChanged: (v) {
-                        setState(() => _unreadOnly = v.first);
-                        load();
-                      },
-                      showSelectedIcon: false,
-                    ),
-                  ],
-                ),
+              _NotificationScope(
+                unreadOnly: _unreadOnly,
+                onChanged: _setScope,
               ),
+              const SizedBox(height: AppDimens.space12),
               Expanded(
                 child: NexaStateSwitcher(
                   stateKey: ValueKey(_bodyState),
                   child: _loading
                       ? const NexaLoadingBlock()
-                      : _items.isEmpty
-                          ? const NexaEmptyState(
-                              icon: Icons.notifications_none_rounded,
-                              title: 'No notifications',
-                              hint:
-                                  'Backup and account alerts will show up here.',
+                      : _error != null
+                          ? NexaEmptyState(
+                              icon: Icons.cloud_off_rounded,
+                              title: 'Notifications unavailable',
+                              hint: _error!,
+                              actionLabel: 'Try again',
+                              onAction: load,
                             )
-                          : ListView.separated(
-                              padding: EdgeInsets.zero,
-                              itemCount: _items.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(height: AppDimens.space2),
-                              itemBuilder: (context, i) => _NotificationCard(
-                                item: _items[i],
-                                brightness: brightness,
-                                onMarkRead: () =>
-                                    _markRead(_items[i]['id'] as String),
-                              ),
-                            ),
+                          : _items.isEmpty
+                              ? NexaEmptyState(
+                                  icon: Icons.notifications_none_rounded,
+                                  title: _unreadOnly
+                                      ? 'You’re all caught up'
+                                      : 'No notifications yet',
+                                  hint: _unreadOnly
+                                      ? 'There are no unread alerts.'
+                                      : 'Account and backup activity will appear here.',
+                                )
+                              : RefreshIndicator(
+                                  onRefresh: load,
+                                  child: ListView(
+                                    physics:
+                                        const AlwaysScrollableScrollPhysics(),
+                                    padding: EdgeInsets.zero,
+                                    children: [
+                                      NexaGroupedList(
+                                        header: _unreadOnly
+                                            ? 'Unread'
+                                            : 'Latest activity',
+                                        children: [
+                                          for (final item in _items)
+                                            _NotificationRow(
+                                              item: item,
+                                              brightness: brightness,
+                                              onMarkRead: () => _markRead(
+                                                item['id']?.toString() ?? '',
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
                 ),
               ),
             ],
@@ -139,23 +214,115 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  String get _bodyState => _loading
-      ? 'loading'
-      : _items.isEmpty
-          ? 'empty'
-          : 'content';
+  String get _bodyState {
+    if (_loading) return 'loading';
+    if (_error != null) return 'error';
+    return _items.isEmpty ? 'empty:$_unreadOnly' : 'content:$_unreadOnly';
+  }
 }
 
-/// One notification as a standard One UI surface row.
-///
-/// Unread items keep the accent container fill and a semibold title, so
-/// read/unread stays legible without adding a separate badge.
-class _NotificationCard extends StatelessWidget {
+class _NotificationScope extends StatelessWidget {
+  final bool unreadOnly;
+  final ValueChanged<bool> onChanged;
+
+  const _NotificationScope({
+    required this.unreadOnly,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return NexaLiquidGlass(
+      borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+      padding: const EdgeInsets.all(AppDimens.space4),
+      blurSigma: 14,
+      showShadow: false,
+      child: Row(
+        children: [
+          _ScopeOption(
+            label: 'All activity',
+            selected: !unreadOnly,
+            onTap: () => onChanged(false),
+          ),
+          _ScopeOption(
+            label: 'Unread',
+            selected: unreadOnly,
+            onTap: () => onChanged(true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScopeOption extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ScopeOption({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: label,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            child: AnimatedContainer(
+              duration: AppMotion.resolve(context, AppMotion.fast),
+              curve: AppMotion.standardCurve,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.space12,
+                vertical: AppDimens.space10,
+              ),
+              decoration: BoxDecoration(
+                color: selected
+                    ? AppColors.glassSelectionFor(brightness)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                border: selected
+                    ? Border.all(
+                        color: AppColors.glassBorderFor(brightness),
+                        width: 0.7,
+                      )
+                    : null,
+              ),
+              child: Text(
+                label,
+                style: AppTextStyle.caption1.copyWith(
+                  color: selected
+                      ? AppColors.labelPrimaryFor(brightness)
+                      : AppColors.labelSecondaryFor(brightness),
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationRow extends StatelessWidget {
   final Map<String, dynamic> item;
   final Brightness brightness;
   final VoidCallback onMarkRead;
 
-  const _NotificationCard({
+  const _NotificationRow({
     required this.item,
     required this.brightness,
     required this.onMarkRead,
@@ -165,64 +332,36 @@ class _NotificationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final read = item['read'] == true;
     final kind = item['kind']?.toString();
-    final unreadSurface = brightness == Brightness.dark
-        ? AppColors.surfaceAltDark
-        : AppColors.accentContainerLight;
-    final readSurface = brightness == Brightness.dark
-        ? AppColors.surfaceDark
-        : AppColors.surfaceLight;
+    final created = DateTime.tryParse(item['created_at']?.toString() ?? '');
+    final message = item['message']?.toString().trim() ?? '';
+    final timestamp = Format.relTime(created);
+    final subtitle = message.isEmpty ? timestamp : '$message · $timestamp';
 
-    return NexaSurface(
-      level: NexaSurfaceLevel.surface,
-      radius: AppDimens.radiusTile,
-      color: read ? readSurface : unreadSurface,
-      child: Material(
-        type: MaterialType.transparency,
-        child: ListTile(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDimens.radiusTile),
-          ),
-          leading: Icon(
-            _icon(kind),
-            color: read
-                ? AppColors.textTertiaryFor(brightness)
-                : AppColors.accentFor(brightness),
-          ),
-          title: Text(
-            item['title']?.toString() ?? '',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyle.rowTitle.copyWith(
-              color: AppColors.textPrimaryFor(brightness),
-              fontWeight: read ? FontWeight.w400 : FontWeight.w600,
+    return NexaGroupTile(
+      leadingIcon: _icon(kind),
+      leadingIconColor: read
+          ? AppColors.labelSecondaryFor(brightness)
+          : AppColors.accentTextFor(brightness),
+      leadingBackgroundColor: read
+          ? AppColors.fillFor(brightness)
+          : AppColors.accentContainerFor(brightness),
+      title: item['title']?.toString() ?? 'Notification',
+      subtitle: subtitle,
+      showChevron: false,
+      trailing: read
+          ? null
+          : IconButton(
+              tooltip: 'Mark as read',
+              onPressed: onMarkRead,
+              icon: Icon(
+                Icons.mark_email_read_outlined,
+                color: AppColors.accentTextFor(brightness),
+              ),
             ),
-          ),
-          subtitle: Text(
-            '${item['message']?.toString() ?? ''} · '
-            '${Format.relTime(DateTime.tryParse(item['created_at']?.toString() ?? ''))}',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyle.caption.copyWith(
-              color: AppColors.textSecondaryFor(brightness),
-            ),
-          ),
-          trailing: read
-              ? null
-              : IconButton(
-                  tooltip: 'Mark read',
-                  icon: Icon(
-                    Icons.mark_email_read_outlined,
-                    color: AppColors.accentFor(brightness),
-                  ),
-                  onPressed: onMarkRead,
-                ),
-        ),
-      ),
     );
   }
 }
 
-/// Maps a notification kind to its leading glyph.
 IconData _icon(String? kind) {
   switch (kind) {
     case 'backup_completed':

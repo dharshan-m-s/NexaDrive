@@ -27,7 +27,7 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(NexaDriveApp(session: Session(), prefs: prefs));
     await tester.pumpAndSettle();
-    expect(find.text('Welcome to NexaDrive'), findsOneWidget);
+    expect(find.text('Sign in to your cloud'), findsOneWidget);
   });
 
   testWidgets('signed-in desktop layout shows a wide sidebar', (tester) async {

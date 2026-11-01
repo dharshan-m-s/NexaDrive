@@ -191,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
-          'Welcome to NexaDrive',
+          'Sign in to your cloud',
           textAlign: TextAlign.center,
           style: AppTextStyle.heroTitle.copyWith(
             fontSize: short ? 22 : 32,
@@ -203,7 +203,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Padding(
             padding: const EdgeInsets.only(top: AppDimens.space6),
             child: Text(
-              'Your files. Your server. Your private cloud.',
+              'Connect to your private cloud.',
               textAlign: TextAlign.center,
               style: AppTextStyle.callout.copyWith(
                 color: AppColors.labelSecondaryFor(brightness),
@@ -326,7 +326,7 @@ class _LoginScreenState extends State<LoginScreen> {
             final short = constraints.maxHeight < 600;
             final horizontal =
                 wide ? AppDimens.pageMarginWide : AppDimens.pageMargin;
-            final vertical = short ? AppDimens.space12 : AppDimens.space32;
+            final vertical = short ? AppDimens.space8 : AppDimens.space32;
             final minHeight = (constraints.maxHeight - vertical * 2)
                 .clamp(0.0, double.infinity);
 
@@ -353,23 +353,25 @@ class _LoginScreenState extends State<LoginScreen> {
                         SizedBox(
                           height: short ? 0 : AppDimens.space20,
                         ),
-                        // Greeting.
                         _heading(brightness: brightness, short: short),
                         SizedBox(
                           height: short ? AppDimens.space8 : AppDimens.space24,
                         ),
-                        // Credentials.
-                        _fields(dense: short, brightness: brightness),
-                        // Inline, actionable error.
-                        if (error != null) ...[
-                          const SizedBox(height: AppDimens.space12),
-                          _ErrorBanner(message: error!),
-                        ],
-                        SizedBox(
-                          height: short ? AppDimens.space8 : AppDimens.space16,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _fields(dense: short, brightness: brightness),
+                            if (error != null) ...[
+                              const SizedBox(height: AppDimens.space12),
+                              _ErrorBanner(message: error!),
+                            ],
+                            SizedBox(
+                              height:
+                                  short ? AppDimens.space8 : AppDimens.space16,
+                            ),
+                            _submitButton(),
+                          ],
                         ),
-                        // Primary action.
-                        _submitButton(),
                         // Quiet footer.
                         Offstage(
                           offstage: short,

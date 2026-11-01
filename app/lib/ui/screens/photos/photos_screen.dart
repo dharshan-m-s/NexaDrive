@@ -351,11 +351,19 @@ class _PhotosScreenState extends State<PhotosScreen> {
               onPressed: _exitSelection,
               icon: const Icon(Icons.close_rounded),
             )
-          : IconButton(
-              tooltip: 'Refresh photos',
-              onPressed: load,
-              icon: Icon(Icons.refresh_rounded,
-                  color: AppColors.accentFor(brightness)),
+          : NexaLiquidGlass(
+              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+              padding: EdgeInsets.zero,
+              blurSigma: 12,
+              showShadow: false,
+              child: IconButton(
+                tooltip: 'Refresh photos',
+                onPressed: _loading ? null : load,
+                icon: Icon(
+                  Icons.refresh_rounded,
+                  color: AppColors.accentTextFor(brightness),
+                ),
+              ),
             ),
       body: _body(),
     );
@@ -431,6 +439,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
                           bytes: _thumbBytes(index),
                           unavailable: _noThumbnail.contains(_pathAt(index)),
                           semanticLabel: _photos[index]['name']?.toString(),
+                          heroTag: 'photo:${_pathAt(index)}',
                           selected: _selected.contains(_pathAt(index)),
                           selecting: _selecting,
                           onTap: () => _onCellTap(index),
@@ -542,6 +551,7 @@ class _PhotoCell extends StatelessWidget {
   final Uint8List? bytes;
   final bool unavailable;
   final String? semanticLabel;
+  final String heroTag;
   final bool selected;
   final bool selecting;
   final VoidCallback onTap;
@@ -552,6 +562,7 @@ class _PhotoCell extends StatelessWidget {
     required this.bytes,
     required this.unavailable,
     required this.semanticLabel,
+    required this.heroTag,
     required this.selected,
     required this.selecting,
     required this.onTap,
@@ -600,9 +611,12 @@ class _PhotoCell extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppDimens.radiusInner),
-              child: content,
+            Hero(
+              tag: heroTag,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppDimens.radiusInner),
+                child: content,
+              ),
             ),
             if (selected) _SelectedOverlay(onAccent: onAccent),
           ],

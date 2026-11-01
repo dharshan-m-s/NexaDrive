@@ -4,7 +4,6 @@ import '../../../../core/design/app_dimensions.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/models/file_entry.dart';
 import '../../../../core/utils/format.dart';
-import '../../../../core/utils/file_kind.dart';
 import '../../../services/api.dart';
 import '../../../services/session.dart';
 import '../../../services/upload_manager.dart';
@@ -124,13 +123,6 @@ class _HomeScreenState extends State<HomeScreen> {
   static int _newestFirst(FileEntry a, FileEntry b) =>
       b.modified!.compareTo(a.modified!);
 
-  String _greeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  }
-
   /// A stable identity for whichever storage-hero state is showing.
   String get _heroState {
     if (_storage != null) return 'ready';
@@ -139,19 +131,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final name = widget.session.displayName?.trim().isNotEmpty == true
-        ? widget.session.displayName!
-        : widget.session.username ?? 'there';
-
     final storage = _storage;
 
+    final pageTitle =
+        MediaQuery.sizeOf(context).width >= 900 ? 'Overview' : 'NexaDrive';
+
     return NexaPage(
-      title: '${_greeting()}, $name',
+      title: pageTitle,
       bottomSafeArea: false,
-      subtitle: storage == null
-          ? 'Your private cloud'
-          : '${Format.bytes(storage.usedBytes)} used · '
-              '${Format.count(storage.fileCount, 'file')}',
       scrollable: true,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -402,35 +389,47 @@ class _RecentSection extends StatelessWidget {
         else if (recent.isEmpty)
           NexaEmptyState(
             icon: Icons.folder_open_rounded,
-            title: 'Your files are ready',
-            hint: 'Browse everything stored in your private cloud.',
-            actionLabel: 'Open My files',
+            title: 'No recent files',
+            hint: 'Files you open or update will appear here.',
+            actionLabel: 'Browse files',
             onAction: () => onNavigate(1),
           )
         else
-          Column(
-            children: [
-              for (final entry in recent)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppDimens.space8),
-                  child: NexaFocusBlock(
-                    icon: FileKind.icon(entry.category),
-                    tint: FileKind.tint(entry.category, brightness),
-                    title: entry.name,
-                    subtitle:
-                        '${Format.relTime(entry.modified)} · ${Format.bytes(entry.size)}',
+          NexaSurface(
+            level: NexaSurfaceLevel.grouped,
+            radius: AppDimens.radiusMedium,
+            child: Column(
+              children: [
+                for (var index = 0; index < recent.length; index++) ...[
+                  NexaFileTile(
+                    entry: recent[index],
                     showChevron: true,
-                    // Open the actual file. Jumping to My files and leaving the
-                    // user to find it again is not "Recent".
-                    onTap: () => FileOpener.open(
+                    subtitle: '${Format.relTime(recent[index].modified)} · '
+                        '${Format.bytes(recent[index].size)}',
+                    trailing: Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.labelTertiaryFor(brightness),
+                    ),
+                    // Open the actual file from Home without making users
+                    // navigate back through the folder hierarchy.
+                    onTap: (entry) => FileOpener.open(
                       context,
                       api: api,
                       entry: entry,
                       siblings: recent,
                     ),
                   ),
-                ),
-            ],
+                  if (index < recent.length - 1)
+                    Divider(
+                      height: 1,
+                      thickness: 0.5,
+                      indent: AppDimens.iconTileLarge + AppDimens.space24,
+                      endIndent: AppDimens.space16,
+                      color: AppColors.dividerFor(brightness),
+                    ),
+                ],
+              ],
+            ),
           ),
       ],
     );

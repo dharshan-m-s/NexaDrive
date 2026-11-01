@@ -3,6 +3,7 @@ import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
+import 'nexa_liquid_glass.dart';
 
 /// Reveals a bar by sliding it in and fading it, so entering and leaving a mode
 /// (selection, breadcrumb, a pinned action) reads as a settle instead of the
@@ -62,71 +63,67 @@ class NexaActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final bg = backgroundColor ?? AppColors.surfaceFor(brightness);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.pageMargin,
-        vertical: AppDimens.space8,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppDimens.pageMargin,
+        AppDimens.space6,
+        AppDimens.pageMargin,
+        AppDimens.space8,
       ),
-      decoration: BoxDecoration(
-        color: bg,
-        border: Border(
-          top: BorderSide(
-            color: AppColors.separatorFor(brightness),
-            width: 0.5,
-          ),
+      child: NexaLiquidGlass(
+        borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+        blurSigma: 18,
+        padding: const EdgeInsets.fromLTRB(
+          AppDimens.space8,
+          AppDimens.space6,
+          AppDimens.space8,
+          AppDimens.space6,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadowColorFor(brightness),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                if (leading != null) ...[
-                  leading!,
-                  const SizedBox(width: AppDimens.space8),
-                ],
-                Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyle.body.copyWith(
-                      color: AppColors.labelPrimaryFor(brightness),
-                      fontWeight: FontWeight.w600,
+        showShadow: true,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  if (leading != null) ...[
+                    leading!,
+                    const SizedBox(width: AppDimens.space8),
+                  ],
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyle.body.copyWith(
+                        color: AppColors.labelPrimaryFor(brightness),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
+                  ),
+                ],
+              ),
+              if (actions.isNotEmpty) ...[
+                const SizedBox(height: AppDimens.space4),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final action in actions)
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(right: AppDimens.space6),
+                          child: action,
+                        ),
+                    ],
                   ),
                 ),
               ],
-            ),
-            if (actions.isNotEmpty) ...[
-              const SizedBox(height: AppDimens.space4),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final action in actions)
-                      Padding(
-                        padding: const EdgeInsets.only(right: AppDimens.space6),
-                        child: action,
-                      ),
-                  ],
-                ),
-              ),
             ],
-          ],
+          ),
         ),
       ),
     );

@@ -6,6 +6,7 @@ import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../services/api.dart';
 import '../../../services/scan_processor.dart';
+import '../../widgets/nexa_components.dart';
 import 'scan_edit_screen.dart';
 
 /// Document pages organizer — reorder, edit, and export as PDF.
@@ -123,23 +124,42 @@ class _ScanPagesScreenState extends State<ScanPagesScreen> {
                 AppDimens.pageMargin,
                 AppDimens.space12,
               ),
-              child: Row(
-                children: [
-                  IconButton(
-                    tooltip: 'Back to camera',
-                    onPressed:
-                        _saving ? null : () => Navigator.of(context).pop(false),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    color: Colors.white,
+              child: Theme(
+                data: Theme.of(context).copyWith(
+                  brightness: Brightness.dark,
+                  colorScheme: Theme.of(context).colorScheme.copyWith(
+                        brightness: Brightness.dark,
+                      ),
+                ),
+                child: NexaLiquidGlass(
+                  borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                  blurSigma: 16,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space4,
+                    vertical: AppDimens.space2,
                   ),
-                  Expanded(
-                    child: Text(
-                      '${widget.pages.length} ${widget.pages.length == 1 ? 'page' : 'pages'}',
-                      style:
-                          AppTextStyle.pageTitle.copyWith(color: Colors.white),
-                    ),
+                  showShadow: false,
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Back to camera',
+                        onPressed: _saving
+                            ? null
+                            : () => Navigator.of(context).pop(false),
+                        icon: const Icon(Icons.arrow_back_rounded),
+                        color: Colors.white,
+                      ),
+                      Expanded(
+                        child: Text(
+                          '${widget.pages.length} ${widget.pages.length == 1 ? 'page' : 'pages'}',
+                          style: AppTextStyle.pageTitle.copyWith(
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
             Expanded(child: _buildBody(context)),
@@ -201,33 +221,53 @@ class _ActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.surfaceDark,
+    return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
-        AppDimens.space12,
+        AppDimens.space8,
         AppDimens.pageMargin,
-        AppDimens.space16,
+        AppDimens.space8,
       ),
-      child: SafeArea(
-        top: false,
-        child: FilledButton.icon(
-          onPressed: (saving || !enabled) ? null : onSave,
-          icon: saving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white),
-                )
-              : const Icon(Icons.picture_as_pdf_outlined, color: Colors.white),
-          label: Text(
-            saving ? 'Creating PDF…' : 'Save as PDF',
-            style: AppTextStyle.rowTitle.copyWith(color: Colors.white),
-          ),
-          style: FilledButton.styleFrom(
-            backgroundColor: accent,
-            padding: const EdgeInsets.symmetric(vertical: AppDimens.space16),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          brightness: Brightness.dark,
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+                brightness: Brightness.dark,
+              ),
+        ),
+        child: NexaLiquidGlass(
+          borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+          blurSigma: 18,
+          padding: const EdgeInsets.all(AppDimens.space8),
+          showShadow: true,
+          child: SafeArea(
+            top: false,
+            child: FilledButton.icon(
+              onPressed: (saving || !enabled) ? null : onSave,
+              icon: saving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.picture_as_pdf_outlined,
+                      color: Colors.white,
+                    ),
+              label: Text(
+                saving ? 'Creating PDF…' : 'Save as PDF',
+                style: AppTextStyle.rowTitle.copyWith(color: Colors.white),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: accent,
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppDimens.space16,
+                ),
+              ),
+            ),
           ),
         ),
       ),

@@ -213,7 +213,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
         'It may use a format or size this platform cannot render.';
   }
 
-  /// Drops frames outside the `current ± _decodeWindow` range.
+  /// Drops frames outside the `current Â± _decodeWindow` range.
   void _evictOutsideWindow(int index) {
     final keep = <String>{
       for (var i = index - _decodeWindow; i <= index + _decodeWindow; i++)
@@ -423,24 +423,12 @@ class _PhotoViewerState extends State<PhotoViewer> {
 
   @override
   Widget build(BuildContext context) {
+    final darkChrome = Theme.of(context).copyWith(
+      brightness: Brightness.dark,
+    );
+
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black.withValues(alpha: 0.72),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: Text(
-          '${_current + 1} of ${_photos.length}',
-          style: AppTextStyle.rowTitle.copyWith(color: Colors.white),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Photo options',
-            onPressed: _showActions,
-            icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
-          ),
-        ],
-      ),
       body: Stack(
         children: [
           Positioned.fill(
@@ -463,8 +451,58 @@ class _PhotoViewerState extends State<PhotoViewer> {
                 return _ZoomablePhoto(
                   key: ValueKey('original:$path'),
                   image: image,
+                  heroTag: 'photo:$path',
                 );
               },
+            ),
+          ),
+          Positioned(
+            left: AppDimens.space16,
+            right: AppDimens.space16,
+            top: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Theme(
+                data: darkChrome,
+                child: NexaLiquidGlass(
+                  borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+                  blurSigma: 18,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space4,
+                    vertical: AppDimens.space2,
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip:
+                            MaterialLocalizations.of(context).backButtonTooltip,
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          '${_current + 1} of ${_photos.length}',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyle.rowTitle.copyWith(
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Photo options',
+                        onPressed: _showActions,
+                        icon: const Icon(
+                          Icons.more_vert_rounded,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
           _BottomBar(
@@ -487,7 +525,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
 /// Placeholder shown while the viewer preview downloads.
 ///
 /// The grid thumbnail, when available, is drawn strongly blurred and dimmed
-/// behind the spinner — the standard "progressive loading" treatment. That
+/// behind the spinner â the standard "progressive loading" treatment. That
 /// reads unambiguously as *loading*; showing a sharp but small preview instead
 /// reads as "the photo is broken and looks blurry".
 class _LoadingPage extends StatelessWidget {
@@ -592,52 +630,54 @@ class _BottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 0,
-      child: Container(
-        color: Colors.black.withValues(alpha: 0.72),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppDimens.space4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                IconButton(
-                  tooltip: 'Previous photo',
-                  onPressed: onPrevious,
-                  color: Colors.white,
-                  disabledColor: Colors.white24,
-                  icon: const Icon(Icons.chevron_left_rounded),
-                ),
-                IconButton(
-                  tooltip: 'Save to device',
-                  onPressed: onDownload,
-                  color: Colors.white,
-                  icon: const Icon(Icons.download_outlined),
-                ),
-                IconButton(
-                  tooltip: 'Share',
-                  onPressed: onShare,
-                  color: Colors.white,
-                  icon: const Icon(Icons.share_outlined),
-                ),
-                IconButton(
-                  tooltip: 'Move to Trash',
-                  onPressed: onDelete,
-                  color: Colors.white,
-                  icon: const Icon(Icons.delete_outline_rounded),
-                ),
-                IconButton(
-                  tooltip: 'Next photo',
-                  onPressed: onNext,
-                  color: Colors.white,
-                  disabledColor: Colors.white24,
-                  icon: const Icon(Icons.chevron_right_rounded),
-                ),
-              ],
-            ),
+      left: AppDimens.space16,
+      right: AppDimens.space16,
+      bottom: MediaQuery.paddingOf(context).bottom + AppDimens.space12,
+      child: Theme(
+        data: Theme.of(context).copyWith(brightness: Brightness.dark),
+        child: NexaLiquidGlass(
+          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+          blurSigma: 18,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space4,
+            vertical: AppDimens.space2,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              IconButton(
+                tooltip: 'Previous photo',
+                onPressed: onPrevious,
+                color: Colors.white,
+                disabledColor: Colors.white38,
+                icon: const Icon(Icons.chevron_left_rounded),
+              ),
+              IconButton(
+                tooltip: 'Save to device',
+                onPressed: onDownload,
+                color: Colors.white,
+                icon: const Icon(Icons.download_outlined),
+              ),
+              IconButton(
+                tooltip: 'Share',
+                onPressed: onShare,
+                color: Colors.white,
+                icon: const Icon(Icons.share_outlined),
+              ),
+              IconButton(
+                tooltip: 'Move to Trash',
+                onPressed: onDelete,
+                color: Colors.white,
+                icon: const Icon(Icons.delete_outline_rounded),
+              ),
+              IconButton(
+                tooltip: 'Next photo',
+                onPressed: onNext,
+                color: Colors.white,
+                disabledColor: Colors.white38,
+                icon: const Icon(Icons.chevron_right_rounded),
+              ),
+            ],
           ),
         ),
       ),
@@ -649,11 +689,17 @@ class _BottomBar extends StatelessWidget {
 ///
 /// The [RawImage] lays out at *native* resolution and the
 /// [InteractiveViewer]'s transform provides the scale, so the only resampling
-/// is the GPU present — and the sampler is chosen from the live scale
+/// is the GPU present â and the sampler is chosen from the live scale
 /// (mipmapped while minifying, bicubic at 1:1 and beyond).
 class _ZoomablePhoto extends StatefulWidget {
   final ui.Image image;
-  const _ZoomablePhoto({super.key, required this.image});
+  final String heroTag;
+
+  const _ZoomablePhoto({
+    super.key,
+    required this.image,
+    required this.heroTag,
+  });
 
   @override
   State<_ZoomablePhoto> createState() => _ZoomablePhotoState();
@@ -766,17 +812,20 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onDoubleTap: _toggleZoom,
-          child: InteractiveViewer(
-            transformationController: _transform,
-            constrained: false,
-            minScale: math.max(_fit * 0.9, 0.5),
-            maxScale: math.max(_fit * 8, 1.4),
-            clipBehavior: Clip.none,
-            child: RawImage(
-              image: widget.image,
-              fit: BoxFit.none,
-              filterQuality: _quality,
-              isAntiAlias: true,
+          child: Hero(
+            tag: widget.heroTag,
+            child: InteractiveViewer(
+              transformationController: _transform,
+              constrained: false,
+              minScale: math.max(_fit * 0.9, 0.5),
+              maxScale: math.max(_fit * 8, 1.4),
+              clipBehavior: Clip.none,
+              child: RawImage(
+                image: widget.image,
+                fit: BoxFit.none,
+                filterQuality: _quality,
+                isAntiAlias: true,
+              ),
             ),
           ),
         );

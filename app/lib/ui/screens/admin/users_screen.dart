@@ -52,10 +52,16 @@ class _UsersScreenState extends State<UsersScreen> {
         return NexaPage(
           title: 'Users',
           subtitle: 'Manage accounts and access',
-          headerAction: IconButton(
-            tooltip: 'Add user',
-            onPressed: () => _showCreateSheet(context),
-            icon: const Icon(Icons.person_add_alt_rounded),
+          headerAction: NexaLiquidGlass(
+            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            padding: const EdgeInsets.all(AppDimens.space2),
+            blurSigma: 12,
+            showShadow: false,
+            child: IconButton(
+              tooltip: 'Add user',
+              onPressed: () => _showCreateSheet(context),
+              icon: const Icon(Icons.person_add_alt_rounded),
+            ),
           ),
           body: switch (c.loadState) {
             UsersLoadState.loading => _buildLoading(),
@@ -145,14 +151,23 @@ class _UsersScreenState extends State<UsersScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: AppDimens.space12),
-            child: NexaSearchField(
-              controller: _search,
-              hint: 'Search accounts',
-              onChanged: c.setQuery,
-              onClear: () {
-                _search.clear();
-                c.setQuery('');
-              },
+            child: NexaLiquidGlass(
+              borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.space8,
+                vertical: AppDimens.space4,
+              ),
+              blurSigma: 12,
+              showShadow: false,
+              child: NexaSearchField(
+                controller: _search,
+                hint: 'Search accounts',
+                onChanged: c.setQuery,
+                onClear: () {
+                  _search.clear();
+                  c.setQuery('');
+                },
+              ),
             ),
           ),
           if (c.visible.isEmpty)

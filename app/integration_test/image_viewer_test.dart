@@ -198,6 +198,12 @@ void main() {
     // the original's pixel dimensions. Exactly one image is on screen, so this
     // cannot accidentally match the placeholder's thumbnail.
     expect(find.byType(RawImage), findsOneWidget);
+    expect(find.byType(Hero), findsOneWidget);
+    expect(
+      find.byType(BackdropFilter),
+      findsNWidgets(2),
+      reason: 'the photo viewer uses a glass top bar and bottom action dock',
+    );
     final raw = tester.widget<RawImage>(find.byType(RawImage));
     expect(raw.image, isNotNull);
     expect(raw.image!.width, kOriginalWidth);

@@ -71,6 +71,13 @@ abstract final class AppMotion {
         damping: 15,
       );
 
+  /// Restraint spring for the floating dock's travelling selection.
+  static const SpringDescription glassSpring = SpringDescription(
+    mass: 1.0,
+    stiffness: 320.0,
+    damping: 25.75,
+  );
+
   // ------------------------------------------------------------- helpers
   /// A standard animated swapper for content changes.
   static AnimatedSwitcher defaultSwitcher({Key? key, Widget? child}) =>

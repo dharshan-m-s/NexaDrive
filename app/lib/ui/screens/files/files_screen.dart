@@ -19,6 +19,7 @@ import '../../../services/thumbnail_cache.dart';
 import '../../../services/upload_manager.dart';
 import '../../widgets/folder_picker.dart';
 import '../../widgets/nexa_action_bar.dart';
+import '../../widgets/nexa_chip.dart';
 import '../../widgets/nexa_empty_state.dart';
 import '../../widgets/nexa_file_tile.dart';
 import '../../widgets/nexa_loading_state.dart';
@@ -31,6 +32,8 @@ import 'file_share_sheet.dart';
 import 'file_properties_sheet.dart';
 
 enum _Sort { name, size, newOld, oldNew }
+
+enum _FileFilter { all, folders, files }
 
 /// A one-shot action another screen wants My files to perform.
 enum FilesIntent { upload, uploadFolder, newFolder }
@@ -72,6 +75,7 @@ class _FilesScreenState extends State<FilesScreen> {
   final Set<String> _selected = <String>{};
   String? _error;
   _Sort _sort = _Sort.name;
+  _FileFilter _filter = _FileFilter.all;
   List<FileEntry>? _sortedCache;
   final Set<String> _busyDownloads = <String>{};
   final Set<String> _noThumbnail = <String>{};
@@ -315,13 +319,14 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   void _toggleSelectAll() {
+    final visible = _visibleItems;
     setState(() {
-      if (_items.isNotEmpty && _selected.length == _items.length) {
-        _selected.clear();
+      final allVisibleSelected = visible.isNotEmpty &&
+          visible.every((entry) => _selected.contains(entry.path));
+      if (allVisibleSelected) {
+        _selected.removeAll(visible.map((entry) => entry.path));
       } else {
-        _selected
-          ..clear()
-          ..addAll(_items.map((entry) => entry.path));
+        _selected.addAll(visible.map((entry) => entry.path));
       }
       _selecting = _selected.isNotEmpty;
     });
@@ -550,6 +555,17 @@ class _FilesScreenState extends State<FilesScreen> {
 
   List<FileEntry> get _sorted => _sortedCache ??= _computeSorted();
 
+  /// The current folder listing after the user's type filter is applied.
+  List<FileEntry> get _visibleItems => switch (_filter) {
+        _FileFilter.all => _sorted,
+        _FileFilter.folders =>
+          _sorted.where((entry) => entry.isFolder).toList(),
+        _FileFilter.files => _sorted.where((entry) => !entry.isFolder).toList(),
+      };
+
+  int get _folderCount => _items.where((entry) => entry.isFolder).length;
+  int get _fileCount => _items.where((entry) => !entry.isFolder).length;
+
   List<FileEntry> _computeSorted() {
     final folders = _items.where((e) => e.isFolder).toList();
     final files = _items.where((e) => !e.isFolder).toList();
@@ -630,6 +646,17 @@ class _FilesScreenState extends State<FilesScreen> {
                     }),
           ),
           NexaRevealBar(
+            visible:
+                !_selecting && !_loading && _error == null && _items.isNotEmpty,
+            alignment: Alignment.topLeft,
+            child: _FileFilterBar(
+              selected: _filter,
+              folderCount: _folderCount,
+              fileCount: _fileCount,
+              onChanged: (value) => setState(() => _filter = value),
+            ),
+          ),
+          NexaRevealBar(
             visible: !_selecting && _path.isNotEmpty,
             alignment: Alignment.topLeft,
             child: _Breadcrumb(
@@ -653,10 +680,14 @@ class _FilesScreenState extends State<FilesScreen> {
               title: Format.count(_selected.length, 'item'),
               actions: [
                 NexaActionItem(
-                  icon: _items.isNotEmpty && _selected.length == _items.length
+                  icon: _visibleItems.isNotEmpty &&
+                          _visibleItems
+                              .every((entry) => _selected.contains(entry.path))
                       ? Icons.deselect_rounded
                       : Icons.select_all_rounded,
-                  label: _items.isNotEmpty && _selected.length == _items.length
+                  label: _visibleItems.isNotEmpty &&
+                          _visibleItems
+                              .every((entry) => _selected.contains(entry.path))
                       ? 'Clear'
                       : 'Select all',
                   onTap: _toggleSelectAll,
@@ -757,7 +788,9 @@ class _FilesScreenState extends State<FilesScreen> {
           ? 'error'
           : _items.isEmpty
               ? 'empty'
-              : 'content:${_grid ? 'grid' : 'list'}';
+              : _visibleItems.isEmpty
+                  ? 'filtered-empty:${_filter.name}'
+                  : 'content:${_grid ? 'grid' : 'list'}:${_filter.name}';
 
   Widget _buildBody() {
     final bottomClearance = MediaQuery.paddingOf(context).bottom;
@@ -799,7 +832,19 @@ class _FilesScreenState extends State<FilesScreen> {
       );
     }
 
-    final sorted = _sorted;
+    final sorted = _visibleItems;
+    if (sorted.isEmpty) {
+      final noun = _filter == _FileFilter.folders ? 'folders' : 'files';
+      return Center(
+        child: NexaEmptyState(
+          icon: Icons.filter_list_off_rounded,
+          title: 'No $noun in this view',
+          hint: 'Try another filter to see the rest of this folder.',
+          actionLabel: 'Show all items',
+          onAction: () => setState(() => _filter = _FileFilter.all),
+        ),
+      );
+    }
     final folders = sorted.where((e) => e.isFolder).toList();
     final files = sorted.where((e) => !e.isFolder).toList();
 
@@ -1346,6 +1391,53 @@ class _BatchDownloadDialogState extends State<_BatchDownloadDialog> {
               widget.cancel.cancel();
             },
             child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact folder/file filters. Counts always reflect the complete folder,
+/// not only the currently selected filter.
+class _FileFilterBar extends StatelessWidget {
+  final _FileFilter selected;
+  final int folderCount;
+  final int fileCount;
+  final ValueChanged<_FileFilter> onChanged;
+
+  const _FileFilterBar({
+    required this.selected,
+    required this.folderCount,
+    required this.fileCount,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: AppDimens.pageMargin),
+      child: Row(
+        children: [
+          NexaChip.tonal(
+            label: 'All ${folderCount + fileCount}',
+            selected: selected == _FileFilter.all,
+            onTap: () => onChanged(_FileFilter.all),
+          ),
+          const SizedBox(width: AppDimens.space8),
+          NexaChip.tonal(
+            label: 'Folders $folderCount',
+            leadingIcon: Icons.folder_outlined,
+            selected: selected == _FileFilter.folders,
+            onTap: () => onChanged(_FileFilter.folders),
+          ),
+          const SizedBox(width: AppDimens.space8),
+          NexaChip.tonal(
+            label: 'Files $fileCount',
+            leadingIcon: Icons.insert_drive_file_outlined,
+            selected: selected == _FileFilter.files,
+            onTap: () => onChanged(_FileFilter.files),
           ),
         ],
       ),

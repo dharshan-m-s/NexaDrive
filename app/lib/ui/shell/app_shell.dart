@@ -33,7 +33,7 @@ import 'navigation.dart';
 
 /// Application shell: brand, navigation context, and the active screen.
 ///
-/// Mobile uses a One UI bottom navigation; desktop uses a persistent sidebar
+/// Mobile uses a floating Liquid Glass dock; desktop uses a persistent sidebar
 /// rail. On wide screens a transfer status strip surfaces the offline queue.
 class AppShell extends StatefulWidget {
   final Session session;
@@ -438,7 +438,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
 
     // Mobile: the page fills the screen behind an independently positioned,
-    // solid floating pill. The shell exposes bottom clearance through MediaQuery
+    // floating glass dock. The shell exposes bottom clearance through MediaQuery
     // so scrollable content can reach a position above the pill without painting
     // a full-width navigation sheet.
     final bottomInset = MediaQuery.paddingOf(context).bottom;

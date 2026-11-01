@@ -258,10 +258,16 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
           title: 'Sync center',
           subtitle: _loading ? null : _summary,
           leading: const NexaBackButton(),
-          headerAction: IconButton(
-            tooltip: 'Refresh',
-            onPressed: _loading ? null : _init,
-            icon: const Icon(Icons.refresh_rounded),
+          headerAction: NexaLiquidGlass(
+            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            padding: EdgeInsets.zero,
+            blurSigma: 12,
+            showShadow: false,
+            child: IconButton(
+              tooltip: 'Refresh',
+              onPressed: _loading ? null : _init,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
           ),
           padding: const EdgeInsets.fromLTRB(
             AppDimens.pageMargin,

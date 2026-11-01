@@ -3,6 +3,7 @@ import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../services/scan_processor.dart';
+import '../../widgets/nexa_components.dart';
 import 'crop_overlay.dart';
 
 /// Per-page scan editor — rotate, filter, crop.
@@ -117,20 +118,37 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
         AppDimens.pageMargin,
         AppDimens.space6,
       ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-            onPressed: () => Navigator.of(context).pop(false),
-            icon: const Icon(Icons.close_rounded, color: Colors.white),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          brightness: Brightness.dark,
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+                brightness: Brightness.dark,
+              ),
+        ),
+        child: NexaLiquidGlass(
+          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+          blurSigma: 16,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space4,
+            vertical: AppDimens.space2,
           ),
-          const SizedBox(width: AppDimens.space4),
-          Text(
-            'Page ${widget.page.number} of ${widget.totalPages}',
-            style: AppTextStyle.rowTitle.copyWith(color: Colors.white),
+          showShadow: false,
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                onPressed: () => Navigator.of(context).pop(false),
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+              ),
+              const SizedBox(width: AppDimens.space4),
+              Text(
+                'Page ${widget.page.number} of ${widget.totalPages}',
+                style: AppTextStyle.rowTitle.copyWith(color: Colors.white),
+              ),
+              const Spacer(),
+            ],
           ),
-          const Spacer(),
-        ],
+        ),
       ),
     );
   }

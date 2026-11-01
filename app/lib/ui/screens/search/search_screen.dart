@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
@@ -9,11 +10,10 @@ import '../../../services/api.dart';
 import '../../widgets/nexa_components.dart';
 import '../../navigation/file_opener.dart';
 
-/// Focused One UI search mode.
-///
-/// The field takes the whole top of the viewing area; results stream in as the
-/// query is typed. Tapping a result opens it in-place; folders show their
-/// path so you always know where a result lives.
+enum _SearchFilter { all, folders, files }
+
+/// Focused cloud search. Queries are debounced and request generations prevent
+/// a slow earlier response from replacing the result of a newer query.
 class SearchScreen extends StatefulWidget {
   final Api api;
   const SearchScreen({super.key, required this.api});
@@ -29,10 +29,14 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _loading = false;
   bool _searched = false;
   String _query = '';
+  String? _error;
+  int _requestGeneration = 0;
+  _SearchFilter _filter = _SearchFilter.all;
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _requestGeneration++;
     _controller.dispose();
     super.dispose();
   }
@@ -40,34 +44,72 @@ class _SearchScreenState extends State<SearchScreen> {
   void _onChanged(String value) {
     _debounce?.cancel();
     final q = value.trim();
+    final generation = ++_requestGeneration;
     setState(() {
       _query = q;
       _searched = q.isNotEmpty;
+      _results = const [];
+      _loading = q.isNotEmpty;
+      _error = null;
+      _filter = _SearchFilter.all;
     });
-    if (q.isEmpty) {
-      setState(() => _results = const []);
-      return;
-    }
-    _debounce = Timer(const Duration(milliseconds: 350), () => _run(q));
+    if (q.isEmpty) return;
+    _debounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _run(q, generation),
+    );
   }
 
-  Future<void> _run(String q) async {
-    setState(() => _loading = true);
+  Future<void> _run(String query, int generation) async {
     try {
-      final raw = await widget.api.searchFiles(q);
-      if (!mounted) return;
+      final raw = await widget.api.searchFiles(query);
+      if (!mounted || generation != _requestGeneration || query != _query) {
+        return;
+      }
       setState(() {
-        _results = raw.map(FileEntry.fromJson).toList();
+        _results = raw.map(FileEntry.fromJson).toList(growable: false);
         _loading = false;
+        _error = null;
       });
     } catch (_) {
-      if (!mounted) return;
-      setState(() => _loading = false);
+      if (!mounted || generation != _requestGeneration || query != _query) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _error = 'Check your connection and try searching again.';
+      });
     }
   }
 
-  /// Results open exactly like they do everywhere else in the app, including
-  /// folders (which previously did nothing when tapped from search).
+  void _retry() {
+    if (_query.isEmpty) return;
+    _debounce?.cancel();
+    final generation = ++_requestGeneration;
+    setState(() {
+      _loading = true;
+      _error = null;
+      _results = const [];
+    });
+    _run(_query, generation);
+  }
+
+  void _clear() {
+    _controller.clear();
+    _onChanged('');
+  }
+
+  List<FileEntry> get _visibleResults => switch (_filter) {
+        _SearchFilter.all => _results,
+        _SearchFilter.folders =>
+          _results.where((entry) => entry.isFolder).toList(growable: false),
+        _SearchFilter.files =>
+          _results.where((entry) => !entry.isFolder).toList(growable: false),
+      };
+
+  int get _folderCount => _results.where((entry) => entry.isFolder).length;
+  int get _fileCount => _results.where((entry) => !entry.isFolder).length;
+
   void _open(FileEntry entry) {
     FileOpener.open(
       context,
@@ -79,12 +121,12 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    Widget row(FileEntry e) => NexaFileTile(
-          entry: e,
-          onTap: (v) => _open(v),
+    Widget row(FileEntry entry) => NexaFileTile(
+          entry: entry,
+          onTap: _open,
           showChevron: true,
-          subtitle:
-              '${e.isFolder ? 'Folder' : Format.bytes(e.size)} · ${e.path == e.name ? '/' : e.path}',
+          subtitle: '${entry.isFolder ? 'Folder' : Format.bytes(entry.size)} · '
+              '${entry.path == entry.name ? '/' : entry.path}',
         );
 
     return Scaffold(
@@ -99,17 +141,22 @@ class _SearchScreenState extends State<SearchScreen> {
                 AppDimens.pageMargin,
                 AppDimens.space8,
               ),
-              child: Row(
-                children: [
-                  const NexaBackButton(),
-                  Expanded(
-                    child: NexaSearchField(
-                      controller: _controller,
-                      hint: 'Search your files',
-                      onChanged: _onChanged,
+              child: NexaLiquidGlass(
+                padding: const EdgeInsets.all(AppDimens.space6),
+                borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+                child: Row(
+                  children: [
+                    const NexaBackButton(),
+                    Expanded(
+                      child: NexaSearchField(
+                        controller: _controller,
+                        hint: 'Search your files',
+                        onChanged: _onChanged,
+                        onClear: _clear,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             Expanded(
@@ -124,11 +171,12 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  /// A stable identity for whichever result state is showing.
   String get _resultState {
     if (!_searched) return 'idle';
-    if (_loading && _results.isEmpty) return 'loading';
-    return _results.isEmpty ? 'empty' : 'content';
+    if (_error != null) return 'error';
+    if (_loading) return 'loading';
+    if (_visibleResults.isEmpty) return 'empty:${_filter.name}';
+    return 'content:${_filter.name}:${_visibleResults.length}';
   }
 
   Widget _buildResults(Widget Function(FileEntry) row) {
@@ -151,7 +199,29 @@ class _SearchScreenState extends State<SearchScreen> {
                 color: AppColors.textSecondaryFor(brightness),
               ),
             ),
+            const SizedBox(height: AppDimens.space6),
+            Text(
+              'Find files and folders by name',
+              style: AppTextStyle.caption1.copyWith(
+                color: AppColors.textTertiaryFor(brightness),
+              ),
+            ),
           ],
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimens.pageMargin),
+          child: NexaEmptyState(
+            icon: Icons.cloud_off_rounded,
+            title: 'Search unavailable',
+            hint: _error!,
+            actionLabel: 'Try again',
+            onAction: _retry,
+          ),
         ),
       );
     }
@@ -183,13 +253,33 @@ class _SearchScreenState extends State<SearchScreen> {
                 color: AppColors.textSecondaryFor(brightness),
               ),
             ),
+            const SizedBox(height: AppDimens.space6),
+            TextButton.icon(
+              onPressed: _clear,
+              icon: const Icon(Icons.close_rounded, size: 16),
+              label: const Text('Clear search'),
+            ),
           ],
         ),
       );
     }
 
-    final folders = _results.where((e) => e.isFolder).toList();
-    final files = _results.where((e) => !e.isFolder).toList();
+    final visible = _visibleResults;
+    if (visible.isEmpty) {
+      final noun = _filter == _SearchFilter.folders ? 'folders' : 'files';
+      return Center(
+        child: NexaEmptyState(
+          icon: Icons.filter_list_off_rounded,
+          title: 'No $noun found',
+          hint: 'Switch the filter to see other matching items.',
+          actionLabel: 'Show all results',
+          onAction: () => setState(() => _filter = _SearchFilter.all),
+        ),
+      );
+    }
+
+    final folders = visible.where((entry) => entry.isFolder).toList();
+    final files = visible.where((entry) => !entry.isFolder).toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
@@ -199,26 +289,55 @@ class _SearchScreenState extends State<SearchScreen> {
         AppDimens.space24,
       ),
       children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              NexaChip.tonal(
+                label: 'All ${_results.length}',
+                selected: _filter == _SearchFilter.all,
+                onTap: () => setState(() => _filter = _SearchFilter.all),
+              ),
+              const SizedBox(width: AppDimens.space8),
+              NexaChip.tonal(
+                label: 'Folders $_folderCount',
+                leadingIcon: Icons.folder_outlined,
+                selected: _filter == _SearchFilter.folders,
+                onTap: () => setState(() => _filter = _SearchFilter.folders),
+              ),
+              const SizedBox(width: AppDimens.space8),
+              NexaChip.tonal(
+                label: 'Files $_fileCount',
+                leadingIcon: Icons.insert_drive_file_outlined,
+                selected: _filter == _SearchFilter.files,
+                onTap: () => setState(() => _filter = _SearchFilter.files),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppDimens.space4,
+            AppDimens.space12,
+            AppDimens.space4,
+            AppDimens.space4,
+          ),
+          child: Text(
+            '${visible.length} matching ${visible.length == 1 ? 'item' : 'items'}',
+            style: AppTextStyle.caption1.copyWith(
+              color: AppColors.textSecondaryFor(brightness),
+            ),
+          ),
+        ),
         if (folders.isNotEmpty) ...[
           const _SearchHeader('Folders'),
-          for (final e in folders) row(e),
+          for (final entry in folders) row(entry),
         ],
         if (files.isNotEmpty) ...[
           const SizedBox(height: AppDimens.space8),
           const _SearchHeader('Files'),
-          for (final e in files) row(e),
+          for (final entry in files) row(entry),
         ],
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.only(top: AppDimens.space16),
-            child: Center(
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          ),
       ],
     );
   }

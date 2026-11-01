@@ -13,6 +13,8 @@ import '../../../update/update_controller.dart';
 import '../../widgets/nexa_grouped_list.dart';
 import '../../widgets/nexa_list_tile.dart';
 import '../../widgets/nexa_page.dart';
+import '../../widgets/nexa_chip.dart';
+import '../../widgets/nexa_surface.dart';
 import '../admin/audit_log_screen.dart';
 import '../admin/users_screen.dart';
 import 'update_center_screen.dart';
@@ -190,44 +192,81 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: Column(
+          NexaSurface(
+            level: NexaSurfaceLevel.grouped,
+            radius: AppDimens.radiusLarge,
+            padding: const EdgeInsets.all(AppDimens.space16),
+            child: Row(
               children: [
                 Container(
-                  width: 68,
-                  height: 68,
+                  width: 60,
+                  height: 60,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: brightness == Brightness.dark
-                        ? accent.withValues(alpha: 0.18)
-                        : accent.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        accent,
+                        brightness == Brightness.dark
+                            ? AppColors.accentDark
+                            : AppColors.accentPressedLight,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accent.withValues(alpha: 0.18),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
                   child: Text(
                     _initial,
                     style: NexaTypography.display.copyWith(
-                      color: accent,
-                      fontSize: 30,
+                      color: Colors.white,
+                      fontSize: 28,
                     ),
                   ),
                 ),
-                const SizedBox(height: AppDimens.spaceSm),
-                Text(
-                  session.displayName ?? session.username ?? '',
-                  style: NexaTypography.sectionHeader.copyWith(
-                    color: AppColors.textPrimaryFor(brightness),
-                    fontWeight: FontWeight.w600,
+                const SizedBox(width: AppDimens.space16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        session.displayName ?? session.username ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: NexaTypography.sectionHeader.copyWith(
+                          color: AppColors.textPrimaryFor(brightness),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: AppDimens.space4),
+                      Text(
+                        session.username ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            NexaTypography.caption.copyWith(color: secondary),
+                      ),
+                      const SizedBox(height: AppDimens.space8),
+                      NexaChip.tonal(
+                        label: isAdmin ? 'Administrator' : 'Member',
+                        leadingIcon: isAdmin
+                            ? Icons.admin_panel_settings_outlined
+                            : Icons.verified_user_outlined,
+                        selected: true,
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: AppDimens.spaceXs),
-                Text(
-                  isAdmin ? 'Administrator' : (session.username ?? ''),
-                  style: NexaTypography.caption.copyWith(color: secondary),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: AppDimens.space2xl),
+          const SizedBox(height: AppDimens.space24),
           NexaGroupedList(
             header: 'General',
             children: [
