@@ -539,7 +539,7 @@ class _MonthHeader extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppDimens.space8,
-                vertical: AppDimens.space3,
+                vertical: AppDimens.space4,
               ),
               child: Text(
                 Format.count(count, 'photo'),

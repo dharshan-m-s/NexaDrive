@@ -52,31 +52,63 @@ class _FilePropertiesSheetState extends State<FilePropertiesSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            NexaSheetHeader(
-              title: entry.name,
-              subtitle: kind,
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  NexaLiquidGlass(
-                    borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                    padding: EdgeInsets.zero,
-                    blurSigma: 10,
-                    showShadow: false,
-                    child: IconButton(
-                      tooltip: 'Copy path',
-                      onPressed: _copyPath,
-                      icon: const Icon(Icons.content_copy_rounded),
-                    ),
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: FileKind.tileFill(category, brightness),
+                    borderRadius: BorderRadius.circular(AppDimens.radiusInner),
                   ),
-                  const SizedBox(width: AppDimens.space4),
-                  IconButton(
-                    tooltip: 'Close',
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded),
+                  child: Icon(
+                    FileKind.icon(category),
+                    color: FileKind.tint(category, brightness),
+                    size: AppDimens.iconLarge,
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: AppDimens.space12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyle.rowTitle.copyWith(
+                          color: AppColors.textPrimaryFor(brightness),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: AppDimens.space2),
+                      Text(
+                        kind,
+                        style: AppTextStyle.caption.copyWith(
+                          color: AppColors.textSecondaryFor(brightness),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppDimens.space8),
+                NexaLiquidGlass(
+                  borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                  padding: EdgeInsets.zero,
+                  blurSigma: 10,
+                  showShadow: false,
+                  child: IconButton(
+                    tooltip: 'Copy path',
+                    onPressed: _copyPath,
+                    icon: const Icon(Icons.content_copy_rounded),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
             ),
             const SizedBox(height: AppDimens.space12),
             NexaSurface(
@@ -144,8 +176,8 @@ class _Section extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(
-            left: AppDimens.pageMargin,
-            bottom: AppDimens.space4,
+            left: AppDimens.space4,
+            bottom: AppDimens.space8,
           ),
           child: Text(
             header.toUpperCase(),
@@ -156,7 +188,27 @@ class _Section extends StatelessWidget {
             ),
           ),
         ),
-        ...children,
+        NexaSurface(
+          level: NexaSurfaceLevel.grouped,
+          radius: AppDimens.radiusMedium,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space16,
+            vertical: AppDimens.space8,
+          ),
+          child: Column(
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                if (i > 0)
+                  Divider(
+                    height: AppDimens.space12,
+                    thickness: 0.5,
+                    color: AppColors.separatorFor(brightness),
+                  ),
+                children[i],
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }
