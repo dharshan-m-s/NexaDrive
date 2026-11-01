@@ -530,11 +530,24 @@ class _MonthHeader extends StatelessWidget {
               color: AppColors.textPrimaryFor(brightness),
             ),
           ),
-          const SizedBox(width: AppDimens.space8),
-          Text(
-            Format.count(count, 'photo'),
-            style: AppTextStyle.caption.copyWith(
-              color: AppColors.textSecondaryFor(brightness),
+          const SizedBox(width: AppDimens.space10),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: AppColors.surfaceAltFor(brightness),
+              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.space8,
+                vertical: AppDimens.space3,
+              ),
+              child: Text(
+                Format.count(count, 'photo'),
+                style: AppTextStyle.caption.copyWith(
+                  color: AppColors.textSecondaryFor(brightness),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
         ],
@@ -608,18 +621,40 @@ class _PhotoCell extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         onLongPress: onLongPress,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Hero(
-              tag: heroTag,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppDimens.radiusInner),
-                child: content,
+        child: AnimatedScale(
+          scale: selected ? 0.965 : 1,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppDimens.radiusInner),
+              border: Border.all(
+                color: selected
+                    ? AppColors.accentFor(brightness)
+                    : Colors.transparent,
+                width: 2.5,
               ),
             ),
-            if (selected) _SelectedOverlay(onAccent: onAccent),
-          ],
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppDimens.radiusInner),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Hero(tag: heroTag, child: content),
+                  AnimatedOpacity(
+                    opacity: selected ? 1 : 0,
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOut,
+                    child: IgnorePointer(
+                      child: _SelectedOverlay(onAccent: onAccent),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

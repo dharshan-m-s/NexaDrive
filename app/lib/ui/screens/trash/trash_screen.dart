@@ -275,10 +275,18 @@ class _TrashScreenState extends State<TrashScreen> {
                                 color: Colors.white,
                               ),
                             )
-                          : Icon(
-                              deleteAll
-                                  ? Icons.delete_sweep_outlined
-                                  : Icons.delete_outline_rounded,
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  deleteAll
+                                      ? Icons.delete_sweep_outlined
+                                      : Icons.delete_outline_rounded,
+                                  size: 19,
+                                ),
+                                const SizedBox(width: AppDimens.space6),
+                                Text(deleteAll ? 'Empty' : 'Delete'),
+                              ],
                             ),
                     ),
                   ],

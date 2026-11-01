@@ -378,14 +378,32 @@ class _ShareScopeOption extends StatelessWidget {
                       fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(width: AppDimens.space6),
-                  Text(
-                    '$count',
-                    style: TextStyle(
-                      color: AppColors.labelSecondaryFor(brightness),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                  const SizedBox(width: AppDimens.space8),
+                  AnimatedContainer(
+                    duration: AppMotion.resolve(context, AppMotion.fast),
+                    curve: AppMotion.standardCurve,
+                    constraints: const BoxConstraints(minWidth: 22),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimens.space6,
+                      vertical: AppDimens.space2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? AppColors.accentContainerFor(brightness)
+                          : AppColors.surfaceAltFor(brightness),
+                      borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                    ),
+                    child: Text(
+                      '$count',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: selected
+                            ? AppColors.accentTextFor(brightness)
+                            : AppColors.labelSecondaryFor(brightness),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ),
                 ],
