@@ -200,8 +200,35 @@ class UpdateRouter {
         const <String>[],
         mode: ProcessStartMode.detached,
       );
-      stdout.addStream(process.stdout).ignore();
-      stderr.addStream(process.stderr).ignore();
+      // Setup can close this app and launch a fresh process. A detached
+      // cleanup helper waits for Setup to exit, then clears the download cache.
+      try {
+        final cacheDir = File(path).parent.path.replaceAll('%', '%%');
+        final helper = File(
+          '${Directory.systemTemp.path}${Platform.pathSeparator}'
+          'nexadrive-installer-cleanup-${process.pid}.cmd',
+        );
+        helper.writeAsStringSync(
+          '@echo off\\r\\n'
+          'setlocal\\r\\n'
+          'set "UPDATE_CACHE=$cacheDir"\\r\\n'
+          ':wait\\r\\n'
+          'tasklist /FI "PID eq ${process.pid}" 2>NUL | find "${process.pid}" >NUL\\r\\n'
+          'if not errorlevel 1 (\\r\\n'
+          '  timeout /t 2 /nobreak >NUL\\r\\n'
+          '  goto wait\\r\\n'
+          ')\\r\\n'
+          'if exist "%UPDATE_CACHE%" rmdir /s /q "%UPDATE_CACHE%"\\r\\n'
+          'del "%~f0" 2>NUL\\r\\n',
+        );
+        await Process.start(
+          Platform.environment['COMSPEC'] ?? 'cmd.exe',
+          ['/c', helper.path],
+          mode: ProcessStartMode.detached,
+        );
+      } catch (_) {
+        // The installer is already running; periodic pruning is the fallback.
+      }
       return true;
     } catch (_) {
       return false;
@@ -235,13 +262,13 @@ class UpdateRouter {
   /// this process exiting. Returns false if it could not be started.
   Future<bool> runDetached(String file) async {
     try {
-      final process = await Process.start(
-        file,
-        const <String>[],
+      // A .cmd file must be hosted by cmd.exe on Windows.
+      final batch = Platform.isWindows && file.toLowerCase().endsWith('.cmd');
+      await Process.start(
+        batch ? (Platform.environment['COMSPEC'] ?? 'cmd.exe') : file,
+        batch ? ['/c', file] : const <String>[],
         mode: ProcessStartMode.detached,
       );
-      stdout.addStream(process.stdout).ignore();
-      stderr.addStream(process.stderr).ignore();
       return true;
     } catch (_) {
       return false;
@@ -874,12 +901,22 @@ class UpdateController extends ChangeNotifier {
       return;
     }
 
-    // Not an AppImage: .deb install goes through the system package manager.
-    status = UpdateStatus.installingHandoff;
-    infoMessage =
-        'To complete the update, install the package with your system package '
-        'manager:\n\tsudo dpkg -i $path\n\nYou can also open the file with the '
-        'system installer now.';
+    // A .deb must be installed by the package manager so its database
+    // and file ownership stay consistent. Open the desktop handler; the user
+    // still confirms authentication and installation in the system UI.
+    final opened = await router.openWithSystemInstaller(path);
+    if (opened) {
+      status = UpdateStatus.installingHandoff;
+      _handoffPending = true;
+      infoMessage =
+          'The package manager is open. Confirm the installation there, '
+          'then return to NexaDrive and confirm completion.';
+    } else {
+      status = UpdateStatus.readyToInstall;
+      infoMessage =
+          'Could not open a package installer automatically. Use Open package '
+          'or run: sudo dpkg -i $path';
+    }
     retryable = false;
   }
 
@@ -911,13 +948,24 @@ class UpdateController extends ChangeNotifier {
       return;
     }
 
-    // 1. Unpack to a same-volume staging folder so the later swap is atomic
-    //    enough (same filesystem move, never a cross-drive copy).
+    // Stage beside (not inside) the live app directory so Robocopy /MIR
+    // never uses a source nested inside its destination.
+    final updateId = DateTime.now().millisecondsSinceEpoch;
+    final parent = appDir.parent;
     final staging = Directory(
-      '${appDir.path}${Platform.pathSeparator}.nexadrive-stage-${DateTime.now().millisecondsSinceEpoch}',
+      '${parent.path}${Platform.pathSeparator}.nexadrive-stage-$updateId',
     );
+    final backup = Directory(
+      '${parent.path}${Platform.pathSeparator}.nexadrive-backup-$updateId',
+    );
+    final helper = File(
+      '${parent.path}${Platform.pathSeparator}'
+      'nexadrive-finish-update-$updateId.cmd',
+    );
+
     try {
       if (!await _unpackZip(File(zipPath), staging)) {
+        if (staging.existsSync()) staging.deleteSync(recursive: true);
         status = UpdateStatus.failed;
         errorMessage = 'The downloaded update could not be unpacked.';
         retryable = false;
@@ -925,16 +973,18 @@ class UpdateController extends ChangeNotifier {
         return;
       }
 
-      // 2. Validate the payload before touching anything live.
       final newExe = File(
         '${staging.path}${Platform.pathSeparator}${_baseName(exe)}',
       );
       final assetManifest = File(
-        '${staging.path}${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}AssetManifest.bin',
+        '${staging.path}${Platform.pathSeparator}data'
+        '${Platform.pathSeparator}flutter_assets'
+        '${Platform.pathSeparator}AssetManifest.bin',
       );
       if (!newExe.existsSync() ||
           newExe.lengthSync() == 0 ||
           !assetManifest.existsSync()) {
+        staging.deleteSync(recursive: true);
         status = UpdateStatus.failed;
         errorMessage =
             'The downloaded update does not look like a valid NexaDrive build.';
@@ -943,45 +993,48 @@ class UpdateController extends ChangeNotifier {
         return;
       }
 
-      // 3. Write the swap helper next to the app and launch it detached.
-      final helper = File(
-        '${appDir.path}${Platform.pathSeparator}nexadrive-finish-update.cmd',
+      final updateCacheDir = (await UpdateDownloader.cacheDirectory()).path;
+      helper.writeAsStringSync(
+        _portableSwapScript(
+          staging: staging.path,
+          backup: backup.path,
+          appDir: appDir.path,
+          exeName: _baseName(exe),
+          updateCacheDir: updateCacheDir,
+        ),
       );
-      final script = _portableSwapScript(
-        staging: staging.path,
-        appDir: appDir.path,
-        exeName: _baseName(exe),
-      );
-      try {
-        helper.writeAsStringSync(script);
-      } catch (_) {
-        status = UpdateStatus.failed;
-        errorMessage =
-            'The update is ready, but the swap helper could not be prepared. '
-            'Copy the "data" files from the release ZIP over your app folder '
-            'manually, then restart.';
-        retryable = false;
-        notifyListeners();
-        return;
-      }
-      if (staging.existsSync() && !await router.runDetached(helper.path)) {
+
+      if (!await router.runDetached(helper.path)) {
+        try {
+          staging.deleteSync(recursive: true);
+        } catch (_) {}
+        try {
+          helper.deleteSync();
+        } catch (_) {}
         status = UpdateStatus.readyToInstall;
         infoMessage =
-            'Download complete — restart NexaDrive to finish the update. '
-            'The verified update is staged next to the app and will be applied '
-            'the next time it starts.';
+            'The update is verified, but Windows could not start the updater. '
+            'Tap Update portable app to retry.';
         retryable = false;
         notifyListeners();
         return;
       }
+
+      _handoffPending = true;
       status = UpdateStatus.installingHandoff;
       infoMessage =
-          'Download complete — restart NexaDrive to finish the update.';
+          'NexaDrive will close, replace the old application bundle, clear '
+          'the downloaded update cache, and relaunch automatically.';
       retryable = false;
       notifyListeners();
     } catch (_) {
+      for (final entity in [staging, backup]) {
+        try {
+          if (entity.existsSync()) entity.deleteSync(recursive: true);
+        } catch (_) {}
+      }
       try {
-        staging.deleteSync(recursive: true);
+        if (helper.existsSync()) helper.deleteSync();
       } catch (_) {}
       status = UpdateStatus.failed;
       errorMessage = 'The update could not be installed.';
@@ -990,62 +1043,62 @@ class UpdateController extends ChangeNotifier {
     }
   }
 
-  /// Generates the detached Windows swap helper. Paths are wrapped in double
-  /// quotes and every literal `%` is doubled (batch expands `%VAR%` at parse
-  /// time), so a path such as `C:\Users\50%Tax` cannot corrupt or escape the
-  /// script.
-  ///
-  /// The swap is rollback-safe: the current app folder is copied to a backup
-  /// first, and a failed copy of the new build restores that backup before
-  /// relaunching. The old version is only removed once the new one is fully
-  /// in place, so a crash or power loss mid-swap can never leave the app
-  /// missing files.
+  /// Generates a detached Windows swap helper. The staging and backup
+  /// directories are siblings of the app directory. The old app is restored
+  /// if mirroring fails; the download cache is cleared only after success.
   static String _portableSwapScript({
     required String staging,
+    required String backup,
     required String appDir,
     required String exeName,
+    required String updateCacheDir,
   }) {
     String batchEscape(String value) => value.replaceAll('%', '%%');
     final src = batchEscape(staging);
+    final backupPath = batchEscape(backup);
     final dir = batchEscape(appDir);
-    final appExe = batchEscape('$appDir$Platform.pathSeparator$exeName');
+    final appExe = batchEscape(
+      '$appDir${Platform.pathSeparator}$exeName',
+    );
+    final cache = batchEscape(updateCacheDir);
     return '@echo off\r\n'
-        'REM NexaDrive portable updater: waits for the app to exit, backs up\r\n'
-        'REM the current version, swaps the staged build in, restores the\r\n'
-        'REM backup if the swap fails, relaunches, then removes itself.\r\n'
         'setlocal\r\n'
         'set "UPDATE_SRC=$src"\r\n'
         'set "APP_DIR=$dir"\r\n'
         'set "APP_EXE=$appExe"\r\n'
-        'set "BACKUP=%APP_DIR%\\nexadrive-backup"\r\n'
+        'set "BACKUP=$backupPath"\r\n'
+        'set "UPDATE_CACHE=$cache"\r\n'
         ':wait\r\n'
         'tasklist /FI "IMAGENAME eq $exeName" 2>NUL | find /I "$exeName" >NUL\r\n'
         'if not errorlevel 1 (\r\n'
         '  timeout /t 2 /nobreak >NUL\r\n'
         '  goto wait\r\n'
         ')\r\n'
-        'REM 1. Back up the working version before anything is touched.\r\n'
-        'robocopy "%APP_DIR%" "%BACKUP%" /e /r:1 /w:1 /xd "%BACKUP%" /nfl /ndl /njh /njs >NUL\r\n'
+        'robocopy "%APP_DIR%" "%BACKUP%" /e /r:1 /w:1 /nfl /ndl /njh /njs >NUL\r\n'
         'if errorlevel 8 (\r\n'
-        '  rmdir /s /q "%BACKUP%" 2>NUL\r\n'
-        '  start "" "%APP_EXE%"\r\n'
-        '  del "%~f0" 2>NUL\r\n'
-        '  exit /b 1\r\n'
-        ')\r\n'
-        'REM 2. Swap the staged build into place. The backup folder is excluded\r\n'
-        'REM    so the rollback anchor survives the mirroring.\r\n'
-        'robocopy "%UPDATE_SRC%" "%APP_DIR%" /mir /r:1 /w:1 /xd "%BACKUP%" /nfl /ndl /njh /njs >NUL\r\n'
-        'if errorlevel 8 (\r\n'
-        '  robocopy "%BACKUP%" "%APP_DIR%" /e /r:1 /w:1 /nfl /ndl /njh /njs >NUL\r\n'
         '  rmdir /s /q "%BACKUP%" 2>NUL\r\n'
         '  rmdir /s /q "%UPDATE_SRC%" 2>NUL\r\n'
         '  start "" "%APP_EXE%"\r\n'
         '  del "%~f0" 2>NUL\r\n'
         '  exit /b 1\r\n'
         ')\r\n'
-        'REM 3. Success: drop the staging copy and the backup, then relaunch.\r\n'
+        'robocopy "%UPDATE_SRC%" "%APP_DIR%" /mir /r:1 /w:1 /nfl /ndl /njh /njs >NUL\r\n'
+        'if errorlevel 8 (\r\n'
+        '  robocopy "%BACKUP%" "%APP_DIR%" /mir /r:1 /w:1 /nfl /ndl /njh /njs >NUL\r\n'
+        '  if errorlevel 8 (\r\n'
+        '    start "" "%APP_EXE%"\r\n'
+        '    del "%~f0" 2>NUL\r\n'
+        '    exit /b 1\r\n'
+        '  )\r\n'
+        '  rmdir /s /q "%BACKUP%" 2>NUL\r\n'
+        '  rmdir /s /q "%UPDATE_SRC%" 2>NUL\r\n'
+        '  start "" "%APP_EXE%"\r\n'
+        '  del "%~f0" 2>NUL\r\n'
+        '  exit /b 1\r\n'
+        ')\r\n'
         'rmdir /s /q "%UPDATE_SRC%" 2>NUL\r\n'
         'rmdir /s /q "%BACKUP%" 2>NUL\r\n'
+        'if exist "%UPDATE_CACHE%" rmdir /s /q "%UPDATE_CACHE%"\r\n'
         'start "" "%APP_EXE%"\r\n'
         'del "%~f0" 2>NUL\r\n';
   }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -148,6 +149,19 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
+  Future<void> _seekRelative(
+    VideoPlayerController controller,
+    Duration position,
+    Duration offset,
+  ) async {
+    final target = position + offset;
+    final milliseconds = target.inMilliseconds
+        .clamp(0, controller.value.duration.inMilliseconds)
+        .toInt();
+    await controller.seekTo(Duration(milliseconds: milliseconds));
+    _scheduleHide(restart: true);
+  }
+
   Future<void> _toggleFullscreen() async {
     final next = !_fullscreen;
     setState(() => _fullscreen = next);
@@ -239,9 +253,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                   leading: IconButton(
                     tooltip:
                         MaterialLocalizations.of(context).backButtonTooltip,
-                    onPressed: _toggleFullscreen,
-                    icon: const Icon(Icons.arrow_back_rounded,
-                        color: Colors.white),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(
+                      Icons.arrow_back_rounded,
+                      color: Colors.white,
+                    ),
                   ),
                   headerAction: IconButton(
                     tooltip: 'Save to device',
@@ -258,7 +274,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   Widget _buildPlayer(
-      VideoPlayerController controller, VideoPlayerValue value) {
+    VideoPlayerController controller,
+    VideoPlayerValue value,
+  ) {
     final aspect = value.aspectRatio > 0 ? value.aspectRatio : 16 / 9;
     final duration = value.duration;
     final fraction = _dragging
@@ -298,141 +316,200 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         children: [
           Positioned.fill(child: video),
           Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
+            left: AppDimens.space12,
+            right: AppDimens.space12,
+            bottom: AppDimens.space12,
             child: AnimatedOpacity(
               opacity: _controlsVisible ? 1 : 0,
               duration: AppMotion.resolve(context, AppMotion.fast),
               curve: AppMotion.standard,
               child: IgnorePointer(
                 ignoring: !_controlsVisible,
-                child: Container(
-                  color: Colors.black.withValues(alpha: 0.66),
-                  padding: const EdgeInsets.fromLTRB(
-                    AppDimens.space8,
-                    AppDimens.space8,
-                    AppDimens.space8,
-                    0,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          IconButton(
-                            tooltip: value.isPlaying ? 'Pause' : 'Play',
-                            onPressed: _togglePlay,
-                            color: Colors.white,
-                            iconSize: 34,
-                            icon: Icon(
-                              value.isPlaying
-                                  ? Icons.pause_rounded
-                                  : Icons.play_arrow_rounded,
-                            ),
-                          ),
-                          Text(
-                            Format.duration(shownPosition),
-                            style: AppTextStyle.micro
-                                .copyWith(color: Colors.white70),
-                          ),
-                          Expanded(
-                            child: SliderTheme(
-                              data: const SliderThemeData(
-                                activeTrackColor: AppColors.accentDark,
-                                inactiveTrackColor: Colors.white24,
-                                thumbColor: AppColors.accentDark,
-                                trackHeight: 3,
-                                thumbShape: RoundSliderThumbShape(
-                                    enabledThumbRadius: 6),
-                              ),
-                              child: Slider(
-                                value: fraction,
-                                onChangeStart: (_) =>
-                                    setState(() => _dragging = true),
-                                onChanged: (v) =>
-                                    setState(() => _dragFraction = v),
-                                onChangeEnd: (v) async {
-                                  setState(() => _dragging = false);
-                                  final target = Duration(
-                                    milliseconds:
-                                        (v * duration.inMilliseconds).round(),
-                                  );
-                                  await controller.seekTo(target);
-                                  _scheduleHide(restart: true);
-                                },
-                              ),
-                            ),
-                          ),
-                          Text(
-                            duration == Duration.zero
-                                ? '--:--'
-                                : Format.duration(duration),
-                            style: AppTextStyle.micro
-                                .copyWith(color: Colors.white70),
-                          ),
-                          IconButton(
-                            tooltip: _fullscreen
-                                ? 'Exit full screen'
-                                : 'Full screen',
-                            onPressed: _toggleFullscreen,
-                            color: Colors.white,
-                            icon: Icon(
-                              _fullscreen
-                                  ? Icons.fullscreen_exit_rounded
-                                  : Icons.fullscreen_rounded,
-                            ),
-                          ),
-                        ],
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppDimens.radiusCard),
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.62),
+                        borderRadius:
+                            BorderRadius.circular(AppDimens.radiusCard),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.14),
+                        ),
                       ),
-                      Row(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppDimens.space8,
+                        AppDimens.space8,
+                        AppDimens.space8,
+                        AppDimens.space4,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            _volume == 0
-                                ? Icons.volume_off_rounded
-                                : Icons.volume_up_rounded,
-                            color: Colors.white70,
-                            size: AppDimens.iconSmall,
-                          ),
-                          Expanded(
-                            child: SliderTheme(
-                              data: SliderTheme.of(context).copyWith(
-                                trackHeight: 2,
-                                thumbShape: const RoundSliderThumbShape(
-                                    enabledThumbRadius: 5),
-                                activeTrackColor: Colors.white70,
-                                inactiveTrackColor: Colors.white24,
-                                thumbColor: Colors.white,
-                              ),
-                              child: Slider(
-                                value: _volume,
-                                onChanged: (v) async {
-                                  setState(() => _volume = v);
-                                  await controller.setVolume(v);
-                                },
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppDimens.space12),
-                          for (final option in _speeds)
-                            if (option == 1.0 || option == 1.5 || option == 2.0)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                    right: AppDimens.space4),
-                                child: ChoiceChip(
-                                  label:
-                                      Text(option == 1.0 ? '1×' : '$option×'),
-                                  selected: (_speed - option).abs() < 0.001,
-                                  onSelected: (_) async {
-                                    setState(() => _speed = option);
-                                    await controller.setPlaybackSpeed(option);
-                                  },
+                          Row(
+                            children: [
+                              IconButton(
+                                tooltip: value.isPlaying ? 'Pause' : 'Play',
+                                onPressed: _togglePlay,
+                                color: Colors.white,
+                                iconSize: 34,
+                                icon: Icon(
+                                  value.isPlaying
+                                      ? Icons.pause_rounded
+                                      : Icons.play_arrow_rounded,
                                 ),
                               ),
+                              IconButton(
+                                tooltip: 'Back 10 seconds',
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints.tightFor(
+                                  width: 36,
+                                  height: 36,
+                                ),
+                                onPressed: () => _seekRelative(
+                                  controller,
+                                  value.position,
+                                  const Duration(seconds: -10),
+                                ),
+                                color: Colors.white70,
+                                icon: const Icon(
+                                  Icons.replay_10_rounded,
+                                  size: 22,
+                                ),
+                              ),
+                              Text(
+                                Format.duration(shownPosition),
+                                style: AppTextStyle.micro
+                                    .copyWith(color: Colors.white70),
+                              ),
+                              IconButton(
+                                tooltip: 'Forward 10 seconds',
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints.tightFor(
+                                  width: 36,
+                                  height: 36,
+                                ),
+                                onPressed: () => _seekRelative(
+                                  controller,
+                                  value.position,
+                                  const Duration(seconds: 10),
+                                ),
+                                color: Colors.white70,
+                                icon: const Icon(
+                                  Icons.forward_10_rounded,
+                                  size: 22,
+                                ),
+                              ),
+                              Expanded(
+                                child: SliderTheme(
+                                  data: const SliderThemeData(
+                                    activeTrackColor: AppColors.accentDark,
+                                    inactiveTrackColor: Colors.white24,
+                                    thumbColor: AppColors.accentDark,
+                                    trackHeight: 3,
+                                    thumbShape: RoundSliderThumbShape(
+                                      enabledThumbRadius: 6,
+                                    ),
+                                  ),
+                                  child: Slider(
+                                    value: fraction,
+                                    onChangeStart: (_) =>
+                                        setState(() => _dragging = true),
+                                    onChanged: (v) =>
+                                        setState(() => _dragFraction = v),
+                                    onChangeEnd: (v) async {
+                                      setState(() => _dragging = false);
+                                      final target = Duration(
+                                        milliseconds:
+                                            (v * duration.inMilliseconds)
+                                                .round(),
+                                      );
+                                      await controller.seekTo(target);
+                                      _scheduleHide(restart: true);
+                                    },
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                duration == Duration.zero
+                                    ? '--:--'
+                                    : Format.duration(duration),
+                                style: AppTextStyle.micro
+                                    .copyWith(color: Colors.white70),
+                              ),
+                              IconButton(
+                                tooltip: _fullscreen
+                                    ? 'Exit full screen'
+                                    : 'Full screen',
+                                onPressed: _toggleFullscreen,
+                                color: Colors.white,
+                                icon: Icon(
+                                  _fullscreen
+                                      ? Icons.fullscreen_exit_rounded
+                                      : Icons.fullscreen_rounded,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Icon(
+                                _volume == 0
+                                    ? Icons.volume_off_rounded
+                                    : Icons.volume_up_rounded,
+                                color: Colors.white70,
+                                size: AppDimens.iconSmall,
+                              ),
+                              Expanded(
+                                child: SliderTheme(
+                                  data: SliderTheme.of(context).copyWith(
+                                    trackHeight: 2,
+                                    thumbShape: const RoundSliderThumbShape(
+                                      enabledThumbRadius: 5,
+                                    ),
+                                    activeTrackColor: Colors.white70,
+                                    inactiveTrackColor: Colors.white24,
+                                    thumbColor: Colors.white,
+                                  ),
+                                  child: Slider(
+                                    value: _volume,
+                                    onChanged: (v) async {
+                                      setState(() => _volume = v);
+                                      await controller.setVolume(v);
+                                    },
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: AppDimens.space12),
+                              for (final option in _speeds)
+                                if (option == 1.0 ||
+                                    option == 1.5 ||
+                                    option == 2.0)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      right: AppDimens.space4,
+                                    ),
+                                    child: ChoiceChip(
+                                      label: Text(
+                                        option == 1.0 ? '1×' : '$option×',
+                                      ),
+                                      selected: (_speed - option).abs() < 0.001,
+                                      onSelected: (_) async {
+                                        setState(() => _speed = option);
+                                        await controller
+                                            .setPlaybackSpeed(option);
+                                      },
+                                    ),
+                                  ),
+                            ],
+                          ),
+                          const SizedBox(height: AppDimens.space4),
                         ],
                       ),
-                      const SizedBox(height: AppDimens.space4),
-                    ],
+                    ),
                   ),
                 ),
               ),

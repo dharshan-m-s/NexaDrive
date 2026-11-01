@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdfx/pdfx.dart';
 import '../../../../core/design/app_dimensions.dart';
 import '../../../../core/models/file_entry.dart';
@@ -34,6 +37,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   /// closed them — a slow native-memory leak while the viewer stayed open.
   PdfControllerPinch? _controller;
   Future<PdfDocument>? _document;
+  String? _localPdfPath;
 
   @override
   void initState() {
@@ -54,9 +58,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     final pending = _document;
     _document = null;
     if (pending == null) return;
-    pending.then((document) {
-      if (!document.isClosed) document.close();
-    }).catchError((Object _) {});
+    pending.then((document) async {
+      if (!document.isClosed) await document.close();
+      await _deleteLocalPdf();
+    }).catchError((Object _) async {
+      await _deleteLocalPdf();
+    });
   }
 
   Future<void> _load() async {
@@ -64,9 +71,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       _loading = true;
       _error = null;
     });
+    File? localFile;
     try {
-      // Probe support before downloading, so an unsupported platform never
-      // pulls a whole PDF into memory just to reject it.
+      // Probe support before downloading, so unsupported platforms never
+      // transfer a document they cannot render.
       final supported = await hasPdfSupport();
       if (!mounted) return;
       if (!supported) {
@@ -76,29 +84,46 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         });
         return;
       }
-      final bytes = await widget.api.download(widget.file.path);
-      if (!mounted) return;
-      // Open the document here, not in build(), so build() stays pure and the
-      // document is created exactly once. The bytes local is released when this
-      // method returns; pdfium holds its own copy by then.
-      final document = PdfDocument.openData(bytes);
+      final directory = await getTemporaryDirectory();
+      localFile = File(
+        '${directory.path}/nexadrive-${DateTime.now().microsecondsSinceEpoch}.pdf',
+      );
+      _localPdfPath = localFile.path;
+      // The HTTP body is streamed to disk. pdfium opens that file directly,
+      // avoiding a full Uint8List plus the renderer's native document copy.
+      await widget.api.downloadToFile(widget.file.path, localFile.path);
+      if (!mounted) {
+        await _deleteLocalPdf();
+        return;
+      }
+      final document = PdfDocument.openFile(localFile.path);
       _document = document;
       _controller = PdfControllerPinch(document: document, initialPage: 1);
       setState(() {
         _supported = true;
         _loading = false;
       });
-      // If the viewer is torn down before the document finishes opening, close
-      // it so the native handle is not stranded.
       document.then((opened) {
         if (!mounted && !opened.isClosed) opened.close();
       }).catchError((Object _) {});
     } catch (e) {
+      await _deleteLocalPdf();
       if (!mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _deleteLocalPdf() async {
+    final path = _localPdfPath;
+    _localPdfPath = null;
+    if (path == null) return;
+    try {
+      await File(path).delete();
+    } catch (_) {
+      // The OS removes the temporary file later if it is already gone/in use.
     }
   }
 

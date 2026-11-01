@@ -172,6 +172,10 @@ jobs:
         working-directory: app
       - run: flutter build linux --release --dart-define=NEXADRIVE_UPDATE_REPO=dharshan-m-s/NexaDrive
         working-directory: app
+      # Exercise the exact AppImage + .deb packaging path used by Release so
+      # launcher/layout regressions fail in CI instead of at release time.
+      - name: Smoke-test Linux release packaging
+        run: bash scripts/package-linux.sh "0.0.0-ci" "$RUNNER_TEMP/nexadrive-dist"
 
   flutter-android:
     name: Flutter Android build

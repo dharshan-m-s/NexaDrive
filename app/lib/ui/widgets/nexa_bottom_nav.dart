@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_motion.dart';
@@ -167,7 +170,10 @@ class _NavItem extends StatelessWidget {
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
-          onTap: onTap,
+          onTap: () {
+            if (!isSelected) unawaited(HapticFeedback.selectionClick());
+            onTap();
+          },
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: AppDimens.space6),
             child: Column(

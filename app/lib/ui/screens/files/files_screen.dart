@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -11,7 +12,8 @@ import '../../../../core/utils/file_kind.dart';
 import '../../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../../services/download_service.dart';
-import '../../../services/folder_source.dart' show FolderUploadPicker;
+import '../../../services/folder_source.dart'
+    show FolderUploadPicker, SingleFileUploadPicker;
 import '../../../services/image_pipeline.dart';
 import '../../../services/thumbnail_cache.dart';
 import '../../../services/upload_manager.dart';
@@ -211,14 +213,35 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   Future<void> _pickAndUpload() async {
-    final files = await FilePicker.pickFiles();
-    if (files.isEmpty) return;
-    if (!mounted) return;
-    await UploadProgressDialog.show(
-      context,
-      files: files,
-      folder: _path,
-    );
+    if (Platform.isAndroid) {
+      // Android's file_picker plugin copies every selected document into its
+      // cache folder. Use SAF URIs instead and stream bounded ranges directly
+      // from ContentResolver, just like folder uploads do.
+      final picked = await const SingleFileUploadPicker().pick();
+      if (picked == null || picked.isEmpty || !mounted) return;
+      final sources = picked
+          .map((file) => UploadSource(
+                path: file.location,
+                sourceUri: file.sourceUri,
+                name: file.name,
+                size: file.size,
+              ))
+          .toList(growable: false);
+      await UploadProgressDialog.showSources(
+        context,
+        sources: sources,
+        folder: _path,
+        api: widget.api,
+      );
+    } else {
+      final files = await FilePicker.pickFiles();
+      if (files.isEmpty || !mounted) return;
+      await UploadProgressDialog.show(
+        context,
+        files: files,
+        folder: _path,
+      );
+    }
     if (mounted) await load();
   }
 

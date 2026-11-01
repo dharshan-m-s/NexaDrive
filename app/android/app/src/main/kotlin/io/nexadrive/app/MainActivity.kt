@@ -8,6 +8,7 @@ import android.content.IntentSender
 import android.content.pm.PackageInstaller
 import android.net.Uri
 import android.os.Build
+import android.provider.OpenableColumns
 import android.provider.Settings
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -57,6 +58,9 @@ class MainActivity : FlutterFragmentActivity() {
     /// The pending result of an open tree picker.
     private var pendingFolderResult: MethodChannel.Result? = null
 
+    /// The pending result of the multiple-document picker.
+    private var pendingFilesResult: MethodChannel.Result? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
@@ -91,6 +95,7 @@ class MainActivity : FlutterFragmentActivity() {
         MethodChannel(messenger, FOLDER_PICKER_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "pickFolder" -> pickFolder(result)
+                "pickFiles" -> pickFiles(result)
                 "listFolder" -> listFolder(
                     call.argument<String>("uri"),
                     result,
@@ -132,6 +137,71 @@ class MainActivity : FlutterFragmentActivity() {
             pendingFolderResult = null
             result.error("unavailable", "No folder picker is available", null)
         }
+    }
+
+    /**
+     * Opens Android's document picker and keeps provider URIs instead of
+     * materialising the selected file into file_picker's cache directory.
+     */
+    private fun pickFiles(result: MethodChannel.Result) {
+        if (pendingFolderResult != null || pendingFilesResult != null) {
+            result.error("busy", "A document picker is already open", null)
+            return
+        }
+        pendingFilesResult = result
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
+            )
+        }
+        try {
+            startActivityForResult(intent, PICK_FILES_REQUEST_CODE)
+        } catch (e: android.content.ActivityNotFoundException) {
+            pendingFilesResult = null
+            result.error("unavailable", "No document picker is available", null)
+        }
+    }
+
+    /**
+     * Queries metadata only. File contents stay at the selected document
+     * provider and are fetched in bounded ranges by readSourceRange().
+     */
+    private fun describeDocument(uri: Uri): Map<String, Any> {
+        var name = uri.lastPathSegment?.substringAfterLast('/') ?: "file"
+        var size = -1L
+        contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex >= 0) name = cursor.getString(nameIndex) ?: name
+                val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) {
+                    size = cursor.getLong(sizeIndex)
+                }
+            }
+        }
+        if (size < 0) {
+            contentResolver.openAssetFileDescriptor(uri, "r")?.use { descriptor ->
+                size = descriptor.length
+            }
+        }
+        require(size >= 0) {
+            "The selected provider did not report the file size for $name"
+        }
+        return mapOf(
+            "uri" to uri.toString(),
+            "name" to name,
+            "size" to size,
+        )
     }
 
     /**
@@ -240,6 +310,56 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == PICK_FILES_REQUEST_CODE) {
+            val result = pendingFilesResult ?: return
+            pendingFilesResult = null
+            if (resultCode != Activity.RESULT_OK || data == null) {
+                result.success(emptyList<Any>())
+                return
+            }
+            val uris = ArrayList<Uri>()
+            val clip = data.clipData
+            if (clip != null) {
+                for (index in 0 until clip.itemCount) {
+                    clip.getItemAt(index).uri?.let(uris::add)
+                }
+            } else {
+                data.data?.let(uris::add)
+            }
+            if (uris.isEmpty()) {
+                result.success(emptyList<Any>())
+                return
+            }
+            // ACTION_OPEN_DOCUMENT grants persistable read access. This lets
+            // queued uploads resume when the app is reopened.
+            for (uri in uris) {
+                try {
+                    contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    )
+                } catch (_: SecurityException) {
+                    // Some providers expose session-only grants; foreground
+                    // uploads can still read those while the picker activity
+                    // has handed control back to this app.
+                }
+            }
+            folderExecutor.execute {
+                try {
+                    val files = uris.map(::describeDocument)
+                    runOnUiThread { result.success(files) }
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        result.error(
+                            "metadata_failed",
+                            e.message ?: "The selected files could not be inspected",
+                            null,
+                        )
+                    }
+                }
+            }
+            return
+        }
         if (requestCode != FolderPickerBridge.REQUEST_CODE) return
         val result = pendingFolderResult ?: return
         pendingFolderResult = null
@@ -464,6 +584,7 @@ class MainActivity : FlutterFragmentActivity() {
         private const val UPDATER_CHANNEL = "nexadrive/updater"
         private const val APP_LOCK_CHANNEL = "nexadrive/app_lock"
         private const val FOLDER_PICKER_CHANNEL = "nexadrive/folder_picker"
+        private const val PICK_FILES_REQUEST_CODE = 7412
         const val ACTION_INSTALL_STATUS = "io.nexadrive.app.INSTALL_STATUS"
     }
 }

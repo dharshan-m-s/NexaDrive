@@ -180,12 +180,16 @@ void main() {
   late Directory appDir;
 
   setUp(() {
-    appDir = Directory.systemTemp.createTempSync('nexadrive_portable_');
+    final root = Directory.systemTemp.createTempSync('nexadrive_portable_');
+    appDir = Directory('${root.path}${Platform.pathSeparator}NexaDrive')
+      ..createSync();
   });
 
   tearDown(() {
     try {
-      if (appDir.existsSync()) appDir.deleteSync(recursive: true);
+      if (appDir.parent.existsSync()) {
+        appDir.parent.deleteSync(recursive: true);
+      }
     } catch (_) {}
   });
 
@@ -205,17 +209,14 @@ void main() {
       await ctrl.install();
 
       expect(router.detachedCalled, isTrue);
-      expect(
-        router.runDetachedTarget,
-        endsWith('nexadrive-finish-update.cmd'),
-      );
+      expect(router.runDetachedTarget, endsWith('.cmd'));
+      expect(File(router.runDetachedTarget!).parent.path, appDir.parent.path);
+      final helperText = File(router.runDetachedTarget!).readAsStringSync();
+      expect(helperText, contains('robocopy "%UPDATE_SRC%" "%APP_DIR%" /mir'));
+      expect(helperText, contains('rmdir /s /q "%UPDATE_CACHE%"'));
       expect(ctrl.status, UpdateStatus.installingHandoff);
-      expect(ctrl.infoMessage, contains('restart NexaDrive'));
-      expect(
-        File('${appDir.path}${Platform.pathSeparator}nexadrive-finish-update.cmd')
-            .existsSync(),
-        isTrue,
-      );
+      expect(ctrl.infoMessage, contains('relaunch automatically'));
+      expect(File(router.runDetachedTarget!).existsSync(), isTrue);
     });
 
     test('rejects a payload that is not a NexaDrive build', () async {
@@ -250,7 +251,7 @@ void main() {
       await ctrl.install();
 
       expect(ctrl.status, UpdateStatus.readyToInstall);
-      expect(ctrl.infoMessage, contains('restart NexaDrive to finish'));
+      expect(ctrl.infoMessage, contains('Tap Update portable app to retry'));
     });
   });
 

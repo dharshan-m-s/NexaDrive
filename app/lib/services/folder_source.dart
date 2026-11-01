@@ -66,6 +66,45 @@ class FolderSelection {
   }
 }
 
+/// Picks individual Android documents without using file_picker's cache copy.
+class SingleFileUploadPicker {
+  const SingleFileUploadPicker();
+
+  static const MethodChannel _channel =
+      MethodChannel('nexadrive/folder_picker');
+
+  /// Returns document URIs and metadata only; file bytes are not copied.
+  Future<List<FolderFile>?> pick() async {
+    if (!Platform.isAndroid) {
+      throw UnsupportedError('The direct document picker is Android-only');
+    }
+    final rawFiles = await _channel.invokeListMethod<dynamic>('pickFiles');
+    if (rawFiles == null) return null;
+    final files = <FolderFile>[];
+    for (final raw in rawFiles) {
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      final uri = map['uri'] as String?;
+      final name = map['name'] as String?;
+      final size = (map['size'] as num?)?.toInt();
+      if (uri == null ||
+          uri.isEmpty ||
+          name == null ||
+          size == null ||
+          size < 0) {
+        continue;
+      }
+      files.add(FolderFile(
+        relativePath: '',
+        name: name,
+        size: size,
+        sourceUri: uri,
+      ));
+    }
+    return files;
+  }
+}
+
 /// Picks folders and turns them into uploadable files.
 ///
 /// Desktop platforms can walk a directory directly. Android has no folder

@@ -93,6 +93,15 @@ chmod +x "$APP_DIR/nexadrive"
 printf '%s' "$DESKTOP" > "$APP_DIR/nexadrive.desktop"
 # appimagetool requires Icon=nexadrive → nexadrive.png in the AppDir root
 cp "$ICON" "$APP_DIR/nexadrive.png"
+
+# AppImage requires an executable AppRun entry point.
+cat > "$APP_DIR/AppRun" <<'EOF'
+#!/bin/sh
+HERE="${APPDIR:-$(dirname "$(readlink -f "$0")")}"
+exec "$HERE/nexadrive" "$@"
+EOF
+chmod 755 "$APP_DIR/AppRun"
+
 mkdir -p "$APP_DIR/$ICON_DIR_DEB"
 cp "$ICON" "$APP_DIR/$ICON_DIR_DEB/nexadrive.png"
 

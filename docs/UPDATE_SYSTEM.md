@@ -114,7 +114,8 @@ Identical in CI, manifest, docs, and the Update Center:
 
 1. `NexaDrive-<ver>-windows-x64-setup.exe` is downloaded and verified.
 2. The app launches it detached and hands over to the user. Windows handles any elevation prompt; the app never escalates.
-3. The Inno Setup installer (`app/windows/installer/nexadrive.iss`) installs per-user (`PrivilegesRequired=lowest`), creates Start Menu / optional desktop shortcuts, upgrades in place without touching user data, and uninstalls cleanly. It never contains server data.
+3. The Inno Setup installer (`app/windows/installer/nexadrive.iss`) installs per-user (`PrivilegesRequired=lowest`), creates Start Menu / optional desktop shortcuts, and upgrades in place. Before copying the new build it removes the old generated `data/` Flutter bundle and `plugins/` directory so obsolete assets and plugin DLLs cannot survive. User data lives outside `{app}` and is not touched.
+4. A detached cleanup helper waits for Setup to exit, then removes the downloaded installer cache even if Setup closed the old NexaDrive process and launched a fresh one.
 
 ### Windows (portable ZIP)
 
@@ -127,14 +128,14 @@ Identical in CI, manifest, docs, and the Update Center:
 
 ### Linux — AppImage
 
-1. If `$APPIMAGE` is set (running as an AppImage) and its folder is writable: stage copy → `chmod +x` → old image renamed aside → staged image atomically `rename(2)`d over the live path → backup dropped. The running binary keeps working throughout; a failure rolls back to the original image.
+1. If `$APPIMAGE` is set (running as an AppImage) and its folder is writable: stage copy → `chmod +x` → old image renamed aside → staged image atomically `rename(2)`d over the live path → backup dropped. The running binary keeps working throughout; a failure rolls back to the original image. Replacing the complete AppImage replaces its Flutter asset bundle; the downloaded update cache is cleared after success. Restart NexaDrive to run the new image.
 2. If the folder is not writable, the Update Center says so plainly and offers the verified file for manual replacement — no mysterious failure.
 
 ### Linux — .deb
 
 1. The verified .deb is downloaded; the app **never** runs `sudo` or embeds credentials.
-2. The Update Center shows the install command (copyable) and offers to open the package with the system installer where the desktop environment supports it.
-3. Privileged installation is left to the user's package manager.
+2. When the user taps Install, the Update Center opens the `.deb` in the desktop's registered package installer automatically. The user confirms installation/authentication in that system UI; if no handler is available, the app leaves the verified package ready and shows the manual command.
+3. Privileged installation is left to the user's package manager. A normal package upgrade replaces the package-owned application bundle and removes obsolete package-owned files; the app never invokes `sudo` itself.
 
 ### Detecting how the client itself is installed
 
