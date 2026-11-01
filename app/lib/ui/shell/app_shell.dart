@@ -555,6 +555,13 @@ class _PageHostState extends State<_PageHost>
     curve: AppMotion.fadeCurve,
   );
 
+  late final Animation<Offset> _offset = Tween<Offset>(
+    begin: const Offset(0, 0.012),
+    end: Offset.zero,
+  ).animate(
+    CurvedAnimation(parent: _reveal, curve: AppMotion.standardCurve),
+  );
+
   @override
   void didUpdateWidget(covariant _PageHost oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -589,7 +596,10 @@ class _PageHostState extends State<_PageHost>
     return SafeArea(
       top: true,
       bottom: false,
-      child: FadeTransition(opacity: _opacity, child: stack),
+      child: FadeTransition(
+        opacity: _opacity,
+        child: SlideTransition(position: _offset, child: stack),
+      ),
     );
   }
 }

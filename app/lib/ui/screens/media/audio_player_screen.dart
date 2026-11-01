@@ -428,7 +428,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
 class _Artwork extends StatelessWidget {
   final String seed;
   final double size;
-  const _Artwork({required this.seed, required this.size});
+  const _Artwork({super.key, required this.seed, required this.size});
 
   @override
   Widget build(BuildContext context) {
