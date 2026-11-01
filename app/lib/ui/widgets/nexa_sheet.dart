@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
+import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
 
 /// Opens an iOS-style modal bottom sheet.
@@ -177,7 +178,7 @@ class NexaSheetBody extends StatelessWidget {
 }
 
 /// Sheet action row — icon + label.
-class NexaSheetAction extends StatelessWidget {
+class NexaSheetAction extends StatefulWidget {
   final IconData icon;
   final String title;
   final String? subtitle;
@@ -200,13 +201,20 @@ class NexaSheetAction extends StatelessWidget {
   });
 
   @override
+  State<NexaSheetAction> createState() => _NexaSheetActionState();
+}
+
+class _NexaSheetActionState extends State<NexaSheetAction> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final isDestructive = destructive;
+    final isDestructive = widget.destructive;
     final fg = isDestructive
         ? AppColors.errorFor(brightness)
-        : (iconColor ?? AppColors.labelPrimaryFor(brightness));
-    final bg = backgroundColor ??
+        : (widget.iconColor ?? AppColors.labelPrimaryFor(brightness));
+    final bg = widget.backgroundColor ??
         (isDestructive
             ? AppColors.errorContainerFor(brightness)
             : AppColors.fillFor(brightness));
@@ -214,26 +222,46 @@ class NexaSheetAction extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: enabled ? onTap : null,
+        onTap: widget.enabled ? widget.onTap : null,
+        onHover: (hovered) {
+          if (widget.enabled && _hovered != hovered) {
+            setState(() => _hovered = hovered);
+          }
+        },
         borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-        child: Container(
+        child: AnimatedContainer(
+          duration: AppMotion.resolve(context, AppMotion.fast),
           padding: const EdgeInsets.symmetric(
             horizontal: AppDimens.space16,
             vertical: AppDimens.space12,
           ),
+          decoration: BoxDecoration(
+            color: widget.enabled && _hovered
+                ? AppColors.fillFor(brightness).withValues(alpha: 0.58)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+          ),
           child: Row(
             children: [
-              Container(
-                width: AppDimens.iconTileLarge,
-                height: AppDimens.iconTileLarge,
-                decoration: BoxDecoration(
-                  color: bg,
-                  borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-                ),
-                child: Icon(
-                  icon,
-                  color: fg,
-                  size: AppDimens.iconMedium,
+              AnimatedScale(
+                scale: _hovered && widget.enabled ? 1.035 : 1,
+                duration: AppMotion.resolve(context, AppMotion.fast),
+                child: Container(
+                  width: AppDimens.iconTileLarge,
+                  height: AppDimens.iconTileLarge,
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: BorderRadius.circular(
+                      AppDimens.radiusStandard,
+                    ),
+                  ),
+                  child: Icon(
+                    widget.icon,
+                    color: widget.enabled
+                        ? fg
+                        : AppColors.labelTertiaryFor(brightness),
+                    size: AppDimens.iconMedium,
+                  ),
                 ),
               ),
               const SizedBox(width: AppDimens.space16),
@@ -242,18 +270,18 @@ class NexaSheetAction extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      widget.title,
                       style: AppTextStyle.title1.copyWith(
-                        color: enabled
+                        color: widget.enabled
                             ? AppColors.labelPrimaryFor(brightness)
                             : AppColors.labelTertiaryFor(brightness),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    if (subtitle != null) ...[
+                    if (widget.subtitle != null) ...[
                       const SizedBox(height: AppDimens.space2),
                       Text(
-                        subtitle!,
+                        widget.subtitle!,
                         style: AppTextStyle.caption1.copyWith(
                           color: AppColors.labelSecondaryFor(brightness),
                         ),
@@ -262,7 +290,7 @@ class NexaSheetAction extends StatelessWidget {
                   ],
                 ),
               ),
-              if (onTap != null && !isDestructive)
+              if (widget.onTap != null && !isDestructive)
                 Icon(
                   Icons.chevron_right_rounded,
                   size: AppDimens.iconMedium,

@@ -187,7 +187,9 @@ class _SideNavItemState extends State<SideNavItem> {
         child: InkWell(
           onTap: widget.onTap,
           onHover: (hovered) {
-            if (_hovered != hovered) setState(() => _hovered = hovered);
+            if (_hovered != hovered) {
+              setState(() => _hovered = hovered);
+            }
           },
           borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
           child: AnimatedContainer(
@@ -210,7 +212,9 @@ class _SideNavItemState extends State<SideNavItem> {
                   scale: selected ? 1.06 : 1,
                   duration: AppMotion.resolve(context, AppMotion.fast),
                   child: Icon(
-                    selected ? (widget.selectedIcon ?? widget.icon) : widget.icon,
+                    selected
+                        ? (widget.selectedIcon ?? widget.icon)
+                        : widget.icon,
                     size: 20,
                     color: selected ? accent : secondary,
                   ),
