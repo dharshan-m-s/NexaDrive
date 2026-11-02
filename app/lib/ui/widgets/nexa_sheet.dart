@@ -3,6 +3,7 @@ import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
+import 'nexa_liquid_glass.dart';
 
 /// Opens an iOS-style modal bottom sheet.
 Future<T?> showNexaSheet<T>(
@@ -151,21 +152,16 @@ class NexaSheetBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
 
-    return Material(
-      color: AppColors.surfaceElevatedFor(brightness),
-      elevation: 22,
-      shadowColor: Colors.black.withValues(alpha: 0.28),
-      shape: RoundedRectangleBorder(
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(AppDimens.radiusXLarge),
-        ),
-        side: BorderSide(
-          color: AppColors.separatorOpaqueFor(brightness),
-          width: 0.7,
-        ),
+    return NexaLiquidGlass(
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(AppDimens.radiusXLarge),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
+      blurSigma: 2.0,
+      tintOpacity: brightness == Brightness.dark ? 0.16 : 0.12,
+      padding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        child: Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
@@ -193,6 +189,8 @@ class NexaSheetBody extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    ),
       ),
     );
   }

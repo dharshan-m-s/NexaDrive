@@ -16,7 +16,6 @@ import '../../../services/thumbnail_cache.dart';
 import '../../../services/background_transfer_service.dart';
 import '../../../services/android_share_intents.dart';
 import '../screens/home/home_screen.dart';
-import '../screens/home/storage_insights_screen.dart';
 import '../screens/files/files_screen.dart';
 import '../screens/shared/shared_screen.dart';
 import '../screens/photos/photos_screen.dart';
@@ -280,18 +279,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         AppColors.warningFor(brightness),
         AppColors.errorFor(brightness),
         Theme.of(context).colorScheme.tertiary,
-        AppColors.infoFor(brightness),
-        AppColors.accentTextFor(brightness),
-        AppColors.labelSecondaryFor(brightness),
       ];
 
-      await showDialog<void>(
+      await showModalBottomSheet<void>(
         context: context,
-        barrierDismissible: true,
+        useSafeArea: true,
+        isScrollControlled: false,
+        backgroundColor: Colors.transparent,
         barrierColor: AppColors.scrimFor(brightness).withValues(alpha: 0.34),
-        builder: (dialogContext) {
+        constraints: const BoxConstraints(maxWidth: 520),
+        builder: (sheetContext) {
           void closeAndRun(VoidCallback action) {
-            Navigator.of(dialogContext).pop();
+            Navigator.of(sheetContext).pop();
             action();
           }
 
@@ -302,9 +301,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               color: palette[0],
               onTap: () => closeAndRun(() {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => ScannerScreen(api: api),
-                  ),
+                  MaterialPageRoute(builder: (_) => ScannerScreen(api: api)),
                 );
               }),
             ),
@@ -338,116 +335,87 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               color: palette[5],
               onTap: () => closeAndRun(() => _goTo(5)),
             ),
-            _MoreMenuItem(
-              icon: Icons.query_stats_rounded,
-              label: 'Storage insights',
-              color: palette[6],
-              onTap: () => closeAndRun(() {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => StorageInsightsScreen(api: api),
-                  ),
-                );
-              }),
-            ),
-            _MoreMenuItem(
-              icon: Icons.folder_rounded,
-              label: 'My files',
-              color: palette[7],
-              onTap: () => closeAndRun(() => _goTo(1)),
-            ),
-            _MoreMenuItem(
-              icon: Icons.people_alt_rounded,
-              label: 'Shared',
-              color: palette[8],
-              onTap: () => closeAndRun(() => _goTo(2)),
-            ),
           ];
 
-          final media = MediaQuery.of(dialogContext);
-          return SafeArea(
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppDimens.pageMargin,
-                  AppDimens.space20,
-                  AppDimens.pageMargin,
-                  media.viewPadding.bottom +
-                      AppDimens.bottomNavHeight +
-                      AppDimens.space24,
-                ),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: 420,
-                    maxHeight: media.size.height -
-                        media.viewPadding.top -
-                        media.viewPadding.bottom -
-                        AppDimens.bottomNavHeight -
-                        AppDimens.space48,
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppDimens.pageMargin,
+              0,
+              AppDimens.pageMargin,
+              AppDimens.space10,
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: NexaLiquidGlass(
+                  borderRadius: BorderRadius.circular(30),
+                  blurSigma: 2.2,
+                  tintOpacity: brightness == Brightness.dark ? 0.12 : 0.085,
+                  padding: const EdgeInsets.fromLTRB(
+                    AppDimens.space12,
+                    AppDimens.space10,
+                    AppDimens.space12,
+                    AppDimens.space12,
                   ),
-                  child: NexaLiquidGlass(
-                    borderRadius: BorderRadius.circular(30),
-                    blurSigma: 2.2,
-                    tintOpacity: brightness == Brightness.dark ? 0.10 : 0.075,
-                    padding: const EdgeInsets.fromLTRB(
-                      AppDimens.space12,
-                      AppDimens.space12,
-                      AppDimens.space12,
-                      AppDimens.space12,
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'More',
-                                    style: AppTextStyle.headline.copyWith(
-                                      color:
-                                          AppColors.labelPrimaryFor(brightness),
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Your tools and destinations',
-                                    style: AppTextStyle.caption1.copyWith(
-                                      color: AppColors.labelSecondaryFor(
-                                          brightness),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: 'Close',
-                              onPressed: () =>
-                                  Navigator.of(dialogContext).pop(),
-                              icon: Icon(
-                                Icons.close_rounded,
-                                color: AppColors.labelSecondaryFor(brightness),
-                              ),
-                            ),
-                          ],
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.labelTertiaryFor(brightness)
+                              .withValues(alpha: 0.72),
+                          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
                         ),
-                        const SizedBox(height: AppDimens.space8),
-                        GridView.count(
-                          crossAxisCount: 3,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          mainAxisSpacing: AppDimens.space8,
-                          crossAxisSpacing: AppDimens.space8,
-                          childAspectRatio: 1.0,
-                          children: [
-                            for (final item in items) _MoreMenuTile(item: item),
-                          ],
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: AppDimens.space12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'More',
+                                  style: AppTextStyle.headline.copyWith(
+                                    color: AppColors.labelPrimaryFor(brightness),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  'Tools and activity',
+                                  style: AppTextStyle.caption1.copyWith(
+                                    color: AppColors.labelSecondaryFor(brightness),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Close',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => Navigator.of(sheetContext).pop(),
+                            icon: Icon(
+                              Icons.close_rounded,
+                              color: AppColors.labelSecondaryFor(brightness),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppDimens.space8),
+                      GridView.count(
+                        crossAxisCount: 3,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        mainAxisSpacing: AppDimens.space6,
+                        crossAxisSpacing: AppDimens.space6,
+                        childAspectRatio: 1.18,
+                        children: [
+                          for (final item in items) _MoreMenuTile(item: item),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),
