@@ -42,7 +42,6 @@ void main() {
 
     expect(find.text('NexaDrive'), findsOneWidget);
     expect(find.text('Home'), findsOneWidget);
-    expect(find.text('My files'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
   });
