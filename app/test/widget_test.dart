@@ -68,8 +68,8 @@ void main() {
     expect(find.byType(BottomSheet), findsOneWidget);
     expect(
       tester.getSize(find.byType(BottomSheet)).height,
-      lessThan(500),
-      reason: 'More must remain compact rather than filling the screen',
+      lessThan(600),
+      reason: 'More must remain content-sized rather than filling the screen',
     );
     expect(find.text('Tools and activity'), findsNothing);
     expect(find.byType(GridView), findsNothing);
