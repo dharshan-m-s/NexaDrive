@@ -1305,8 +1305,8 @@ class _ViewArea extends StatelessWidget {
         ],
       ),
     );
-  }}
-
+  }
+}
 class _FileMenuLabel extends StatelessWidget {
   final IconData icon;
   final String label;
