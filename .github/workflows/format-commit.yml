@@ -1,0 +1,45 @@
+name: Temporary Dart formatter repair
+
+on:
+  push:
+    branches: [beta]
+    paths:
+      - 'app/**/*.dart'
+
+permissions:
+  contents: write
+
+jobs:
+  format-and-verify:
+    if: "!contains(github.event.head_commit.message, '[formatter cleanup]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+      - name: Format Dart sources
+        working-directory: app
+        run: |
+          flutter pub get
+          dart format lib test integration_test
+      - name: Commit formatted source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/lib app/test app/integration_test
+          if git diff --cached --quiet; then
+            echo "Dart sources already formatted."
+          else
+            git commit -m "Apply Dart formatter to redesigned UI"
+            git push origin HEAD:beta
+          fi
+      - name: Analyze formatted source
+        working-directory: app
+        run: flutter analyze
+      - name: Run Flutter tests
+        working-directory: app
+        run: flutter test
