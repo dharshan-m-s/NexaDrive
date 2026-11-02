@@ -291,12 +291,7 @@ class _CapacityPanel extends StatelessWidget {
                         widthFactor: storage.usageFraction,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.accentFor(brightness),
-                                AppColors.infoFor(brightness),
-                              ],
-                            ),
+                            color: AppColors.accentFor(brightness),
                           ),
                         ),
                       ),
