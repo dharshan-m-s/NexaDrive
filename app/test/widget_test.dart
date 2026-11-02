@@ -47,7 +47,7 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
   });
 
-  testWidgets('narrow layout shows the restored compact More action sheet',
+  testWidgets('narrow layout shows compact More menu above the dock',
       (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1.0;
@@ -65,39 +65,20 @@ void main() {
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(BottomSheet), findsOneWidget);
-    expect(
-      tester.getSize(find.byType(BottomSheet)).height,
-      lessThan(600),
-      reason: 'More must remain content-sized rather than filling the screen',
-    );
-    expect(find.text('Tools and activity'), findsNothing);
-    expect(find.byType(GridView), findsNothing);
     for (final label in [
-      'Scan document',
+      'Scan',
       'Transfers',
       'Trash',
-      'Sync center',
-      'Notifications',
+      'Sync',
+      'Alerts',
       'Settings',
     ]) {
       expect(find.text(label), findsOneWidget);
     }
-    final moreSheet = find.byType(BottomSheet);
-    expect(
-      find.descendant(
-        of: moreSheet,
-        matching: find.text('Storage Insights'),
-      ),
-      findsNothing,
-    );
-    expect(
-      find.descendant(of: moreSheet, matching: find.text('My files')),
-      findsNothing,
-    );
-    expect(
-      find.descendant(of: moreSheet, matching: find.text('Shared')),
-      findsNothing,
-    );
+    expect(find.text('Storage Insights'), findsNothing);
+    expect(find.text('My files'), findsOneWidget);
+    expect(find.text('Shared'), findsNothing);
+    expect(find.byType(NexaBottomNav), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
