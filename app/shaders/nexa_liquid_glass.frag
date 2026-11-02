@@ -14,10 +14,15 @@ float cornerRadius(vec2 local) {
 }
 
 void main() {
+  // ImageFilter.shader supplies u_size and u_texture automatically. FlutterFragCoord
+  // and u_size are in the same filter-local pixel coordinate space.
   vec2 pixel = FlutterFragCoord().xy;
   vec2 uv = pixel / u_size;
-#ifdef IMPELLER_TARGET_OPENGLES
-  // Impeller's OpenGL ES texture origin differs from the other backends.
+
+  // Older Impeller GLES versions exposed render-target textures bottom-up.
+  // Flutter 3.47 stores them top-down; the compatibility macro keeps this
+  // shader correct on both sides of that renderer migration.
+#if defined(IMPELLER_TARGET_OPENGLES) && !defined(IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED)
   uv.y = 1.0 - uv.y;
 #endif
 
@@ -25,21 +30,22 @@ void main() {
   vec2 local = pixel - halfSize;
   float radius = clamp(cornerRadius(local), 0.0, min(halfSize.x, halfSize.y));
 
-  // Rounded-rectangle signed distance field.
+  // Rounded-rectangle signed distance field, with an independent radius in
+  // each corner. This gives the refraction a stable mask matching the clip.
   vec2 corner = abs(local) - (halfSize - vec2(radius));
   float signedDistance =
       length(max(corner, vec2(0.0))) + min(max(corner.x, corner.y), 0.0) - radius;
   float insideDistance = max(-signedDistance, 0.0);
 
-  // A broad optical shoulder lets the shape read as curved glass, not a
-  // hairline outline. It is scaled in physical pixels for consistent depth.
+  // A broad optical shoulder gives the material real volume instead of a
+  // gradient-only glass imitation. Distances are physical filter pixels.
   float edgeSpan = clamp(min(u_size.x, u_size.y) * 0.34, 15.0, 28.0);
   float edgeMask = 1.0 - smoothstep(1.0, edgeSpan, insideDistance);
   float softBulge = exp(-insideDistance / (edgeSpan * 1.65));
   float rimLine = exp(-pow((insideDistance - 1.5) / 1.8, 2.0));
   float innerRim = exp(-pow((insideDistance - 8.0) / 5.0, 2.0));
 
-  // Nearest-edge normal; rounded corners use the true radial normal.
+  // Nearest-edge normal; rounded corners use the radial normal.
   vec2 outside = max(corner, vec2(0.0));
   vec2 normalVector;
   if (outside.x > 0.0 && outside.y > 0.0) {
@@ -51,8 +57,8 @@ void main() {
   }
   vec2 normal = normalize(normalVector + vec2(0.0001, 0.0001));
 
-  // A restrained wave varies the optical thickness around the perimeter.
-  // The centre stays readable while the shoulders visibly magnify the scene.
+  // Vary optical thickness subtly around the perimeter. The centre remains
+  // readable while the shoulder visibly magnifies and bends the live scene.
   float wave = sin(insideDistance * 0.19 + uv.x * 7.0 - uv.y * 5.0);
   float shoulder = edgeMask * (13.5 + wave * 2.2);
   float centreWarp = softBulge * 1.15;
@@ -72,7 +78,7 @@ void main() {
   float refractionStrength = clamp(edgeMask * 0.72 + softBulge * 0.10, 0.0, 0.78);
   vec3 optical = mix(source.rgb, refracted, refractionStrength);
 
-  // Slight chromatic Fresnel edge separation, like a thick polished lens.
+  // Restrained chromatic Fresnel separation and a soft specular reflection.
   vec3 spectral = mix(
       vec3(0.22, 0.78, 0.96),
       vec3(0.68, 0.53, 1.0),
@@ -87,6 +93,7 @@ void main() {
   optical += vec3(1.0) * (rimLine * 0.16 + specular);
   optical += vec3(0.10, 0.20, 0.33) * fresnel * 0.035;
 
-  // Keep the sampled backdrop's alpha; tint and specular are layered by Dart.
-  fragColor = vec4(clamp(optical, 0.0, 1.0), source.a);
+  // ImageFilter output must remain premultiplied-alpha. Do not let the
+  // additive highlights exceed the sampled backdrop's alpha.
+  fragColor = vec4(clamp(optical, vec3(0.0), vec3(source.a)), source.a);
 }

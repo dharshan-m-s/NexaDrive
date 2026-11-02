@@ -216,80 +216,52 @@ class _TrashScreenState extends State<TrashScreen> {
           if (!_loading && _error == null && _items.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: AppDimens.space12),
-              child: NexaSurface(
-                level: NexaSurfaceLevel.surface,
-                radius: AppDimens.radiusLarge,
-                padding: const EdgeInsets.all(AppDimens.space16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${_items.length} ${_items.length == 1 ? 'item' : 'items'}',
-                            style: AppTextStyle.rowTitle.copyWith(
-                              color: AppColors.textPrimaryFor(brightness),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Text(
-                            _selectedIds.isEmpty
-                                ? 'Select items to restore or remove'
-                                : '${_selectedIds.length} selected',
-                            style: AppTextStyle.caption.copyWith(
-                              color: AppColors.textSecondaryFor(brightness),
-                            ),
-                          ),
-                        ],
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '${_items.length} ${_items.length == 1 ? 'item' : 'items'}',
+                    style: AppTextStyle.caption1.copyWith(
+                      color: AppColors.textSecondaryFor(brightness),
                     ),
-                    TextButton.icon(
-                      onPressed: _emptying ? null : _toggleSelectAll,
-                      icon: Icon(
-                        allSelected
-                            ? Icons.deselect_rounded
-                            : Icons.select_all_rounded,
-                      ),
-                      label: Text(allSelected ? 'Clear' : 'Select'),
-                    ),
-                    const SizedBox(width: AppDimens.space4),
-                    FilledButton(
-                      onPressed:
-                          _emptying ? null : () => _deleteMany(all: deleteAll),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.errorFor(brightness),
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(48, 44),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimens.space12,
+                  ),
+                  const SizedBox(height: AppDimens.space8),
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: AppDimens.space8,
+                    runSpacing: AppDimens.space4,
+                    children: [
+                      TextButton.icon(
+                        onPressed: _emptying ? null : _toggleSelectAll,
+                        icon: Icon(
+                          allSelected
+                              ? Icons.deselect_rounded
+                              : Icons.select_all_rounded,
                         ),
+                        label: Text(allSelected ? 'Clear' : 'Select all'),
                       ),
-                      child: _emptying
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
+                      FilledButton.icon(
+                        onPressed: _emptying
+                            ? null
+                            : () => _deleteMany(all: deleteAll),
+                        icon: _emptying
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Icon(
+                                deleteAll
+                                    ? Icons.delete_sweep_outlined
+                                    : Icons.delete_outline_rounded,
                               ),
-                            )
-                          : Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  deleteAll
-                                      ? Icons.delete_sweep_outlined
-                                      : Icons.delete_outline_rounded,
-                                  size: 19,
-                                ),
-                                const SizedBox(width: AppDimens.space6),
-                                Text(deleteAll ? 'Empty' : 'Delete'),
-                              ],
-                            ),
-                    ),
-                  ],
-                ),
+                        label:
+                            Text(deleteAll ? 'Empty trash' : 'Delete selected'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           Expanded(
@@ -314,37 +286,28 @@ class _TrashScreenState extends State<TrashScreen> {
                             )
                           : RefreshIndicator(
                               onRefresh: load,
-                              child: ListView(
+                              child: ListView.separated(
                                 padding: EdgeInsets.only(
                                   bottom: bottomClearance > AppDimens.space24
                                       ? bottomClearance
                                       : AppDimens.space24,
                                 ),
-                                children: [
-                                  NexaGroupedList(
-                                    header: 'Recently deleted',
-                                    children: [
-                                      for (final item in _items)
-                                        _TrashRow(
-                                          item: item,
-                                          brightness: brightness,
-                                          selected: _selectedIds.contains(
-                                            item['id']?.toString() ?? '',
-                                          ),
-                                          onSelected: (value) => _toggleItem(
-                                            item['id']?.toString() ?? '',
-                                            value,
-                                          ),
-                                          onRestore: () => _restore(
-                                            item['id']?.toString() ?? '',
-                                          ),
-                                          onDelete: () => _delete(
-                                            item['id']?.toString() ?? '',
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ],
+                                itemCount: _items.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: AppDimens.space2),
+                                itemBuilder: (context, i) {
+                                  final item = _items[i];
+                                  final id = item['id']?.toString() ?? '';
+                                  return _TrashRow(
+                                    item: item,
+                                    brightness: brightness,
+                                    selected: _selectedIds.contains(id),
+                                    onSelected: (value) =>
+                                        _toggleItem(id, value),
+                                    onRestore: () => _restore(id),
+                                    onDelete: () => _delete(id),
+                                  );
+                                },
                               ),
                             ),
             ),
@@ -388,39 +351,68 @@ class _TrashRow extends StatelessWidget {
       DateTime.tryParse(item['deleted_at']?.toString() ?? ''),
     );
 
-    return NexaGroupTile(
-      leading: Checkbox.adaptive(
-        value: selected,
-        onChanged: (value) => onSelected(value ?? false),
-        visualDensity: VisualDensity.compact,
-        semanticLabel: 'Select ${item['name'] ?? 'deleted item'}',
-      ),
-      leadingIcon:
-          isFolder ? Icons.folder_rounded : Icons.insert_drive_file_rounded,
-      leadingIconColor: isFolder ? AppColors.accentTextFor(brightness) : null,
-      leadingBackgroundColor:
-          isFolder ? AppColors.accentContainerFor(brightness) : null,
-      title: item['name'] as String? ?? '',
-      subtitle: 'Deleted $deletedAt',
-      showChevron: false,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            tooltip: 'Restore',
-            icon: Icon(
-              Icons.restore_rounded,
-              color: AppColors.accentTextFor(brightness),
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
+      radius: AppDimens.radiusTile,
+      child: Material(
+        type: MaterialType.transparency,
+        child: ListTile(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimens.radiusTile),
+          ),
+          leading: Checkbox.adaptive(
+            value: selected,
+            onChanged: (value) => onSelected(value ?? false),
+            visualDensity: VisualDensity.compact,
+          ),
+          title: Row(
+            children: [
+              Icon(
+                isFolder
+                    ? Icons.folder_rounded
+                    : Icons.insert_drive_file_rounded,
+                size: AppDimens.iconMedium,
+                color: isFolder ? AppColors.accentFor(brightness) : null,
+              ),
+              const SizedBox(width: AppDimens.space8),
+              Expanded(
+                child: Text(
+                  item['name'] as String? ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyle.rowTitle.copyWith(
+                    color: AppColors.textPrimaryFor(brightness),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          subtitle: Text(
+            'Deleted $deletedAt',
+            style: AppTextStyle.caption.copyWith(
+              color: AppColors.textSecondaryFor(brightness),
             ),
-            onPressed: onRestore,
           ),
-          IconButton(
-            tooltip: 'Delete forever',
-            icon: const Icon(Icons.delete_forever_outlined),
-            color: AppColors.errorFor(brightness),
-            onPressed: onDelete,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'Restore',
+                icon: Icon(
+                  Icons.restore_rounded,
+                  color: AppColors.accentFor(brightness),
+                ),
+                onPressed: onRestore,
+              ),
+              IconButton(
+                tooltip: 'Delete forever',
+                icon: const Icon(Icons.delete_forever_outlined),
+                color: AppColors.errorFor(brightness),
+                onPressed: onDelete,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

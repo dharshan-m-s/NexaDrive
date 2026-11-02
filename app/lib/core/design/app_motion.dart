@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 
 /// NexaDrive motion tokens.
 ///
-/// Visual composition follows One UI's restraint; interaction follows the
-/// continuity and feedback quality expected from native iOS. Motion is
-/// responsive and physical: springs are critically damped by default, bounces
-/// are reserved for momentum-driven gestures, and nothing delays a user action.
-/// Every duration, curve and spring in NexaDrive must come from this file.
+/// THE REFERENCE: Apple's animation guidance. Motion is responsive and
+/// physical: springs are critically damped by default, bounces are reserved for
+/// momentum-driven gestures, and nothing delays a user action. Every duration,
+/// curve and spring in NexaDrive must come from this file.
 abstract final class AppMotion {
   // ------------------------------------------------------------ durations
   /// Micro-interactions: press highlight, toggle, checkbox.
@@ -23,9 +22,6 @@ abstract final class AppMotion {
 
   /// Deliberate motion: full-screen transitions.
   static const Duration slow = Duration(milliseconds: 420);
-
-  /// Low-amplitude skeleton breathing; disabled entirely for reduced motion.
-  static const Duration ambient = Duration(milliseconds: 1400);
 
   // --------------------------------------------------------------- curves
   /// iOS-style standard easing: fast start, gentle settle.
@@ -74,13 +70,6 @@ abstract final class AppMotion {
         stiffness: 100,
         damping: 15,
       );
-
-  /// Restraint spring for the floating dock's travelling selection.
-  static const SpringDescription glassSpring = SpringDescription(
-    mass: 1.0,
-    stiffness: 320.0,
-    damping: 25.75,
-  );
 
   // ------------------------------------------------------------- helpers
   /// A standard animated swapper for content changes.

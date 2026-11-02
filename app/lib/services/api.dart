@@ -144,15 +144,6 @@ class Api {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> storageInsights() async {
-    final response = await _client.get(
-      _uri('/api/storage/insights'),
-      headers: _headers,
-    );
-    _check(response);
-    return jsonDecode(response.body) as Map<String, dynamic>;
-  }
-
   Future<void> createFolder(String path) async {
     final response = await _client.post(
       _uri('/api/folders'),
@@ -585,14 +576,6 @@ class Api {
   Future<void> deleteShare(String id) async {
     final response = await _client.delete(_uri('/api/shares', {'id': id}),
         headers: _headers);
-    _check(response);
-  }
-
-  Future<void> leaveShare(String id) async {
-    final response = await _client.delete(
-      _uri('/api/shared', {'id': id}),
-      headers: _headers,
-    );
     _check(response);
   }
 

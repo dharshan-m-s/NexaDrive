@@ -296,55 +296,9 @@ pub(crate) struct CreateFolderRequest {
 }
 
 #[derive(Serialize)]
-pub(crate) struct StorageSummaryResponse {
-    pub(crate) used_bytes: u64,
-    pub(crate) file_count: u64,
-    /// Null means the account has unlimited storage.
-    pub(crate) quota_bytes: Option<i64>,
-}
-
-#[derive(Serialize)]
 pub(crate) struct StorageResponse {
     pub(crate) used_bytes: u64,
     pub(crate) file_count: u64,
-    /// Null means the account has unlimited storage.
-    pub(crate) quota_bytes: Option<i64>,
-    pub(crate) type_breakdown: Vec<StorageTypeStat>,
-    pub(crate) activity_last_7_days: Vec<StorageDayStat>,
-    pub(crate) size_distribution: Vec<StorageSizeBand>,
-    pub(crate) largest_files: Vec<StorageLargestFile>,
-}
-
-#[derive(Serialize)]
-pub(crate) struct StorageTypeStat {
-    pub(crate) key: String,
-    pub(crate) label: String,
-    pub(crate) bytes: u64,
-    pub(crate) count: u64,
-}
-
-#[derive(Serialize)]
-pub(crate) struct StorageDayStat {
-    pub(crate) date: String,
-    pub(crate) label: String,
-    pub(crate) bytes: u64,
-    pub(crate) count: u64,
-}
-
-#[derive(Serialize)]
-pub(crate) struct StorageSizeBand {
-    pub(crate) key: String,
-    pub(crate) label: String,
-    pub(crate) count: u64,
-    pub(crate) bytes: u64,
-}
-
-#[derive(Serialize)]
-pub(crate) struct StorageLargestFile {
-    pub(crate) name: String,
-    pub(crate) path: String,
-    pub(crate) size_bytes: u64,
-    pub(crate) modified_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize)]

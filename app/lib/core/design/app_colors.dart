@@ -11,27 +11,28 @@ import 'package:flutter/material.dart';
 ///  * **Label opacities** — primary/secondary/tertiary text are one ink at
 ///    decreasing opacity, which keeps hierarchy legible in both appearances
 ///    instead of introducing unrelated grays.
-///  * **One deliberate accent** — a vivid iris indigo, lifted in dark mode.
+///  * **One deliberate accent** — system blue, with a lifted variant for dark
+///    mode (iOS raises accent luminance on black).
 ///
 /// Every color in NexaDrive must come from this file. No hardcoded
 /// `Color(...)` literals in widgets.
 abstract final class AppColors {
   // --------------------------------------------------------------- accent
-  /// Iris indigo — distinctive without overpowering content.
+  /// System blue (light). iOS `systemBlue`.
   static const Color accent = Color(0xFF007AFF);
 
-  /// Luminous lavender-indigo for dark surfaces.
+  /// System blue (dark) — lifted so it stays legible on near-black.
   static const Color accentDark = Color(0xFF0A84FF);
 
-  /// Soft iris fill behind the accent (selection, toggle-on, badge).
+  /// Soft blue fill behind the accent (selection, toggle-on, badge).
   static const Color accentContainerLight = Color(0x1F007AFF);
   static const Color accentContainerDark = Color(0x330A84FF);
 
-  /// Contrast-safe iris text/icons on the container fill.
+  /// Strong blue text/icons on the container fill.
   static const Color onAccentContainerLight = Color(0xFF0040DD);
   static const Color onAccentContainerDark = Color(0xFF7AB8FF);
 
-  /// Deep iris shade for pressed/active accents.
+  /// Deep shade of blue for pressed/active accents.
   static const Color accentPressedLight = Color(0xFF0062CC);
   static const Color accentPressedDark = Color(0xFF409CFF);
 
@@ -122,51 +123,6 @@ abstract final class AppColors {
   static const Color onInfoContainerLight = onAccentContainerLight;
   static const Color infoContainerDark = accentContainerDark;
   static const Color onInfoContainerDark = onAccentContainerDark;
-
-  // --------------------------------------------------------- glass material
-  /// Neutral theme-aware tint for translucent app chrome.
-  static const Color glassSurfaceLight = Color(0xFFF8F7FF);
-  static const Color glassSurfaceDark = Color(0xFF1A1D30);
-  static const Color glassHighlightLight = Color(0x66FFFFFF);
-  static const Color glassHighlightDark = Color(0x1FFFFFFF);
-  static const Color glassBorderLight = Color(0xBFFFFFFF);
-  static const Color glassBorderDark = Color(0x2AFFFFFF);
-  static const Color glassSelectionLight = Color(0xDDE0F8F4);
-  static const Color glassSelectionDark = Color(0x24FFFFFF);
-
-  static Color glassSurfaceFor(Brightness b) =>
-      b == Brightness.dark ? glassSurfaceDark : glassSurfaceLight;
-  static Color glassHighlightFor(Brightness b) =>
-      b == Brightness.dark ? glassHighlightDark : glassHighlightLight;
-  static Color glassBorderFor(Brightness b) =>
-      b == Brightness.dark ? glassBorderDark : glassBorderLight;
-  static Color glassSelectionFor(Brightness b) =>
-      b == Brightness.dark ? glassSelectionDark : glassSelectionLight;
-
-  // ---------------------------------------------------------- analytics
-  /// Consistent chart hues for file composition and storage distribution.
-  static const List<Color> analyticsPaletteLight = [
-    Color(0xFF6658E8),
-    Color(0xFF229DBD),
-    Color(0xFF26986B),
-    Color(0xFFD9912F),
-    Color(0xFFD96C8A),
-    Color(0xFF78809B),
-  ];
-
-  static const List<Color> analyticsPaletteDark = [
-    Color(0xFFA79BFF),
-    Color(0xFF67C9E2),
-    Color(0xFF65D6A0),
-    Color(0xFFFFC36F),
-    Color(0xFFFF9BB3),
-    Color(0xFFABB4D0),
-  ];
-
-  static List<Color> analyticsPaletteFor(Brightness brightness) =>
-      brightness == Brightness.dark
-          ? analyticsPaletteDark
-          : analyticsPaletteLight;
 
   // ------------------------------------------------------------ shadows
   /// iOS keeps depth subtle: a single soft ambient shadow for floating

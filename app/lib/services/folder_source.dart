@@ -73,18 +73,12 @@ class SingleFileUploadPicker {
   static const MethodChannel _channel =
       MethodChannel('nexadrive/folder_picker');
 
-  /// Opens the all-files document picker and keeps provider URIs.
-  Future<List<FolderFile>?> pick() => _pick('pickFiles');
-
-  /// Opens Android's native image gallery without broad storage permission
-  /// or copying selected photos into the app cache.
-  Future<List<FolderFile>?> pickImages() => _pick('pickImages');
-
-  Future<List<FolderFile>?> _pick(String method) async {
+  /// Returns document URIs and metadata only; file bytes are not copied.
+  Future<List<FolderFile>?> pick() async {
     if (!Platform.isAndroid) {
       throw UnsupportedError('The direct document picker is Android-only');
     }
-    final rawFiles = await _channel.invokeListMethod<dynamic>(method);
+    final rawFiles = await _channel.invokeListMethod<dynamic>('pickFiles');
     if (rawFiles == null) return null;
     final files = <FolderFile>[];
     for (final raw in rawFiles) {

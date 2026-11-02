@@ -190,82 +190,6 @@ void main() {
     });
   });
 
-  group('Shared access API', () {
-    setUp(() async {
-      setUpStorage();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('server_url', 'https://server.com');
-      FlutterSecureStorage.setMockInitialValues(
-        <String, String>{'token': 'secret-token'},
-      );
-    });
-
-    test('preserves received owner and sent-share expiry response fields',
-        () async {
-      final session = await loadSession();
-      final client = MockClient((request) async {
-        if (request.url.path == '/api/shared') {
-          return http.Response(
-            jsonEncode([
-              {
-                'id': 'received-1',
-                'name': 'Project',
-                'path': 'Project',
-                'permission': 'write',
-                'owner': 'alice',
-              },
-            ]),
-            200,
-          );
-        }
-        if (request.url.path == '/api/shares') {
-          return http.Response(
-            jsonEncode([
-              {
-                'id': 'sent-1',
-                'path': 'report.pdf',
-                'permission': 'read',
-                'recipient': 'bob',
-                'is_link': false,
-                'expires_at': '2026-12-01T10:00:00Z',
-              },
-            ]),
-            200,
-          );
-        }
-        return http.Response('Not found', 404);
-      });
-
-      final api = Api(session, client: client);
-      final received = await api.shared();
-      final sent = await api.shares();
-
-      expect(received.single['owner'], 'alice');
-      expect(received.single['permission'], 'write');
-      expect(sent.single['recipient'], 'bob');
-      expect(sent.single['expires_at'], '2026-12-01T10:00:00Z');
-    });
-
-    test('leaves only the selected shared entry through authenticated DELETE',
-        () async {
-      final session = await loadSession();
-      late http.Request captured;
-      final client = MockClient((request) async {
-        captured = request;
-        return http.Response('', 204);
-      });
-
-      final api = Api(session, client: client);
-      const shareId = '11111111-1111-1111-1111-111111111111';
-      await api.leaveShare(shareId);
-
-      expect(captured.method, 'DELETE');
-      expect(captured.url.path, '/api/shared');
-      expect(captured.url.queryParameters['id'], shareId);
-      expect(captured.headers['Authorization'], 'Bearer secret-token');
-    });
-  });
-
   group('Logout / session clearing', () {
     setUp(() async {
       setUpStorage();
@@ -316,41 +240,6 @@ void main() {
       setUpStorage();
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('server_url', 'https://server.com');
-    });
-
-    test('requests detailed statistics from the dedicated insights endpoint',
-        () async {
-      final session = await loadSession();
-      Uri? requestedUri;
-      final client = MockClient((request) async {
-        requestedUri = request.url;
-        return http.Response(
-          jsonEncode({
-            'used_bytes': 4096,
-            'file_count': 2,
-            'quota_bytes': null,
-            'type_breakdown': [
-              {
-                'key': 'images',
-                'label': 'Images',
-                'bytes': 4096,
-                'count': 2,
-              },
-            ],
-            'activity_last_7_days': [],
-            'size_distribution': [],
-            'largest_files': [],
-          }),
-          200,
-        );
-      });
-
-      final api = Api(session, client: client);
-      final result = await api.storageInsights();
-
-      expect(requestedUri?.path, '/api/storage/insights');
-      expect(result['type_breakdown'], isA<List<dynamic>>());
-      expect(result['used_bytes'], 4096);
     });
 
     test('throws ApiException on non-2xx response with server error', () async {

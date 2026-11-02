@@ -45,5 +45,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  shaders:
-    - shaders/nexa_liquid_glass.frag

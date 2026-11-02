@@ -54,16 +54,10 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
               ? null
               : '${_entries.length} event${_entries.length == 1 ? '' : 's'}',
           leading: const NexaBackButton(),
-          headerAction: NexaLiquidGlass(
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            padding: EdgeInsets.zero,
-            blurSigma: 12,
-            showShadow: false,
-            child: IconButton(
-              tooltip: 'Refresh audit log',
-              onPressed: _loading ? null : load,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
+          headerAction: IconButton(
+            tooltip: 'Refresh',
+            onPressed: load,
+            icon: const Icon(Icons.refresh_rounded),
           ),
           scrollable: true,
           padding: const EdgeInsets.fromLTRB(

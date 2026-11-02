@@ -6,7 +6,6 @@ import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../services/api.dart';
 import '../../../services/scan_processor.dart';
-import '../../widgets/nexa_components.dart';
 import 'scan_edit_screen.dart';
 
 /// Document pages organizer — reorder, edit, and export as PDF.
@@ -124,42 +123,23 @@ class _ScanPagesScreenState extends State<ScanPagesScreen> {
                 AppDimens.pageMargin,
                 AppDimens.space12,
               ),
-              child: Theme(
-                data: Theme.of(context).copyWith(
-                  brightness: Brightness.dark,
-                  colorScheme: Theme.of(context).colorScheme.copyWith(
-                        brightness: Brightness.dark,
-                      ),
-                ),
-                child: NexaLiquidGlass(
-                  borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                  blurSigma: 16,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimens.space4,
-                    vertical: AppDimens.space2,
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Back to camera',
+                    onPressed:
+                        _saving ? null : () => Navigator.of(context).pop(false),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    color: Colors.white,
                   ),
-                  showShadow: false,
-                  child: Row(
-                    children: [
-                      IconButton(
-                        tooltip: 'Back to camera',
-                        onPressed: _saving
-                            ? null
-                            : () => Navigator.of(context).pop(false),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                        color: Colors.white,
-                      ),
-                      Expanded(
-                        child: Text(
-                          '${widget.pages.length} ${widget.pages.length == 1 ? 'page' : 'pages'}',
-                          style: AppTextStyle.pageTitle.copyWith(
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
+                  Expanded(
+                    child: Text(
+                      '${widget.pages.length} ${widget.pages.length == 1 ? 'page' : 'pages'}',
+                      style:
+                          AppTextStyle.pageTitle.copyWith(color: Colors.white),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
             Expanded(child: _buildBody(context)),
@@ -221,53 +201,33 @@ class _ActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return Container(
+      color: AppColors.surfaceDark,
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
-        AppDimens.space8,
+        AppDimens.space12,
         AppDimens.pageMargin,
-        AppDimens.space8,
+        AppDimens.space16,
       ),
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          brightness: Brightness.dark,
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-                brightness: Brightness.dark,
-              ),
-        ),
-        child: NexaLiquidGlass(
-          borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-          blurSigma: 18,
-          padding: const EdgeInsets.all(AppDimens.space8),
-          showShadow: true,
-          child: SafeArea(
-            top: false,
-            child: FilledButton.icon(
-              onPressed: (saving || !enabled) ? null : onSave,
-              icon: saving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(
-                      Icons.picture_as_pdf_outlined,
-                      color: Colors.white,
-                    ),
-              label: Text(
-                saving ? 'Creating PDF…' : 'Save as PDF',
-                style: AppTextStyle.rowTitle.copyWith(color: Colors.white),
-              ),
-              style: FilledButton.styleFrom(
-                backgroundColor: accent,
-                padding: const EdgeInsets.symmetric(
-                  vertical: AppDimens.space16,
-                ),
-              ),
-            ),
+      child: SafeArea(
+        top: false,
+        child: FilledButton.icon(
+          onPressed: (saving || !enabled) ? null : onSave,
+          icon: saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.picture_as_pdf_outlined, color: Colors.white),
+          label: Text(
+            saving ? 'Creating PDF…' : 'Save as PDF',
+            style: AppTextStyle.rowTitle.copyWith(color: Colors.white),
+          ),
+          style: FilledButton.styleFrom(
+            backgroundColor: accent,
+            padding: const EdgeInsets.symmetric(vertical: AppDimens.space16),
           ),
         ),
       ),
@@ -295,20 +255,11 @@ class _PageCard extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+      borderRadius: BorderRadius.circular(AppDimens.radiusCard),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.surfaceDark,
-          borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-          border: Border.all(
-              color: Colors.white.withValues(alpha: 0.10), width: 0.8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.22),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(AppDimens.radiusCard),
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(

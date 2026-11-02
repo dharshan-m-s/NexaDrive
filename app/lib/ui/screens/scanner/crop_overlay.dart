@@ -183,48 +183,25 @@ class _CropPainter extends CustomPainter {
       canvas.drawLine(Offset(rect.left, y), Offset(rect.right, y), grid);
     }
 
-    // L-shaped corner grips stay visible over both light and dark scans.
-    final outline = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 7
-      ..strokeCap = StrokeCap.round
-      ..color = Colors.black.withValues(alpha: 0.48);
-    final grip = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round
-      ..color = color;
-    const arm = 24.0;
-    final corners = <(Offset, Offset, Offset)>[
-      (rect.topLeft, Offset(arm, 0), Offset(0, arm)),
-      (rect.topRight, Offset(-arm, 0), Offset(0, arm)),
-      (rect.bottomLeft, Offset(arm, 0), Offset(0, -arm)),
-      (rect.bottomRight, Offset(-arm, 0), Offset(0, -arm)),
+    // Corner handles.
+    final handlePaint = Paint()..color = color;
+    const radius = 12.0;
+    final corners = [
+      rect.topLeft,
+      rect.topRight,
+      rect.bottomLeft,
+      rect.bottomRight,
     ];
-    for (final corner in corners) {
-      final point = corner.$1;
-      final horizontal = corner.$2;
-      final vertical = corner.$3;
-      canvas.drawLine(point, point + horizontal, outline);
-      canvas.drawLine(point, point + vertical, outline);
-      canvas.drawLine(point, point + horizontal, grip);
-      canvas.drawLine(point, point + vertical, grip);
-    }
-
-    // Mid-edge handles make the crop affordance discoverable without
-    // introducing additional drag targets or changing the existing gesture map.
-    final edgeHandle = Paint()..color = Colors.white.withValues(alpha: 0.86);
-    for (final point in [
-      Offset(rect.center.dx, rect.top),
-      Offset(rect.center.dx, rect.bottom),
-      Offset(rect.left, rect.center.dy),
-      Offset(rect.right, rect.center.dy),
-    ]) {
-      canvas.drawCircle(point, 3.5, edgeHandle);
+    for (final c in corners) {
+      canvas.drawCircle(c, radius, handlePaint);
+      canvas.drawCircle(
+        c,
+        radius - 4,
+        Paint()..color = const Color(0xFFFFFFFF),
+      );
     }
   }
 
   @override
-  bool shouldRepaint(_CropPainter old) =>
-      old.rect != rect || old.color != color;
+  bool shouldRepaint(_CropPainter old) => old.rect != rect;
 }

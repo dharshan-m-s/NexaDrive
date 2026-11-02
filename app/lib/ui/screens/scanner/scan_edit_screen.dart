@@ -3,7 +3,6 @@ import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../services/scan_processor.dart';
-import '../../widgets/nexa_components.dart';
 import 'crop_overlay.dart';
 
 /// Per-page scan editor — rotate, filter, crop.
@@ -118,37 +117,20 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
         AppDimens.pageMargin,
         AppDimens.space6,
       ),
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          brightness: Brightness.dark,
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-                brightness: Brightness.dark,
-              ),
-        ),
-        child: NexaLiquidGlass(
-          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-          blurSigma: 16,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space4,
-            vertical: AppDimens.space2,
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+            onPressed: () => Navigator.of(context).pop(false),
+            icon: const Icon(Icons.close_rounded, color: Colors.white),
           ),
-          showShadow: false,
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                onPressed: () => Navigator.of(context).pop(false),
-                icon: const Icon(Icons.close_rounded, color: Colors.white),
-              ),
-              const SizedBox(width: AppDimens.space4),
-              Text(
-                'Page ${widget.page.number} of ${widget.totalPages}',
-                style: AppTextStyle.rowTitle.copyWith(color: Colors.white),
-              ),
-              const Spacer(),
-            ],
+          const SizedBox(width: AppDimens.space4),
+          Text(
+            'Page ${widget.page.number} of ${widget.totalPages}',
+            style: AppTextStyle.rowTitle.copyWith(color: Colors.white),
           ),
-        ),
+          const Spacer(),
+        ],
       ),
     );
   }
@@ -170,7 +152,7 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
                 onChanged: (r) => setState(() => _crop = r),
               )
             : ClipRRect(
-                borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+                borderRadius: BorderRadius.circular(8),
                 child: Image.memory(bytes,
                     fit: BoxFit.contain, gaplessPlayback: true),
               ),
@@ -179,25 +161,19 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
   }
 
   Widget _filterBar(Brightness brightness) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
-      child: NexaLiquidGlass(
-        borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-        blurSigma: 14,
-        tintOpacity: 0.10,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimens.space8,
-          vertical: AppDimens.space6,
-        ),
-        showShadow: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _chip('Original', ScanFilter.color, brightness),
-            _chip('Grayscale', ScanFilter.grayscale, brightness),
-            _chip('B&W', ScanFilter.blackAndWhite, brightness),
-          ],
-        ),
+    return Container(
+      color: AppColors.surfaceDark,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.space16,
+        vertical: AppDimens.space8,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _chip('Original', ScanFilter.color, brightness),
+          _chip('Grayscale', ScanFilter.grayscale, brightness),
+          _chip('B&W', ScanFilter.blackAndWhite, brightness),
+        ],
       ),
     );
   }
@@ -219,45 +195,31 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
   }
 
   Widget _actionBar(Brightness brightness) {
-    return Padding(
+    return Container(
+      color: AppColors.surfaceDark,
       padding: const EdgeInsets.fromLTRB(
         AppDimens.space12,
-        AppDimens.space8,
+        0,
         AppDimens.space12,
-        AppDimens.space12,
+        AppDimens.space16,
       ),
-      child: NexaLiquidGlass(
-        borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-        blurSigma: 16,
-        tintOpacity: 0.12,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimens.space8,
-          vertical: AppDimens.space6,
-        ),
-        showShadow: true,
-        child: SafeArea(
-          top: false,
-          child: Row(
-            children: [
-              _actionBtn(Icons.rotate_left_rounded, 'Rotate left', _rotateLeft),
-              _actionBtn(
-                  Icons.rotate_right_rounded, 'Rotate right', _rotateRight),
-              _actionBtn(
-                  Icons.center_focus_strong_rounded, 'Auto-crop', _autoCrop),
-              if (_crop != null)
-                _actionBtn(Icons.restart_alt_rounded, 'Reset crop',
-                    () => setState(() => _crop = null)),
-              const Spacer(),
-              FilledButton(
-                onPressed: () {
-                  _apply();
-                  Navigator.of(context).pop(true);
-                },
-                child: const Text('Apply'),
-              ),
-            ],
+      child: Row(
+        children: [
+          _actionBtn(Icons.rotate_left_rounded, 'Rotate left', _rotateLeft),
+          _actionBtn(Icons.rotate_right_rounded, 'Rotate right', _rotateRight),
+          _actionBtn(Icons.center_focus_strong_rounded, 'Auto-crop', _autoCrop),
+          if (_crop != null)
+            _actionBtn(Icons.restart_alt_rounded, 'Reset crop',
+                () => setState(() => _crop = null)),
+          const Spacer(),
+          FilledButton(
+            onPressed: () {
+              _apply();
+              Navigator.of(context).pop(true);
+            },
+            child: const Text('Done'),
           ),
-        ),
+        ],
       ),
     );
   }

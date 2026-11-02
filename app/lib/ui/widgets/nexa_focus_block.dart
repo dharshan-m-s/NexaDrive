@@ -4,7 +4,7 @@ import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import 'nexa_surface.dart';
 
-/// One UI-inspired quick-action block with native-feeling press feedback.
+/// iOS-style focus block (large tappable card for quick actions).
 class NexaFocusBlock extends StatelessWidget {
   final IconData icon;
   final Color? tint;
@@ -37,14 +37,11 @@ class NexaFocusBlock extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: layout == NexaFocusBlockLayout.horizontal ? 52 : 64,
-          height: layout == NexaFocusBlockLayout.horizontal ? 52 : 64,
+          width: layout == NexaFocusBlockLayout.horizontal ? 48 : 56,
+          height: layout == NexaFocusBlockLayout.horizontal ? 48 : 56,
           decoration: BoxDecoration(
-            color: AppColors.accentContainerFor(brightness),
-            borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-            border: Border.all(
-                color: accent.withValues(
-                    alpha: brightness == Brightness.dark ? 0.26 : 0.15)),
+            color: accent.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
           ),
           child: Icon(
             icon,
@@ -60,8 +57,7 @@ class NexaFocusBlock extends StatelessWidget {
               : TextAlign.center,
           style: AppTextStyle.title2.copyWith(
             color: AppColors.labelPrimaryFor(brightness),
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.2,
+            fontWeight: FontWeight.w500,
           ),
         ),
         if (subtitle != null) ...[

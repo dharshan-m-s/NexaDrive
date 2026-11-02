@@ -8,7 +8,6 @@ library;
 
 export 'nexa_surface.dart';
 export 'nexa_bottom_nav.dart';
-export 'nexa_liquid_glass.dart';
 export 'nexa_button.dart';
 export 'nexa_text_field.dart';
 export 'nexa_sheet.dart';

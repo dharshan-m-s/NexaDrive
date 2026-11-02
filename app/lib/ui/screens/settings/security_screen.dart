@@ -184,18 +184,6 @@ class _SecurityScreenState extends State<SecurityScreen> {
     return NexaPage(
       title: 'Security',
       subtitle: 'Sessions and sign-in devices',
-      headerAction: NexaLiquidGlass(
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        padding: EdgeInsets.zero,
-        blurSigma: 12,
-        showShadow: false,
-        child: IconButton(
-          tooltip: 'Refresh sessions',
-          onPressed:
-              _busy || loadState == SessionsLoadState.loading ? null : load,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-      ),
       body: switch (loadState) {
         SessionsLoadState.loading => const NexaLoadingBlock(),
         SessionsLoadState.failure => NexaEmptyState(

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
-import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
 
 /// Opens an iOS-style modal bottom sheet.
@@ -35,9 +34,9 @@ Future<T?> showNexaSheet<T>(
 ///
 /// Use this for self-contained bodies such as [FileShareSheet] or [FolderPicker].
 /// Use [showNexaSheet] with a [NexaSheetBody] instead for menu/action sheets:
-/// [NexaSheetBody] paints its own opaque elevated surface, separate from the
-/// floating navigation dock and from the page beneath it. A self-contained
-/// body such as [FolderPickerBody] should use [showNexaFormSheet] instead.
+/// that variant paints a transparent modal so [NexaSheetBody] can own the
+/// surface. Passing such a self-contained body to [showNexaSheet] would leave it
+/// with no background at all.
 Future<T?> showNexaFormSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
@@ -66,7 +65,6 @@ class NexaSheetHeader extends StatelessWidget {
   final String? subtitle;
   final Widget? trailing;
   final VoidCallback? onClose;
-  final IconData? icon;
 
   const NexaSheetHeader({
     super.key,
@@ -74,39 +72,7 @@ class NexaSheetHeader extends StatelessWidget {
     this.subtitle,
     this.trailing,
     this.onClose,
-    this.icon,
   });
-
-  IconData _iconForTitle(String value) {
-    final normalized = value.toLowerCase();
-    if (normalized.contains('share')) {
-      return Icons.ios_share_rounded;
-    }
-    if (normalized.contains('propert') || normalized.contains('detail')) {
-      return Icons.info_outline_rounded;
-    }
-    if (normalized.contains('folder') ||
-        normalized.contains('move') ||
-        normalized.contains('copy')) {
-      return Icons.folder_open_rounded;
-    }
-    if (normalized.contains('user') || normalized.contains('member')) {
-      return Icons.person_outline_rounded;
-    }
-    if (normalized.contains('upload')) {
-      return Icons.cloud_upload_rounded;
-    }
-    if (normalized.contains('download')) {
-      return Icons.download_rounded;
-    }
-    if (normalized.contains('delete') || normalized.contains('trash')) {
-      return Icons.delete_outline_rounded;
-    }
-    if (normalized.contains('rename') || normalized.contains('edit')) {
-      return Icons.edit_rounded;
-    }
-    return Icons.tune_rounded;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -123,32 +89,12 @@ class NexaSheetHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppColors.accentContainerFor(brightness),
-              borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-              border: Border.all(
-                color:
-                    AppColors.accentTextFor(brightness).withValues(alpha: 0.12),
-              ),
-            ),
-            child: Icon(
-              icon ?? _iconForTitle(title),
-              size: 21,
-              color: AppColors.accentTextFor(brightness),
-            ),
-          ),
-          const SizedBox(width: AppDimens.space12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                   style: AppTextStyle.sectionHeader.copyWith(
                     color: AppColors.labelPrimaryFor(brightness),
                   ),
@@ -231,7 +177,7 @@ class NexaSheetBody extends StatelessWidget {
 }
 
 /// Sheet action row — icon + label.
-class NexaSheetAction extends StatefulWidget {
+class NexaSheetAction extends StatelessWidget {
   final IconData icon;
   final String title;
   final String? subtitle;
@@ -254,20 +200,13 @@ class NexaSheetAction extends StatefulWidget {
   });
 
   @override
-  State<NexaSheetAction> createState() => _NexaSheetActionState();
-}
-
-class _NexaSheetActionState extends State<NexaSheetAction> {
-  bool _hovered = false;
-
-  @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final isDestructive = widget.destructive;
+    final isDestructive = destructive;
     final fg = isDestructive
         ? AppColors.errorFor(brightness)
-        : (widget.iconColor ?? AppColors.labelPrimaryFor(brightness));
-    final bg = widget.backgroundColor ??
+        : (iconColor ?? AppColors.labelPrimaryFor(brightness));
+    final bg = backgroundColor ??
         (isDestructive
             ? AppColors.errorContainerFor(brightness)
             : AppColors.fillFor(brightness));
@@ -275,46 +214,26 @@ class _NexaSheetActionState extends State<NexaSheetAction> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: widget.enabled ? widget.onTap : null,
-        onHover: (hovered) {
-          if (widget.enabled && _hovered != hovered) {
-            setState(() => _hovered = hovered);
-          }
-        },
+        onTap: enabled ? onTap : null,
         borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-        child: AnimatedContainer(
-          duration: AppMotion.resolve(context, AppMotion.fast),
+        child: Container(
           padding: const EdgeInsets.symmetric(
             horizontal: AppDimens.space16,
             vertical: AppDimens.space12,
           ),
-          decoration: BoxDecoration(
-            color: widget.enabled && _hovered
-                ? AppColors.fillFor(brightness).withValues(alpha: 0.58)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-          ),
           child: Row(
             children: [
-              AnimatedScale(
-                scale: _hovered && widget.enabled ? 1.035 : 1,
-                duration: AppMotion.resolve(context, AppMotion.fast),
-                child: Container(
-                  width: AppDimens.iconTileLarge,
-                  height: AppDimens.iconTileLarge,
-                  decoration: BoxDecoration(
-                    color: bg,
-                    borderRadius: BorderRadius.circular(
-                      AppDimens.radiusStandard,
-                    ),
-                  ),
-                  child: Icon(
-                    widget.icon,
-                    color: widget.enabled
-                        ? fg
-                        : AppColors.labelTertiaryFor(brightness),
-                    size: AppDimens.iconMedium,
-                  ),
+              Container(
+                width: AppDimens.iconTileLarge,
+                height: AppDimens.iconTileLarge,
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+                ),
+                child: Icon(
+                  icon,
+                  color: fg,
+                  size: AppDimens.iconMedium,
                 ),
               ),
               const SizedBox(width: AppDimens.space16),
@@ -323,18 +242,18 @@ class _NexaSheetActionState extends State<NexaSheetAction> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.title,
-                      style: AppTextStyle.rowTitle.copyWith(
-                        color: widget.enabled
+                      title,
+                      style: AppTextStyle.title1.copyWith(
+                        color: enabled
                             ? AppColors.labelPrimaryFor(brightness)
                             : AppColors.labelTertiaryFor(brightness),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    if (widget.subtitle != null) ...[
+                    if (subtitle != null) ...[
                       const SizedBox(height: AppDimens.space2),
                       Text(
-                        widget.subtitle!,
+                        subtitle!,
                         style: AppTextStyle.caption1.copyWith(
                           color: AppColors.labelSecondaryFor(brightness),
                         ),
@@ -343,7 +262,7 @@ class _NexaSheetActionState extends State<NexaSheetAction> {
                   ],
                 ),
               ),
-              if (widget.onTap != null && !isDestructive)
+              if (onTap != null && !isDestructive)
                 Icon(
                   Icons.chevron_right_rounded,
                   size: AppDimens.iconMedium,
@@ -468,7 +387,6 @@ class NexaConfirmationDialog extends StatelessWidget {
   final String confirmText;
   final String cancelText;
   final bool isDestructive;
-  final IconData? icon;
 
   const NexaConfirmationDialog({
     super.key,
@@ -477,7 +395,6 @@ class NexaConfirmationDialog extends StatelessWidget {
     required this.confirmText,
     required this.cancelText,
     this.isDestructive = false,
-    this.icon,
   });
 
   @override
@@ -493,38 +410,11 @@ class NexaConfirmationDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
       ),
-      title: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: (isDestructive
-                  ? AppColors.errorContainerFor(brightness)
-                  : AppColors.accentContainerFor(brightness)),
-              borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-            ),
-            child: Icon(
-              icon ??
-                  (isDestructive
-                      ? Icons.delete_outline_rounded
-                      : Icons.help_outline_rounded),
-              color: isDestructive
-                  ? AppColors.errorFor(brightness)
-                  : AppColors.accentTextFor(brightness),
-              size: 21,
-            ),
-          ),
-          const SizedBox(width: AppDimens.space12),
-          Expanded(
-            child: Text(
-              title,
-              style: AppTextStyle.sectionHeader.copyWith(
-                color: AppColors.labelPrimaryFor(brightness),
-              ),
-            ),
-          ),
-        ],
+      title: Text(
+        title,
+        style: AppTextStyle.sectionHeader.copyWith(
+          color: AppColors.labelPrimaryFor(brightness),
+        ),
       ),
       content: Text(
         message,

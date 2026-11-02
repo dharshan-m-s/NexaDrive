@@ -75,17 +75,6 @@ void main() {
       expect(find.text('This folder is empty'), findsNothing);
     });
 
-    testWidgets('upload offers a gallery choice and a file browser',
-        (tester) async {
-      await pump(tester, FilesScreen(api: listingApi(const [])));
-      await tester.tap(find.byTooltip('Upload files'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Choose from gallery'), findsOneWidget);
-      expect(find.text('Browse files'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-
     testWidgets('the header fits a 320dp phone without overflowing',
         (tester) async {
       await pump(

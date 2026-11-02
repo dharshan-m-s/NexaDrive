@@ -4,73 +4,6 @@ import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import 'nexa_button.dart';
 
-class _ErrorIllustration extends StatelessWidget {
-  final IconData icon;
-  final Color error;
-  final Brightness brightness;
-
-  const _ErrorIllustration({
-    required this.icon,
-    required this.error,
-    required this.brightness,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 82,
-      height: 82,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(
-            left: 2,
-            top: 7,
-            child: Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                color: AppColors.fillFor(brightness),
-                borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 1,
-            bottom: 4,
-            child: Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                color: AppColors.errorContainerFor(brightness),
-                borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-              ),
-            ),
-          ),
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: AppColors.surfaceFor(brightness),
-              borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-              border: Border.all(color: AppColors.separatorFor(brightness)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(
-                      alpha: brightness == Brightness.dark ? 0.14 : 0.04),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Icon(icon, size: 30, color: error),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Error state with retry action.
 class NexaErrorState extends StatelessWidget {
   final String title;
@@ -103,7 +36,15 @@ class NexaErrorState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _ErrorIllustration(icon: icon, error: error, brightness: brightness),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: error.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+            ),
+            child: Icon(icon, size: 30, color: error),
+          ),
           const SizedBox(height: AppDimens.space16),
           Text(
             title,

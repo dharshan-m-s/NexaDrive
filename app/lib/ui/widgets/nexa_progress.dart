@@ -21,7 +21,7 @@ class NexaProgressIndicator extends StatelessWidget {
     this.valueLabel,
     this.color,
     this.backgroundColor,
-    this.height = 6,
+    this.height = 4,
     this.showPercentage = true,
   });
 

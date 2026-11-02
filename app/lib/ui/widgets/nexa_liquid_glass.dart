@@ -109,8 +109,8 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
     final shader = active ? _shader : null;
 
     if (shader != null) {
-      // ImageFilter shaders receive u_size automatically at float indices 0-1.
-      // The following vec4 contains the actual clipped corner radii in pixels.
+      // ImageFilter.shader reserves float slots 0-1 for the engine-provided
+      // texture size. The next four slots are the physical corner radii.
       final radii = widget.borderRadius.resolve(Directionality.of(context));
       final scale = MediaQuery.devicePixelRatioOf(context);
       shader
@@ -119,6 +119,8 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
         ..setFloat(4, radii.bottomRight.x * scale)
         ..setFloat(5, radii.bottomLeft.x * scale);
     }
+
+    final blurSigma = widget.blurSigma.clamp(0.0, 2.4).toDouble();
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -145,18 +147,19 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
                 child: BackdropFilter(
                   filter: shader != null
                       ? ui.ImageFilter.compose(
-                          // Blur the live backdrop first, then refract that
-                          // texture with the GPU shader. The edge is optically
-                          // displaced; this is not a transparent tint layer.
-                          outer: ui.ImageFilter.shader(shader),
+                          // Blur first, then refract that live backdrop. Medium
+                          // sampling avoids harsh pixel edges during displacement.
+                          outer: ui.ImageFilter.shader(
+                            shader,
+                            filterQuality: FilterQuality.medium,
+                          ),
                           inner: ui.ImageFilter.blur(
-                            sigmaX: widget.blurSigma.clamp(0.0, 2.4).toDouble(),
-                            sigmaY: widget.blurSigma.clamp(0.0, 2.4).toDouble(),
+                            sigmaX: blurSigma,
+                            sigmaY: blurSigma,
                           ),
                         )
                       : ui.ImageFilter.blur(
-                          // Older/unsupported renderers keep a modest frosted
-                          // fallback. Impeller uses the refractive shader path.
+                          // Unsupported renderers keep a modest frosted fallback.
                           sigmaX: widget.blurSigma.clamp(0.0, 4.0).toDouble(),
                           sigmaY: widget.blurSigma.clamp(0.0, 4.0).toDouble(),
                         ),

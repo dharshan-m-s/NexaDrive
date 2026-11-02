@@ -4,19 +4,17 @@ import 'app_dimensions.dart';
 import 'app_typography.dart';
 import 'app_transitions.dart';
 
-/// NexaDrive visual system.
+/// NexaDrive theme builder.
 ///
-/// Visual direction combines One UI's confident hierarchy, reachability and
-/// purpose-built content surfaces with native iOS interaction discipline:
-/// quiet press feedback, consistent transitions, accessible controls and
-/// sheets that preserve context. Liquid Glass is reserved for navigation and
-/// transient controls; ordinary content remains tonal and data-led.
+/// THE REFERENCE: Apple's platform UI. The theme encodes iOS's feel:
+///  * layered surfaces — a grouped page background behind white content planes;
+///  * no ripple — press feedback is a quiet tonal highlight, as on iOS;
+///  * restrained single accent (system blue) and no tinted surface overlays;
+///  * grouped inset lists, generous rounded panels and natural sheets/alerts.
 ///
 /// Visual rules:
-///  * Light mode: porcelain canvas, distinct grouped content planes.
-///  * Dark mode: deep graphite canvas with clearly separated elevated surfaces.
-///  * Cards communicate their content through layout, icons and real data —
-///    not repeated decorative gradients.
+///  * Light mode: grouped neutral page background, white content surfaces.
+///  * Dark mode: true-black grouped canvas, `#1C1C1E`/`#2C2C2E` content planes.
 abstract final class AppTheme {
   static ThemeData light() => _build(Brightness.light);
   static ThemeData dark() => _build(Brightness.dark);
@@ -81,7 +79,7 @@ abstract final class AppTheme {
       shadowColor:
           isDark ? AppColors.shadowColorStrong : AppColors.shadowColorSoft,
       dividerColor: divider,
-      // Use quiet tonal feedback; the surface primitives supply the tactile scale/press state.
+      // iOS has no ripple: press feedback is a faint tonal highlight instead.
       splashFactory: NoSplash.splashFactory,
       highlightColor: Colors.transparent,
       splashColor: Colors.transparent,

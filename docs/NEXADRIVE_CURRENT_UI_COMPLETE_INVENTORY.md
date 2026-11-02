@@ -1,5 +1,3 @@
-> **Current implementation note (2026-11-02):** This document records the earlier UI baseline. For the current screen/component coverage and redesign status, use [Premium UI Redesign Coverage](PREMIUM_UI_REDESIGN_COVERAGE.md). For actual media rendering behavior, use [File Format Support](FILE_FORMAT_SUPPORT.md). Source code on `beta` remains authoritative where this historical inventory differs.
-
 # NEXADRIVE CURRENT UI — COMPLETE INVENTORY
 
 > v1.1.0 · snapshot against `app/` (Flutter) + `server/` (Axum) as built.

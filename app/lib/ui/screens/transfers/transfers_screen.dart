@@ -201,105 +201,98 @@ class _TransfersScreenState extends State<TransfersScreen> {
               ? '${_selected.length} of ${items.length} selected'
               : _summary(items),
           leading: const NexaBackButton(),
-          headerAction: NexaLiquidGlass(
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            padding: const EdgeInsets.all(AppDimens.space2),
-            blurSigma: 12,
-            showShadow: false,
-            child: _selecting
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip: _selected.length == items.length
-                            ? 'Deselect all'
-                            : 'Select all',
-                        onPressed: items.isEmpty
-                            ? null
-                            : () => _toggleSelectAll(items),
-                        icon: Icon(
-                          _selected.length == items.length && items.isNotEmpty
-                              ? Icons.deselect_rounded
-                              : Icons.select_all_rounded,
-                        ),
+          headerAction: _selecting
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: _selected.length == items.length
+                          ? 'Deselect all'
+                          : 'Select all',
+                      onPressed:
+                          items.isEmpty ? null : () => _toggleSelectAll(items),
+                      icon: Icon(
+                        _selected.length == items.length && items.isNotEmpty
+                            ? Icons.deselect_rounded
+                            : Icons.select_all_rounded,
                       ),
+                    ),
+                    IconButton(
+                      tooltip: 'Delete selected',
+                      onPressed: _selected.isEmpty ? null : _deleteSelected,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    ),
+                    IconButton(
+                      tooltip: 'Cancel selection',
+                      onPressed: _exitSelection,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (items.any((UploadItem item) =>
+                        item.state == UploadState.uploading ||
+                        item.state == UploadState.queued ||
+                        item.state == UploadState.retrying))
                       IconButton(
-                        tooltip: 'Delete selected',
-                        onPressed: _selected.isEmpty ? null : _deleteSelected,
-                        icon: const Icon(Icons.delete_outline_rounded),
-                      ),
+                        tooltip: 'Pause all',
+                        onPressed: _pauseAll,
+                        icon: const Icon(Icons.pause_circle_outline_rounded),
+                      )
+                    else if (items.any(
+                        (UploadItem item) => item.state == UploadState.paused))
                       IconButton(
-                        tooltip: 'Cancel selection',
-                        onPressed: _exitSelection,
-                        icon: const Icon(Icons.close_rounded),
+                        tooltip: 'Resume all',
+                        onPressed: _resumeAll,
+                        icon: const Icon(Icons.play_circle_outline_rounded),
                       ),
-                    ],
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (items.any((UploadItem item) =>
-                          item.state == UploadState.uploading ||
-                          item.state == UploadState.queued ||
-                          item.state == UploadState.retrying))
-                        IconButton(
-                          tooltip: 'Pause all',
-                          onPressed: _pauseAll,
-                          icon: const Icon(Icons.pause_circle_outline_rounded),
-                        )
-                      else if (items.any((UploadItem item) =>
-                          item.state == UploadState.paused))
-                        IconButton(
-                          tooltip: 'Resume all',
-                          onPressed: _resumeAll,
-                          icon: const Icon(Icons.play_circle_outline_rounded),
-                        ),
-                      IconButton(
-                        tooltip: 'Select transfers',
-                        onPressed: items.isEmpty ? null : _enterSelection,
-                        icon: const Icon(Icons.checklist_rounded),
-                      ),
-                      PopupMenuButton<String>(
-                        tooltip: 'Queue actions',
-                        icon: const Icon(Icons.more_vert_rounded),
-                        onSelected: (value) {
-                          switch (value) {
-                            case 'deleteAll':
-                              _deleteAll();
-                            case 'retry':
-                              _retryAll();
-                            case 'clear':
-                              _clearCompleted();
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          if (items.any((UploadItem item) =>
-                              item.state == UploadState.failed))
-                            const PopupMenuItem(
-                              value: 'retry',
-                              child: Text('Retry failed'),
-                            ),
-                          if (items.any((UploadItem item) =>
-                              item.state == UploadState.completed))
-                            const PopupMenuItem(
-                              value: 'clear',
-                              child: Text('Clear completed'),
-                            ),
-                          if (items.isNotEmpty)
-                            PopupMenuItem(
-                              value: 'deleteAll',
-                              child: Text(
-                                'Delete all transfers',
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
+                    IconButton(
+                      tooltip: 'Select transfers',
+                      onPressed: items.isEmpty ? null : _enterSelection,
+                      icon: const Icon(Icons.checklist_rounded),
+                    ),
+                    PopupMenuButton<String>(
+                      tooltip: 'Queue actions',
+                      icon: const Icon(Icons.more_vert_rounded),
+                      onSelected: (value) {
+                        switch (value) {
+                          case 'deleteAll':
+                            _deleteAll();
+                          case 'retry':
+                            _retryAll();
+                          case 'clear':
+                            _clearCompleted();
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        if (items.any((UploadItem item) =>
+                            item.state == UploadState.failed))
+                          const PopupMenuItem(
+                            value: 'retry',
+                            child: Text('Retry failed'),
+                          ),
+                        if (items.any((UploadItem item) =>
+                            item.state == UploadState.completed))
+                          const PopupMenuItem(
+                            value: 'clear',
+                            child: Text('Clear completed'),
+                          ),
+                        if (items.isNotEmpty)
+                          PopupMenuItem(
+                            value: 'deleteAll',
+                            child: Text(
+                              'Delete all transfers',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
                               ),
                             ),
-                        ],
-                      ),
-                    ],
-                  ),
-          ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
           padding: const EdgeInsets.fromLTRB(
             AppDimens.pageMargin,
             0,
@@ -364,40 +357,6 @@ class _TransfersScreenState extends State<TransfersScreen> {
             item.state == UploadState.cancelled)
         .toList();
 
-    Widget group(List<UploadItem> entries) {
-      return NexaSurface(
-        level: NexaSurfaceLevel.grouped,
-        radius: AppDimens.radiusMedium,
-        padding: const EdgeInsets.symmetric(vertical: AppDimens.space4),
-        child: Column(
-          children: [
-            for (var index = 0; index < entries.length; index++) ...[
-              _TransferRow(
-                item: entries[index],
-                selecting: _selecting,
-                selected: _selected.contains(entries[index].id),
-                onSelect: _toggleSelected,
-                onToggle: _toggle,
-                onRemove: _remove,
-              ),
-              if (index < entries.length - 1)
-                Padding(
-                  padding: const EdgeInsets.only(
-                    left: AppDimens.space20,
-                    right: AppDimens.space16,
-                  ),
-                  child: Divider(
-                    height: 0.5,
-                    thickness: 0.5,
-                    color: AppColors.dividerFor(Theme.of(context).brightness),
-                  ),
-                ),
-            ],
-          ],
-        ),
-      );
-    }
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
@@ -406,23 +365,44 @@ class _TransfersScreenState extends State<TransfersScreen> {
         AppDimens.space24,
       ),
       children: [
-        if (active.isNotEmpty) ...[
+        if (active.isNotEmpty)
           _Section(
-            'Uploading',
-            '${Format.bytes(active.fold<int>(0, (int s, UploadItem e) => s + e.transferred))} '
-                'of ${Format.bytes(active.fold<int>(0, (int s, UploadItem e) => s + e.size))}',
+              'Uploading',
+              '${Format.bytes(active.fold<int>(0, (int s, UploadItem e) => s + e.transferred))} '
+                  'of ${Format.bytes(active.fold<int>(0, (int s, UploadItem e) => s + e.size))}'),
+        for (final item in active)
+          _TransferRow(
+            item: item,
+            selecting: _selecting,
+            selected: _selected.contains(item.id),
+            onSelect: _toggleSelected,
+            onToggle: _toggle,
+            onRemove: _remove,
           ),
-          group(active),
-        ],
         if (failed.isNotEmpty) ...[
           const SizedBox(height: AppDimens.space16),
           _Section('Needs attention', '${failed.length} failed'),
-          group(failed),
+          for (final item in failed)
+            _TransferRow(
+              item: item,
+              selecting: _selecting,
+              selected: _selected.contains(item.id),
+              onSelect: _toggleSelected,
+              onToggle: _toggle,
+              onRemove: _remove,
+            ),
         ],
         if (completed.isNotEmpty) ...[
           const SizedBox(height: AppDimens.space16),
           _Section('Completed', '${completed.length} done'),
-          group(completed),
+          for (final item in completed)
+            _TransferRow(
+              item: item,
+              selecting: _selecting,
+              selected: _selected.contains(item.id),
+              onSelect: _toggleSelected,
+              onRemove: _remove,
+            ),
         ],
       ],
     );
@@ -493,8 +473,9 @@ class _TransferRow extends StatelessWidget {
     final uploading =
         state == UploadState.uploading || state == UploadState.retrying;
     final paused = state == UploadState.paused;
-    final accent = AppColors.accentFor(brightness);
+    final frac = item.progress;
 
+    final accent = AppColors.accentFor(brightness);
     final Color statusColor;
     final Widget? trailing;
     if (failed) {
@@ -533,86 +514,92 @@ class _TransferRow extends StatelessWidget {
       );
     }
 
-    return Column(
-      children: [
-        ListTile(
-          onTap:
-              selecting && onSelect != null ? () => onSelect!(item.id) : null,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.pageMargin,
-            vertical: AppDimens.space4,
-          ),
-          minTileHeight: AppDimens.listHeightLarge,
-          leading: selecting
-              ? Checkbox.adaptive(
-                  value: selected,
-                  onChanged:
-                      onSelect == null ? null : (_) => onSelect!(item.id),
-                  semanticLabel: 'Select ${item.name}',
-                )
-              : SizedBox(
-                  width: AppDimens.iconTileLarge,
-                  height: AppDimens.iconTileLarge,
-                  child: Center(
-                    child: uploading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Icon(
-                            completed
-                                ? Icons.check_circle_outline_rounded
-                                : failed
-                                    ? Icons.error_outline_rounded
-                                    : paused
-                                        ? Icons.pause_circle_outline_rounded
-                                        : Icons.cloud_upload_outlined,
-                            size: AppDimens.iconMedium,
-                            color: statusColor,
-                          ),
-                  ),
-                ),
-          title: Text(
-            item.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyle.rowTitle.copyWith(
-              color: AppColors.textPrimaryFor(brightness),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          subtitle: Text(
-            _label(state, item),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyle.caption.copyWith(
-              color:
-                  failed ? statusColor : AppColors.textSecondaryFor(brightness),
-            ),
-          ),
-          trailing: selecting ? null : trailing,
-        ),
-        if (!completed && !failed)
-          Padding(
-            padding: const EdgeInsets.only(
-              left: AppDimens.pageMargin +
-                  AppDimens.iconTileLarge +
-                  AppDimens.space12,
-              right: AppDimens.pageMargin,
-              bottom: AppDimens.space10,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-              child: LinearProgressIndicator(
-                value: item.progress,
-                minHeight: 4,
-                backgroundColor: accent.withValues(alpha: 0.16),
-                valueColor: AlwaysStoppedAnimation<Color>(accent),
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
+      margin: const EdgeInsets.only(bottom: AppDimens.space8),
+      padding: const EdgeInsets.fromLTRB(
+        AppDimens.space16,
+        AppDimens.space12,
+        AppDimens.space8,
+        AppDimens.space12,
+      ),
+      onTap: selecting && onSelect != null ? () => onSelect!(item.id) : null,
+      child: Row(
+        children: [
+          if (selecting) ...[
+            SizedBox(
+              width: 44,
+              child: Checkbox(
+                value: selected,
+                semanticLabel: 'Select ${item.name}',
+                onChanged: onSelect == null ? null : (_) => onSelect!(item.id),
               ),
             ),
+            const SizedBox(width: AppDimens.space4),
+          ] else ...[
+            SizedBox(
+              width: 22,
+              child: uploading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      completed
+                          ? Icons.check_circle_outline_rounded
+                          : failed
+                              ? Icons.error_outline_rounded
+                              : paused
+                                  ? Icons.pause_circle_outline_rounded
+                                  : Icons.schedule_rounded,
+                      size: 20,
+                      color: statusColor,
+                    ),
+            ),
+          ],
+          const SizedBox(width: AppDimens.space12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyle.rowTitle.copyWith(
+                    color: AppColors.textPrimaryFor(brightness),
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space2),
+                Text(
+                  _label(state, item),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyle.caption.copyWith(
+                    color: failed
+                        ? statusColor
+                        : AppColors.textSecondaryFor(brightness),
+                  ),
+                ),
+                if (!completed && !failed) ...[
+                  const SizedBox(height: AppDimens.space6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                    child: LinearProgressIndicator(
+                      value: frac,
+                      minHeight: 4,
+                      backgroundColor: accent.withValues(alpha: 0.18),
+                      valueColor: AlwaysStoppedAnimation<Color>(accent),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-      ],
+          if (!selecting) trailing,
+        ],
+      ),
     );
   }
 

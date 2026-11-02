@@ -4,7 +4,7 @@ import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import 'nexa_surface.dart';
 
-/// Compact status panel with a clear icon well and semantic tint.
+/// iOS-style status pod (compact status card).
 class NexaStatusPod extends StatelessWidget {
   final IconData icon;
   final Color tint;
@@ -35,18 +35,13 @@ class NexaStatusPod extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 52,
-            height: 52,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: tint.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-              border: Border.all(
-                color: tint.withValues(
-                  alpha: brightness == Brightness.dark ? 0.28 : 0.16,
-                ),
-              ),
+              borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
             ),
-            child: Icon(icon, size: 24, color: tint),
+            child: Icon(icon, size: 22, color: tint),
           ),
           const SizedBox(width: AppDimens.space16),
           Expanded(
@@ -57,14 +52,13 @@ class NexaStatusPod extends StatelessWidget {
                   title,
                   style: AppTextStyle.title2.copyWith(
                     color: AppColors.labelPrimaryFor(brightness),
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.2,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: AppDimens.space4),
+                const SizedBox(height: AppDimens.space2),
                 Text(
                   subtitle,
-                  style: AppTextStyle.footnote.copyWith(
+                  style: AppTextStyle.caption1.copyWith(
                     color: AppColors.labelSecondaryFor(brightness),
                   ),
                 ),

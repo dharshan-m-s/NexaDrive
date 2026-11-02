@@ -27,7 +27,7 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(NexaDriveApp(session: Session(), prefs: prefs));
     await tester.pumpAndSettle();
-    expect(find.text('Sign in to your cloud'), findsOneWidget);
+    expect(find.text('Welcome to NexaDrive'), findsOneWidget);
   });
 
   testWidgets('signed-in desktop layout shows a wide sidebar', (tester) async {
@@ -47,7 +47,7 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
   });
 
-  testWidgets('narrow layout shows the restored compact More action sheet',
+  testWidgets('signed-in narrow layout shows bottom navigation and More sheet',
       (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1.0;
@@ -58,6 +58,7 @@ void main() {
         .pumpWidget(NexaDriveApp(session: signedInSession(), prefs: prefs));
     await tester.pumpAndSettle();
 
+    // The redesign replaces the Material NavigationBar with an iOS tab bar.
     expect(find.byType(NexaBottomNav), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
     expect(find.text('Photos'), findsOneWidget);
@@ -65,39 +66,17 @@ void main() {
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(BottomSheet), findsOneWidget);
-    expect(
-      tester.getSize(find.byType(BottomSheet)).height,
-      lessThan(600),
-      reason: 'More must remain content-sized rather than filling the screen',
-    );
-    expect(find.text('Tools and activity'), findsNothing);
-    expect(find.byType(GridView), findsNothing);
-    for (final label in [
-      'Scan document',
-      'Transfers',
-      'Trash',
-      'Sync center',
-      'Notifications',
-      'Settings',
-    ]) {
-      expect(find.text(label), findsOneWidget);
-    }
-    final moreSheet = find.byType(BottomSheet);
-    expect(
-      find.descendant(
-        of: moreSheet,
-        matching: find.text('Storage Insights'),
-      ),
-      findsNothing,
-    );
-    expect(
-      find.descendant(of: moreSheet, matching: find.text('My files')),
-      findsNothing,
-    );
-    expect(
-      find.descendant(of: moreSheet, matching: find.text('Shared')),
-      findsNothing,
-    );
+    // Scoped to the sheet: the destinations behind it (Home's shortcuts, the
+    // navigation bar) legitimately reuse some of these labels.
+    Finder inSheet(String label) => find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.text(label),
+        );
+    expect(inSheet('Scan document'), findsOneWidget);
+    expect(inSheet('Transfers'), findsOneWidget);
+    expect(inSheet('Trash'), findsOneWidget);
+    expect(inSheet('Sync center'), findsOneWidget);
+    expect(inSheet('Notifications'), findsOneWidget);
+    expect(inSheet('Settings'), findsOneWidget);
   });
 }

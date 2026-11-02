@@ -41,60 +41,42 @@ class NexaAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final accent = AppColors.accentTextFor(brightness);
-    final bg = backgroundColor ?? AppColors.accentContainerFor(brightness);
-    final fg = foregroundColor ?? accent;
-    final parts = (name ?? '')
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty);
-    final initials = parts
-        .take(2)
-        .map((part) => String.fromCharCode(part.runes.first))
-        .join()
-        .toUpperCase();
-    final fallback = initials.isEmpty ? '?' : initials;
-    final diameter = radius * 2;
+    final accent = AppColors.accentFor(brightness);
+    final bg = backgroundColor ?? accent.withValues(alpha: 0.14);
 
-    return Container(
-      width: diameter,
-      height: diameter,
-      decoration: BoxDecoration(
-        color: bg,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: AppColors.separatorFor(brightness),
-          width: 0.8,
-        ),
+    String initial = '?';
+    if (name != null && name!.trim().isNotEmpty) {
+      initial = name!.trim().runes.first.toString().toUpperCase();
+    }
+
+    if (imageUrl != null && imageUrl!.isNotEmpty) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: bg,
+        backgroundImage: NetworkImage(imageUrl!),
+        onBackgroundImageError: (_, __) => {},
+        child: imageUrl == null ? Text(initial, style: _textStyle) : null,
+      );
+    }
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: bg,
+      child: Text(
+        initial,
+        style: _textStyle,
       ),
-      clipBehavior: Clip.antiAlias,
-      child: imageUrl != null && imageUrl!.isNotEmpty
-          ? Image.network(
-              imageUrl!,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Center(
-                child: Text(
-                  fallback,
-                  style: TextStyle(
-                    color: fg,
-                    fontSize: radius * 0.7,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            )
-          : Center(
-              child: Text(
-                fallback,
-                style: TextStyle(
-                  color: fg,
-                  fontSize: radius * 0.7,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
     );
   }
+
+  TextStyle get _textStyle => TextStyle(
+        color: foregroundColor ??
+            AppColors.accentFor(
+              WidgetsBinding.instance.platformDispatcher.platformBrightness,
+            ),
+        fontSize: radius * 0.7,
+        fontWeight: FontWeight.w600,
+      );
 }
 
 /// Avatar with status indicator.
