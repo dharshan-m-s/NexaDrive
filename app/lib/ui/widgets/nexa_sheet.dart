@@ -3,7 +3,6 @@ import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
-import 'nexa_liquid_glass.dart';
 
 /// Opens an iOS-style modal bottom sheet.
 Future<T?> showNexaSheet<T>(
@@ -204,41 +203,25 @@ class NexaSheetBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final surface = AppColors.surfaceFor(brightness);
 
-    return NexaLiquidGlass(
-      borderRadius: const BorderRadius.vertical(
-        top: Radius.circular(AppDimens.radiusXLarge),
-      ),
-      blurSigma: 2.0,
-      tintOpacity: brightness == Brightness.dark ? 0.16 : 0.12,
-      padding: EdgeInsets.zero,
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
+    return Material(
+      color: Colors.transparent,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppDimens.radiusXLarge),
         ),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            padding: EdgeInsets.zero,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(
-                    top: AppDimens.space12,
-                    bottom: AppDimens.space12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.separatorOpaqueFor(brightness),
-                    borderRadius: BorderRadius.circular(
-                      AppDimens.radiusPill,
-                    ),
-                  ),
-                ),
-                Padding(padding: padding, child: child),
-              ],
+        child: Material(
+          color: surface,
+          child: Padding(
+            // Keep text fields above the on-screen keyboard: stop the sheet's
+            // scroll viewport where the keyboard begins.
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            child: SingleChildScrollView(
+              padding: padding,
+              child: child,
             ),
           ),
         ),
