@@ -4,6 +4,78 @@ import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import 'nexa_button.dart';
 
+class _EmptyIllustration extends StatelessWidget {
+  final IconData icon;
+  final double size;
+  final Color accent;
+  final Brightness brightness;
+
+  const _EmptyIllustration({required this.icon, required this.size, required this.accent, required this.brightness});
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: SizedBox(
+        width: size + 20,
+        height: size + 20,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Positioned(
+              left: 2,
+              top: 6,
+              child: Transform.rotate(
+                angle: -0.12,
+                child: Container(
+                  width: size * 0.84,
+                  height: size * 0.84,
+                  decoration: BoxDecoration(
+                    color: AppColors.fillFor(brightness),
+                    borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+                    border: Border.all(color: AppColors.separatorFor(brightness)),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 2,
+              bottom: 5,
+              child: Transform.rotate(
+                angle: 0.10,
+                child: Container(
+                  width: size * 0.84,
+                  height: size * 0.84,
+                  decoration: BoxDecoration(
+                    color: AppColors.accentContainerFor(brightness),
+                    borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceFor(brightness),
+                borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+                border: Border.all(color: AppColors.separatorFor(brightness), width: 0.8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: brightness == Brightness.dark ? 0.16 : 0.045),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Icon(icon, size: size * 0.45, color: accent),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Standard empty state with illustration, title, hint, and action.
 class NexaEmptyState extends StatelessWidget {
   final IconData icon;
@@ -42,16 +114,11 @@ class NexaEmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: iconSize,
-            height: iconSize,
-            decoration: BoxDecoration(
-              color: brightness == Brightness.dark
-                  ? accent.withValues(alpha: 0.12)
-                  : accent.withValues(alpha: 0.07),
-              borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-            ),
-            child: Icon(icon, size: iconSize * 0.45, color: accent),
+          _EmptyIllustration(
+            icon: icon,
+            size: iconSize,
+            accent: accent,
+            brightness: brightness,
           ),
           const SizedBox(height: AppDimens.space12),
           Text(
