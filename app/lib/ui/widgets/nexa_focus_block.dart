@@ -4,7 +4,7 @@ import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import 'nexa_surface.dart';
 
-/// iOS-style focus block (large tappable card for quick actions).
+/// One UI-inspired quick-action block with native-feeling press feedback.
 class NexaFocusBlock extends StatelessWidget {
   final IconData icon;
   final Color? tint;
