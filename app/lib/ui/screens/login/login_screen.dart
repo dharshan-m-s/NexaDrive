@@ -350,6 +350,7 @@ class _LoginScreenState extends State<LoginScreen> {
             // reshuffles the column, unmounts the focused field and the IME
             // snaps shut; this layout cannot do that.
             final short = constraints.maxHeight < 600;
+            // Keep phone gutters compact without narrowing the form itself.
             final horizontal = wide
                 ? AppDimens.pageMarginWide
                 : AppDimens.space12;
