@@ -218,11 +218,11 @@ class _Header extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Container(
-                        width: 44,
-                        height: 44,
+                        width: 48,
+                        height: 48,
                         decoration: BoxDecoration(
                           color: AppColors.accentContainerFor(brightness),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
                           border: Border.all(
                             color: AppColors.separatorFor(brightness)
                                 .withValues(alpha: 0.72),
@@ -242,8 +242,12 @@ class _Header extends StatelessWidget {
                           children: [
                             Text(
                               title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: AppTextStyle.largeTitle.copyWith(
                                 color: foreground,
+                                letterSpacing: -0.55,
+                                height: 1.04,
                               ),
                             ),
                             if (subtitle != null) ...[
