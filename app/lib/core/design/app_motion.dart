@@ -24,6 +24,9 @@ abstract final class AppMotion {
   /// Deliberate motion: full-screen transitions.
   static const Duration slow = Duration(milliseconds: 420);
 
+  /// Low-amplitude skeleton breathing; disabled entirely for reduced motion.
+  static const Duration ambient = Duration(milliseconds: 1400);
+
   // --------------------------------------------------------------- curves
   /// iOS-style standard easing: fast start, gentle settle.
   static const Curve standard = Cubic(0.25, 0.1, 0.25, 1.0);
