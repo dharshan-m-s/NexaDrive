@@ -365,11 +365,9 @@ class _LoginScreenState extends State<LoginScreen> {
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: minHeight),
                 child: Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minWidth: constraints.maxWidth.clamp(0.0, 440.0),
-                      maxWidth: 440,
-                    ),
+                  child: SizedBox(
+                    width: (constraints.maxWidth - horizontal * 2)
+                        .clamp(0.0, 440.0),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
