@@ -76,7 +76,7 @@ class _DownloadToViewScreenState extends State<DownloadToViewScreen> {
       title: 'Download to open',
       subtitle: widget.file.name,
       headerIcon: widget.icon,
-      scrollable: false,
+      scrollable: true,
       padding: const EdgeInsets.all(AppDimens.pageMargin),
       body: Center(
         child: ConstrainedBox(
