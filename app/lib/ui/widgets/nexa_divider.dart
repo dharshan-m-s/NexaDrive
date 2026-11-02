@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 
-/// Subtle divider (iOS-style).
+/// Tonal divider for grouped content surfaces.
 class NexaDivider extends StatelessWidget {
   final double indent;
   final double endIndent;
