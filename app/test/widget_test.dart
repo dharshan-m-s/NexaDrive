@@ -83,8 +83,21 @@ void main() {
     ]) {
       expect(find.text(label), findsOneWidget);
     }
-    expect(find.text('Storage Insights'), findsNothing);
-    expect(find.text('My files'), findsNothing);
-    expect(find.text('Shared'), findsNothing);
+    final moreSheet = find.byType(BottomSheet);
+    expect(
+      find.descendant(
+        of: moreSheet,
+        matching: find.text('Storage Insights'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: moreSheet, matching: find.text('My files')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: moreSheet, matching: find.text('Shared')),
+      findsNothing,
+    );
   });
 }
