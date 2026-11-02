@@ -1217,7 +1217,7 @@ class _ViewArea extends StatelessWidget {
                 )
               else
                 PopupMenuButton<_FileHeaderAction>(
-                  tooltip: 'More file actions',
+                  tooltip: 'More actions',
                   icon: const Icon(Icons.more_horiz_rounded),
                   style: IconButton.styleFrom(
                     backgroundColor: AppColors.fillFor(brightness),
@@ -1298,10 +1298,13 @@ class _ViewArea extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: FilledButton.icon(
-                    onPressed: onUpload,
-                    icon: const Icon(Icons.upload_rounded, size: 18),
-                    label: const Text('Upload'),
+                  child: Tooltip(
+                    message: 'Upload files',
+                    child: FilledButton.icon(
+                      onPressed: onUpload,
+                      icon: const Icon(Icons.upload_rounded, size: 18),
+                      label: const Text('Upload'),
+                    ),
                   ),
                 ),
                 const SizedBox(width: AppDimens.space8),
