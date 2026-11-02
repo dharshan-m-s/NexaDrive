@@ -423,6 +423,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
 
   @override
   Widget build(BuildContext context) {
+    final currentName = _pathAt(_current).split('/').last;
     final darkChrome = Theme.of(context).copyWith(
       brightness: Brightness.dark,
     );
@@ -483,12 +484,28 @@ class _PhotoViewerState extends State<PhotoViewer> {
                         ),
                       ),
                       Expanded(
-                        child: Text(
-                          '${_current + 1} of ${_photos.length}',
-                          textAlign: TextAlign.center,
-                          style: AppTextStyle.rowTitle.copyWith(
-                            color: Colors.white,
-                          ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              currentName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: AppTextStyle.rowTitle.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: AppDimens.space2),
+                            Text(
+                              '${_current + 1} of ${_photos.length}',
+                              style: AppTextStyle.caption2.copyWith(
+                                color: Colors.white.withValues(alpha: 0.70),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       IconButton(
