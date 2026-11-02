@@ -391,8 +391,8 @@ class _QuickActionTileState extends State<_QuickActionTile> {
 
     return AnimatedScale(
       scale: _pressed ? 0.975 : 1,
-      duration: const Duration(milliseconds: 140),
-      curve: Curves.easeOutCubic,
+      duration: AppMotion.resolve(context, AppMotion.micro),
+      curve: AppMotion.standardCurve,
       child: Material(
         color: AppColors.surfaceFor(brightness),
         borderRadius: radius,
@@ -411,16 +411,7 @@ class _QuickActionTileState extends State<_QuickActionTile> {
                 ),
                 width: 0.8,
               ),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  tint.withValues(
-                    alpha: brightness == Brightness.dark ? 0.15 : 0.075,
-                  ),
-                  AppColors.surfaceFor(brightness),
-                ],
-              ),
+              color: AppColors.surfaceFor(brightness),
             ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
@@ -438,14 +429,7 @@ class _QuickActionTileState extends State<_QuickActionTile> {
                         width: 42,
                         height: 42,
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              tint.withValues(alpha: 0.23),
-                              tint.withValues(alpha: 0.09),
-                            ],
-                          ),
+                          color: tint.withValues(alpha: brightness == Brightness.dark ? 0.20 : 0.11),
                           borderRadius: BorderRadius.circular(
                             AppDimens.radiusMedium,
                           ),
