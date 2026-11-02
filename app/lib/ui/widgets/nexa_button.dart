@@ -54,6 +54,7 @@ class NexaFilledButton extends StatelessWidget {
       style: FilledButton.styleFrom(
         backgroundColor: accent,
         foregroundColor: onPrimary,
+        overlayColor: onPrimary.withValues(alpha: 0.12),
         disabledBackgroundColor: accent.withValues(alpha: 0.4),
         disabledForegroundColor: onPrimary.withValues(alpha: 0.6),
         minimumSize:
@@ -118,6 +119,7 @@ class NexaOutlinedButton extends StatelessWidget {
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         foregroundColor: fg,
+        overlayColor: fg.withValues(alpha: 0.08),
         side: BorderSide(color: borderColor ?? accent, width: 1.5),
         minimumSize:
             Size(fullWidth ? double.infinity : 64, AppDimens.touchTargetLarge),
@@ -217,6 +219,7 @@ class NexaDestructiveButton extends StatelessWidget {
       style: FilledButton.styleFrom(
         backgroundColor: error,
         foregroundColor: Colors.white,
+        overlayColor: Colors.white.withValues(alpha: 0.12),
         disabledBackgroundColor: error.withValues(alpha: 0.4),
         disabledForegroundColor: Colors.white.withValues(alpha: 0.6),
         minimumSize:
@@ -280,6 +283,7 @@ class NexaIconButton extends StatelessWidget {
       style: IconButton.styleFrom(
         backgroundColor: bg,
         foregroundColor: fg,
+        overlayColor: fg.withValues(alpha: 0.10),
         minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
         padding: const EdgeInsets.all(AppDimens.space8),
         shape: RoundedRectangleBorder(
