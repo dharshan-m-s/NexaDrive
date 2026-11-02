@@ -143,24 +143,50 @@ class _Header extends StatelessWidget {
 
   IconData _iconForTitle(String value) {
     final title = value.toLowerCase();
-    if (title.contains('storage') || title.contains('insight')) return Icons.donut_large_rounded;
-    if (title.contains('file') || title.contains('folder')) return Icons.folder_copy_rounded;
-    if (title.contains('shared') || title.contains('collabor')) return Icons.people_alt_rounded;
-    if (title.contains('photo') || title.contains('gallery')) return Icons.photo_library_rounded;
-    if (title.contains('trash') || title.contains('recover')) return Icons.delete_sweep_rounded;
-    if (title.contains('setting') || title.contains('preference')) return Icons.tune_rounded;
+    if (title.contains('storage') || title.contains('insight')) {
+      return Icons.donut_large_rounded;
+    }
+    if (title.contains('file') || title.contains('folder')) {
+      return Icons.folder_copy_rounded;
+    }
+    if (title.contains('shared') || title.contains('collabor')) {
+      return Icons.people_alt_rounded;
+    }
+    if (title.contains('photo') || title.contains('gallery')) {
+      return Icons.photo_library_rounded;
+    }
+    if (title.contains('trash') || title.contains('recover')) {
+      return Icons.delete_sweep_rounded;
+    }
+    if (title.contains('setting') || title.contains('preference')) {
+      return Icons.tune_rounded;
+    }
     if (title.contains('sync')) return Icons.sync_rounded;
-    if (title.contains('notification')) return Icons.notifications_active_rounded;
-    if (title.contains('transfer') || title.contains('upload') || title.contains('download')) return Icons.cloud_upload_rounded;
+    if (title.contains('notification')) {
+      return Icons.notifications_active_rounded;
+    }
+    if (title.contains('transfer') ||
+        title.contains('upload') ||
+        title.contains('download')) {
+      return Icons.cloud_upload_rounded;
+    }
     if (title.contains('search')) return Icons.search_rounded;
     if (title.contains('scan')) return Icons.document_scanner_rounded;
-    if (title.contains('security') || title.contains('lock')) return Icons.shield_rounded;
+    if (title.contains('security') || title.contains('lock')) {
+      return Icons.shield_rounded;
+    }
     if (title.contains('update')) return Icons.system_update_alt_rounded;
-    if (title.contains('user') || title.contains('admin')) return Icons.manage_accounts_rounded;
-    if (title.contains('audit') || title.contains('log')) return Icons.fact_check_rounded;
+    if (title.contains('user') || title.contains('admin')) {
+      return Icons.manage_accounts_rounded;
+    }
+    if (title.contains('audit') || title.contains('log')) {
+      return Icons.fact_check_rounded;
+    }
     if (title.contains('pdf')) return Icons.picture_as_pdf_rounded;
     if (title.contains('video')) return Icons.play_circle_rounded;
-    if (title.contains('audio') || title.contains('music')) return Icons.graphic_eq_rounded;
+    if (title.contains('audio') || title.contains('music')) {
+      return Icons.graphic_eq_rounded;
+    }
     if (title.contains('text')) return Icons.article_rounded;
     return Icons.cloud_rounded;
   }
@@ -225,7 +251,9 @@ class _Header extends StatelessWidget {
                               Text(
                                 subtitle!,
                                 style: AppTextStyle.caption1.copyWith(
-                                  color: AppColors.labelSecondaryFor(brightness),
+                                  color: AppColors.labelSecondaryFor(
+                                    brightness,
+                                  ),
                                 ),
                               ),
                             ],

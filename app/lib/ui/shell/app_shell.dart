@@ -366,7 +366,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                         decoration: BoxDecoration(
                           color: AppColors.labelTertiaryFor(brightness)
                               .withValues(alpha: 0.72),
-                          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                          borderRadius: BorderRadius.circular(
+                            AppDimens.radiusPill,
+                          ),
                         ),
                       ),
                       const SizedBox(height: AppDimens.space12),
@@ -379,14 +381,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                                 Text(
                                   'More',
                                   style: AppTextStyle.headline.copyWith(
-                                    color: AppColors.labelPrimaryFor(brightness),
+                                    color: AppColors.labelPrimaryFor(
+                                      brightness,
+                                    ),
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
                                 Text(
                                   'Tools and activity',
                                   style: AppTextStyle.caption1.copyWith(
-                                    color: AppColors.labelSecondaryFor(brightness),
+                                    color: AppColors.labelSecondaryFor(
+                                      brightness,
+                                    ),
                                   ),
                                 ),
                               ],
