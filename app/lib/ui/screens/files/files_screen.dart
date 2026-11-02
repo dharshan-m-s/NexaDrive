@@ -1280,9 +1280,13 @@ class _ViewArea extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton.filled(
+                  IconButton(
                     tooltip: 'Upload files',
                     onPressed: onUpload,
+                    color: AppColors.accentFor(Theme.of(context).brightness),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                    ),
                     icon: const Icon(Icons.upload_rounded),
                   ),
                   IconButton(

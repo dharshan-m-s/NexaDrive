@@ -145,25 +145,24 @@ class _Header extends StatelessWidget {
     required this.foreground,
   });
 
-  Widget _glassAction() {
-    final current = action;
-    if (current == null || current is NexaLiquidGlass) {
-      return current ?? const SizedBox.shrink();
-    }
+  Widget _glassControl(Widget control) {
+    if (control is NexaLiquidGlass) return control;
     return NexaLiquidGlass(
       borderRadius: BorderRadius.circular(AppDimens.radiusPill),
       padding: EdgeInsets.zero,
-      blurSigma: 16,
-      tintOpacity: 0.24,
+      blurSigma: 2,
+      tintOpacity: 0.105,
       showShadow: false,
-      child: current,
+      child: control,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final glassAction = _glassAction();
+    final glassAction = action == null ? null : _glassControl(action!);
+    final glassLeading = leading == null ? null : _glassControl(leading!);
+    final glassActions = actions?.map(_glassControl).toList(growable: false);
 
     if (largeTitle) {
       return Padding(
@@ -177,7 +176,7 @@ class _Header extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (leading != null) ...[
-              leading!,
+              glassLeading!,
               const SizedBox(height: AppDimens.space8),
             ],
             Row(
@@ -206,11 +205,11 @@ class _Header extends StatelessWidget {
                 ),
                 if (action != null) ...[
                   const SizedBox(width: AppDimens.space8),
-                  glassAction,
+                  glassAction!,
                 ],
                 if (actions != null) ...[
                   const SizedBox(width: AppDimens.space8),
-                  ...actions!,
+                  ...glassActions!,
                 ],
               ],
             ),
@@ -230,7 +229,7 @@ class _Header extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (leading != null) ...[
-            leading!,
+            glassLeading!,
             const SizedBox(width: AppDimens.space8),
           ],
           Expanded(
@@ -254,8 +253,8 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
-          if (action != null) glassAction,
-          if (actions != null) ...actions!,
+          if (action != null) glassAction!,
+          if (glassActions != null) ...glassActions,
         ],
       ),
     );

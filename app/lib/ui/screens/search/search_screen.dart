@@ -151,6 +151,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       child: NexaSearchField(
                         controller: _controller,
                         hint: 'Search your files',
+                        filled: false,
                         onChanged: _onChanged,
                         onClear: _clear,
                       ),

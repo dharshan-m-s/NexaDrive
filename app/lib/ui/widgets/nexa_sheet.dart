@@ -157,8 +157,8 @@ class NexaSheetBody extends StatelessWidget {
         top: Radius.circular(AppDimens.radiusXLarge),
       ),
       padding: EdgeInsets.zero,
-      blurSigma: 22,
-      tintOpacity: brightness == Brightness.dark ? 0.40 : 0.52,
+      blurSigma: 2,
+      tintOpacity: brightness == Brightness.dark ? 0.17 : 0.12,
       showShadow: false,
       child: Padding(
         padding: EdgeInsets.only(

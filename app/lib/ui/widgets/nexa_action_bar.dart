@@ -73,7 +73,7 @@ class NexaActionBar extends StatelessWidget {
       ),
       child: NexaLiquidGlass(
         borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-        blurSigma: 18,
+        blurSigma: 2,
         padding: const EdgeInsets.fromLTRB(
           AppDimens.space8,
           AppDimens.space6,

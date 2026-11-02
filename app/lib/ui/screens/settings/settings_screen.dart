@@ -14,7 +14,7 @@ import '../../widgets/nexa_grouped_list.dart';
 import '../../widgets/nexa_list_tile.dart';
 import '../../widgets/nexa_page.dart';
 import '../../widgets/nexa_chip.dart';
-import '../../widgets/nexa_surface.dart';
+import '../../widgets/nexa_liquid_glass.dart';
 import '../../widgets/nexa_sheet.dart';
 import '../admin/audit_log_screen.dart';
 import '../admin/users_screen.dart';
@@ -198,10 +198,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          NexaSurface(
-            level: NexaSurfaceLevel.grouped,
-            radius: AppDimens.radiusLarge,
+          NexaLiquidGlass(
+            borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+            blurSigma: 2,
+            tintOpacity: brightness == Brightness.dark ? 0.14 : 0.10,
             padding: const EdgeInsets.all(AppDimens.space16),
+            showShadow: true,
             child: Row(
               children: [
                 Container(

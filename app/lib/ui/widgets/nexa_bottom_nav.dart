@@ -11,7 +11,7 @@ import 'nexa_liquid_glass.dart';
 
 /// Floating Liquid Glass navigation dock.
 ///
-/// The dock is intentionally the one continuously blurred surface in the
+/// The dock is intentionally the one continuously refracted surface in the
 /// shell. A clipped backdrop, theme-aware tint, directional highlight,
 /// hairline edge and soft shadow create depth without frosting page content.
 /// The selected tab travels on a spring and stretches subtly before settling.
@@ -31,7 +31,7 @@ class NexaBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return NexaLiquidGlass(
       borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-      blurSigma: 18,
+      blurSigma: 2,
       padding: EdgeInsets.zero,
       child: SizedBox(
         width: double.infinity,
@@ -156,20 +156,20 @@ class _NavRowState extends State<_NavRow> with SingleTickerProviderStateMixin {
                             end: Alignment.bottomRight,
                             colors: brightness == Brightness.dark
                                 ? [
-                                    Colors.white.withValues(alpha: 0.17),
+                                    Colors.white.withValues(alpha: 0.12),
                                     const Color(0xFF9A8CFF)
-                                        .withValues(alpha: 0.20),
+                                        .withValues(alpha: 0.13),
                                   ]
                                 : [
-                                    Colors.white.withValues(alpha: 0.46),
+                                    Colors.white.withValues(alpha: 0.26),
                                     const Color(0xFF6658E8)
-                                        .withValues(alpha: 0.10),
+                                        .withValues(alpha: 0.075),
                                   ],
                           ),
                           border: Border.all(
                             color: brightness == Brightness.dark
                                 ? Colors.white.withValues(alpha: 0.16)
-                                : Colors.white.withValues(alpha: 0.78),
+                                : Colors.white.withValues(alpha: 0.56),
                             width: 0.7,
                           ),
                           boxShadow: [
