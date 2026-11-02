@@ -182,7 +182,7 @@ class _SkeletonItemState extends State<_SkeletonItem>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: AppMotion.normal,
+      duration: AppMotion.ambient,
       vsync: this,
     );
     _animation = Tween(begin: 0.6, end: 1.0).animate(
