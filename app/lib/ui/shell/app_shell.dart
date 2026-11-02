@@ -271,163 +271,74 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (_moreSheetOpen) return;
     setState(() => _moreSheetOpen = true);
     try {
-      final brightness = Theme.of(context).brightness;
-      final palette = <Color>[
-        AppColors.accentFor(brightness),
-        Theme.of(context).colorScheme.secondary,
-        AppColors.successFor(brightness),
-        AppColors.warningFor(brightness),
-        AppColors.errorFor(brightness),
-        Theme.of(context).colorScheme.tertiary,
-      ];
-
-      await showModalBottomSheet<void>(
-        context: context,
-        useSafeArea: true,
-        isScrollControlled: false,
-        backgroundColor: Colors.transparent,
-        barrierColor: AppColors.scrimFor(brightness).withValues(alpha: 0.34),
-        constraints: const BoxConstraints(maxWidth: 520),
-        builder: (sheetContext) {
-          void closeAndRun(VoidCallback action) {
-            Navigator.of(sheetContext).pop();
-            action();
-          }
-
-          final items = <_MoreMenuItem>[
-            _MoreMenuItem(
-              icon: Icons.document_scanner_rounded,
-              label: 'Scan document',
-              color: palette[0],
-              onTap: () => closeAndRun(() {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => ScannerScreen(api: api)),
-                );
-              }),
-            ),
-            _MoreMenuItem(
-              icon: Icons.cloud_upload_rounded,
-              label: 'Transfers',
-              color: palette[1],
-              onTap: () => closeAndRun(_openTransfers),
-            ),
-            _MoreMenuItem(
-              icon: Icons.delete_sweep_rounded,
-              label: 'Trash',
-              color: palette[2],
-              onTap: () => closeAndRun(() => _goTo(4)),
-            ),
-            _MoreMenuItem(
-              icon: Icons.sync_rounded,
-              label: 'Sync center',
-              color: palette[3],
-              onTap: () => closeAndRun(_openSyncCenter),
-            ),
-            _MoreMenuItem(
-              icon: Icons.notifications_active_rounded,
-              label: 'Notifications',
-              color: palette[4],
-              onTap: () => closeAndRun(_openNotifications),
-            ),
-            _MoreMenuItem(
-              icon: Icons.settings_rounded,
-              label: 'Settings',
-              color: palette[5],
-              onTap: () => closeAndRun(() => _goTo(5)),
-            ),
-          ];
-
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppDimens.pageMargin,
-              0,
-              AppDimens.pageMargin,
-              AppDimens.space10,
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: NexaLiquidGlass(
-                  borderRadius: BorderRadius.circular(30),
-                  blurSigma: 2.2,
-                  tintOpacity: brightness == Brightness.dark ? 0.12 : 0.085,
-                  padding: const EdgeInsets.fromLTRB(
-                    AppDimens.space12,
-                    AppDimens.space10,
-                    AppDimens.space12,
-                    AppDimens.space12,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 34,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: AppColors.labelTertiaryFor(brightness)
-                              .withValues(alpha: 0.72),
-                          borderRadius: BorderRadius.circular(
-                            AppDimens.radiusPill,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: AppDimens.space12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'More',
-                                  style: AppTextStyle.headline.copyWith(
-                                    color: AppColors.labelPrimaryFor(
-                                      brightness,
-                                    ),
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                Text(
-                                  'Tools and activity',
-                                  style: AppTextStyle.caption2.copyWith(
-                                    color: AppColors.labelSecondaryFor(
-                                      brightness,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Close',
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => Navigator.of(sheetContext).pop(),
-                            icon: Icon(
-                              Icons.close_rounded,
-                              color: AppColors.labelSecondaryFor(brightness),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppDimens.space8),
-                      GridView.count(
-                        crossAxisCount: 3,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        mainAxisSpacing: AppDimens.space6,
-                        crossAxisSpacing: AppDimens.space6,
-                        childAspectRatio: 1.18,
-                        children: [
-                          for (final item in items) _MoreMenuTile(item: item),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+      // Keep the v1.0.19 interaction model: a compact, readable action list.
+      // The menu intentionally exposes only these six destinations; storage
+      // insights, My files and Shared remain accessible from their own flows.
+      await showNexaSheet<void>(
+        context,
+        builder: (sheetContext) => NexaSheetBody(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const NexaSheetHeader(title: 'More'),
+              NexaSheetAction(
+                icon: Icons.camera_alt_rounded,
+                title: 'Scan document',
+                subtitle: 'Snap a page and save it to My files',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ScannerScreen(api: api),
+                    ),
+                  );
+                },
               ),
-            ),
-          );
-        },
+              NexaSheetAction(
+                icon: Icons.cloud_upload_outlined,
+                title: 'Transfers',
+                subtitle: 'Uploads waiting for a connection',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _openTransfers();
+                },
+              ),
+              NexaSheetAction(
+                icon: Icons.delete_outline_rounded,
+                title: 'Trash',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _goTo(4);
+                },
+              ),
+              NexaSheetAction(
+                icon: Icons.sync_rounded,
+                title: 'Sync center',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _openSyncCenter();
+                },
+              ),
+              NexaSheetAction(
+                icon: Icons.notifications_outlined,
+                title: 'Notifications',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _openNotifications();
+                },
+              ),
+              NexaSheetAction(
+                icon: Icons.settings_outlined,
+                title: 'Settings',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _goTo(5);
+                },
+              ),
+            ],
+          ),
+        ),
       );
     } finally {
       if (mounted) {
