@@ -295,11 +295,19 @@ class _PageCard extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AppDimens.radiusCard),
+      borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.surfaceDark,
-          borderRadius: BorderRadius.circular(AppDimens.radiusCard),
+          borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.10), width: 0.8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.22),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
