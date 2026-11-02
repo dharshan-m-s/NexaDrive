@@ -216,11 +216,10 @@ class _TrashScreenState extends State<TrashScreen> {
           if (!_loading && _error == null && _items.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: AppDimens.space12),
-              child: NexaLiquidGlass(
-                borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-                blurSigma: 14,
-                padding: const EdgeInsets.all(AppDimens.space8),
-                showShadow: false,
+              child: NexaSurface(
+                level: NexaSurfaceLevel.surface,
+                radius: AppDimens.radiusLarge,
+                padding: const EdgeInsets.all(AppDimens.space16),
                 child: Row(
                   children: [
                     Expanded(
