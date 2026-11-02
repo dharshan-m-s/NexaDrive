@@ -43,9 +43,8 @@ class NexaLiquidGlass extends StatelessWidget {
     final opaque = forceOpaque || highContrast || !enabled;
     final dark = brightness == Brightness.dark;
     final tint = AppColors.glassSurfaceFor(brightness);
-    final tintAlpha = (tintOpacity ?? (dark ? 0.14 : 0.105))
-        .clamp(0.0, 0.24)
-        .toDouble();
+    final tintAlpha =
+        (tintOpacity ?? (dark ? 0.14 : 0.105)).clamp(0.0, 0.24).toDouble();
     final edge = dark
         ? Colors.white.withValues(alpha: 0.24)
         : Colors.white.withValues(alpha: 0.72);
