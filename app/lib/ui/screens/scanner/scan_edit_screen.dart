@@ -170,7 +170,7 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
                 onChanged: (r) => setState(() => _crop = r),
               )
             : ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
                 child: Image.memory(bytes,
                     fit: BoxFit.contain, gaplessPlayback: true),
               ),
@@ -179,19 +179,25 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
   }
 
   Widget _filterBar(Brightness brightness) {
-    return Container(
-      color: AppColors.surfaceDark,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space16,
-        vertical: AppDimens.space8,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _chip('Original', ScanFilter.color, brightness),
-          _chip('Grayscale', ScanFilter.grayscale, brightness),
-          _chip('B&W', ScanFilter.blackAndWhite, brightness),
-        ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
+      child: NexaLiquidGlass(
+        borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+        blurSigma: 14,
+        tintOpacity: 0.10,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space8,
+          vertical: AppDimens.space6,
+        ),
+        showShadow: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _chip('Original', ScanFilter.color, brightness),
+            _chip('Grayscale', ScanFilter.grayscale, brightness),
+            _chip('B&W', ScanFilter.blackAndWhite, brightness),
+          ],
+        ),
       ),
     );
   }
@@ -213,31 +219,42 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
   }
 
   Widget _actionBar(Brightness brightness) {
-    return Container(
-      color: AppColors.surfaceDark,
+    return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.space12,
-        0,
+        AppDimens.space8,
         AppDimens.space12,
-        AppDimens.space16,
+        AppDimens.space12,
       ),
-      child: Row(
-        children: [
-          _actionBtn(Icons.rotate_left_rounded, 'Rotate left', _rotateLeft),
-          _actionBtn(Icons.rotate_right_rounded, 'Rotate right', _rotateRight),
-          _actionBtn(Icons.center_focus_strong_rounded, 'Auto-crop', _autoCrop),
-          if (_crop != null)
-            _actionBtn(Icons.restart_alt_rounded, 'Reset crop',
-                () => setState(() => _crop = null)),
-          const Spacer(),
-          FilledButton(
-            onPressed: () {
-              _apply();
-              Navigator.of(context).pop(true);
-            },
-            child: const Text('Done'),
+      child: NexaLiquidGlass(
+        borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+        blurSigma: 16,
+        tintOpacity: 0.12,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space8,
+          vertical: AppDimens.space6,
+        ),
+        showShadow: true,
+        child: SafeArea(
+          top: false,
+          child: Row(
+            children: [
+              _actionBtn(Icons.rotate_left_rounded, 'Rotate left', _rotateLeft),
+              _actionBtn(Icons.rotate_right_rounded, 'Rotate right', _rotateRight),
+              _actionBtn(Icons.center_focus_strong_rounded, 'Auto-crop', _autoCrop),
+              if (_crop != null)
+                _actionBtn(Icons.restart_alt_rounded, 'Reset crop', () => setState(() => _crop = null)),
+              const Spacer(),
+              FilledButton(
+                onPressed: () {
+                  _apply();
+                  Navigator.of(context).pop(true);
+                },
+                child: const Text('Apply'),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
