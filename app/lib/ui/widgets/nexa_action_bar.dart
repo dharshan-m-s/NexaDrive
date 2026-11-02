@@ -171,6 +171,10 @@ class NexaActionItem extends StatelessWidget {
           decoration: BoxDecoration(
             color: enabled ? bg : bg.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            border: Border.all(
+              color: fg.withValues(alpha: enabled ? 0.16 : 0.08),
+              width: 0.7,
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
