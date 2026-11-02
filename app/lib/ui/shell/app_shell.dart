@@ -33,6 +33,7 @@ import '../../update/update_controller.dart';
 import '../../update/update_downloader.dart';
 import '../../update/update_source.dart';
 import '../widgets/nexa_components.dart';
+import '../widgets/nexa_liquid_glass.dart';
 import 'navigation.dart';
 
 /// Application shell: brand, navigation context, and the active screen.
@@ -345,98 +346,81 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         constraints: const BoxConstraints(maxWidth: 420),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppDimens.pageMargin),
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: dark
-                    ? const Color(0xF21B1C22)
-                    : const Color(0xF7FFFFFF),
-                borderRadius: BorderRadius.circular(26),
-                border: Border.all(
-                  color: (dark ? Colors.white : Colors.black)
-                      .withValues(alpha: 0.12),
+          child: NexaLiquidGlass(
+            borderRadius: BorderRadius.circular(28),
+            blurSigma: 20,
+            tintOpacity: dark ? 0.16 : 0.12,
+            padding: const EdgeInsets.all(12),
+            showShadow: true,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'More',
+                        style: AppTextStyle.title3.copyWith(
+                          color: AppColors.labelPrimaryFor(brightness),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _closeMoreMenu,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: dark ? 0.42 : 0.16),
-                    blurRadius: 34,
-                    spreadRadius: -8,
-                    offset: const Offset(0, 14),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'More',
-                          style: AppTextStyle.title3.copyWith(
-                            color: AppColors.labelPrimaryFor(brightness),
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(child: _moreMenuTile(
+                      icon: Icons.document_scanner_outlined,
+                      title: 'Scan',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => ScannerScreen(api: api)),
                       ),
-                      IconButton(
-                        tooltip: 'Close',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: _closeMoreMenu,
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Expanded(child: _moreMenuTile(
-                        icon: Icons.document_scanner_outlined,
-                        title: 'Scan',
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => ScannerScreen(api: api)),
-                        ),
-                      )),
-                      const SizedBox(width: 9),
-                      Expanded(child: _moreMenuTile(
-                        icon: Icons.cloud_upload_outlined,
-                        title: 'Transfers',
-                        onTap: _openTransfers,
-                      )),
-                      const SizedBox(width: 9),
-                      Expanded(child: _moreMenuTile(
-                        icon: Icons.delete_outline_rounded,
-                        title: 'Trash',
-                        onTap: () => _goTo(4),
-                      )),
-                    ],
-                  ),
-                  const SizedBox(height: 9),
-                  Row(
-                    children: [
-                      Expanded(child: _moreMenuTile(
-                        icon: Icons.sync_rounded,
-                        title: 'Sync',
-                        onTap: _openSyncCenter,
-                      )),
-                      const SizedBox(width: 9),
-                      Expanded(child: _moreMenuTile(
-                        icon: Icons.notifications_outlined,
-                        title: 'Alerts',
-                        onTap: _openNotifications,
-                      )),
-                      const SizedBox(width: 9),
-                      Expanded(child: _moreMenuTile(
-                        icon: Icons.settings_outlined,
-                        title: 'Settings',
-                        onTap: () => _goTo(5),
-                      )),
-                    ],
-                  ),
-                ],
-              ),
+                    )),
+                    const SizedBox(width: 9),
+                    Expanded(child: _moreMenuTile(
+                      icon: Icons.cloud_upload_outlined,
+                      title: 'Transfers',
+                      onTap: _openTransfers,
+                    )),
+                    const SizedBox(width: 9),
+                    Expanded(child: _moreMenuTile(
+                      icon: Icons.delete_outline_rounded,
+                      title: 'Trash',
+                      onTap: () => _goTo(4),
+                    )),
+                  ],
+                ),
+                const SizedBox(height: 9),
+                Row(
+                  children: [
+                    Expanded(child: _moreMenuTile(
+                      icon: Icons.sync_rounded,
+                      title: 'Sync',
+                      onTap: _openSyncCenter,
+                    )),
+                    const SizedBox(width: 9),
+                    Expanded(child: _moreMenuTile(
+                      icon: Icons.notifications_outlined,
+                      title: 'Alerts',
+                      onTap: _openNotifications,
+                    )),
+                    const SizedBox(width: 9),
+                    Expanded(child: _moreMenuTile(
+                      icon: Icons.settings_outlined,
+                      title: 'Settings',
+                      onTap: () => _goTo(5),
+                    )),
+                  ],
+                ),
+              ],
             ),
           ),
         ),

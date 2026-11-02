@@ -11,6 +11,7 @@ import 'package:nexadrive/services/session.dart';
 import 'package:nexadrive/ui/screens/files/file_share_sheet.dart';
 import 'package:nexadrive/ui/screens/files/files_screen.dart';
 import 'package:nexadrive/ui/screens/trash/trash_screen.dart';
+import 'package:nexadrive/ui/widgets/nexa_liquid_glass.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Layout and state regression tests for the redesigned screens.
@@ -239,6 +240,8 @@ void main() {
       expect(find.text('Sync'), findsOneWidget);
       expect(find.text('Alerts'), findsOneWidget);
       expect(find.text('Settings'), findsOneWidget);
+      // The compact popup and the dock both use the same bounded glass material.
+      expect(find.byType(NexaLiquidGlass), findsWidgets);
       // The floating navigation remains mounted beneath the menu.
       expect(find.text('Home'), findsOneWidget);
       expect(find.text('Files'), findsOneWidget);
