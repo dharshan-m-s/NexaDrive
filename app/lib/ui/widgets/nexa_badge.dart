@@ -78,6 +78,10 @@ class NexaBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+        border: Border.all(
+          color: fg.withValues(alpha: 0.18),
+          width: 0.7,
+        ),
       ),
       child: Center(
         child: Text(

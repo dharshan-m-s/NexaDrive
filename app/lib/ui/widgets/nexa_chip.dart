@@ -101,7 +101,7 @@ class NexaChip extends StatelessWidget {
     final widget = Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppDimens.space12,
-        vertical: AppDimens.space6,
+        vertical: AppDimens.space8,
       ),
       decoration: BoxDecoration(
         color: bg,

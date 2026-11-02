@@ -65,7 +65,7 @@ class NexaListTile extends StatelessWidget {
     if (icon == Icons.sync_rounded ||
         icon == Icons.cloud_upload_outlined ||
         icon == Icons.cloud_done_outlined) {
-      return const Color(0xFF299AA0);
+      return AppColors.infoFor(brightness);
     }
     return fallback;
   }
@@ -87,18 +87,14 @@ class NexaListTile extends StatelessWidget {
         width: AppDimens.iconTileLarge,
         height: AppDimens.iconTileLarge,
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              background,
-              tint.withValues(
-                alpha: brightness == Brightness.dark ? 0.13 : 0.055,
-              ),
-            ],
+          color: background,
+          borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+          border: Border.all(
+            color: tint.withValues(
+              alpha: brightness == Brightness.dark ? 0.30 : 0.18,
+            ),
+            width: 0.8,
           ),
-          borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-          border: Border.all(color: tint.withValues(alpha: 0.16), width: 0.7),
         ),
         child: Icon(
           resolvedIcon,

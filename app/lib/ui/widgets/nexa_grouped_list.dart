@@ -34,11 +34,11 @@ class NexaGroupedList extends StatelessWidget {
         if (header != null) NexaSectionHeader(header!, padding: padding),
         NexaSurface(
           level: NexaSurfaceLevel.grouped,
-          radius: AppDimens.radiusLarge,
+          radius: AppDimens.radiusXLarge,
           padding:
               padding ?? const EdgeInsets.symmetric(vertical: AppDimens.space4),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+            borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
             child: Material(
               type: MaterialType.transparency,
               child: Column(
