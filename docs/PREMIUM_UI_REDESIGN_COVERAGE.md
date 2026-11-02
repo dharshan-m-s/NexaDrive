@@ -2,7 +2,7 @@
 
 **Branch:** `beta`  
 **Design direction:** One UI-inspired visual hierarchy and card composition, with native iOS interaction discipline.  
-**Glass rule:** Preserve optical Liquid Glass for the floating navigation dock and transient controls/sheets. Keep persistent content surfaces tonal, readable and data-led.
+**Glass rule:** Preserve optical Liquid Glass for the floating navigation dock and selected transient controls. Keep the More action sheet and persistent content surfaces solid, tonal, readable and data-led.
 
 This document is the explicit coverage register for the current redesign. A page is not considered redesigned merely because its title color or typography changed. Shared components are counted as applied where the screen actually uses them.
 
@@ -75,7 +75,7 @@ These files are part of the screen architecture but are not visual screens and t
 | `nexa_page.dart` | Shared page identity icon, responsive title hierarchy, solid page canvas and no blanket glass wrapping around every header control. |
 | `nexa_progress.dart` | Progress track receives a clearer default visual weight. |
 | `nexa_search_field.dart` | Rounded inset control with a visible resting edge. |
-| `nexa_sheet.dart` | Contextual sheet-header icons and icon-led confirmation dialogs; transient sheet glass retained. |
+| `nexa_sheet.dart` | Contextual sheet-header icons and icon-led confirmation dialogs; action sheets use the original opaque, content-sized surface and readable action rows. |
 | `nexa_status_pod.dart` | Larger semantic icon well and stronger title/subtitle hierarchy. |
 | `nexa_surface.dart` / `nexa_surfaces.dart` | Canonical surface becomes stateful, with tonal press feedback and reduced-motion-aware scale. |
 | `nexa_text_field.dart` | Refined field edge/radius and corrected focus feedback when an external FocusNode is supplied. |
@@ -85,7 +85,7 @@ These files are part of the screen architecture but are not visual screens and t
 
 ## 3. Design-system files
 
-- `app_colors.dart` — existing semantic indigo, porcelain/graphite, status and surface tokens retained.
+- `app_colors.dart` — restored v1.0.19 semantic system-blue palette, grouped surfaces, status and surface tokens; current glass-specific tokens remain available.
 - `app_dimensions.dart` — shared spacing and shape tokens remain authoritative.
 - `app_motion.dart` — One UI visual restraint plus native iOS interaction guidance; dedicated ambient skeleton token and reduced-motion resolution.
 - `app_shadows.dart` — shared elevation tokens retained.
@@ -105,7 +105,7 @@ These are not omissions; changing them would regress a previously approved or fu
 - Existing file-operation semantics and platform-specific fallbacks.
 - The temporary formatter auto-commit workflow and its trigger file were removed; the repository's standard CI format gate remains authoritative.
 
-Persistent content cards are not turned into glass. Glass is reserved for navigation and transient controls/sheets.
+Persistent content cards and the More action sheet are not turned into glass. Optical Liquid Glass is reserved for the floating navigation dock and selected purpose-built transient controls.
 
 ## 5. Not introduced by this UI redesign
 
