@@ -6,7 +6,7 @@ import 'nexa_surface.dart';
 import 'nexa_chip.dart';
 import 'nexa_list_tile.dart';
 
-/// iOS-style grouped list section.
+/// One UI-inspired grouped section for related settings and actions.
 class NexaGroupedList extends StatelessWidget {
   final String? header;
   final List<Widget> children;
