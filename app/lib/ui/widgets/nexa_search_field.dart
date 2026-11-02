@@ -81,7 +81,7 @@ class NexaSearchField extends StatelessWidget {
                 vertical: AppDimens.space10,
               ),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
                 borderSide: BorderSide.none,
               ),
               enabledBorder: OutlineInputBorder(
