@@ -184,31 +184,12 @@ class _SearchScreenState extends State<SearchScreen> {
     final brightness = Theme.of(context).brightness;
 
     if (!_searched) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.search_rounded,
-              size: 48,
-              color: AppColors.textTertiaryFor(brightness),
-            ),
-            const SizedBox(height: AppDimens.space12),
-            Text(
-              'Search everything in your cloud',
-              style: AppTextStyle.rowSubtitle.copyWith(
-                color: AppColors.textSecondaryFor(brightness),
-              ),
-            ),
-            const SizedBox(height: AppDimens.space6),
-            Text(
-              'Find files and folders by name',
-              style: AppTextStyle.caption1.copyWith(
-                color: AppColors.textTertiaryFor(brightness),
-              ),
-            ),
-          ],
-        ),
+      return const NexaEmptyState(
+        centered: true,
+        icon: Icons.search_rounded,
+        title: 'Search your private cloud',
+        hint: 'Find files and folders by name. Results stay on your server.',
+        iconSize: 64,
       );
     }
 
@@ -238,30 +219,14 @@ class _SearchScreenState extends State<SearchScreen> {
     }
 
     if (_results.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.search_off_rounded,
-              size: 48,
-              color: AppColors.textTertiaryFor(brightness),
-            ),
-            const SizedBox(height: AppDimens.space12),
-            Text(
-              'No matches for “$_query”',
-              style: AppTextStyle.rowSubtitle.copyWith(
-                color: AppColors.textSecondaryFor(brightness),
-              ),
-            ),
-            const SizedBox(height: AppDimens.space6),
-            TextButton.icon(
-              onPressed: _clear,
-              icon: const Icon(Icons.close_rounded, size: 16),
-              label: const Text('Clear search'),
-            ),
-          ],
-        ),
+      return NexaEmptyState(
+        centered: true,
+        icon: Icons.search_off_rounded,
+        title: 'No matches for “$_query”',
+        hint: 'Try a shorter name or remove a word from your search.',
+        actionLabel: 'Clear search',
+        onAction: _clear,
+        actionIcon: Icons.close_rounded,
       );
     }
 
