@@ -3,7 +3,7 @@ import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 
-/// NexaDrive text field — iOS-style rounded field with proper states.
+/// NexaDrive form field — One UI-inspired shape with native focus feedback.
 class NexaTextField extends StatefulWidget {
   final TextEditingController? controller;
   final String? label;
