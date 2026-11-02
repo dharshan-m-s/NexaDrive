@@ -138,7 +138,8 @@ class _FileIconTile extends StatelessWidget {
           width: 0.8,
         ),
       ),
-      child: Icon(FileKind.icon(category), size: AppDimens.iconMedium, color: tint),
+      child: Icon(FileKind.icon(category),
+          size: AppDimens.iconMedium, color: tint),
     );
   }
 }
@@ -230,15 +231,18 @@ class _GridFileArtwork extends StatelessWidget {
   final Color tint;
   final Brightness brightness;
 
-  const _GridFileArtwork({required this.category, required this.tint, required this.brightness});
+  const _GridFileArtwork(
+      {required this.category, required this.tint, required this.brightness});
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: tint.withValues(alpha: brightness == Brightness.dark ? 0.20 : 0.10),
+        color:
+            tint.withValues(alpha: brightness == Brightness.dark ? 0.20 : 0.10),
       ),
-      child: Center(child: Icon(FileKind.icon(category), size: 38, color: tint)),
+      child:
+          Center(child: Icon(FileKind.icon(category), size: 38, color: tint)),
     );
   }
 }
@@ -344,12 +348,18 @@ class NexaFileGridTile extends StatelessWidget {
                     ),
                   ),
                   if (entry.isFolder)
-                    Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.labelTertiaryFor(brightness)),
+                    Icon(Icons.chevron_right_rounded,
+                        size: 16,
+                        color: AppColors.labelTertiaryFor(brightness)),
                   if (selecting)
                     Icon(
-                      selected ? Icons.check_circle_rounded : Icons.circle_outlined,
+                      selected
+                          ? Icons.check_circle_rounded
+                          : Icons.circle_outlined,
                       size: 18,
-                      color: selected ? accent : AppColors.labelTertiaryFor(brightness),
+                      color: selected
+                          ? accent
+                          : AppColors.labelTertiaryFor(brightness),
                     ),
                 ],
               ),

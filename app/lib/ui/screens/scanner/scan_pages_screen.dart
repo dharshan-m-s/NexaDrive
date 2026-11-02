@@ -300,7 +300,8 @@ class _PageCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surfaceDark,
           borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.10), width: 0.8),
+          border: Border.all(
+              color: Colors.white.withValues(alpha: 0.10), width: 0.8),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.22),

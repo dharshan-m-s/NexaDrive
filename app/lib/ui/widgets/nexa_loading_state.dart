@@ -227,8 +227,7 @@ class _SkeletonItemState extends State<_SkeletonItem>
                   decoration: BoxDecoration(
                     color: Color.lerp(widget.baseColor, widget.highlightColor,
                         _animation.value),
-                    borderRadius:
-                        BorderRadius.circular(AppDimens.radiusMedium),
+                    borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
                   ),
                 ),
                 const SizedBox(width: AppDimens.space12),

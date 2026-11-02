@@ -44,7 +44,10 @@ class NexaAvatar extends StatelessWidget {
     final accent = AppColors.accentTextFor(brightness);
     final bg = backgroundColor ?? AppColors.accentContainerFor(brightness);
     final fg = foregroundColor ?? accent;
-    final parts = (name ?? '').trim().split(RegExp(r'\s+')).where((part) => part.isNotEmpty);
+    final parts = (name ?? '')
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty);
     final initials = parts
         .take(2)
         .map((part) => String.fromCharCode(part.runes.first))

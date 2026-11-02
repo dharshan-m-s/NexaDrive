@@ -337,7 +337,8 @@ class _ScannerScreenState extends State<ScannerScreen>
                 children: [
                   Expanded(
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+                      borderRadius:
+                          BorderRadius.circular(AppDimens.radiusMedium),
                       child: Stack(
                         fit: StackFit.expand,
                         children: [

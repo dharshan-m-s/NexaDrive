@@ -240,10 +240,13 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
           child: Row(
             children: [
               _actionBtn(Icons.rotate_left_rounded, 'Rotate left', _rotateLeft),
-              _actionBtn(Icons.rotate_right_rounded, 'Rotate right', _rotateRight),
-              _actionBtn(Icons.center_focus_strong_rounded, 'Auto-crop', _autoCrop),
+              _actionBtn(
+                  Icons.rotate_right_rounded, 'Rotate right', _rotateRight),
+              _actionBtn(
+                  Icons.center_focus_strong_rounded, 'Auto-crop', _autoCrop),
               if (_crop != null)
-                _actionBtn(Icons.restart_alt_rounded, 'Reset crop', () => setState(() => _crop = null)),
+                _actionBtn(Icons.restart_alt_rounded, 'Reset crop',
+                    () => setState(() => _crop = null)),
               const Spacer(),
               FilledButton(
                 onPressed: () {

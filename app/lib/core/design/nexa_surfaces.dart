@@ -154,7 +154,8 @@ class _NexaSurfaceState extends State<NexaSurface> {
         NexaSurfaceLevel.modal => AppDimens.radiusXLarge,
       };
 
-  static List<BoxShadow> _shadowFor(NexaSurfaceLevel level, Brightness brightness) {
+  static List<BoxShadow> _shadowFor(
+      NexaSurfaceLevel level, Brightness brightness) {
     switch (level) {
       case NexaSurfaceLevel.background:
       case NexaSurfaceLevel.surface:
@@ -168,7 +169,8 @@ class _NexaSurfaceState extends State<NexaSurface> {
   }
 
   static Border? _borderFor(NexaSurfaceLevel level, Brightness brightness) {
-    if (level == NexaSurfaceLevel.grouped || level == NexaSurfaceLevel.surface) {
+    if (level == NexaSurfaceLevel.grouped ||
+        level == NexaSurfaceLevel.surface) {
       return Border.all(
         color: AppColors.separatorFor(brightness).withValues(
           alpha: brightness == Brightness.dark ? 0.78 : 0.62,

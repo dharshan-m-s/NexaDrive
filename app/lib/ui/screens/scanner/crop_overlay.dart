@@ -225,5 +225,6 @@ class _CropPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_CropPainter old) => old.rect != rect || old.color != color;
+  bool shouldRepaint(_CropPainter old) =>
+      old.rect != rect || old.color != color;
 }

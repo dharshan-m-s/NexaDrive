@@ -42,7 +42,9 @@ class NexaFocusBlock extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.accentContainerFor(brightness),
             borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-            border: Border.all(color: accent.withValues(alpha: brightness == Brightness.dark ? 0.26 : 0.15)),
+            border: Border.all(
+                color: accent.withValues(
+                    alpha: brightness == Brightness.dark ? 0.26 : 0.15)),
           ),
           child: Icon(
             icon,

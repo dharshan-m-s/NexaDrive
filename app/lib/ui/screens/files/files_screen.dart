@@ -1156,7 +1156,8 @@ class _ViewArea extends StatelessWidget {
                 ),
                 child: Icon(
                   selecting ? Icons.check_rounded : titleIcon,
-                  color: selecting ? accent : AppColors.accentTextFor(brightness),
+                  color:
+                      selecting ? accent : AppColors.accentTextFor(brightness),
                   size: 23,
                 ),
               ),
@@ -1169,7 +1170,8 @@ class _ViewArea extends StatelessWidget {
                       duration: AppMotion.resolve(context, AppMotion.fast),
                       child: Text(
                         selecting ? Format.count(selectedCount, 'item') : title,
-                        key: ValueKey(selecting ? 'selection:$selectedCount' : title),
+                        key: ValueKey(
+                            selecting ? 'selection:$selectedCount' : title),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: NexaTypography.pageTitle.copyWith(
@@ -1208,7 +1210,8 @@ class _ViewArea extends StatelessWidget {
                   onPressed: onExitSelection,
                   style: IconButton.styleFrom(
                     backgroundColor: AppColors.fillFor(brightness),
-                    minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+                    minimumSize: const Size(
+                        AppDimens.touchTarget, AppDimens.touchTarget),
                   ),
                   icon: const Icon(Icons.close_rounded),
                 )
@@ -1218,7 +1221,8 @@ class _ViewArea extends StatelessWidget {
                   icon: const Icon(Icons.more_horiz_rounded),
                   style: IconButton.styleFrom(
                     backgroundColor: AppColors.fillFor(brightness),
-                    minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+                    minimumSize: const Size(
+                        AppDimens.touchTarget, AppDimens.touchTarget),
                   ),
                   onSelected: (action) {
                     switch (action) {
@@ -1245,33 +1249,43 @@ class _ViewArea extends StatelessWidget {
                   itemBuilder: (context) => [
                     const PopupMenuItem(
                       value: _FileHeaderAction.refresh,
-                      child: _FileMenuLabel(icon: Icons.refresh_rounded, label: 'Refresh folder'),
+                      child: _FileMenuLabel(
+                          icon: Icons.refresh_rounded, label: 'Refresh folder'),
                     ),
                     const PopupMenuDivider(),
                     if (onNewFolder != null)
                       const PopupMenuItem(
                         value: _FileHeaderAction.newFolder,
-                        child: _FileMenuLabel(icon: Icons.create_new_folder_outlined, label: 'New folder'),
+                        child: _FileMenuLabel(
+                            icon: Icons.create_new_folder_outlined,
+                            label: 'New folder'),
                       ),
                     if (onUploadFolder != null)
                       const PopupMenuItem(
                         value: _FileHeaderAction.uploadFolder,
-                        child: _FileMenuLabel(icon: Icons.drive_folder_upload_outlined, label: 'Upload folder'),
+                        child: _FileMenuLabel(
+                            icon: Icons.drive_folder_upload_outlined,
+                            label: 'Upload folder'),
                       ),
                     if (onScan != null)
                       const PopupMenuItem(
                         value: _FileHeaderAction.scan,
-                        child: _FileMenuLabel(icon: Icons.document_scanner_outlined, label: 'Scan document'),
+                        child: _FileMenuLabel(
+                            icon: Icons.document_scanner_outlined,
+                            label: 'Scan document'),
                       ),
                     if (onSort != null)
                       const PopupMenuItem(
                         value: _FileHeaderAction.sort,
-                        child: _FileMenuLabel(icon: Icons.sort_rounded, label: 'Sort by…'),
+                        child: _FileMenuLabel(
+                            icon: Icons.sort_rounded, label: 'Sort by…'),
                       ),
                     PopupMenuItem(
                       value: _FileHeaderAction.toggleView,
                       child: _FileMenuLabel(
-                        icon: isGrid ? Icons.view_list_rounded : Icons.grid_view_rounded,
+                        icon: isGrid
+                            ? Icons.view_list_rounded
+                            : Icons.grid_view_rounded,
                         label: isGrid ? 'List view' : 'Grid view',
                       ),
                     ),
@@ -1296,7 +1310,8 @@ class _ViewArea extends StatelessWidget {
                   onPressed: onSearch,
                   style: IconButton.styleFrom(
                     backgroundColor: AppColors.fillFor(brightness),
-                    minimumSize: const Size(AppDimens.touchTargetLarge, AppDimens.touchTargetLarge),
+                    minimumSize: const Size(
+                        AppDimens.touchTargetLarge, AppDimens.touchTargetLarge),
                   ),
                   icon: const Icon(Icons.search_rounded),
                 ),
@@ -1308,6 +1323,7 @@ class _ViewArea extends StatelessWidget {
     );
   }
 }
+
 class _FileMenuLabel extends StatelessWidget {
   final IconData icon;
   final String label;

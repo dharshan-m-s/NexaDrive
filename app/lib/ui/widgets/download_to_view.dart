@@ -95,10 +95,12 @@ class _DownloadToViewScreenState extends State<DownloadToViewScreen> {
                     height: 92,
                     decoration: BoxDecoration(
                       color: AppColors.accentContainerFor(brightness),
-                      borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+                      borderRadius:
+                          BorderRadius.circular(AppDimens.radiusXLarge),
                       border: Border.all(color: accent.withValues(alpha: 0.18)),
                     ),
-                    child: Icon(widget.icon, size: 42, color: AppColors.accentTextFor(brightness)),
+                    child: Icon(widget.icon,
+                        size: 42, color: AppColors.accentTextFor(brightness)),
                   ),
                 ),
                 const SizedBox(height: AppDimens.space20),
@@ -127,16 +129,19 @@ class _DownloadToViewScreenState extends State<DownloadToViewScreen> {
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.fillFor(brightness),
-                      borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+                      borderRadius:
+                          BorderRadius.circular(AppDimens.radiusMedium),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.insert_drive_file_outlined, size: 16, color: secondary),
+                        Icon(Icons.insert_drive_file_outlined,
+                            size: 16, color: secondary),
                         const SizedBox(width: AppDimens.space8),
                         Text(
                           Format.bytes(widget.file.size),
-                          style: AppTextStyle.caption1.copyWith(color: secondary),
+                          style:
+                              AppTextStyle.caption1.copyWith(color: secondary),
                         ),
                       ],
                     ),
@@ -151,7 +156,8 @@ class _DownloadToViewScreenState extends State<DownloadToViewScreen> {
                         ? const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
                           )
                         : const Icon(Icons.download_outlined),
                     label: Text(_busy ? 'Downloading…' : 'Download file'),
@@ -162,7 +168,8 @@ class _DownloadToViewScreenState extends State<DownloadToViewScreen> {
                   Text(
                     _done!,
                     textAlign: TextAlign.center,
-                    style: AppTextStyle.caption.copyWith(color: AppColors.successFor(brightness)),
+                    style: AppTextStyle.caption
+                        .copyWith(color: AppColors.successFor(brightness)),
                   ),
                 ],
               ],

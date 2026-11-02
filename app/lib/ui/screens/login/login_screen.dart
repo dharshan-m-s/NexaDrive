@@ -171,7 +171,8 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: accent.withValues(alpha: brightness == Brightness.dark ? 0.16 : 0.10),
+            color: accent.withValues(
+                alpha: brightness == Brightness.dark ? 0.16 : 0.10),
             blurRadius: 22,
             offset: const Offset(0, 8),
           ),

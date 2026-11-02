@@ -81,13 +81,19 @@ class NexaSheetHeader extends StatelessWidget {
   IconData _iconForTitle(String value) {
     final normalized = value.toLowerCase();
     if (normalized.contains('share')) return Icons.ios_share_rounded;
-    if (normalized.contains('propert') || normalized.contains('detail')) return Icons.info_outline_rounded;
-    if (normalized.contains('folder') || normalized.contains('move') || normalized.contains('copy')) return Icons.folder_open_rounded;
-    if (normalized.contains('user') || normalized.contains('member')) return Icons.person_outline_rounded;
+    if (normalized.contains('propert') || normalized.contains('detail'))
+      return Icons.info_outline_rounded;
+    if (normalized.contains('folder') ||
+        normalized.contains('move') ||
+        normalized.contains('copy')) return Icons.folder_open_rounded;
+    if (normalized.contains('user') || normalized.contains('member'))
+      return Icons.person_outline_rounded;
     if (normalized.contains('upload')) return Icons.cloud_upload_rounded;
     if (normalized.contains('download')) return Icons.download_rounded;
-    if (normalized.contains('delete') || normalized.contains('trash')) return Icons.delete_outline_rounded;
-    if (normalized.contains('rename') || normalized.contains('edit')) return Icons.edit_rounded;
+    if (normalized.contains('delete') || normalized.contains('trash'))
+      return Icons.delete_outline_rounded;
+    if (normalized.contains('rename') || normalized.contains('edit'))
+      return Icons.edit_rounded;
     return Icons.tune_rounded;
   }
 
@@ -113,7 +119,8 @@ class NexaSheetHeader extends StatelessWidget {
               color: AppColors.accentContainerFor(brightness),
               borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
               border: Border.all(
-                color: AppColors.accentTextFor(brightness).withValues(alpha: 0.12),
+                color:
+                    AppColors.accentTextFor(brightness).withValues(alpha: 0.12),
               ),
             ),
             child: Icon(
@@ -498,8 +505,8 @@ class NexaConfirmationDialog extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: (isDestructive
-                      ? AppColors.errorContainerFor(brightness)
-                      : AppColors.accentContainerFor(brightness)),
+                  ? AppColors.errorContainerFor(brightness)
+                  : AppColors.accentContainerFor(brightness)),
               borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
             ),
             child: Icon(

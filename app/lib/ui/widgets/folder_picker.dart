@@ -145,7 +145,8 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
                       height: 44,
                       decoration: BoxDecoration(
                         color: AppColors.accentContainerFor(brightness),
-                        borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+                        borderRadius:
+                            BorderRadius.circular(AppDimens.radiusMedium),
                       ),
                       child: Icon(
                         Icons.folder_open_rounded,

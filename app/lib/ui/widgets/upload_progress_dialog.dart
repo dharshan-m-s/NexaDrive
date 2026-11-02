@@ -40,16 +40,24 @@ class _TransferMetric extends StatelessWidget {
           vertical: AppDimens.space8,
         ),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: brightness == Brightness.dark ? 0.16 : 0.09),
+          color: color.withValues(
+              alpha: brightness == Brightness.dark ? 0.16 : 0.09),
           borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
           border: Border.all(color: color.withValues(alpha: 0.16)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: AppTextStyle.caption2.copyWith(color: color, fontWeight: FontWeight.w700, letterSpacing: 0.7)),
+            Text(label,
+                style: AppTextStyle.caption2.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.7)),
             const SizedBox(height: AppDimens.space2),
-            Text(value, style: AppTextStyle.title2.copyWith(color: AppColors.labelPrimaryFor(brightness), fontWeight: FontWeight.w700)),
+            Text(value,
+                style: AppTextStyle.title2.copyWith(
+                    color: AppColors.labelPrimaryFor(brightness),
+                    fontWeight: FontWeight.w700)),
           ],
         ),
       ),
@@ -266,11 +274,20 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
             const SizedBox(height: AppDimens.space12),
             Row(
               children: [
-                _TransferMetric(label: 'DONE', value: completed.toString(), color: successFor(brightness)),
+                _TransferMetric(
+                    label: 'DONE',
+                    value: completed.toString(),
+                    color: successFor(brightness)),
                 const SizedBox(width: AppDimens.space8),
-                _TransferMetric(label: 'ACTIVE', value: active.toString(), color: AppColors.accentFor(brightness)),
+                _TransferMetric(
+                    label: 'ACTIVE',
+                    value: active.toString(),
+                    color: AppColors.accentFor(brightness)),
                 const SizedBox(width: AppDimens.space8),
-                _TransferMetric(label: 'ISSUES', value: failed.toString(), color: AppColors.errorFor(brightness)),
+                _TransferMetric(
+                    label: 'ISSUES',
+                    value: failed.toString(),
+                    color: AppColors.errorFor(brightness)),
               ],
             ),
             const SizedBox(height: AppDimens.space12),

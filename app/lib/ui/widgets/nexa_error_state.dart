@@ -56,7 +56,8 @@ class _ErrorIllustration extends StatelessWidget {
               border: Border.all(color: AppColors.separatorFor(brightness)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: brightness == Brightness.dark ? 0.14 : 0.04),
+                  color: Colors.black.withValues(
+                      alpha: brightness == Brightness.dark ? 0.14 : 0.04),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),

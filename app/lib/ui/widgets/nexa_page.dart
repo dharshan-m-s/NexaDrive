@@ -222,7 +222,8 @@ class _Header extends StatelessWidget {
                         height: 48,
                         decoration: BoxDecoration(
                           color: AppColors.accentContainerFor(brightness),
-                          borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+                          borderRadius:
+                              BorderRadius.circular(AppDimens.radiusMedium),
                           border: Border.all(
                             color: AppColors.separatorFor(brightness)
                                 .withValues(alpha: 0.72),

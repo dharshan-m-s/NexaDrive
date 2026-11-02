@@ -170,7 +170,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       height: 36,
                       decoration: BoxDecoration(
                         color: AppColors.accentContainerFor(brightness),
-                        borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+                        borderRadius:
+                            BorderRadius.circular(AppDimens.radiusStandard),
                       ),
                       child: Icon(
                         Icons.picture_as_pdf_rounded,
