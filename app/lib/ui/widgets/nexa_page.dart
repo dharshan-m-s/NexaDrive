@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
-import 'nexa_liquid_glass.dart';
 
 /// The single NexaDrive page shell — iOS-style with large title support.
 class NexaPage extends StatelessWidget {
@@ -75,14 +74,6 @@ class NexaPage extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: bg,
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: brightness == Brightness.dark
-                  ? [const Color(0xFF17162D), bg, bg]
-                  : [const Color(0xFFEAE8FF), bg, bg],
-              stops: const [0, 0.42, 1],
-            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -174,24 +165,9 @@ class _Header extends StatelessWidget {
     return Icons.cloud_rounded;
   }
 
-  Widget _glassControl(Widget control) {
-    if (control is NexaLiquidGlass) return control;
-    return NexaLiquidGlass(
-      borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-      padding: EdgeInsets.zero,
-      blurSigma: 2,
-      tintOpacity: 0.105,
-      showShadow: false,
-      child: control,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final glassAction = action == null ? null : _glassControl(action!);
-    final glassLeading = leading == null ? null : _glassControl(leading!);
-    final glassActions = actions?.map(_glassControl).toList(growable: false);
 
     if (largeTitle) {
       return Padding(
@@ -205,11 +181,11 @@ class _Header extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (leading != null) ...[
-              glassLeading!,
+              leading!,
               const SizedBox(height: AppDimens.space8),
             ],
             Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
                   child: Row(
@@ -261,11 +237,11 @@ class _Header extends StatelessWidget {
                 ),
                 if (action != null) ...[
                   const SizedBox(width: AppDimens.space8),
-                  glassAction!,
+                  action!,
                 ],
                 if (actions != null) ...[
                   const SizedBox(width: AppDimens.space8),
-                  ...glassActions!,
+                  ...actions!,
                 ],
               ],
             ),
@@ -285,7 +261,7 @@ class _Header extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (leading != null) ...[
-            glassLeading!,
+            leading!,
             const SizedBox(width: AppDimens.space8),
           ],
           Expanded(
@@ -309,8 +285,8 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
-          if (action != null) glassAction!,
-          if (glassActions != null) ...glassActions,
+          if (action != null) action!,
+          if (actions != null) ...actions!,
         ],
       ),
     );
