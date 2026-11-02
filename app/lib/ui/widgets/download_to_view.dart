@@ -171,4 +171,5 @@ class _DownloadToViewScreenState extends State<DownloadToViewScreen> {
         ),
       ),
     );
-  }}
+  }
+}
