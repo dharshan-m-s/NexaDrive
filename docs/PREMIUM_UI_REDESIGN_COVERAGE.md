@@ -82,7 +82,6 @@ These files are part of the screen architecture but are not visual screens and t
 | `download_to_view.dart` | Rebuilt as a NexaPage-based fallback page. |
 | `folder_picker.dart` | Destination-first header and clearer folder confirmation control. |
 | `upload_progress_dialog.dart` | Animated progress and compact transfer metrics. |
-| `formatter_trigger.dart` | Tooling-only formatter trigger; not a user-facing component. |
 
 ## 3. Design-system files
 
@@ -104,6 +103,7 @@ These are not omissions; changing them would regress a previously approved or fu
 - Immersive camera, photo and media viewing interaction models.
 - Existing routes, API contracts, server authorization, SQLite schema, upload queue, sync engine, media proxy and storage paths.
 - Existing file-operation semantics and platform-specific fallbacks.
+- The temporary formatter auto-commit workflow and its trigger file were removed; the repository's standard CI format gate remains authoritative.
 
 Persistent content cards are not turned into glass. Glass is reserved for navigation and transient controls/sheets.
 
