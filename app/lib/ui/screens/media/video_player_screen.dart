@@ -244,6 +244,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                   body: body,
                 )
               : NexaPage(
+                  headerIcon: Icons.movie_rounded,
                   title: widget.file.name,
                   // This page paints its own black canvas, so the header has to
                   // force light chrome rather than inherit the theme's dark text.
