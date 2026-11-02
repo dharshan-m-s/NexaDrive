@@ -10,8 +10,9 @@ import '../../core/utils/format.dart';
 import 'nexa_page.dart';
 import 'nexa_surface.dart';
 
-/// One UI "Download to open externally" fallback used for formats NexaDrive
-/// can't render in-app yet (PDF pages, video, audio).
+/// Responsive save/open fallback used when a platform viewer cannot render a
+/// particular file. In-app PDF, audio and video viewers remain the primary path
+/// where the platform supports them.
 class DownloadToViewScreen extends StatefulWidget {
   final FileEntry file;
   final Future<void> Function(String path, String outPath) downloader;
