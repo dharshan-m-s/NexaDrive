@@ -159,27 +159,52 @@ class _LoginScreenState extends State<LoginScreen> {
   /// a soft accent glow so it reads as a brand object rather than a flat shape.
   Widget _brandTile(Brightness brightness) {
     final accent = AppColors.accentFor(brightness);
-    final onAccent =
-        brightness == Brightness.dark ? Colors.black : Colors.white;
-
     return Container(
-      width: 64,
-      height: 64,
-      alignment: Alignment.center,
+      width: 76,
+      height: 76,
       decoration: BoxDecoration(
-        color: accent,
-        borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+        color: AppColors.accentContainerFor(brightness),
+        borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+        border: Border.all(
+          color: accent.withValues(alpha: 0.18),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: accent.withValues(
-              alpha: brightness == Brightness.dark ? 0.30 : 0.28,
-            ),
+            color: accent.withValues(alpha: brightness == Brightness.dark ? 0.16 : 0.10),
             blurRadius: 22,
-            offset: const Offset(0, 10),
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Icon(Icons.cloud_rounded, color: onAccent, size: 34),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceFor(brightness),
+              shape: BoxShape.circle,
+              border: Border.all(color: accent.withValues(alpha: 0.14)),
+            ),
+          ),
+          Icon(
+            Icons.cloud_rounded,
+            color: AppColors.accentTextFor(brightness),
+            size: 30,
+          ),
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -357,20 +382,28 @@ class _LoginScreenState extends State<LoginScreen> {
                         SizedBox(
                           height: short ? AppDimens.space8 : AppDimens.space24,
                         ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _fields(dense: short, brightness: brightness),
-                            if (error != null) ...[
-                              const SizedBox(height: AppDimens.space12),
-                              _ErrorBanner(message: error!),
+                        NexaSurface(
+                          level: NexaSurfaceLevel.surface,
+                          radius: AppDimens.radiusXLarge,
+                          padding: EdgeInsets.all(
+                            short ? AppDimens.space12 : AppDimens.space20,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _fields(dense: short, brightness: brightness),
+                              if (error != null) ...[
+                                const SizedBox(height: AppDimens.space12),
+                                _ErrorBanner(message: error!),
+                              ],
+                              SizedBox(
+                                height: short
+                                    ? AppDimens.space8
+                                    : AppDimens.space16,
+                              ),
+                              _submitButton(),
                             ],
-                            SizedBox(
-                              height:
-                                  short ? AppDimens.space8 : AppDimens.space16,
-                            ),
-                            _submitButton(),
-                          ],
+                          ),
                         ),
                         // Quiet footer.
                         Offstage(
