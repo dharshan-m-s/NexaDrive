@@ -466,6 +466,7 @@ class NexaConfirmationDialog extends StatelessWidget {
   final String confirmText;
   final String cancelText;
   final bool isDestructive;
+  final IconData? icon;
 
   const NexaConfirmationDialog({
     super.key,
@@ -474,6 +475,7 @@ class NexaConfirmationDialog extends StatelessWidget {
     required this.confirmText,
     required this.cancelText,
     this.isDestructive = false,
+    this.icon,
   });
 
   @override
@@ -489,11 +491,38 @@ class NexaConfirmationDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
       ),
-      title: Text(
-        title,
-        style: AppTextStyle.sectionHeader.copyWith(
-          color: AppColors.labelPrimaryFor(brightness),
-        ),
+      title: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: (isDestructive
+                      ? AppColors.errorContainerFor(brightness)
+                      : AppColors.accentContainerFor(brightness)),
+              borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+            ),
+            child: Icon(
+              icon ??
+                  (isDestructive
+                      ? Icons.delete_outline_rounded
+                      : Icons.help_outline_rounded),
+              color: isDestructive
+                  ? AppColors.errorFor(brightness)
+                  : AppColors.accentTextFor(brightness),
+              size: 21,
+            ),
+          ),
+          const SizedBox(width: AppDimens.space12),
+          Expanded(
+            child: Text(
+              title,
+              style: AppTextStyle.sectionHeader.copyWith(
+                color: AppColors.labelPrimaryFor(brightness),
+              ),
+            ),
+          ),
+        ],
       ),
       content: Text(
         message,
