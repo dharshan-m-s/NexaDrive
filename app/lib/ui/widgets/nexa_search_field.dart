@@ -3,7 +3,7 @@ import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 
-/// iOS-style search field for inline use.
+/// Compact, theme-aware search control for inline discovery.
 class NexaSearchField extends StatelessWidget {
   final TextEditingController? controller;
   final String? hint;
