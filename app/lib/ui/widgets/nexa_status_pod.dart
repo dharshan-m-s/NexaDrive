@@ -4,7 +4,7 @@ import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import 'nexa_surface.dart';
 
-/// iOS-style status pod (compact status card).
+/// Compact status panel with a clear icon well and semantic tint.
 class NexaStatusPod extends StatelessWidget {
   final IconData icon;
   final Color tint;
