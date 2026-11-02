@@ -25,7 +25,6 @@ jobs:
         working-directory: app
         run: |
           flutter pub get
-          dart format lib test integration_test
       - name: Commit formatted source
         run: |
           git config user.name "github-actions[bot]"
