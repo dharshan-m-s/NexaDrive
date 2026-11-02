@@ -37,11 +37,12 @@ class NexaFocusBlock extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: layout == NexaFocusBlockLayout.horizontal ? 48 : 56,
-          height: layout == NexaFocusBlockLayout.horizontal ? 48 : 56,
+          width: layout == NexaFocusBlockLayout.horizontal ? 52 : 64,
+          height: layout == NexaFocusBlockLayout.horizontal ? 52 : 64,
           decoration: BoxDecoration(
-            color: accent.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+            color: AppColors.accentContainerFor(brightness),
+            borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+            border: Border.all(color: accent.withValues(alpha: brightness == Brightness.dark ? 0.26 : 0.15)),
           ),
           child: Icon(
             icon,
@@ -57,7 +58,8 @@ class NexaFocusBlock extends StatelessWidget {
               : TextAlign.center,
           style: AppTextStyle.title2.copyWith(
             color: AppColors.labelPrimaryFor(brightness),
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -0.2,
           ),
         ),
         if (subtitle != null) ...[
