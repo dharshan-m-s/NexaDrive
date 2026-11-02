@@ -198,12 +198,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          NexaLiquidGlass(
-            borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-            blurSigma: 2,
-            tintOpacity: brightness == Brightness.dark ? 0.14 : 0.10,
+          NexaSurface(
+            level: NexaSurfaceLevel.surface,
+            radius: AppDimens.radiusXLarge,
             padding: const EdgeInsets.all(AppDimens.space16),
-            showShadow: true,
             child: Row(
               children: [
                 Container(
@@ -211,16 +209,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   height: 60,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        accent,
-                        brightness == Brightness.dark
-                            ? AppColors.accentDark
-                            : AppColors.accentPressedLight,
-                      ],
-                    ),
+                    color: AppColors.accentContainerFor(brightness),
                     borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
                     boxShadow: [
                       BoxShadow(
@@ -233,7 +222,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Text(
                     _initial,
                     style: NexaTypography.display.copyWith(
-                      color: Colors.white,
+                      color: AppColors.accentTextFor(brightness),
                       fontSize: 28,
                     ),
                   ),
@@ -273,7 +262,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-          ),
+          ),,
           const SizedBox(height: AppDimens.space24),
           NexaGroupedList(
             header: 'General',
