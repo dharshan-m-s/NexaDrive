@@ -41,7 +41,9 @@ class NexaStatusPod extends StatelessWidget {
               color: tint.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
               border: Border.all(
-                color: tint.withValues(alpha: brightness == Brightness.dark ? 0.28 : 0.16),
+                color: tint.withValues(
+                  alpha: brightness == Brightness.dark ? 0.28 : 0.16,
+                ),
               ),
             ),
             child: Icon(icon, size: 24, color: tint),
@@ -55,7 +57,7 @@ class NexaStatusPod extends StatelessWidget {
                   title,
                   style: AppTextStyle.title2.copyWith(
                     color: AppColors.labelPrimaryFor(brightness),
-                    fontWeight: FontWeight.w650,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: -0.2,
                   ),
                 ),

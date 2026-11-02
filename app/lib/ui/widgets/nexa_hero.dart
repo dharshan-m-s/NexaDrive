@@ -61,26 +61,47 @@ class NexaHero extends StatelessWidget {
                   color: AppColors.accentContainerFor(brightness),
                   borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
                 ),
-                child: Icon(Icons.cloud_outlined, size: 20, color: AppColors.accentTextFor(brightness)),
+                child: Icon(
+                  Icons.cloud_outlined,
+                  size: 20,
+                  color: AppColors.accentTextFor(brightness),
+                ),
               ),
               const SizedBox(width: AppDimens.space10),
               Expanded(
                 child: Text(
                   label,
-                  style: AppTextStyle.subheadline.copyWith(color: ink, fontWeight: FontWeight.w600),
+                  style: AppTextStyle.subheadline.copyWith(
+                    color: ink,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               if (onTap != null)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(actionLabel, style: AppTextStyle.caption2.copyWith(color: accent, fontWeight: FontWeight.w700, letterSpacing: 0.45)),
+                    Text(
+                      actionLabel,
+                      style: AppTextStyle.caption2.copyWith(
+                        color: accent,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.45,
+                      ),
+                    ),
                     const SizedBox(width: AppDimens.space4),
                     Icon(Icons.arrow_outward_rounded, size: 15, color: accent),
                   ],
                 )
               else
-                Text('OVERVIEW', style: AppTextStyle.caption2.copyWith(color: secondaryInk, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+                Text(
+                  'OVERVIEW',
+                  style: AppTextStyle.caption2.copyWith(
+                    color: secondaryInk,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: AppDimens.space20),
@@ -95,11 +116,25 @@ class NexaHero extends StatelessWidget {
                       value,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTextStyle.heroTitle.copyWith(color: ink, fontSize: 38, height: 1.02, letterSpacing: -1.0, fontWeight: FontWeight.w700),
+                      style: AppTextStyle.heroTitle.copyWith(
+                        color: ink,
+                        fontSize: 38,
+                        height: 1.02,
+                        letterSpacing: -1.0,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     if (secondary != null && secondary!.isNotEmpty) ...[
                       const SizedBox(height: AppDimens.space6),
-                      Text(secondary!, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyle.subheadline.copyWith(color: secondaryInk, fontWeight: FontWeight.w500)),
+                      Text(
+                        secondary!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyle.subheadline.copyWith(
+                          color: secondaryInk,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ],
                   ],
                 ),
@@ -121,8 +156,15 @@ class NexaHero extends StatelessWidget {
                 Container(
                   width: 68,
                   height: 68,
-                  decoration: BoxDecoration(color: AppColors.fillFor(brightness), shape: BoxShape.circle),
-                  child: Icon(Icons.cloud_done_rounded, color: accent, size: 32),
+                  decoration: BoxDecoration(
+                    color: AppColors.fillFor(brightness),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.cloud_done_rounded,
+                    color: accent,
+                    size: 32,
+                  ),
                 ),
             ],
           ),
@@ -146,10 +188,22 @@ class NexaHero extends StatelessWidget {
           const SizedBox(height: AppDimens.space12),
           Row(
             children: [
-              Icon(Icons.check_circle_outline_rounded, size: 15, color: secondaryInk),
+              Icon(
+                Icons.check_circle_outline_rounded,
+                size: 15,
+                color: secondaryInk,
+              ),
               const SizedBox(width: AppDimens.space6),
               Expanded(
-                child: Text(detail, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyle.caption1.copyWith(color: secondaryInk, fontWeight: FontWeight.w500)),
+                child: Text(
+                  detail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyle.caption1.copyWith(
+                    color: secondaryInk,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
             ],
           ),

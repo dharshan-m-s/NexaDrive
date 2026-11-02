@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/design/app_colors.dart';
+import '../../../../core/design/app_motion.dart';
 import '../../../../core/design/app_dimensions.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/models/file_entry.dart';
@@ -429,7 +430,9 @@ class _QuickActionTileState extends State<_QuickActionTile> {
                         width: 42,
                         height: 42,
                         decoration: BoxDecoration(
-                          color: tint.withValues(alpha: brightness == Brightness.dark ? 0.20 : 0.11),
+                          color: tint.withValues(
+                            alpha: brightness == Brightness.dark ? 0.20 : 0.11,
+                          ),
                           borderRadius: BorderRadius.circular(
                             AppDimens.radiusMedium,
                           ),

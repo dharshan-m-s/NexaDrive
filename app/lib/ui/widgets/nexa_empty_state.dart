@@ -10,7 +10,12 @@ class _EmptyIllustration extends StatelessWidget {
   final Color accent;
   final Brightness brightness;
 
-  const _EmptyIllustration({required this.icon, required this.size, required this.accent, required this.brightness});
+  const _EmptyIllustration({
+    required this.icon,
+    required this.size,
+    required this.accent,
+    required this.brightness,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +37,9 @@ class _EmptyIllustration extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: AppColors.fillFor(brightness),
                     borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-                    border: Border.all(color: AppColors.separatorFor(brightness)),
+                    border: Border.all(
+                      color: AppColors.separatorFor(brightness),
+                    ),
                   ),
                 ),
               ),
@@ -58,10 +65,15 @@ class _EmptyIllustration extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.surfaceFor(brightness),
                 borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-                border: Border.all(color: AppColors.separatorFor(brightness), width: 0.8),
+                border: Border.all(
+                  color: AppColors.separatorFor(brightness),
+                  width: 0.8,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: brightness == Brightness.dark ? 0.16 : 0.045),
+                    color: Colors.black.withValues(
+                      alpha: brightness == Brightness.dark ? 0.16 : 0.045,
+                    ),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),

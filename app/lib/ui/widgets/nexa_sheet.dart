@@ -159,9 +159,7 @@ class NexaSheetBody extends StatelessWidget {
       blurSigma: 2.0,
       tintOpacity: brightness == Brightness.dark ? 0.16 : 0.12,
       padding: EdgeInsets.zero,
-      child: Material(
-        color: Colors.transparent,
-        child: Padding(
+      child: Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
@@ -181,7 +179,9 @@ class NexaSheetBody extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: AppColors.separatorOpaqueFor(brightness),
-                    borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                    borderRadius: BorderRadius.circular(
+                      AppDimens.radiusPill,
+                    ),
                   ),
                 ),
                 Padding(padding: padding, child: child),
@@ -189,8 +189,6 @@ class NexaSheetBody extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    ),
       ),
     );
   }
