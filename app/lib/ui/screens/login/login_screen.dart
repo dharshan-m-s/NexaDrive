@@ -332,8 +332,6 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final size = MediaQuery.sizeOf(context);
-    final wide = size.width >= 700;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundFor(brightness),
@@ -349,11 +347,12 @@ class _LoginScreenState extends State<LoginScreen> {
             // without unmounting it. Swapping children in and out by height
             // reshuffles the column, unmounts the focused field and the IME
             // snaps shut; this layout cannot do that.
+            // Use the actual content width; MediaQuery can describe a larger window.
+            final wide = constraints.maxWidth >= 700;
             final short = constraints.maxHeight < 600;
-            // Keep phone gutters compact without narrowing the form itself.
-            final horizontal =
-                wide ? AppDimens.pageMarginWide : AppDimens.space12;
-            final vertical = short ? AppDimens.space8 : AppDimens.space32;
+            // Keep phones edge-to-edge inside SafeArea; add gutters on wide layouts.
+            final horizontal = wide ? AppDimens.pageMarginWide : 0.0;
+            final vertical = short ? AppDimens.space4 : AppDimens.space32;
             final minHeight = (constraints.maxHeight - vertical * 2)
                 .clamp(0.0, double.infinity);
 
@@ -367,8 +366,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 constraints: BoxConstraints(minHeight: minHeight),
                 child: Center(
                   child: SizedBox(
-                    width: (constraints.maxWidth - horizontal * 2)
-                        .clamp(0.0, 440.0),
+                    width: constraints.maxWidth.clamp(0.0, 440.0),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -385,27 +383,32 @@ class _LoginScreenState extends State<LoginScreen> {
                         SizedBox(
                           height: short ? AppDimens.space8 : AppDimens.space24,
                         ),
-                        NexaSurface(
-                          level: NexaSurfaceLevel.surface,
-                          radius: AppDimens.radiusXLarge,
-                          padding: EdgeInsets.all(
-                            wide ? AppDimens.space20 : AppDimens.space8,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _fields(dense: short, brightness: brightness),
-                              if (error != null) ...[
-                                const SizedBox(height: AppDimens.space12),
-                                _ErrorBanner(message: error!),
+                        SizedBox(
+                          width: double.infinity,
+                          child: NexaSurface(
+                            level: NexaSurfaceLevel.surface,
+                            radius: AppDimens.radiusXLarge,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: wide ? AppDimens.space20 : 0,
+                              vertical:
+                                  wide ? AppDimens.space20 : AppDimens.space8,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _fields(dense: short, brightness: brightness),
+                                if (error != null) ...[
+                                  const SizedBox(height: AppDimens.space12),
+                                  _ErrorBanner(message: error!),
+                                ],
+                                SizedBox(
+                                  height: short
+                                      ? AppDimens.space4
+                                      : AppDimens.space16,
+                                ),
+                                _submitButton(),
                               ],
-                              SizedBox(
-                                height: short
-                                    ? AppDimens.space8
-                                    : AppDimens.space16,
-                              ),
-                              _submitButton(),
-                            ],
+                            ),
                           ),
                         ),
                         // Quiet footer.
