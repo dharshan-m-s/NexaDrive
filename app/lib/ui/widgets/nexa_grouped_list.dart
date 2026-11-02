@@ -118,16 +118,18 @@ class NexaPageContainer extends StatelessWidget {
 
   IconData _pageIcon(String value) {
     final title = value.toLowerCase();
-    if (title.contains('file') || title.contains('folder'))
+    if (title.contains('file') || title.contains('folder')) {
       return Icons.folder_copy_rounded;
+    }
     if (title.contains('photo')) return Icons.photo_library_rounded;
     if (title.contains('share')) return Icons.people_alt_rounded;
     if (title.contains('trash')) return Icons.delete_sweep_rounded;
     if (title.contains('sync')) return Icons.sync_rounded;
     if (title.contains('transfer')) return Icons.cloud_upload_rounded;
     if (title.contains('setting')) return Icons.tune_rounded;
-    if (title.contains('notification'))
+    if (title.contains('notification')) {
       return Icons.notifications_active_rounded;
+    }
     return Icons.cloud_rounded;
   }
 
