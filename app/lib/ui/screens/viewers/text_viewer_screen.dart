@@ -90,6 +90,7 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
       body: SafeArea(
         bottom: false,
         child: NexaPage(
+          headerIcon: Icons.article_rounded,
           title: widget.file.name,
           subtitle:
               widget.file.size == null ? null : Format.bytes(widget.file.size),
