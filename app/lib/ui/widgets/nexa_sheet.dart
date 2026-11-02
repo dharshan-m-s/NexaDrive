@@ -80,20 +80,32 @@ class NexaSheetHeader extends StatelessWidget {
 
   IconData _iconForTitle(String value) {
     final normalized = value.toLowerCase();
-    if (normalized.contains('share')) return Icons.ios_share_rounded;
-    if (normalized.contains('propert') || normalized.contains('detail'))
+    if (normalized.contains('share')) {
+      return Icons.ios_share_rounded;
+    }
+    if (normalized.contains('propert') || normalized.contains('detail')) {
       return Icons.info_outline_rounded;
+    }
     if (normalized.contains('folder') ||
         normalized.contains('move') ||
-        normalized.contains('copy')) return Icons.folder_open_rounded;
-    if (normalized.contains('user') || normalized.contains('member'))
+        normalized.contains('copy')) {
+      return Icons.folder_open_rounded;
+    }
+    if (normalized.contains('user') || normalized.contains('member')) {
       return Icons.person_outline_rounded;
-    if (normalized.contains('upload')) return Icons.cloud_upload_rounded;
-    if (normalized.contains('download')) return Icons.download_rounded;
-    if (normalized.contains('delete') || normalized.contains('trash'))
+    }
+    if (normalized.contains('upload')) {
+      return Icons.cloud_upload_rounded;
+    }
+    if (normalized.contains('download')) {
+      return Icons.download_rounded;
+    }
+    if (normalized.contains('delete') || normalized.contains('trash')) {
       return Icons.delete_outline_rounded;
-    if (normalized.contains('rename') || normalized.contains('edit'))
+    }
+    if (normalized.contains('rename') || normalized.contains('edit')) {
       return Icons.edit_rounded;
+    }
     return Icons.tune_rounded;
   }
 
