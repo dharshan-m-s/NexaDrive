@@ -389,7 +389,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                                 ),
                                 Text(
                                   'Tools and activity',
-                                  style: AppTextStyle.caption1.copyWith(
+                                  style: AppTextStyle.caption2.copyWith(
                                     color: AppColors.labelSecondaryFor(
                                       brightness,
                                     ),
@@ -967,7 +967,7 @@ class _MoreMenuTile extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppDimens.space4,
-            vertical: AppDimens.space8,
+            vertical: AppDimens.space4,
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -987,7 +987,7 @@ class _MoreMenuTile extends StatelessWidget {
                 ),
                 child: Icon(item.icon, color: item.color, size: 23),
               ),
-              const SizedBox(height: AppDimens.space8),
+              const SizedBox(height: AppDimens.space4),
               Text(
                 item.label,
                 textAlign: TextAlign.center,
