@@ -435,34 +435,83 @@ class _Artwork extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     final hue = (seed.hashCode.abs() % 360).toDouble();
     final base = HSLColor.fromAHSL(
-            1, hue, 0.32, brightness == Brightness.dark ? 0.24 : 0.86)
-        .toColor();
-    final accent = HSLColor.fromAHSL(1, (hue + 28) % 360, 0.42,
-            brightness == Brightness.dark ? 0.34 : 0.74)
-        .toColor();
+      1,
+      hue,
+      0.34,
+      brightness == Brightness.dark ? 0.24 : 0.86,
+    ).toColor();
+    final accent = HSLColor.fromAHSL(
+      1,
+      (hue + 28) % 360,
+      0.52,
+      brightness == Brightness.dark ? 0.68 : 0.42,
+    ).toColor();
 
     return Center(
       child: Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppDimens.radiusHero),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [base, accent],
+          color: base,
+          borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+          border: Border.all(
+            color: accent.withValues(alpha: 0.32),
+            width: 1,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(
+                alpha: brightness == Brightness.dark ? 0.24 : 0.08,
+              ),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
         ),
-        child: Center(
-          child: Icon(
-            Icons.album_rounded,
-            size: size * 0.34,
-            color: AppColors.textPrimaryFor(brightness).withValues(alpha: 0.55),
-          ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: size * 0.76,
+              height: size * 0.76,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+                border: Border.all(color: accent.withValues(alpha: 0.26)),
+              ),
+            ),
+            Container(
+              width: size * 0.60,
+              height: size * 0.60,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceFor(brightness),
+                shape: BoxShape.circle,
+                border: Border.all(color: accent.withValues(alpha: 0.34)),
+              ),
+            ),
+            Icon(
+              Icons.graphic_eq_rounded,
+              size: size * 0.30,
+              color: accent,
+            ),
+            Positioned(
+              right: size * 0.16,
+              top: size * 0.16,
+              child: Container(
+                width: size * 0.075,
+                height: size * 0.075,
+                decoration: BoxDecoration(
+                  color: accent,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
 }
 
 /// Connecting state while the platform backend opens the stream.
