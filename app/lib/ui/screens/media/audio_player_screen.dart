@@ -267,6 +267,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
       body: SafeArea(
         bottom: false,
         child: NexaPage(
+          headerIcon: Icons.graphic_eq_rounded,
           title: 'Now playing',
           subtitle: [artist, title].where((s) => s.isNotEmpty).join(' · '),
           leading: const NexaBackButton(),
