@@ -1126,76 +1126,99 @@ class _ViewArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final titleIcon = title == 'My files' || title == 'My Files'
+        ? Icons.folder_copy_rounded
+        : Icons.folder_open_rounded;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
-        AppDimens.spaceLg,
+        AppDimens.space16,
         AppDimens.pageMargin,
-        AppDimens.spaceSm,
+        AppDimens.space12,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  selecting ? Format.count(selectedCount, 'item') : title,
-                  style: NexaTypography.pageTitle.copyWith(
-                    color: selecting
-                        ? accent
-                        : AppColors.textPrimaryFor(brightness),
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: AppColors.accentContainerFor(brightness),
+                  borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+                  border: Border.all(
+                    color: AppColors.accentTextFor(brightness)
+                        .withValues(alpha: 0.12),
                   ),
                 ),
-                if (!selecting) ...[
-                  const SizedBox(height: AppDimens.spaceXs),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: NexaTypography.caption.copyWith(
-                      color: AppColors.textSecondaryFor(brightness),
+                child: Icon(
+                  selecting ? Icons.check_rounded : titleIcon,
+                  color: selecting ? accent : AppColors.accentTextFor(brightness),
+                  size: 23,
+                ),
+              ),
+              const SizedBox(width: AppDimens.space12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: AppMotion.resolve(context, AppMotion.fast),
+                      child: Text(
+                        selecting ? Format.count(selectedCount, 'item') : title,
+                        key: ValueKey(selecting ? 'selection:$selectedCount' : title),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: NexaTypography.pageTitle.copyWith(
+                          color: selecting
+                              ? accent
+                              : AppColors.labelPrimaryFor(brightness),
+                          letterSpacing: -0.45,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
-                if (selecting && onBackToRoot != null) ...[
-                  const SizedBox(height: AppDimens.space2xs),
-                  TextButton.icon(
-                    onPressed: onBackToRoot,
-                    icon:
-                        const Icon(Icons.home_outlined, size: AppDimens.iconSm),
-                    label: const Text('Back to My files'),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (selecting)
-            IconButton(
-              tooltip: 'Cancel selection',
-              onPressed: onExitSelection,
-              icon: const Icon(Icons.close_rounded),
-            )
-          else
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: 'Upload files',
-                  onPressed: onUpload,
-                  color: AppColors.accentFor(brightness),
-                  icon: const Icon(Icons.upload_rounded),
+                    if (!selecting)
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: NexaTypography.caption.copyWith(
+                          color: AppColors.labelSecondaryFor(brightness),
+                        ),
+                      )
+                    else if (onBackToRoot != null)
+                      TextButton(
+                        onPressed: onBackToRoot,
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, AppDimens.touchTarget),
+                          alignment: Alignment.centerLeft,
+                        ),
+                        child: const Text('Back to My files'),
+                      ),
+                  ],
                 ),
+              ),
+              if (selecting)
                 IconButton(
-                  tooltip: 'Search files',
-                  onPressed: onSearch,
-                  icon: const Icon(Icons.search_rounded),
-                ),
+                  tooltip: 'Cancel selection',
+                  onPressed: onExitSelection,
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.fillFor(brightness),
+                    minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+                  ),
+                  icon: const Icon(Icons.close_rounded),
+                )
+              else
                 PopupMenuButton<_FileHeaderAction>(
-                  tooltip: 'More actions',
+                  tooltip: 'More file actions',
                   icon: const Icon(Icons.more_horiz_rounded),
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.fillFor(brightness),
+                    minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+                  ),
                   onSelected: (action) {
                     switch (action) {
                       case _FileHeaderAction.refresh:
@@ -1221,62 +1244,68 @@ class _ViewArea extends StatelessWidget {
                   itemBuilder: (context) => [
                     const PopupMenuItem(
                       value: _FileHeaderAction.refresh,
-                      child: _FileMenuLabel(
-                        icon: Icons.refresh_rounded,
-                        label: 'Refresh folder',
-                      ),
+                      child: _FileMenuLabel(icon: Icons.refresh_rounded, label: 'Refresh folder'),
                     ),
                     const PopupMenuDivider(),
                     if (onNewFolder != null)
                       const PopupMenuItem(
                         value: _FileHeaderAction.newFolder,
-                        child: _FileMenuLabel(
-                          icon: Icons.create_new_folder_outlined,
-                          label: 'New folder',
-                        ),
+                        child: _FileMenuLabel(icon: Icons.create_new_folder_outlined, label: 'New folder'),
                       ),
                     if (onUploadFolder != null)
                       const PopupMenuItem(
                         value: _FileHeaderAction.uploadFolder,
-                        child: _FileMenuLabel(
-                          icon: Icons.drive_folder_upload_outlined,
-                          label: 'Upload folder',
-                        ),
+                        child: _FileMenuLabel(icon: Icons.drive_folder_upload_outlined, label: 'Upload folder'),
                       ),
                     if (onScan != null)
                       const PopupMenuItem(
                         value: _FileHeaderAction.scan,
-                        child: _FileMenuLabel(
-                          icon: Icons.document_scanner_outlined,
-                          label: 'Scan document',
-                        ),
+                        child: _FileMenuLabel(icon: Icons.document_scanner_outlined, label: 'Scan document'),
                       ),
                     if (onSort != null)
                       const PopupMenuItem(
                         value: _FileHeaderAction.sort,
-                        child: _FileMenuLabel(
-                          icon: Icons.sort_rounded,
-                          label: 'Sort by…',
-                        ),
+                        child: _FileMenuLabel(icon: Icons.sort_rounded, label: 'Sort by…'),
                       ),
                     PopupMenuItem(
                       value: _FileHeaderAction.toggleView,
                       child: _FileMenuLabel(
-                        icon: isGrid
-                            ? Icons.view_list_rounded
-                            : Icons.grid_view_rounded,
+                        icon: isGrid ? Icons.view_list_rounded : Icons.grid_view_rounded,
                         label: isGrid ? 'List view' : 'Grid view',
                       ),
                     ),
                   ],
                 ),
+            ],
+          ),
+          if (!selecting) ...[
+            const SizedBox(height: AppDimens.space12),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: onUpload,
+                    icon: const Icon(Icons.upload_rounded, size: 18),
+                    label: const Text('Upload'),
+                  ),
+                ),
+                const SizedBox(width: AppDimens.space8),
+                IconButton(
+                  tooltip: 'Search files',
+                  onPressed: onSearch,
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.fillFor(brightness),
+                    minimumSize: const Size(AppDimens.touchTargetLarge, AppDimens.touchTargetLarge),
+                  ),
+                  icon: const Icon(Icons.search_rounded),
+                ),
               ],
             ),
+          ],
         ],
       ),
     );
-  }
-}
+  }}
 
 class _FileMenuLabel extends StatelessWidget {
   final IconData icon;
