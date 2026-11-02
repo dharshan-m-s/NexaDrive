@@ -351,9 +351,8 @@ class _LoginScreenState extends State<LoginScreen> {
             // snaps shut; this layout cannot do that.
             final short = constraints.maxHeight < 600;
             // Keep phone gutters compact without narrowing the form itself.
-            final horizontal = wide
-                ? AppDimens.pageMarginWide
-                : AppDimens.space12;
+            final horizontal =
+                wide ? AppDimens.pageMarginWide : AppDimens.space12;
             final vertical = short ? AppDimens.space8 : AppDimens.space32;
             final minHeight = (constraints.maxHeight - vertical * 2)
                 .clamp(0.0, double.infinity);
