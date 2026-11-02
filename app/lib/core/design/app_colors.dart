@@ -18,54 +18,54 @@ import 'package:flutter/material.dart';
 abstract final class AppColors {
   // --------------------------------------------------------------- accent
   /// Iris indigo — distinctive without overpowering content.
-  static const Color accent = Color(0xFF6658E8);
+  static const Color accent = Color(0xFF007AFF);
 
   /// Luminous lavender-indigo for dark surfaces.
-  static const Color accentDark = Color(0xFF9A8CFF);
+  static const Color accentDark = Color(0xFF0A84FF);
 
   /// Soft iris fill behind the accent (selection, toggle-on, badge).
-  static const Color accentContainerLight = Color(0x1F6658E8);
-  static const Color accentContainerDark = Color(0x339A8CFF);
+  static const Color accentContainerLight = Color(0x1F007AFF);
+  static const Color accentContainerDark = Color(0x330A84FF);
 
   /// Contrast-safe iris text/icons on the container fill.
-  static const Color onAccentContainerLight = Color(0xFF5140C8);
-  static const Color onAccentContainerDark = Color(0xFFC3B9FF);
+  static const Color onAccentContainerLight = Color(0xFF0040DD);
+  static const Color onAccentContainerDark = Color(0xFF7AB8FF);
 
   /// Deep iris shade for pressed/active accents.
-  static const Color accentPressedLight = Color(0xFF5142D0);
-  static const Color accentPressedDark = Color(0xFFB3A7FF);
+  static const Color accentPressedLight = Color(0xFF0062CC);
+  static const Color accentPressedDark = Color(0xFF409CFF);
 
   /// Accent safe for *text and icons on plain surfaces* (meets contrast).
-  static const Color accentHighEmphasisLight = Color(0xFF5142D0);
-  static const Color accentHighEmphasisDark = Color(0xFFB3A7FF);
+  static const Color accentHighEmphasisLight = Color(0xFF0062CC);
+  static const Color accentHighEmphasisDark = Color(0xFF409CFF);
 
   /// The softest accent tint — behind icon tiles and quiet highlights.
-  static const Color accentSubtleLight = Color(0x146658E8);
-  static const Color accentSubtleDark = Color(0x269A8CFF);
+  static const Color accentSubtleLight = Color(0x14007AFF);
+  static const Color accentSubtleDark = Color(0x260A84FF);
 
   // ------------------------------------------------------------ surfaces
   /// Page background (light) — iOS `systemGroupedBackground`.
-  static const Color backgroundLight = Color(0xFFF4F2FA);
+  static const Color backgroundLight = Color(0xFFF2F2F7);
 
   /// Page background (dark) — true black, the iOS grouped canvas.
-  static const Color backgroundDark = Color(0xFF0D1020);
+  static const Color backgroundDark = Color(0xFF000000);
 
   /// Primary content surface (cards, sheets, tiles) — LEVEL 1.
   static const Color surfaceLight = Color(0xFFFFFFFF);
-  static const Color surfaceDark = Color(0xFF191B2B);
+  static const Color surfaceDark = Color(0xFF1C1C1E);
 
   /// Grouped/alt surface used inside panels to separate rows or hover fills
   /// — LEVEL 2 (`secondarySystemGroupedBackground`).
-  static const Color surfaceAltLight = Color(0xFFF4F2FA);
-  static const Color surfaceAltDark = Color(0xFF24263A);
+  static const Color surfaceAltLight = Color(0xFFF2F2F7);
+  static const Color surfaceAltDark = Color(0xFF2C2C2E);
 
   /// Slightly deeper surface for headers/toolbars over content — LEVEL 3.
   static const Color surfaceElevatedLight = Color(0xFFFFFFFF);
-  static const Color surfaceElevatedDark = Color(0xFF2B2D46);
+  static const Color surfaceElevatedDark = Color(0xFF2C2C2E);
 
   /// Deepest inset surface — pressed rows, selection bar over content.
-  static const Color surfacePressedLight = Color(0xFFE8E5F2);
-  static const Color surfacePressedDark = Color(0xFF343650);
+  static const Color surfacePressedLight = Color(0xFFE5E5EA);
+  static const Color surfacePressedDark = Color(0xFF3A3A3C);
 
   // --------------------------------------------------------------- text
   /// `label` — the one ink, at full strength.
@@ -88,8 +88,8 @@ abstract final class AppColors {
 
   // ------------------------------------------------------------ dividers
   /// `separator` — a hairline that reads as a rule, not a border.
-  static const Color dividerLight = Color(0x1F514B70);
-  static const Color dividerDark = Color(0x2E77718F);
+  static const Color dividerLight = Color(0x1F3C3C43);
+  static const Color dividerDark = Color(0x2E545456);
 
   // ------------------------------------------------------------ status
   static const Color successLight = Color(0xFF34C759);
@@ -282,14 +282,14 @@ abstract final class AppColors {
       b == Brightness.dark ? surfaceGroupedDark : surfaceGroupedLight;
 
   static const Color surfaceGroupedLight = Color(0xFFFFFFFF);
-  static const Color surfaceGroupedDark = Color(0xFF191B2B);
+  static const Color surfaceGroupedDark = Color(0xFF1C1C1E);
 
   /// Tertiary grouped plane.
   static Color surfaceGroupedAltFor(Brightness b) =>
       b == Brightness.dark ? surfaceGroupedAltDark : surfaceGroupedAltLight;
 
-  static const Color surfaceGroupedAltLight = Color(0xFFF4F2FA);
-  static const Color surfaceGroupedAltDark = Color(0xFF24263A);
+  static const Color surfaceGroupedAltLight = Color(0xFFF2F2F7);
+  static const Color surfaceGroupedAltDark = Color(0xFF2C2C2E);
 
   /// Alternate surface alias used by panel internals.
   static Color surfaceAltFor(Brightness b) =>
@@ -326,8 +326,8 @@ abstract final class AppColors {
   // ------------------------------------------------------- on-gradient text
   /// Text/icons placed on a vivid gradient hero. Light mode uses deep navy on
   /// the calm sky→ocean face (high contrast); dark mode reads near-white.
-  static const Color onGradientLight = Color(0xFF28234F);
-  static const Color onGradientDark = Color(0xFFF7F5FF);
+  static const Color onGradientLight = Color(0xFF06283D);
+  static const Color onGradientDark = Color(0xFFF2FAFF);
 
   static Color heroTextOnGradient(Brightness b) =>
       b == Brightness.dark ? onGradientDark : onGradientLight;
