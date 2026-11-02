@@ -358,4 +358,5 @@ class NexaFileGridTile extends StatelessWidget {
         ),
       ),
     );
-  }}
+  }
+}
