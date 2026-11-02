@@ -99,7 +99,7 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
     final opaque = widget.forceOpaque || highContrast || !widget.enabled;
     final active = !opaque;
     final dark = brightness == Brightness.dark;
-    final tint = AppColors.glassSurfaceFor(brightness);
+    final tint = AppColors.surfaceAltFor(brightness);
     final tintAlpha = (widget.tintOpacity ?? (dark ? 0.105 : 0.07))
         .clamp(0.0, 0.20)
         .toDouble();
@@ -147,12 +147,10 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
                 child: BackdropFilter(
                   filter: shader != null
                       ? ui.ImageFilter.compose(
-                          // Blur first, then refract that live backdrop. Medium
-                          // sampling avoids harsh pixel edges during displacement.
-                          outer: ui.ImageFilter.shader(
-                            shader,
-                            filterQuality: FilterQuality.medium,
-                          ),
+                          // Blur first, then refract that live backdrop. The
+                          // runtime sampler uses the engine's configured texture
+                          // filtering; ImageFilter.shader has no quality argument.
+                          outer: ui.ImageFilter.shader(shader),
                           inner: ui.ImageFilter.blur(
                             sigmaX: blurSigma,
                             sigmaY: blurSigma,
