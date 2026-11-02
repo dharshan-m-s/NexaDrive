@@ -5,19 +5,23 @@ import 'app_dimensions.dart';
 import 'app_motion.dart';
 import 'app_shadows.dart';
 
-/// Surface hierarchy levels (Apple-inspired):
-///   L0: Page background (systemGroupedBackground)
-///   L1: Primary content surface (systemBackground)
-///   L2: Grouped/secondary surface (secondarySystemGroupedBackground)
-///   L3: Floating/elevated surface (popovers, sheets)
-///   L4: Modal overlay (full-screen modals)
+/// Surface hierarchy levels:
+///   L0: Porcelain/graphite page canvas.
+///   L1: Primary content plane.
+///   L2: Grouped secondary plane.
+///   L3: Floating/elevated transient surface.
+///   L4: Modal overlay.
+///
+/// One UI-inspired tonal separation and corner language, with native iOS-style
+/// press feedback and motion. Content planes stay clear; optical glass belongs
+/// to the dedicated navigation and transient-control primitives.
 enum NexaSurfaceLevel { background, surface, grouped, floating, modal }
 
 /// The single NexaDrive surface primitive.
 ///
 /// Every surface in NexaDrive is one of these five levels rendered from the
-/// semantic tokens — tonal separation first, a restrained shadow second, and a
-/// backdrop blur only for the floating/modal levels. This is the base the
+/// semantic tokens — tonal separation first, a restrained shadow second, and
+/// optional blur only for floating/modal contexts. This is the base the
 /// grouped lists, panels, sheets and control clusters are built from.
 class NexaSurface extends StatefulWidget {
   final NexaSurfaceLevel level;
