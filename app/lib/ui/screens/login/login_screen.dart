@@ -350,8 +350,9 @@ class _LoginScreenState extends State<LoginScreen> {
             // reshuffles the column, unmounts the focused field and the IME
             // snaps shut; this layout cannot do that.
             final short = constraints.maxHeight < 600;
-            final horizontal =
-                wide ? AppDimens.pageMarginWide : AppDimens.pageMargin;
+            final horizontal = wide
+                ? AppDimens.pageMarginWide
+                : (short ? AppDimens.space10 : AppDimens.pageMargin);
             final vertical = short ? AppDimens.space8 : AppDimens.space32;
             final minHeight = (constraints.maxHeight - vertical * 2)
                 .clamp(0.0, double.infinity);
@@ -388,7 +389,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           level: NexaSurfaceLevel.surface,
                           radius: AppDimens.radiusXLarge,
                           padding: EdgeInsets.all(
-                            short ? AppDimens.space12 : AppDimens.space20,
+                            short ? AppDimens.space8 : AppDimens.space20,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
