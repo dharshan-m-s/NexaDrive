@@ -1300,10 +1300,20 @@ class _ViewArea extends StatelessWidget {
                 Expanded(
                   child: Tooltip(
                     message: 'Upload files',
-                    child: FilledButton.icon(
+                    child: FilledButton.tonalIcon(
                       onPressed: onUpload,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        backgroundColor:
+                            AppColors.accentContainerFor(brightness),
+                        foregroundColor: AppColors.accentTextFor(brightness),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
                       icon: const Icon(Icons.upload_rounded, size: 18),
-                      label: const Text('Upload'),
+                      label: const Text('Upload files'),
                     ),
                   ),
                 ),

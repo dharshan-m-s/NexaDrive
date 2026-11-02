@@ -267,89 +267,181 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _showMoreSheet() async {
-    if (_moreSheetOpen) return;
+  void _showMoreSheet() {
+    if (_moreSheetOpen) {
+      _closeMoreMenu();
+      return;
+    }
     setState(() => _moreSheetOpen = true);
-    try {
-      // Keep the v1.0.19 interaction model: a compact, readable action list.
-      // The menu intentionally exposes only these six destinations; storage
-      // insights, My files and Shared remain accessible from their own flows.
-      await showNexaSheet<void>(
-        context,
-        builder: (sheetContext) => NexaSheetBody(
+  }
+
+  void _closeMoreMenu() {
+    if (!_moreSheetOpen) return;
+    setState(() => _moreSheetOpen = false);
+    if (_queuedSharedFiles.isNotEmpty &&
+        !_shareSheetShowing &&
+        !_deferShareProcessing) {
+      unawaited(_processSharedFiles());
+    }
+  }
+
+  void _openMoreAction(VoidCallback action) {
+    _closeMoreMenu();
+    action();
+  }
+
+  Widget _moreMenuTile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    final brightness = Theme.of(context).brightness;
+    final dark = brightness == Brightness.dark;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openMoreAction(onTap),
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          height: 82,
+          decoration: BoxDecoration(
+            color: dark
+                ? Colors.white.withValues(alpha: 0.055)
+                : Colors.black.withValues(alpha: 0.035),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: (dark ? Colors.white : Colors.black).withValues(alpha: 0.075),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 9),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const NexaSheetHeader(title: 'More'),
-              NexaSheetAction(
-                icon: Icons.camera_alt_rounded,
-                title: 'Scan document',
-                subtitle: 'Snap a page and save it to My files',
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ScannerScreen(api: api),
-                    ),
-                  );
-                },
-              ),
-              NexaSheetAction(
-                icon: Icons.cloud_upload_outlined,
-                title: 'Transfers',
-                subtitle: 'Uploads waiting for a connection',
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _openTransfers();
-                },
-              ),
-              NexaSheetAction(
-                icon: Icons.delete_outline_rounded,
-                title: 'Trash',
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _goTo(4);
-                },
-              ),
-              NexaSheetAction(
-                icon: Icons.sync_rounded,
-                title: 'Sync center',
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _openSyncCenter();
-                },
-              ),
-              NexaSheetAction(
-                icon: Icons.notifications_outlined,
-                title: 'Notifications',
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _openNotifications();
-                },
-              ),
-              NexaSheetAction(
-                icon: Icons.settings_outlined,
-                title: 'Settings',
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _goTo(5);
-                },
+              Icon(icon, size: 23,
+                  color: AppColors.accentTextFor(brightness)),
+              const SizedBox(height: 7),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: AppTextStyle.caption1.copyWith(
+                  color: AppColors.labelPrimaryFor(brightness),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
         ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _moreSheetOpen = false);
-        if (_queuedSharedFiles.isNotEmpty &&
-            !_shareSheetShowing &&
-            !_deferShareProcessing) {
-          unawaited(_processSharedFiles());
-        }
-      }
-    }
+      ),
+    );
+  }
+
+  Widget _buildMoreMenu() {
+    final brightness = Theme.of(context).brightness;
+    final dark = brightness == Brightness.dark;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppDimens.pageMargin),
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: dark
+                    ? const Color(0xF21B1C22)
+                    : const Color(0xF7FFFFFF),
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(
+                  color: (dark ? Colors.white : Colors.black)
+                      .withValues(alpha: 0.12),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: dark ? 0.42 : 0.16),
+                    blurRadius: 34,
+                    spreadRadius: -8,
+                    offset: const Offset(0, 14),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'More',
+                          style: AppTextStyle.title3.copyWith(
+                            color: AppColors.labelPrimaryFor(brightness),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _closeMoreMenu,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(child: _moreMenuTile(
+                        icon: Icons.document_scanner_outlined,
+                        title: 'Scan',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => ScannerScreen(api: api)),
+                        ),
+                      )),
+                      const SizedBox(width: 9),
+                      Expanded(child: _moreMenuTile(
+                        icon: Icons.cloud_upload_outlined,
+                        title: 'Transfers',
+                        onTap: _openTransfers,
+                      )),
+                      const SizedBox(width: 9),
+                      Expanded(child: _moreMenuTile(
+                        icon: Icons.delete_outline_rounded,
+                        title: 'Trash',
+                        onTap: () => _goTo(4),
+                      )),
+                    ],
+                  ),
+                  const SizedBox(height: 9),
+                  Row(
+                    children: [
+                      Expanded(child: _moreMenuTile(
+                        icon: Icons.sync_rounded,
+                        title: 'Sync',
+                        onTap: _openSyncCenter,
+                      )),
+                      const SizedBox(width: 9),
+                      Expanded(child: _moreMenuTile(
+                        icon: Icons.notifications_outlined,
+                        title: 'Alerts',
+                        onTap: _openNotifications,
+                      )),
+                      const SizedBox(width: 9),
+                      Expanded(child: _moreMenuTile(
+                        icon: Icons.settings_outlined,
+                        title: 'Settings',
+                        onTap: () => _goTo(5),
+                      )),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   IconData _sharedFileIcon(AndroidSharedFile file) {
@@ -809,6 +901,24 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   pages: pages,
                 ),
               ),
+              if (_moreSheetOpen) ...[
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _closeMoreMenu,
+                    child: ColoredBox(
+                      color: Colors.black.withValues(alpha: 0.10),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: AppDimens.bottomNavHeight +
+                      AppDimens.space10 * 2 + bottomInset + 28,
+                  child: _buildMoreMenu(),
+                ),
+              ],
               if (!_shareSheetShowing && !(index == 3 && _photosSelecting))
                 Positioned(
                   left: 0,

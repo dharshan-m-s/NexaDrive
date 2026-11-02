@@ -225,6 +225,26 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('More opens a compact 3 by 2 menu without replacing the dock',
+        (tester) async {
+      final api = shellApi();
+      await pumpShell(tester, api);
+
+      await tester.tap(find.text('More'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Scan'), findsOneWidget);
+      expect(find.text('Transfers'), findsOneWidget);
+      expect(find.text('Trash'), findsOneWidget);
+      expect(find.text('Sync'), findsOneWidget);
+      expect(find.text('Alerts'), findsOneWidget);
+      expect(find.text('Settings'), findsOneWidget);
+      // The floating navigation remains mounted beneath the menu.
+      expect(find.text('Home'), findsOneWidget);
+      expect(find.text('Files'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets(
         "Home's New folder shortcut opens the folder dialog on My files",
         (tester) async {
