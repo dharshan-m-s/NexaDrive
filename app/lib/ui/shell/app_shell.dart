@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
+import '../../../core/design/app_typography.dart';
+import '../../../core/utils/format.dart';
 import '../../../core/design/app_motion.dart';
 import '../../../services/api.dart';
 import '../../../services/session.dart';
@@ -12,7 +14,9 @@ import '../../../services/sync_service.dart';
 import '../../../services/media_cache.dart';
 import '../../../services/thumbnail_cache.dart';
 import '../../../services/background_transfer_service.dart';
+import '../../../services/android_share_intents.dart';
 import '../screens/home/home_screen.dart';
+import '../screens/home/storage_insights_screen.dart';
 import '../screens/files/files_screen.dart';
 import '../screens/shared/shared_screen.dart';
 import '../screens/photos/photos_screen.dart';
@@ -23,6 +27,7 @@ import '../screens/notifications/notifications_screen.dart';
 import '../screens/transfers/transfers_screen.dart';
 import '../screens/login/login_screen.dart';
 import '../screens/scanner/scanner_screen.dart';
+import '../widgets/folder_picker.dart';
 import '../../update/android_updater_channel.dart';
 import '../../update/app_platform.dart';
 import '../../update/update_controller.dart';
@@ -60,6 +65,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late final UpdateController updateController;
   Timer? _queueTimer;
   bool _handlingExpiredSession = false;
+  bool _moreSheetOpen = false;
+  bool _shareSheetShowing = false;
+  bool _photosSelecting = false;
+  bool _deferShareProcessing = false;
+  final Set<String> _activeSharedUris = <String>{};
+  final List<AndroidSharedFile> _queuedSharedFiles = [];
 
   /// Destinations the user has actually opened.
   ///
@@ -101,6 +112,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(AndroidShareIntents.initialize(_queueSharedFiles));
     _queueTimer =
         Timer.periodic(const Duration(seconds: 30), (_) => _resumeQueue());
     api = widget.api ?? Api(widget.session);
@@ -257,72 +269,503 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   Future<void> _showMoreSheet() async {
-    await showNexaSheet<void>(
-      context,
-      builder: (sheetContext) => NexaSheetBody(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const NexaSheetHeader(title: 'More'),
-            NexaSheetAction(
-              icon: Icons.camera_alt_rounded,
-              title: 'Scan document',
-              subtitle: 'Snap a page and save it to My files',
-              onTap: () {
-                Navigator.pop(sheetContext);
+    if (_moreSheetOpen) return;
+    setState(() => _moreSheetOpen = true);
+    try {
+      final brightness = Theme.of(context).brightness;
+      final palette = <Color>[
+        AppColors.accentFor(brightness),
+        Theme.of(context).colorScheme.secondary,
+        AppColors.successFor(brightness),
+        AppColors.warningFor(brightness),
+        AppColors.errorFor(brightness),
+        Theme.of(context).colorScheme.tertiary,
+        AppColors.infoFor(brightness),
+        AppColors.accentTextFor(brightness),
+        AppColors.labelSecondaryFor(brightness),
+      ];
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        barrierColor: AppColors.scrimFor(brightness).withValues(alpha: 0.34),
+        builder: (dialogContext) {
+          void closeAndRun(VoidCallback action) {
+            Navigator.of(dialogContext).pop();
+            action();
+          }
+
+          final items = <_MoreMenuItem>[
+            _MoreMenuItem(
+              icon: Icons.document_scanner_rounded,
+              label: 'Scan document',
+              color: palette[0],
+              onTap: () => closeAndRun(() {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => ScannerScreen(api: api),
                   ),
                 );
-              },
+              }),
             ),
-            NexaSheetAction(
-              icon: Icons.cloud_upload_outlined,
-              title: 'Transfers',
-              subtitle: 'Uploads waiting for a connection',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _openTransfers();
-              },
+            _MoreMenuItem(
+              icon: Icons.cloud_upload_rounded,
+              label: 'Transfers',
+              color: palette[1],
+              onTap: () => closeAndRun(_openTransfers),
             ),
-            NexaSheetAction(
-              icon: Icons.delete_outline_rounded,
-              title: 'Trash',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _goTo(4);
-              },
+            _MoreMenuItem(
+              icon: Icons.delete_sweep_rounded,
+              label: 'Trash',
+              color: palette[2],
+              onTap: () => closeAndRun(() => _goTo(4)),
             ),
-            NexaSheetAction(
+            _MoreMenuItem(
               icon: Icons.sync_rounded,
-              title: 'Sync center',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _openSyncCenter();
-              },
+              label: 'Sync center',
+              color: palette[3],
+              onTap: () => closeAndRun(_openSyncCenter),
             ),
-            NexaSheetAction(
-              icon: Icons.notifications_outlined,
-              title: 'Notifications',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _openNotifications();
-              },
+            _MoreMenuItem(
+              icon: Icons.notifications_active_rounded,
+              label: 'Notifications',
+              color: palette[4],
+              onTap: () => closeAndRun(_openNotifications),
             ),
-            NexaSheetAction(
-              icon: Icons.settings_outlined,
-              title: 'Settings',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _goTo(5);
-              },
+            _MoreMenuItem(
+              icon: Icons.settings_rounded,
+              label: 'Settings',
+              color: palette[5],
+              onTap: () => closeAndRun(() => _goTo(5)),
             ),
-          ],
+            _MoreMenuItem(
+              icon: Icons.query_stats_rounded,
+              label: 'Storage insights',
+              color: palette[6],
+              onTap: () => closeAndRun(() {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => StorageInsightsScreen(api: api),
+                  ),
+                );
+              }),
+            ),
+            _MoreMenuItem(
+              icon: Icons.folder_rounded,
+              label: 'My files',
+              color: palette[7],
+              onTap: () => closeAndRun(() => _goTo(1)),
+            ),
+            _MoreMenuItem(
+              icon: Icons.people_alt_rounded,
+              label: 'Shared',
+              color: palette[8],
+              onTap: () => closeAndRun(() => _goTo(2)),
+            ),
+          ];
+
+          final media = MediaQuery.of(dialogContext);
+          return SafeArea(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppDimens.pageMargin,
+                  AppDimens.space20,
+                  AppDimens.pageMargin,
+                  media.viewPadding.bottom +
+                      AppDimens.bottomNavHeight +
+                      AppDimens.space24,
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 420,
+                    maxHeight: media.size.height -
+                        media.viewPadding.top -
+                        media.viewPadding.bottom -
+                        AppDimens.bottomNavHeight -
+                        AppDimens.space48,
+                  ),
+                  child: NexaLiquidGlass(
+                    borderRadius: BorderRadius.circular(30),
+                    blurSigma: 2.2,
+                    tintOpacity: brightness == Brightness.dark ? 0.10 : 0.075,
+                    padding: const EdgeInsets.fromLTRB(
+                      AppDimens.space12,
+                      AppDimens.space12,
+                      AppDimens.space12,
+                      AppDimens.space12,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'More',
+                                    style: AppTextStyle.headline.copyWith(
+                                      color:
+                                          AppColors.labelPrimaryFor(brightness),
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Your tools and destinations',
+                                    style: AppTextStyle.caption1.copyWith(
+                                      color: AppColors.labelSecondaryFor(
+                                          brightness),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Close',
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(),
+                              icon: Icon(
+                                Icons.close_rounded,
+                                color: AppColors.labelSecondaryFor(brightness),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppDimens.space8),
+                        GridView.count(
+                          crossAxisCount: 3,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          mainAxisSpacing: AppDimens.space8,
+                          crossAxisSpacing: AppDimens.space8,
+                          childAspectRatio: 1.0,
+                          children: [
+                            for (final item in items) _MoreMenuTile(item: item),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _moreSheetOpen = false);
+        if (_queuedSharedFiles.isNotEmpty &&
+            !_shareSheetShowing &&
+            !_deferShareProcessing) {
+          unawaited(_processSharedFiles());
+        }
+      }
+    }
+  }
+
+  IconData _sharedFileIcon(AndroidSharedFile file) {
+    final mime = file.mimeType.toLowerCase();
+    final name = file.name.toLowerCase();
+    if (mime.startsWith('image/')) return Icons.image_outlined;
+    if (mime.startsWith('video/')) return Icons.videocam_outlined;
+    if (mime.startsWith('audio/')) return Icons.audio_file_outlined;
+    if (mime == 'application/pdf' || name.endsWith('.pdf')) {
+      return Icons.picture_as_pdf_outlined;
+    }
+    if (mime.startsWith('text/')) return Icons.description_outlined;
+    return Icons.insert_drive_file_outlined;
+  }
+
+  String _sharedFileType(AndroidSharedFile file) {
+    final mimeType = file.mimeType.toLowerCase();
+    if (mimeType.startsWith('image/')) return 'Image';
+    if (mimeType.startsWith('video/')) return 'Video';
+    if (mimeType.startsWith('audio/')) return 'Audio';
+    if (mimeType == 'application/pdf') return 'PDF document';
+    if (mimeType.startsWith('text/')) return 'Text file';
+    if (mimeType.startsWith('application/')) return 'Document';
+    final subtype = mimeType.split('/').last;
+    return subtype == 'octet-stream' ? 'File' : subtype.toUpperCase();
+  }
+
+  void _queueSharedFiles(List<AndroidSharedFile> files) {
+    if (!mounted || files.isEmpty) return;
+    final known = <String>{
+      ..._activeSharedUris,
+      ..._queuedSharedFiles.map((file) => file.uri),
+    };
+    _queuedSharedFiles.addAll(files.where((file) => known.add(file.uri)));
+    if (!_shareSheetShowing && !_moreSheetOpen && !_deferShareProcessing) {
+      unawaited(_processSharedFiles());
+    }
+  }
+
+  void _retainSharedFiles(
+    List<AndroidSharedFile> files, {
+    String message = 'Import kept for later. Review it when ready.',
+  }) {
+    final known = _queuedSharedFiles.map((file) => file.uri).toSet();
+    _queuedSharedFiles.addAll(files.where((file) => known.add(file.uri)));
+    _deferShareProcessing = true;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          action: SnackBarAction(
+            label: 'Review',
+            onPressed: () {
+              _deferShareProcessing = false;
+              unawaited(_processSharedFiles());
+            },
+          ),
         ),
-      ),
-    );
+      );
+  }
+
+  Future<void> _processSharedFiles() async {
+    if (!mounted ||
+        _shareSheetShowing ||
+        _deferShareProcessing ||
+        _queuedSharedFiles.isEmpty) {
+      return;
+    }
+    _shareSheetShowing = true;
+    _deferShareProcessing = false;
+    setState(() {});
+    var files = List<AndroidSharedFile>.from(_queuedSharedFiles);
+    _queuedSharedFiles.clear();
+    _activeSharedUris.addAll(files.map((file) => file.uri));
+
+    try {
+      files = await AndroidShareIntents.stage(files);
+      if (!mounted) return;
+      final failed = files.where(
+        (file) => file.localPath == null || file.stageError != null,
+      );
+      if (failed.isNotEmpty) {
+        final reason = failed.first.stageError;
+        _retainSharedFiles(
+          files,
+          message: reason == null
+              ? 'Could not prepare a shared file. Review to retry.'
+              : 'Could not import ${failed.first.name}: $reason',
+        );
+        return;
+      }
+
+      final choice = await showNexaSheet<_SharedUploadChoice>(
+        context,
+        builder: (sheetContext) => NexaSheetBody(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              NexaSheetHeader(
+                title: 'Add to NexaDrive',
+                subtitle:
+                    '${files.length} ${files.length == 1 ? 'item' : 'items'} · '
+                    'Original quality',
+              ),
+              for (final file in files.take(4))
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space16,
+                    vertical: AppDimens.space4,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(_sharedFileIcon(file), size: 19),
+                      const SizedBox(width: AppDimens.space10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              file.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyle.subheadline,
+                            ),
+                            Text(
+                              _sharedFileType(file),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyle.caption1.copyWith(
+                                color: AppColors.labelSecondaryFor(
+                                  Theme.of(sheetContext).brightness,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        Format.bytes(file.size),
+                        style: AppTextStyle.caption1.copyWith(
+                          color: AppColors.labelSecondaryFor(
+                            Theme.of(sheetContext).brightness,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (files.length > 4)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space16,
+                    vertical: AppDimens.space4,
+                  ),
+                  child: Text(
+                    '+ ${files.length - 4} more items',
+                    style: AppTextStyle.caption1.copyWith(
+                      color: AppColors.labelSecondaryFor(
+                        Theme.of(sheetContext).brightness,
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: AppDimens.space8),
+              NexaSheetAction(
+                icon: Icons.cloud_upload_outlined,
+                title: 'Upload as-is',
+                subtitle: 'Save directly to My files',
+                onTap: () =>
+                    Navigator.pop(sheetContext, _SharedUploadChoice.root),
+              ),
+              NexaSheetAction(
+                icon: Icons.create_new_folder_outlined,
+                title: 'Create a folder',
+                subtitle: 'Make a new folder, then upload into it',
+                onTap: () => Navigator.pop(
+                  sheetContext,
+                  _SharedUploadChoice.createFolder,
+                ),
+              ),
+              NexaSheetAction(
+                icon: Icons.folder_open_rounded,
+                title: 'Choose a folder',
+                subtitle: 'Pick an existing destination in your cloud',
+                onTap: () => Navigator.pop(
+                  sheetContext,
+                  _SharedUploadChoice.chooseFolder,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!mounted) return;
+      if (choice == null) {
+        _retainSharedFiles(files);
+        return;
+      }
+
+      var destination = '';
+      if (choice == _SharedUploadChoice.createFolder) {
+        final controller = TextEditingController();
+        final name = await showDialog<String>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Create upload folder'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Folder name',
+                hintText: 'e.g. Shared photos',
+              ),
+              onSubmitted: (value) =>
+                  Navigator.pop(dialogContext, value.trim()),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.pop(dialogContext, controller.text.trim()),
+                child: const Text('Create'),
+              ),
+            ],
+          ),
+        );
+        controller.dispose();
+        final safeName = name?.trim() ?? '';
+        if (safeName.isEmpty) {
+          _retainSharedFiles(files);
+          return;
+        }
+        if (safeName == '.' ||
+            safeName == '..' ||
+            safeName.contains('/') ||
+            safeName.contains('\\')) {
+          throw const FormatException(
+            'Enter a single folder name without slashes.',
+          );
+        }
+        try {
+          await api.createFolder(safeName);
+        } on ApiException catch (error) {
+          if (error.status != 409) rethrow;
+          // An existing destination folder is a valid upload target.
+        }
+        destination = safeName;
+      } else if (choice == _SharedUploadChoice.chooseFolder) {
+        final selected = await FolderPicker.pick(
+          context,
+          api: api,
+          title: 'Upload to folder',
+        );
+        if (selected == null) {
+          _retainSharedFiles(files);
+          return;
+        }
+        destination = selected;
+      }
+
+      final sources = files
+          .map(
+            (file) => UploadSource(
+              path: file.localPath!,
+              name: file.name,
+              size: file.size,
+              temporary: true,
+            ),
+          )
+          .toList(growable: false);
+      final manager = UploadManager.current;
+      await manager.enqueueAll(sources, destination);
+      await AndroidShareIntents.acknowledge(files);
+      if (mounted) {
+        _toast(
+          '${sources.length} ${sources.length == 1 ? 'file' : 'files'} '
+          'queued for upload',
+        );
+        _openTransfers();
+      }
+    } catch (error) {
+      _retainSharedFiles(
+        files,
+        message: 'Import was not queued: $error. Review to retry.',
+      );
+    } finally {
+      _activeSharedUris.removeAll(files.map((file) => file.uri));
+      _shareSheetShowing = false;
+      if (mounted) setState(() {});
+      if (mounted && _queuedSharedFiles.isNotEmpty && !_deferShareProcessing) {
+        unawaited(_processSharedFiles());
+      }
+    }
   }
 
   Future<void> logout() async {
@@ -353,6 +796,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    AndroidShareIntents.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _queueTimer?.cancel();
     // The app is no longer in the foreground, so the background worker may
@@ -384,7 +828,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           },
         ),
         SharedScreen(api: api),
-        PhotosScreen(api: api, session: widget.session),
+        PhotosScreen(
+          api: api,
+          session: widget.session,
+          onSelectionChanged: (selecting) {
+            if (_photosSelecting != selecting) {
+              setState(() => _photosSelecting = selecting);
+            }
+          },
+        ),
         TrashScreen(api: api),
         SettingsScreen(
           session: widget.session,
@@ -472,43 +924,115 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   pages: pages,
                 ),
               ),
-              Positioned(
-                left: 0,
-                right: 0,
-                // Keep the pill separate from the system gesture area; the pill's
-                // own surface, outline, and shadow create its floating appearance.
-                bottom: AppDimens.space10 + bottomInset,
-                child: SafeArea(
-                  top: false,
-                  bottom: false,
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 420),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimens.pageMargin,
-                        ),
-                        child: NexaBottomNav(
-                          currentIndex: index >= 4 ? 4 : index,
-                          onTap: (value) {
-                            if (value == 4) {
-                              _showMoreSheet();
-                            } else {
-                              _goTo(value);
-                            }
-                          },
-                          items: NexaBottomNavItems.primary,
+              if (!_shareSheetShowing && !(index == 3 && _photosSelecting))
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  // Keep the pill separate from the system gesture area; the pill's
+                  // own surface, outline, and shadow create its floating appearance.
+                  bottom: AppDimens.space10 + bottomInset,
+                  child: SafeArea(
+                    top: false,
+                    bottom: false,
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 420),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.pageMargin,
+                          ),
+                          child: NexaBottomNav(
+                            currentIndex: index >= 4 ? 4 : index,
+                            onTap: (value) {
+                              if (value == 4) {
+                                _showMoreSheet();
+                              } else {
+                                _goTo(value);
+                              }
+                            },
+                            items: NexaBottomNavItems.primary,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ));
   }
 }
+
+class _MoreMenuItem {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _MoreMenuItem({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+}
+
+class _MoreMenuTile extends StatelessWidget {
+  final _MoreMenuItem item;
+
+  const _MoreMenuTile({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: item.onTap,
+        borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space4,
+            vertical: AppDimens.space8,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: item.color.withValues(
+                    alpha: brightness == Brightness.dark ? 0.25 : 0.14,
+                  ),
+                  borderRadius: BorderRadius.circular(17),
+                  border: Border.all(
+                    color: item.color.withValues(alpha: 0.20),
+                    width: 0.8,
+                  ),
+                ),
+                child: Icon(item.icon, color: item.color, size: 23),
+              ),
+              const SizedBox(height: AppDimens.space8),
+              Text(
+                item.label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyle.caption1.copyWith(
+                  color: AppColors.labelPrimaryFor(brightness),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _SharedUploadChoice { root, createFolder, chooseFolder }
 
 /// Holds every visited destination in one [IndexedStack].
 ///

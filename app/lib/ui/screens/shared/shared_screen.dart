@@ -9,6 +9,8 @@ import '../../../services/api.dart';
 import '../../widgets/nexa_components.dart';
 import 'shared_browse_screen.dart';
 
+enum _SharedPageAction { refresh, toggleSort }
+
 class SharedScreen extends StatefulWidget {
   final Api api;
   const SharedScreen({super.key, required this.api});
@@ -22,6 +24,7 @@ class _SharedScreenState extends State<SharedScreen> {
   List<Map<String, dynamic>> _shares = [];
   bool _loading = true;
   bool _mine = false;
+  bool _descending = false;
   String? _error;
   String? _openingShareId;
   int _loadGeneration = 0;
@@ -103,8 +106,11 @@ class _SharedScreenState extends State<SharedScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Remove share?'),
-        content: Text('Remove access to “${_displayName(share)}”?'),
+        title: const Text('Stop sharing?'),
+        content: Text(
+          'This revokes the recipient’s access to “${_displayName(share)}”. '
+          'The file or folder itself will not be deleted.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -126,13 +132,79 @@ class _SharedScreenState extends State<SharedScreen> {
     }
   }
 
+  Future<void> _leaveShare(Map<String, dynamic> share) async {
+    final id = share['id']?.toString() ?? '';
+    if (id.isEmpty) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove from Shared with me?'),
+        content: Text(
+          'You will lose access to “${_displayName(share)}”. '
+          'The owner’s original file will not be changed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Remove access'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await widget.api.leaveShare(id);
+      if (mounted) await load();
+    } catch (e) {
+      if (mounted) _showMessage(e.toString());
+    }
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  List<Map<String, dynamic>> get _visibleItems => _mine ? _shares : _shared;
+  String _shareSubtitle(Map<String, dynamic> item) {
+    if (!_mine) {
+      final owner =
+          (item['owner'] ?? item['owner_username'])?.toString().trim() ?? '';
+      final permission =
+          item['permission']?.toString() == 'write' ? 'Can edit' : 'Can view';
+      final sender = owner.isEmpty ? 'Shared with you' : 'Shared by $owner';
+      return '$sender · $permission';
+    }
+
+    final recipient = item['recipient']?.toString().trim() ?? '';
+    final permission = item['permission'] == 'write' ? 'Can edit' : 'Can view';
+    final target = item['is_link'] == true
+        ? 'Public link'
+        : recipient.isEmpty
+            ? 'Shared by you'
+            : 'Shared with $recipient';
+    final expiresAt = DateTime.tryParse(item['expires_at']?.toString() ?? '');
+    final expiry = expiresAt == null
+        ? ''
+        : ' · Expires ${expiresAt.toLocal().day.toString().padLeft(2, '0')}/'
+            '${expiresAt.toLocal().month.toString().padLeft(2, '0')}/'
+            '${expiresAt.toLocal().year}';
+    return '$target · $permission$expiry';
+  }
+
+  List<Map<String, dynamic>> get _visibleItems {
+    final items = List<Map<String, dynamic>>.from(_mine ? _shares : _shared);
+    items.sort(
+      (a, b) => _displayName(a).toLowerCase().compareTo(
+            _displayName(b).toLowerCase(),
+          ),
+    );
+    return _descending ? items.reversed.toList(growable: false) : items;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -141,10 +213,41 @@ class _SharedScreenState extends State<SharedScreen> {
       title: 'Shared',
       subtitle: '$count ${_mine ? 'active shares' : 'shared items'}',
       bottomSafeArea: false,
-      headerAction: IconButton(
-        tooltip: 'Refresh',
-        onPressed: _loading ? null : load,
-        icon: const Icon(Icons.refresh_rounded),
+      headerAction: PopupMenuButton<_SharedPageAction>(
+        tooltip: 'Shared page actions',
+        icon: const Icon(Icons.more_horiz_rounded),
+        onSelected: (action) {
+          switch (action) {
+            case _SharedPageAction.refresh:
+              load();
+              break;
+            case _SharedPageAction.toggleSort:
+              setState(() => _descending = !_descending);
+              break;
+          }
+        },
+        itemBuilder: (context) => [
+          const PopupMenuItem(
+            value: _SharedPageAction.refresh,
+            child: Row(
+              children: [
+                Icon(Icons.refresh_rounded, size: 18),
+                SizedBox(width: AppDimens.space10),
+                Text('Refresh shares'),
+              ],
+            ),
+          ),
+          PopupMenuItem(
+            value: _SharedPageAction.toggleSort,
+            child: Row(
+              children: [
+                const Icon(Icons.sort_by_alpha_rounded, size: 18),
+                const SizedBox(width: AppDimens.space10),
+                Text(_descending ? 'Sort A–Z' : 'Sort Z–A'),
+              ],
+            ),
+          ),
+        ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -220,47 +323,33 @@ class _SharedScreenState extends State<SharedScreen> {
                   leadingBackgroundColor:
                       AppColors.accentContainerFor(brightness),
                   title: _displayName(item),
-                  subtitle: _mine
-                      ? (item['permission'] == 'write'
-                          ? 'Can edit'
-                          : 'Can view')
-                      : (item['owner_username']?.toString().trim().isNotEmpty ==
-                              true
-                          ? 'Shared by ${item['owner_username']}'
-                          : 'Shared with you'),
+                  subtitle: _shareSubtitle(item),
                   showChevron: !_mine,
-                  trailing: _mine
-                      ? NexaLiquidGlass(
-                          borderRadius:
-                              BorderRadius.circular(AppDimens.radiusPill),
-                          padding: EdgeInsets.zero,
-                          blurSigma: 9,
-                          showShadow: false,
-                          child: IconButton(
-                            tooltip: 'Remove share',
-                            onPressed: () => _deleteShare(item),
-                            icon: Icon(
-                              Icons.link_off_rounded,
-                              color: AppColors.errorFor(brightness),
-                              size: 20,
+                  trailing: _openingShareId == item['id']?.toString() && !_mine
+                      ? const SizedBox(
+                          width: 40,
+                          height: 40,
+                          child: Center(
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                           ),
                         )
-                      : _openingShareId == item['id']?.toString()
-                          ? const SizedBox(
-                              width: 40,
-                              height: 40,
-                              child: Center(
-                                child: SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : null,
+                      : IconButton(
+                          tooltip: _mine
+                              ? 'Stop sharing'
+                              : 'Remove from Shared with me',
+                          onPressed: _mine
+                              ? () => _deleteShare(item)
+                              : () => _leaveShare(item),
+                          icon: Icon(
+                            Icons.link_off_rounded,
+                            color: AppColors.errorFor(brightness),
+                            size: 20,
+                          ),
+                        ),
                   onTap: _mine ? null : () => _openShare(item),
                 ),
             ],

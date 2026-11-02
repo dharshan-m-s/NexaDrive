@@ -26,10 +26,10 @@ use crate::{
             sign_out_everywhere,
         },
         sharing::{
-            create_share, delete_share, download_shared_file, list_shared, list_shared_items,
-            list_shares, public_share_download, resolve_username, shared_action,
+            create_share, delete_share, download_shared_file, leave_share, list_shared,
+            list_shared_items, list_shares, public_share_download, resolve_username, shared_action,
         },
-        storage::{list_trash, permanently_delete_trash, restore_trash, storage},
+        storage::{list_trash, permanently_delete_trash, restore_trash, storage, storage_insights},
         sync::{
             delete_sync_device, list_sync_devices, rename_sync_device, sync_delete, sync_delta,
             sync_manifest,
@@ -74,7 +74,7 @@ pub(crate) fn app(state: AppState, config: &Config) -> Router {
             "/api/shares",
             get(list_shares).post(create_share).delete(delete_share),
         )
-        .route("/api/shared", get(list_shared))
+        .route("/api/shared", get(list_shared).delete(leave_share))
         .route("/api/shared/items", get(list_shared_items))
         .route("/api/shared/download", get(download_shared_file))
         .route("/api/shared/action", post(shared_action))
@@ -110,6 +110,7 @@ pub(crate) fn app(state: AppState, config: &Config) -> Router {
         .route("/api/photos", get(list_photos))
         .route("/api/folders", post(create_folder))
         .route("/api/storage", get(storage))
+        .route("/api/storage/insights", get(storage_insights))
         .route(
             "/api/trash",
             get(list_trash).delete(permanently_delete_trash),

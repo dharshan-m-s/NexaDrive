@@ -77,9 +77,10 @@ class NexaFileTile extends StatelessWidget {
         entry.name,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: AppTextStyle.title1.copyWith(
+        style: AppTextStyle.rowTitle.copyWith(
           color: selected ? onAccent : AppColors.labelPrimaryFor(brightness),
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          letterSpacing: -0.15,
         ),
       ),
       subtitle: Text(
@@ -98,10 +99,10 @@ class NexaFileTile extends StatelessWidget {
                   size: AppDimens.iconMedium,
                 )
               : null),
-      minTileHeight: AppDimens.listHeightLarge,
+      minTileHeight: 68,
       contentPadding: const EdgeInsets.symmetric(
         horizontal: AppDimens.pageMargin,
-        vertical: AppDimens.space4,
+        vertical: AppDimens.space6,
       ),
       visualDensity: VisualDensity.compact,
     );
@@ -120,17 +121,26 @@ class _FileIconTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tint = FileKind.tint(category, brightness);
     return Container(
       width: AppDimens.iconTileLarge,
       height: AppDimens.iconTileLarge,
       decoration: BoxDecoration(
-        color: FileKind.tileFill(category, brightness),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            FileKind.tileFill(category, brightness),
+            tint.withValues(alpha: brightness == Brightness.dark ? 0.18 : 0.10),
+          ],
+        ),
         borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+        border: Border.all(color: tint.withValues(alpha: 0.18), width: 0.7),
       ),
       child: Icon(
         FileKind.icon(category),
         size: AppDimens.iconMedium,
-        color: FileKind.tint(category, brightness),
+        color: tint,
       ),
     );
   }
@@ -245,13 +255,20 @@ class NexaFileGridTile extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+        borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
         onTap: onTap == null ? null : () => onTap!(entry),
         onLongPress: onLongPress,
         child: Container(
           decoration: BoxDecoration(
-            color: AppColors.surfaceGroupedFor(brightness),
-            borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppColors.surfaceFor(brightness),
+                AppColors.surfaceGroupedFor(brightness),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
             border: selected
                 ? Border.all(
                     color: AppColors.onAccentContainerFor(brightness), width: 2)
@@ -289,9 +306,10 @@ class NexaFileGridTile extends StatelessWidget {
                 entry.name,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: AppTextStyle.caption1.copyWith(
+                style: AppTextStyle.subheadline.copyWith(
                   color: AppColors.labelPrimaryFor(brightness),
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1,
                 ),
               ),
               const SizedBox(height: AppDimens.space2),

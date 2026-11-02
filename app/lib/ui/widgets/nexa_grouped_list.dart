@@ -34,25 +34,32 @@ class NexaGroupedList extends StatelessWidget {
         if (header != null) NexaSectionHeader(header!, padding: padding),
         NexaSurface(
           level: NexaSurfaceLevel.grouped,
+          radius: AppDimens.radiusLarge,
           padding:
               padding ?? const EdgeInsets.symmetric(vertical: AppDimens.space4),
-          child: Material(
-            type: MaterialType.transparency,
-            child: Column(
-              children: [
-                for (var i = 0; i < children.length; i++) ...[
-                  children[i],
-                  if (withDividers && i < children.length - 1)
-                    Padding(
-                      padding: EdgeInsets.only(
-                        left: _insetFor(children[i]),
-                        right: AppDimens.pageMargin,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+            child: Material(
+              type: MaterialType.transparency,
+              child: Column(
+                children: [
+                  for (var i = 0; i < children.length; i++) ...[
+                    children[i],
+                    if (withDividers && i < children.length - 1)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          left: _insetFor(children[i]),
+                          right: AppDimens.pageMargin,
+                        ),
+                        child: Divider(
+                          color: divider,
+                          height: 0.5,
+                          thickness: 0.5,
+                        ),
                       ),
-                      child:
-                          Divider(color: divider, height: 0.5, thickness: 0.5),
-                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

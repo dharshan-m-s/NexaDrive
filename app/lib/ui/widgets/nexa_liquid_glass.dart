@@ -29,7 +29,7 @@ class NexaLiquidGlass extends StatefulWidget {
       Radius.circular(AppDimens.radiusMedium),
     ),
     this.padding = const EdgeInsets.all(AppDimens.space12),
-    this.blurSigma = 2,
+    this.blurSigma = 1.8,
     this.enabled = true,
     this.forceOpaque = false,
     this.showHighlight = true,
@@ -100,7 +100,7 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
     final active = !opaque;
     final dark = brightness == Brightness.dark;
     final tint = AppColors.glassSurfaceFor(brightness);
-    final tintAlpha = (widget.tintOpacity ?? (dark ? 0.12 : 0.085))
+    final tintAlpha = (widget.tintOpacity ?? (dark ? 0.105 : 0.07))
         .clamp(0.0, 0.20)
         .toDouble();
     final edge = dark
@@ -144,12 +144,21 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
               Positioned.fill(
                 child: BackdropFilter(
                   filter: shader != null
-                      ? ui.ImageFilter.shader(shader)
+                      ? ui.ImageFilter.compose(
+                          // Blur the live backdrop first, then refract that
+                          // texture with the GPU shader. The edge is optically
+                          // displaced; this is not a transparent tint layer.
+                          outer: ui.ImageFilter.shader(shader),
+                          inner: ui.ImageFilter.blur(
+                            sigmaX: widget.blurSigma.clamp(0.0, 2.4).toDouble(),
+                            sigmaY: widget.blurSigma.clamp(0.0, 2.4).toDouble(),
+                          ),
+                        )
                       : ui.ImageFilter.blur(
-                          // Never let the fallback turn into a heavy frosted
-                          // overlay just because a caller requested a large blur.
-                          sigmaX: widget.blurSigma.clamp(0.0, 3.0).toDouble(),
-                          sigmaY: widget.blurSigma.clamp(0.0, 3.0).toDouble(),
+                          // Older/unsupported renderers keep a modest frosted
+                          // fallback. Impeller uses the refractive shader path.
+                          sigmaX: widget.blurSigma.clamp(0.0, 4.0).toDouble(),
+                          sigmaY: widget.blurSigma.clamp(0.0, 4.0).toDouble(),
                         ),
                   child: const SizedBox.expand(),
                 ),

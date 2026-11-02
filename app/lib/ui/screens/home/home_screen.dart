@@ -11,6 +11,7 @@ import '../../navigation/file_opener.dart';
 import '../../widgets/nexa_components.dart';
 import '../files/files_screen.dart' show FilesIntent;
 import '../transfers/transfers_screen.dart';
+import 'storage_insights_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final Session session;
@@ -160,7 +161,11 @@ class _HomeScreenState extends State<HomeScreen> {
             child: storage != null
                 ? _StorageHero(
                     storage: storage,
-                    onTap: () => widget.onNavigate(1),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => StorageInsightsScreen(api: widget.api),
+                      ),
+                    ),
                   )
                 : _loading
                     ? const Center(
@@ -175,8 +180,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         onRetry: load,
                       ),
           ),
-          const SizedBox(height: AppDimens.space24),
-
           // ------------------------------------- quick actions (focus blocks)
           const _SectionHeader('Quick actions'),
           const SizedBox(height: AppDimens.space12),
@@ -244,14 +247,14 @@ class _StorageHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final usedBytes = storage.usedBytes;
     final quotaBytes = storage.quotaBytes;
-    final hasQuota = quotaBytes != null && quotaBytes > 0;
-    final (value, unit) = _decompose(usedBytes);
+    final hasQuota = quotaBytes != null;
+    final (value, _) = _decompose(usedBytes);
 
     final secondary = hasQuota ? 'of ${Format.bytes(quotaBytes)} used' : null;
     final detail = hasQuota
         ? '${Format.bytes(storage.freeBytes)} free · '
             '${Format.count(storage.fileCount, 'file')}'
-        : 'Storage quota is not set on this server';
+        : 'Unlimited storage · ${Format.count(storage.fileCount, 'file')}';
 
     return NexaHero(
       label: 'Storage',
@@ -260,6 +263,7 @@ class _StorageHero extends StatelessWidget {
       detail: detail,
       fraction: hasQuota ? storage.usageFraction : 0,
       onTap: onTap,
+      actionLabel: 'INSIGHTS',
     );
   }
 }
@@ -298,29 +302,34 @@ class _QuickActionsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     final items = <_QuickActionData>[
       _QuickActionData(
         Icons.cloud_upload_outlined,
         'Upload files',
-        'Add files to your cloud',
+        'Add to your cloud',
+        AppColors.accentFor(brightness),
         () => _request(FilesIntent.upload),
       ),
       _QuickActionData(
         Icons.drive_folder_upload_outlined,
         'Upload folder',
         'Keep folders together',
+        const Color(0xFF2C9AA0),
         () => _request(FilesIntent.uploadFolder),
       ),
       _QuickActionData(
         Icons.create_new_folder_outlined,
         'New folder',
-        'Organise your files',
+        'Organise your space',
+        AppColors.successFor(brightness),
         () => _request(FilesIntent.newFolder),
       ),
       _QuickActionData(
         Icons.photo_library_outlined,
         'Photo library',
-        'Browse your memories',
+        'Your memories, together',
+        const Color(0xFFD58B4B),
         () => onNavigate(3),
       ),
     ];
@@ -335,7 +344,11 @@ class _QuickActionsGrid extends StatelessWidget {
           runSpacing: spacing,
           children: [
             for (final item in items)
-              SizedBox(width: width, child: _QuickActionTile(data: item)),
+              SizedBox(
+                width: width,
+                height: 116,
+                child: _QuickActionTile(data: item),
+              ),
           ],
         );
       },
@@ -347,71 +360,136 @@ class _QuickActionData {
   final IconData icon;
   final String title;
   final String subtitle;
+  final Color tint;
   final VoidCallback onTap;
-  const _QuickActionData(this.icon, this.title, this.subtitle, this.onTap);
+
+  const _QuickActionData(
+    this.icon,
+    this.title,
+    this.subtitle,
+    this.tint,
+    this.onTap,
+  );
 }
 
-class _QuickActionTile extends StatelessWidget {
+class _QuickActionTile extends StatefulWidget {
   final _QuickActionData data;
   const _QuickActionTile({required this.data});
 
   @override
+  State<_QuickActionTile> createState() => _QuickActionTileState();
+}
+
+class _QuickActionTileState extends State<_QuickActionTile> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    return Material(
-      color: AppColors.surfaceFor(brightness),
-      borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-      child: InkWell(
-        onTap: data.onTap,
-        borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space12,
-            vertical: AppDimens.space12,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.accentContainerFor(brightness),
-                  borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+    final radius = BorderRadius.circular(AppDimens.radiusLarge);
+    final tint = widget.data.tint;
+
+    return AnimatedScale(
+      scale: _pressed ? 0.975 : 1,
+      duration: const Duration(milliseconds: 140),
+      curve: Curves.easeOutCubic,
+      child: Material(
+        color: AppColors.surfaceFor(brightness),
+        borderRadius: radius,
+        child: InkWell(
+          onTap: widget.data.onTap,
+          onHighlightChanged: (value) {
+            if (_pressed != value) setState(() => _pressed = value);
+          },
+          borderRadius: radius,
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              border: Border.all(
+                color: tint.withValues(
+                  alpha: brightness == Brightness.dark ? 0.22 : 0.13,
                 ),
-                child: Icon(
-                  data.icon,
-                  size: 21,
-                  color: AppColors.accentFor(brightness),
-                ),
+                width: 0.8,
               ),
-              const SizedBox(width: AppDimens.space10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      data.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyle.subheadline.copyWith(
-                        color: AppColors.labelPrimaryFor(brightness),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: AppDimens.space2),
-                    Text(
-                      data.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyle.caption2.copyWith(
-                        color: AppColors.labelSecondaryFor(brightness),
-                      ),
-                    ),
-                  ],
-                ),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  tint.withValues(
+                    alpha: brightness == Brightness.dark ? 0.15 : 0.075,
+                  ),
+                  AppColors.surfaceFor(brightness),
+                ],
               ),
-            ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppDimens.space12,
+                AppDimens.space12,
+                AppDimens.space12,
+                AppDimens.space10,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              tint.withValues(alpha: 0.23),
+                              tint.withValues(alpha: 0.09),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(
+                            AppDimens.radiusMedium,
+                          ),
+                          border: Border.all(
+                            color: tint.withValues(alpha: 0.18),
+                          ),
+                        ),
+                        child: Icon(
+                          widget.data.icon,
+                          size: 21,
+                          color: tint,
+                        ),
+                      ),
+                      const Spacer(),
+                      Icon(
+                        Icons.arrow_outward_rounded,
+                        size: 15,
+                        color: AppColors.labelTertiaryFor(brightness),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Text(
+                    widget.data.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyle.subheadline.copyWith(
+                      color: AppColors.labelPrimaryFor(brightness),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.15,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space2),
+                  Text(
+                    widget.data.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyle.caption2.copyWith(
+                      color: AppColors.labelSecondaryFor(brightness),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -497,8 +575,29 @@ class _RecentSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionHeader('Recent'),
-        const SizedBox(height: AppDimens.space12),
+        Row(
+          children: [
+            const Expanded(child: _SectionHeader('Recent')),
+            TextButton(
+              onPressed: () => onNavigate(1),
+              style: TextButton.styleFrom(
+                minimumSize: const Size(44, 36),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimens.space8,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('See all', style: AppTextStyle.subheadline),
+                  const SizedBox(width: AppDimens.space2),
+                  const Icon(Icons.chevron_right_rounded, size: 17),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppDimens.space8),
         if (storage != null && storage!.fileCount == 0)
           NexaSurface(
             level: NexaSurfaceLevel.grouped,

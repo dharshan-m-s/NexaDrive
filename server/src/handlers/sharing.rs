@@ -212,6 +212,22 @@ pub(crate) async fn delete_share(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Delete a received share only for the authenticated recipient. The owner
+/// endpoint is separate and intentionally uses owner_id instead.
+async fn remove_recipient_share(
+    db: &SqlitePool,
+    share_id: Uuid,
+    recipient_id: Uuid,
+) -> Result<u64, sqlx::Error> {
+    let result =
+        sqlx::query("DELETE FROM shares WHERE id=$1 AND recipient_user_id=$2 AND is_link=FALSE")
+            .bind(share_id)
+            .bind(recipient_id)
+            .execute(db)
+            .await?;
+    Ok(result.rows_affected())
+}
+
 pub(crate) async fn list_shared(
     State(state): State<AppState>,
     axum::extract::Extension(user_id): axum::extract::Extension<Uuid>,
@@ -235,6 +251,29 @@ pub(crate) async fn list_shared(
             })
             .collect(),
     ))
+}
+
+/// Remove the current recipient's access without permitting them to revoke
+/// a share that belongs to another recipient.
+pub(crate) async fn leave_share(
+    State(state): State<AppState>,
+    axum::extract::Extension(user_id): axum::extract::Extension<Uuid>,
+    Query(query): Query<IdQuery>,
+) -> Result<StatusCode, AppError> {
+    let id = query
+        .id
+        .ok_or_else(|| AppError::BadRequest("Share id is required".into()))?;
+    if remove_recipient_share(&state.db, id, user_id).await? == 0 {
+        return Err(AppError::NotFound);
+    }
+    audit(
+        &state.db,
+        user_id,
+        "leave_shared_item",
+        Some(&id.to_string()),
+    )
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub(crate) async fn list_shared_items(
@@ -544,6 +583,99 @@ mod tests {
             !link_share_is_allowed(true, false),
             "folder link shares do not"
         );
+    }
+
+    #[tokio::test]
+    async fn recipient_unlink_is_scoped_to_that_recipient_and_never_revokes_owner_shares() {
+        use sqlx::sqlite::SqlitePoolOptions;
+
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TABLE shares (
+                id BLOB PRIMARY KEY,
+                owner_id BLOB NOT NULL,
+                recipient_user_id BLOB,
+                is_link BOOLEAN NOT NULL
+            )",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let owner = Uuid::new_v4();
+        let recipient = Uuid::new_v4();
+        let other_user = Uuid::new_v4();
+        let named_share = Uuid::new_v4();
+        let public_link = Uuid::new_v4();
+
+        sqlx::query(
+            "INSERT INTO shares (id, owner_id, recipient_user_id, is_link)
+             VALUES ($1, $2, $3, FALSE)",
+        )
+        .bind(named_share)
+        .bind(owner)
+        .bind(recipient)
+        .execute(&db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO shares (id, owner_id, recipient_user_id, is_link)
+             VALUES ($1, $2, NULL, TRUE)",
+        )
+        .bind(public_link)
+        .bind(owner)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        // Neither the owner nor a different account may use recipient unlink.
+        assert_eq!(
+            remove_recipient_share(&db, named_share, owner)
+                .await
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            remove_recipient_share(&db, named_share, other_user)
+                .await
+                .unwrap(),
+            0
+        );
+
+        // Public links are not recipient-owned entries and cannot be unlinked
+        // through this endpoint.
+        assert_eq!(
+            remove_recipient_share(&db, public_link, recipient)
+                .await
+                .unwrap(),
+            0
+        );
+
+        let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM shares WHERE id IN ($1, $2)")
+            .bind(named_share)
+            .bind(public_link)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(remaining, 2);
+
+        // Only the authenticated named recipient can remove the received row.
+        assert_eq!(
+            remove_recipient_share(&db, named_share, recipient)
+                .await
+                .unwrap(),
+            1
+        );
+        let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM shares WHERE id=$1")
+            .bind(named_share)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(remaining, 0);
     }
 
     #[test]

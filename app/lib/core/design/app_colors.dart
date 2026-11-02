@@ -143,6 +143,31 @@ abstract final class AppColors {
   static Color glassSelectionFor(Brightness b) =>
       b == Brightness.dark ? glassSelectionDark : glassSelectionLight;
 
+  // ---------------------------------------------------------- analytics
+  /// Consistent chart hues for file composition and storage distribution.
+  static const List<Color> analyticsPaletteLight = [
+    Color(0xFF6658E8),
+    Color(0xFF229DBD),
+    Color(0xFF26986B),
+    Color(0xFFD9912F),
+    Color(0xFFD96C8A),
+    Color(0xFF78809B),
+  ];
+
+  static const List<Color> analyticsPaletteDark = [
+    Color(0xFFA79BFF),
+    Color(0xFF67C9E2),
+    Color(0xFF65D6A0),
+    Color(0xFFFFC36F),
+    Color(0xFFFF9BB3),
+    Color(0xFFABB4D0),
+  ];
+
+  static List<Color> analyticsPaletteFor(Brightness brightness) =>
+      brightness == Brightness.dark
+          ? analyticsPaletteDark
+          : analyticsPaletteLight;
+
   // ------------------------------------------------------------ shadows
   /// iOS keeps depth subtle: a single soft ambient shadow for floating
   /// surfaces, plus a slightly stronger one for modals.

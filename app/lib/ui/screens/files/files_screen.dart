@@ -8,6 +8,7 @@ import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_dimensions.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/models/file_entry.dart';
+import '../../../../core/utils/file_sort.dart';
 import '../../../../core/utils/file_kind.dart';
 import '../../../../core/utils/format.dart';
 import '../../../services/api.dart';
@@ -23,7 +24,6 @@ import '../../widgets/nexa_chip.dart';
 import '../../widgets/nexa_empty_state.dart';
 import '../../widgets/nexa_file_tile.dart';
 import '../../widgets/nexa_loading_state.dart';
-import '../../widgets/nexa_liquid_glass.dart';
 import '../../widgets/nexa_sheet.dart';
 import '../../widgets/upload_progress_dialog.dart';
 import '../scanner/scanner_screen.dart';
@@ -31,8 +31,6 @@ import '../search/search_screen.dart';
 import '../../navigation/file_opener.dart';
 import 'file_share_sheet.dart';
 import 'file_properties_sheet.dart';
-
-enum _Sort { name, size, newOld, oldNew }
 
 enum _FileFilter { all, folders, files }
 
@@ -77,7 +75,7 @@ class _FilesScreenState extends State<FilesScreen> {
   bool _selecting = false;
   final Set<String> _selected = <String>{};
   String? _error;
-  _Sort _sort = _Sort.name;
+  FileSortOrder _sort = FileSortOrder.nameAscending;
   _FileFilter _filter = _FileFilter.all;
   List<FileEntry>? _sortedCache;
   final Set<String> _busyDownloads = <String>{};
@@ -553,95 +551,13 @@ class _FilesScreenState extends State<FilesScreen> {
     }
   }
 
-  Future<void> _showMoreActions() async {
-    await showNexaSheet<void>(
-      context,
-      isScrollControlled: false,
-      builder: (sheetContext) => NexaSheetBody(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const NexaSheetHeader(
-              title: 'More actions',
-              subtitle: 'Tools for organising this folder',
-            ),
-            NexaSheetAction(
-              icon: Icons.create_new_folder_outlined,
-              title: 'New folder',
-              subtitle: 'Create a folder here',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _createFolder();
-              },
-            ),
-            NexaSheetAction(
-              icon: Icons.drive_folder_upload_outlined,
-              title: 'Upload folder',
-              subtitle: 'Keep a folder and its structure together',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _pickAndUploadFolder();
-              },
-            ),
-            NexaSheetAction(
-              icon: Icons.document_scanner_outlined,
-              title: 'Scan document',
-              subtitle: 'Capture pages with your camera',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                Navigator.of(context)
-                    .push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        ScannerScreen(api: widget.api, folder: _path),
-                  ),
-                )
-                    .then((saved) {
-                  if (saved == true && mounted) load();
-                });
-              },
-            ),
-            NexaSheetAction(
-              icon: Icons.sort_rounded,
-              title: 'Sort by',
-              subtitle: 'Change the order of files and folders',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _pickSort();
-              },
-            ),
-            NexaSheetAction(
-              icon: _grid ? Icons.view_list_rounded : Icons.grid_view_rounded,
-              title: _grid ? 'Switch to list view' : 'Switch to grid view',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                setState(() => _grid = !_grid);
-              },
-            ),
-            if (_path.isNotEmpty)
-              NexaSheetAction(
-                icon: Icons.arrow_upward_rounded,
-                title: 'Back to My files',
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  setState(() => _path = '');
-                  load();
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _pickSort() async {
-    final selected = await showDialog<_Sort>(
+    final selected = await showDialog<FileSortOrder>(
       context: context,
       builder: (context) => SimpleDialog(
         title: const Text('Sort by'),
         children: [
-          for (final option in _Sort.values)
+          for (final option in FileSortOrder.values)
             SimpleDialogOption(
               onPressed: () => Navigator.pop(context, option),
               child: Row(
@@ -678,11 +594,13 @@ class _FilesScreenState extends State<FilesScreen> {
     }
   }
 
-  static String _sortLabel(_Sort sort) => switch (sort) {
-        _Sort.name => 'Name (A–Z)',
-        _Sort.size => 'Size (largest first)',
-        _Sort.newOld => 'Newest first',
-        _Sort.oldNew => 'Oldest first',
+  static String _sortLabel(FileSortOrder sort) => switch (sort) {
+        FileSortOrder.nameAscending => 'Name (A–Z)',
+        FileSortOrder.nameDescending => 'Name (Z–A)',
+        FileSortOrder.sizeDescending => 'Size (largest first)',
+        FileSortOrder.sizeAscending => 'Size (smallest first)',
+        FileSortOrder.modifiedNewest => 'Newest first',
+        FileSortOrder.modifiedOldest => 'Oldest first',
       };
 
   Future<void> _downloadItem(FileEntry entry) async {
@@ -712,40 +630,19 @@ class _FilesScreenState extends State<FilesScreen> {
   List<FileEntry> get _sorted => _sortedCache ??= _computeSorted();
 
   /// The current folder listing after the user's type filter is applied.
-  List<FileEntry> get _visibleItems => switch (_filter) {
-        _FileFilter.all => _sorted,
-        _FileFilter.folders =>
-          _sorted.where((entry) => entry.isFolder).toList(),
-        _FileFilter.files => _sorted.where((entry) => !entry.isFolder).toList(),
-      };
+  List<FileEntry> get _visibleItems => filterFileEntries(
+        _sorted,
+        switch (_filter) {
+          _FileFilter.all => FileEntryFilter.all,
+          _FileFilter.folders => FileEntryFilter.folders,
+          _FileFilter.files => FileEntryFilter.files,
+        },
+      );
 
   int get _folderCount => _items.where((entry) => entry.isFolder).length;
   int get _fileCount => _items.where((entry) => !entry.isFolder).length;
 
-  List<FileEntry> _computeSorted() {
-    final folders = _items.where((e) => e.isFolder).toList();
-    final files = _items.where((e) => !e.isFolder).toList();
-    int Function(FileEntry, FileEntry) cmp;
-    switch (_sort) {
-      case _Sort.name:
-        cmp = (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase());
-        break;
-      case _Sort.size:
-        cmp = (a, b) => (b.size ?? 0).compareTo(a.size ?? 0);
-        break;
-      case _Sort.newOld:
-        cmp = (a, b) => (b.modified?.millisecondsSinceEpoch ?? 0)
-            .compareTo(a.modified?.millisecondsSinceEpoch ?? 0);
-        break;
-      case _Sort.oldNew:
-        cmp = (a, b) => (a.modified?.millisecondsSinceEpoch ?? 0)
-            .compareTo(b.modified?.millisecondsSinceEpoch ?? 0);
-        break;
-    }
-    folders.sort(cmp);
-    files.sort(cmp);
-    return [...folders, ...files];
-  }
+  List<FileEntry> _computeSorted() => sortFileEntries(_items, _sort);
 
   @override
   Widget build(BuildContext context) {
@@ -786,7 +683,7 @@ class _FilesScreenState extends State<FilesScreen> {
                           builder: (_) => SearchScreen(api: widget.api)),
                     ),
             onSort: _selecting ? null : _pickSort,
-            onMore: _showMoreActions,
+            onRefresh: load,
             onScan: _selecting
                 ? null
                 : () => Navigator.of(context)
@@ -1180,6 +1077,15 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 }
 
+enum _FileHeaderAction {
+  refresh,
+  newFolder,
+  uploadFolder,
+  scan,
+  sort,
+  toggleView,
+}
+
 class _ViewArea extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -1196,7 +1102,7 @@ class _ViewArea extends StatelessWidget {
   final VoidCallback? onSearch;
   final VoidCallback? onScan;
   final VoidCallback? onSort;
-  final VoidCallback onMore;
+  final VoidCallback? onRefresh;
 
   const _ViewArea({
     required this.title,
@@ -1214,7 +1120,7 @@ class _ViewArea extends StatelessWidget {
     this.onSearch,
     this.onScan,
     this.onSort,
-    required this.onMore,
+    this.onRefresh,
   });
 
   @override
@@ -1250,7 +1156,8 @@ class _ViewArea extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: NexaTypography.caption.copyWith(
-                        color: AppColors.textSecondaryFor(brightness)),
+                      color: AppColors.textSecondaryFor(brightness),
+                    ),
                   ),
                 ],
                 if (selecting && onBackToRoot != null) ...[
@@ -1272,38 +1179,120 @@ class _ViewArea extends StatelessWidget {
               icon: const Icon(Icons.close_rounded),
             )
           else
-            NexaLiquidGlass(
-              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-              padding: const EdgeInsets.symmetric(horizontal: AppDimens.space2),
-              blurSigma: 12,
-              showShadow: false,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: 'Upload files',
-                    onPressed: onUpload,
-                    color: AppColors.accentFor(Theme.of(context).brightness),
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.transparent,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Upload files',
+                  onPressed: onUpload,
+                  color: AppColors.accentFor(brightness),
+                  icon: const Icon(Icons.upload_rounded),
+                ),
+                IconButton(
+                  tooltip: 'Search files',
+                  onPressed: onSearch,
+                  icon: const Icon(Icons.search_rounded),
+                ),
+                PopupMenuButton<_FileHeaderAction>(
+                  tooltip: 'More actions',
+                  icon: const Icon(Icons.more_horiz_rounded),
+                  onSelected: (action) {
+                    switch (action) {
+                      case _FileHeaderAction.refresh:
+                        onRefresh?.call();
+                        break;
+                      case _FileHeaderAction.newFolder:
+                        onNewFolder?.call();
+                        break;
+                      case _FileHeaderAction.uploadFolder:
+                        onUploadFolder?.call();
+                        break;
+                      case _FileHeaderAction.scan:
+                        onScan?.call();
+                        break;
+                      case _FileHeaderAction.sort:
+                        onSort?.call();
+                        break;
+                      case _FileHeaderAction.toggleView:
+                        onToggleView();
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: _FileHeaderAction.refresh,
+                      child: _FileMenuLabel(
+                        icon: Icons.refresh_rounded,
+                        label: 'Refresh folder',
+                      ),
                     ),
-                    icon: const Icon(Icons.upload_rounded),
-                  ),
-                  IconButton(
-                    tooltip: 'Search files',
-                    onPressed: onSearch,
-                    icon: const Icon(Icons.search_rounded),
-                  ),
-                  IconButton(
-                    tooltip: 'More actions',
-                    onPressed: onMore,
-                    icon: const Icon(Icons.more_horiz_rounded),
-                  ),
-                ],
-              ),
+                    const PopupMenuDivider(),
+                    if (onNewFolder != null)
+                      const PopupMenuItem(
+                        value: _FileHeaderAction.newFolder,
+                        child: _FileMenuLabel(
+                          icon: Icons.create_new_folder_outlined,
+                          label: 'New folder',
+                        ),
+                      ),
+                    if (onUploadFolder != null)
+                      const PopupMenuItem(
+                        value: _FileHeaderAction.uploadFolder,
+                        child: _FileMenuLabel(
+                          icon: Icons.drive_folder_upload_outlined,
+                          label: 'Upload folder',
+                        ),
+                      ),
+                    if (onScan != null)
+                      const PopupMenuItem(
+                        value: _FileHeaderAction.scan,
+                        child: _FileMenuLabel(
+                          icon: Icons.document_scanner_outlined,
+                          label: 'Scan document',
+                        ),
+                      ),
+                    if (onSort != null)
+                      const PopupMenuItem(
+                        value: _FileHeaderAction.sort,
+                        child: _FileMenuLabel(
+                          icon: Icons.sort_rounded,
+                          label: 'Sort by…',
+                        ),
+                      ),
+                    PopupMenuItem(
+                      value: _FileHeaderAction.toggleView,
+                      child: _FileMenuLabel(
+                        icon: isGrid
+                            ? Icons.view_list_rounded
+                            : Icons.grid_view_rounded,
+                        label: isGrid ? 'List view' : 'Grid view',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
         ],
       ),
+    );
+  }
+}
+
+class _FileMenuLabel extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _FileMenuLabel({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: AppDimens.iconSm),
+        const SizedBox(width: AppDimens.space10),
+        Text(label),
+      ],
     );
   }
 }

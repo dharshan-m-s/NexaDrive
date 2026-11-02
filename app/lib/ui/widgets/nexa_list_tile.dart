@@ -42,6 +42,34 @@ class NexaListTile extends StatelessWidget {
     this.minHeight,
   });
 
+  static Color _semanticTint(
+    IconData? icon,
+    Color fallback,
+    Brightness brightness,
+  ) {
+    if (icon == Icons.notifications_outlined ||
+        icon == Icons.notifications_rounded ||
+        icon == Icons.schedule_rounded) {
+      return AppColors.warningFor(brightness);
+    }
+    if (icon == Icons.delete_outline_rounded ||
+        icon == Icons.delete_rounded ||
+        icon == Icons.logout_rounded) {
+      return AppColors.errorFor(brightness);
+    }
+    if (icon == Icons.check_circle_outline_rounded ||
+        icon == Icons.verified_user_outlined ||
+        icon == Icons.lock_outline_rounded) {
+      return AppColors.successFor(brightness);
+    }
+    if (icon == Icons.sync_rounded ||
+        icon == Icons.cloud_upload_outlined ||
+        icon == Icons.cloud_done_outlined) {
+      return const Color(0xFF299AA0);
+    }
+    return fallback;
+  }
+
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
@@ -51,20 +79,31 @@ class NexaListTile extends StatelessWidget {
 
     Widget? leadingWidget = leading;
     if (leadingWidget == null && resolvedIcon != null) {
+      final tint =
+          leadingIconColor ?? _semanticTint(resolvedIcon, accent, brightness);
+      final background = leadingBackgroundColor ??
+          tint.withValues(alpha: brightness == Brightness.dark ? 0.20 : 0.11);
       leadingWidget = Container(
         width: AppDimens.iconTileLarge,
         height: AppDimens.iconTileLarge,
         decoration: BoxDecoration(
-          color: leadingBackgroundColor ??
-              (brightness == Brightness.dark
-                  ? accent.withValues(alpha: 0.18)
-                  : accent.withValues(alpha: 0.12)),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              background,
+              tint.withValues(
+                alpha: brightness == Brightness.dark ? 0.13 : 0.055,
+              ),
+            ],
+          ),
           borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+          border: Border.all(color: tint.withValues(alpha: 0.16), width: 0.7),
         ),
         child: Icon(
           resolvedIcon,
           size: AppDimens.iconMedium,
-          color: leadingIconColor ?? accent,
+          color: tint,
         ),
       );
     }
@@ -81,13 +120,14 @@ class NexaListTile extends StatelessWidget {
         title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: AppTextStyle.title1.copyWith(
+        style: AppTextStyle.rowTitle.copyWith(
           color: selected
               ? onAccent
               : (enabled
                   ? AppColors.labelPrimaryFor(brightness)
                   : AppColors.labelTertiaryFor(brightness)),
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          letterSpacing: -0.1,
         ),
       ),
       subtitle: subtitle == null

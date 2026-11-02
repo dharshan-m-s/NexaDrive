@@ -3,7 +3,6 @@ import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
-import 'nexa_liquid_glass.dart';
 
 /// Opens an iOS-style modal bottom sheet.
 Future<T?> showNexaSheet<T>(
@@ -36,9 +35,9 @@ Future<T?> showNexaSheet<T>(
 ///
 /// Use this for self-contained bodies such as [FileShareSheet] or [FolderPicker].
 /// Use [showNexaSheet] with a [NexaSheetBody] instead for menu/action sheets:
-/// that variant paints a transparent modal so [NexaSheetBody] can own the
-/// surface. Passing such a self-contained body to [showNexaSheet] would leave it
-/// with no background at all.
+/// [NexaSheetBody] paints its own opaque elevated surface, separate from the
+/// floating navigation dock and from the page beneath it. A self-contained
+/// body such as [FolderPickerBody] should use [showNexaFormSheet] instead.
 Future<T?> showNexaFormSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
@@ -152,21 +151,47 @@ class NexaSheetBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
 
-    return NexaLiquidGlass(
-      borderRadius: const BorderRadius.vertical(
-        top: Radius.circular(AppDimens.radiusXLarge),
+    return Material(
+      color: AppColors.surfaceElevatedFor(brightness),
+      elevation: 22,
+      shadowColor: Colors.black.withValues(alpha: 0.28),
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppDimens.radiusXLarge),
+        ),
+        side: BorderSide(
+          color: AppColors.separatorOpaqueFor(brightness),
+          width: 0.7,
+        ),
       ),
-      padding: EdgeInsets.zero,
-      blurSigma: 2,
-      tintOpacity: brightness == Brightness.dark ? 0.17 : 0.12,
-      showShadow: false,
+      clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
-        child: SingleChildScrollView(
-          padding: padding,
-          child: child,
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.zero,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(
+                    top: AppDimens.space12,
+                    bottom: AppDimens.space12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.separatorOpaqueFor(brightness),
+                    borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                  ),
+                ),
+                Padding(padding: padding, child: child),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -267,7 +292,7 @@ class _NexaSheetActionState extends State<NexaSheetAction> {
                   children: [
                     Text(
                       widget.title,
-                      style: AppTextStyle.title1.copyWith(
+                      style: AppTextStyle.rowTitle.copyWith(
                         color: widget.enabled
                             ? AppColors.labelPrimaryFor(brightness)
                             : AppColors.labelTertiaryFor(brightness),
