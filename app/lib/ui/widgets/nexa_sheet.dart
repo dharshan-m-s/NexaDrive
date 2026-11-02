@@ -67,6 +67,7 @@ class NexaSheetHeader extends StatelessWidget {
   final String? subtitle;
   final Widget? trailing;
   final VoidCallback? onClose;
+  final IconData? icon;
 
   const NexaSheetHeader({
     super.key,
@@ -74,7 +75,21 @@ class NexaSheetHeader extends StatelessWidget {
     this.subtitle,
     this.trailing,
     this.onClose,
+    this.icon,
   });
+
+  IconData _iconForTitle(String value) {
+    final normalized = value.toLowerCase();
+    if (normalized.contains('share')) return Icons.ios_share_rounded;
+    if (normalized.contains('propert') || normalized.contains('detail')) return Icons.info_outline_rounded;
+    if (normalized.contains('folder') || normalized.contains('move') || normalized.contains('copy')) return Icons.folder_open_rounded;
+    if (normalized.contains('user') || normalized.contains('member')) return Icons.person_outline_rounded;
+    if (normalized.contains('upload')) return Icons.cloud_upload_rounded;
+    if (normalized.contains('download')) return Icons.download_rounded;
+    if (normalized.contains('delete') || normalized.contains('trash')) return Icons.delete_outline_rounded;
+    if (normalized.contains('rename') || normalized.contains('edit')) return Icons.edit_rounded;
+    return Icons.tune_rounded;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -91,12 +106,31 @@ class NexaSheetHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.accentContainerFor(brightness),
+              borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+              border: Border.all(
+                color: AppColors.accentTextFor(brightness).withValues(alpha: 0.12),
+              ),
+            ),
+            child: Icon(
+              icon ?? _iconForTitle(title),
+              size: 21,
+              color: AppColors.accentTextFor(brightness),
+            ),
+          ),
+          const SizedBox(width: AppDimens.space12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTextStyle.sectionHeader.copyWith(
                     color: AppColors.labelPrimaryFor(brightness),
                   ),
