@@ -48,7 +48,7 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
   });
 
-  testWidgets('narrow layout shows the More glass launcher', (tester) async {
+  testWidgets('narrow layout shows a compact More Liquid Glass sheet', (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -66,29 +66,37 @@ void main() {
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
 
-    // More is a floating 3x3 glass launcher, not a bottom sheet. Scope the
-    // assertions to that launcher because the background can reuse labels.
-    final launcher = find.ancestor(
-      of: find.text('Your tools and destinations'),
+    // More is a content-sized modal bottom sheet. Its optical glass is
+    // retained, while primary destinations stay in the navigation dock.
+    final sheet = find.ancestor(
+      of: find.text('Tools and activity'),
       matching: find.byType(NexaLiquidGlass),
     );
-    Finder inLauncher(String label) => find.descendant(
-          of: launcher,
-          matching: find.text(label),
-        );
-    expect(launcher, findsOneWidget);
+    Finder inSheet(String label) =>
+        find.descendant(of: sheet, matching: find.text(label));
+    expect(sheet, findsOneWidget);
+    expect(find.byType(BottomSheet), findsOneWidget);
     expect(
-      find.descendant(of: launcher, matching: find.byType(GridView)),
+      tester.getSize(find.byType(BottomSheet)).height,
+      lessThan(500),
+      reason: 'More must remain compact rather than filling the screen',
+    );
+    expect(
+      find.descendant(of: sheet, matching: find.byType(GridView)),
       findsOneWidget,
     );
-    expect(inLauncher('Scan document'), findsOneWidget);
-    expect(inLauncher('Transfers'), findsOneWidget);
-    expect(inLauncher('Trash'), findsOneWidget);
-    expect(inLauncher('Sync center'), findsOneWidget);
-    expect(inLauncher('Notifications'), findsOneWidget);
-    expect(inLauncher('Settings'), findsOneWidget);
-    expect(inLauncher('Storage insights'), findsOneWidget);
-    expect(inLauncher('My files'), findsOneWidget);
-    expect(inLauncher('Shared'), findsOneWidget);
+    for (final label in [
+      'Scan document',
+      'Transfers',
+      'Trash',
+      'Sync center',
+      'Notifications',
+      'Settings',
+    ]) {
+      expect(inSheet(label), findsOneWidget);
+    }
+    expect(inSheet('Storage insights'), findsNothing);
+    expect(inSheet('My files'), findsNothing);
+    expect(inSheet('Shared'), findsNothing);
   });
 }
