@@ -376,47 +376,61 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Expanded(child: _moreMenuTile(
-                      icon: Icons.document_scanner_outlined,
-                      title: 'Scan',
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => ScannerScreen(api: api)),
+                    Expanded(
+                      child: _moreMenuTile(
+                        icon: Icons.document_scanner_outlined,
+                        title: 'Scan',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ScannerScreen(api: api),
+                          ),
+                        ),
                       ),
-                    )),
+                    ),
                     const SizedBox(width: 9),
-                    Expanded(child: _moreMenuTile(
-                      icon: Icons.cloud_upload_outlined,
-                      title: 'Transfers',
-                      onTap: _openTransfers,
-                    )),
+                    Expanded(
+                      child: _moreMenuTile(
+                        icon: Icons.cloud_upload_outlined,
+                        title: 'Transfers',
+                        onTap: _openTransfers,
+                      ),
+                    ),
                     const SizedBox(width: 9),
-                    Expanded(child: _moreMenuTile(
-                      icon: Icons.delete_outline_rounded,
-                      title: 'Trash',
-                      onTap: () => _goTo(4),
-                    )),
+                    Expanded(
+                      child: _moreMenuTile(
+                        icon: Icons.delete_outline_rounded,
+                        title: 'Trash',
+                        onTap: () => _goTo(4),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 9),
                 Row(
                   children: [
-                    Expanded(child: _moreMenuTile(
-                      icon: Icons.sync_rounded,
-                      title: 'Sync',
-                      onTap: _openSyncCenter,
-                    )),
+                    Expanded(
+                      child: _moreMenuTile(
+                        icon: Icons.sync_rounded,
+                        title: 'Sync',
+                        onTap: _openSyncCenter,
+                      ),
+                    ),
                     const SizedBox(width: 9),
-                    Expanded(child: _moreMenuTile(
-                      icon: Icons.notifications_outlined,
-                      title: 'Alerts',
-                      onTap: _openNotifications,
-                    )),
+                    Expanded(
+                      child: _moreMenuTile(
+                        icon: Icons.notifications_outlined,
+                        title: 'Alerts',
+                        onTap: _openNotifications,
+                      ),
+                    ),
                     const SizedBox(width: 9),
-                    Expanded(child: _moreMenuTile(
-                      icon: Icons.settings_outlined,
-                      title: 'Settings',
-                      onTap: () => _goTo(5),
-                    )),
+                    Expanded(
+                      child: _moreMenuTile(
+                        icon: Icons.settings_outlined,
+                        title: 'Settings',
+                        onTap: () => _goTo(5),
+                      ),
+                    ),
                   ],
                 ),
               ],
