@@ -973,8 +973,8 @@ class _MoreMenuTile extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   color: item.color.withValues(
                     alpha: brightness == Brightness.dark ? 0.25 : 0.14,
