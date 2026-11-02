@@ -366,7 +366,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 constraints: BoxConstraints(minHeight: minHeight),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 440),
+                    constraints: BoxConstraints(
+                      minWidth: constraints.maxWidth.clamp(0.0, 440.0),
+                      maxWidth: 440,
+                    ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
