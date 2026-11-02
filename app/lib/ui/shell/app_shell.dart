@@ -33,7 +33,6 @@ import '../../update/update_controller.dart';
 import '../../update/update_downloader.dart';
 import '../../update/update_source.dart';
 import '../widgets/nexa_components.dart';
-import '../widgets/nexa_liquid_glass.dart';
 import 'navigation.dart';
 
 /// Application shell: brand, navigation context, and the active screen.
