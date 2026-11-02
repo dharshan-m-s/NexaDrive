@@ -512,7 +512,6 @@ class _Artwork extends StatelessWidget {
     );
   }
 }
-}
 
 /// Connecting state while the platform backend opens the stream.
 class _Buffering extends StatelessWidget {
