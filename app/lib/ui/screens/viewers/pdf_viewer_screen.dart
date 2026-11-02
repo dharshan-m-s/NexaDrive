@@ -165,6 +165,20 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       onPressed: () => Navigator.of(context).maybePop(),
                       icon: const Icon(Icons.arrow_back_rounded),
                     ),
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.accentContainerFor(brightness),
+                        borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+                      ),
+                      child: Icon(
+                        Icons.picture_as_pdf_rounded,
+                        size: 19,
+                        color: AppColors.accentTextFor(brightness),
+                      ),
+                    ),
+                    const SizedBox(width: AppDimens.space8),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
