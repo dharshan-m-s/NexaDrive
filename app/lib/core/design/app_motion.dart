@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 
 /// NexaDrive motion tokens.
 ///
-/// THE REFERENCE: Apple's animation guidance. Motion is responsive and
-/// physical: springs are critically damped by default, bounces are reserved for
-/// momentum-driven gestures, and nothing delays a user action. Every duration,
-/// curve and spring in NexaDrive must come from this file.
+/// Visual composition follows One UI's restraint; interaction follows the
+/// continuity and feedback quality expected from native iOS. Motion is
+/// responsive and physical: springs are critically damped by default, bounces
+/// are reserved for momentum-driven gestures, and nothing delays a user action.
+/// Every duration, curve and spring in NexaDrive must come from this file.
 abstract final class AppMotion {
   // ------------------------------------------------------------ durations
   /// Micro-interactions: press highlight, toggle, checkbox.
