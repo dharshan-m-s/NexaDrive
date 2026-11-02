@@ -90,16 +90,23 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
       body: SafeArea(
         bottom: false,
         child: NexaPage(
+          headerIcon: Icons.article_rounded,
           title: widget.file.name,
           subtitle:
               widget.file.size == null ? null : Format.bytes(widget.file.size),
           leading: const NexaBackButton(),
           headerAction: _text == null
               ? null
-              : IconButton(
-                  tooltip: 'Copy all text',
-                  onPressed: _copyText,
-                  icon: const Icon(Icons.copy_all_outlined),
+              : NexaLiquidGlass(
+                  borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                  padding: EdgeInsets.zero,
+                  blurSigma: 12,
+                  showShadow: false,
+                  child: IconButton(
+                    tooltip: 'Copy all text',
+                    onPressed: _copyText,
+                    icon: const Icon(Icons.copy_all_outlined),
+                  ),
                 ),
           body: switch ((_text, _error)) {
             (null, null) => const NexaLoadingBlock(),

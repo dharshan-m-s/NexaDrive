@@ -3,7 +3,7 @@ import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 
-/// NexaDrive text field — iOS-style rounded field with proper states.
+/// NexaDrive form field — One UI-inspired shape with native focus feedback.
 class NexaTextField extends StatefulWidget {
   final TextEditingController? controller;
   final String? label;
@@ -66,16 +66,29 @@ class _NexaTextFieldState extends State<NexaTextField> {
   late FocusNode _focusNode;
   bool _hasFocus = false;
 
+  FocusNode get _activeFocusNode => widget.focusNode ?? _focusNode;
+
   @override
   void initState() {
     super.initState();
     _focusNode = FocusNode();
-    _focusNode.addListener(_onFocusChange);
+    _activeFocusNode.addListener(_onFocusChange);
+    _hasFocus = _activeFocusNode.hasFocus;
+  }
+
+  @override
+  void didUpdateWidget(covariant NexaTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode != widget.focusNode) {
+      (oldWidget.focusNode ?? _focusNode).removeListener(_onFocusChange);
+      _activeFocusNode.addListener(_onFocusChange);
+      _hasFocus = _activeFocusNode.hasFocus;
+    }
   }
 
   @override
   void dispose() {
-    _focusNode.removeListener(_onFocusChange);
+    _activeFocusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
     super.dispose();
   }
@@ -95,7 +108,7 @@ class _NexaTextFieldState extends State<NexaTextField> {
         ? error
         : _hasFocus
             ? accent
-            : Colors.transparent;
+            : AppColors.separatorFor(brightness).withValues(alpha: 0.58);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -115,7 +128,7 @@ class _NexaTextFieldState extends State<NexaTextField> {
         ],
         TextFormField(
           controller: widget.controller,
-          focusNode: widget.focusNode ?? _focusNode,
+          focusNode: _activeFocusNode,
           keyboardType: widget.keyboardType,
           textInputAction: widget.textInputAction,
           obscureText: widget.obscureText,
@@ -182,13 +195,13 @@ class _NexaTextFieldState extends State<NexaTextField> {
                   )
                 : null,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+              borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
               borderSide: BorderSide.none,
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
               borderSide: BorderSide(
-                  color: borderColor, width: _hasFocus || hasError ? 2 : 0),
+                  color: borderColor, width: _hasFocus || hasError ? 1.5 : 0.8),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppDimens.radiusStandard),

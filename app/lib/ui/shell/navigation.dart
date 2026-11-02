@@ -149,7 +149,7 @@ class SideNavigation extends StatelessWidget {
 }
 
 /// A single sidebar row: an inset rounded selection fill, accent glyph.
-class SideNavItem extends StatelessWidget {
+class SideNavItem extends StatefulWidget {
   final IconData icon;
   final IconData? selectedIcon;
   final String label;
@@ -166,18 +166,31 @@ class SideNavItem extends StatelessWidget {
   });
 
   @override
+  State<SideNavItem> createState() => _SideNavItemState();
+}
+
+class _SideNavItemState extends State<SideNavItem> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final accent = AppColors.accentFor(brightness);
     final secondary = AppColors.textSecondaryFor(brightness);
     final primary = AppColors.textPrimaryFor(brightness);
+    final selected = widget.selected;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppDimens.space1),
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
-          onTap: onTap,
+          onTap: widget.onTap,
+          onHover: (hovered) {
+            if (_hovered != hovered) {
+              setState(() => _hovered = hovered);
+            }
+          },
           borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
           child: AnimatedContainer(
             duration: AppMotion.resolve(context, AppMotion.fast),
@@ -188,20 +201,28 @@ class SideNavItem extends StatelessWidget {
             decoration: BoxDecoration(
               color: selected
                   ? AppColors.accentContainerFor(brightness)
-                  : Colors.transparent,
+                  : _hovered
+                      ? AppColors.fillFor(brightness).withValues(alpha: 0.72)
+                      : Colors.transparent,
               borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
             ),
             child: Row(
               children: [
-                Icon(
-                  selected ? (selectedIcon ?? icon) : icon,
-                  size: 20,
-                  color: selected ? accent : secondary,
+                AnimatedScale(
+                  scale: selected ? 1.06 : 1,
+                  duration: AppMotion.resolve(context, AppMotion.fast),
+                  child: Icon(
+                    selected
+                        ? (widget.selectedIcon ?? widget.icon)
+                        : widget.icon,
+                    size: 20,
+                    color: selected ? accent : secondary,
+                  ),
                 ),
                 const SizedBox(width: AppDimens.space12),
                 Expanded(
                   child: Text(
-                    label,
+                    widget.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyle.bodyEmphasized.copyWith(

@@ -7,9 +7,12 @@ import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import '../../core/models/file_entry.dart';
 import '../../core/utils/format.dart';
+import 'nexa_page.dart';
+import 'nexa_surface.dart';
 
-/// One UI "Download to open externally" fallback used for formats NexaDrive
-/// can't render in-app yet (PDF pages, video, audio).
+/// Responsive save/open fallback used when a platform viewer cannot render a
+/// particular file. In-app PDF, audio and video viewers remain the primary path
+/// where the platform supports them.
 class DownloadToViewScreen extends StatefulWidget {
   final FileEntry file;
   final Future<void> Function(String path, String outPath) downloader;
@@ -68,83 +71,110 @@ class _DownloadToViewScreenState extends State<DownloadToViewScreen> {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final accent = AppColors.accentFor(brightness);
-    final secondary = AppColors.textSecondaryFor(brightness);
+    final secondary = AppColors.labelSecondaryFor(brightness);
 
-    return Scaffold(
-      appBar: AppBar(),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppDimens.pageMargin),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Spacer(flex: 2),
-              Center(
-                child: Container(
-                  width: 96,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    color: brightness == Brightness.dark
-                        ? accent.withValues(alpha: 0.16)
-                        : accent.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(AppDimens.radiusCard),
+    return NexaPage(
+      title: 'Download to open',
+      subtitle: widget.file.name,
+      headerIcon: widget.icon,
+      scrollable: true,
+      padding: const EdgeInsets.all(AppDimens.pageMargin),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: NexaSurface(
+            level: NexaSurfaceLevel.surface,
+            radius: AppDimens.radiusXLarge,
+            padding: const EdgeInsets.all(AppDimens.space24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 92,
+                    height: 92,
+                    decoration: BoxDecoration(
+                      color: AppColors.accentContainerFor(brightness),
+                      borderRadius:
+                          BorderRadius.circular(AppDimens.radiusXLarge),
+                      border: Border.all(color: accent.withValues(alpha: 0.18)),
+                    ),
+                    child: Icon(widget.icon,
+                        size: 42, color: AppColors.accentTextFor(brightness)),
                   ),
-                  child: Icon(widget.icon, size: 44, color: accent),
                 ),
-              ),
-              const SizedBox(height: AppDimens.space24),
-              Text(
-                widget.file.name,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyle.sectionHeader.copyWith(
-                  color: AppColors.textPrimaryFor(brightness),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: AppDimens.space8),
-              Text(
-                widget.subtitle,
-                textAlign: TextAlign.center,
-                style: AppTextStyle.rowSubtitle.copyWith(color: secondary),
-              ),
-              if (widget.file.size != null) ...[
-                const SizedBox(height: AppDimens.space16),
+                const SizedBox(height: AppDimens.space20),
                 Text(
-                  '${Format.bytes(widget.file.size)} · '
-                  '${Format.shortDateTime(widget.file.modified?.toLocal())}',
+                  widget.file.name,
                   textAlign: TextAlign.center,
-                  style: AppTextStyle.caption.copyWith(color: secondary),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyle.title2.copyWith(
+                    color: AppColors.labelPrimaryFor(brightness),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ],
-              const SizedBox(height: AppDimens.space32),
-              SizedBox(
-                height: 52,
-                child: FilledButton.icon(
-                  onPressed: _busy ? null : _save,
-                  icon: _busy
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.download_outlined),
-                  label: Text(_busy ? 'Downloading…' : 'Download'),
-                ),
-              ),
-              if (_done != null) ...[
-                const SizedBox(height: AppDimens.space12),
+                const SizedBox(height: AppDimens.space8),
                 Text(
-                  _done!,
+                  widget.subtitle,
                   textAlign: TextAlign.center,
-                  style: AppTextStyle.caption
-                      .copyWith(color: AppColors.successFor(brightness)),
+                  style: AppTextStyle.body.copyWith(color: secondary),
                 ),
+                if (widget.file.size != null) ...[
+                  const SizedBox(height: AppDimens.space16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimens.space12,
+                      vertical: AppDimens.space10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.fillFor(brightness),
+                      borderRadius:
+                          BorderRadius.circular(AppDimens.radiusMedium),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.insert_drive_file_outlined,
+                            size: 16, color: secondary),
+                        const SizedBox(width: AppDimens.space8),
+                        Text(
+                          Format.bytes(widget.file.size),
+                          style:
+                              AppTextStyle.caption1.copyWith(color: secondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: AppDimens.space24),
+                SizedBox(
+                  height: 52,
+                  child: FilledButton.icon(
+                    onPressed: _busy ? null : _save,
+                    icon: _busy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.download_outlined),
+                    label: Text(_busy ? 'Downloading…' : 'Download file'),
+                  ),
+                ),
+                if (_done != null) ...[
+                  const SizedBox(height: AppDimens.space12),
+                  Text(
+                    _done!,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyle.caption
+                        .copyWith(color: AppColors.successFor(brightness)),
+                  ),
+                ],
               ],
-              const Spacer(flex: 3),
-            ],
+            ),
           ),
         ),
       ),

@@ -13,6 +13,9 @@ import '../../../update/update_controller.dart';
 import '../../widgets/nexa_grouped_list.dart';
 import '../../widgets/nexa_list_tile.dart';
 import '../../widgets/nexa_page.dart';
+import '../../widgets/nexa_surface.dart';
+import '../../widgets/nexa_chip.dart';
+import '../../widgets/nexa_sheet.dart';
 import '../admin/audit_log_screen.dart';
 import '../admin/users_screen.dart';
 import 'update_center_screen.dart';
@@ -64,29 +67,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _changeTheme(BuildContext context) async {
     final current = widget.session.themeMode;
-    final value = await showDialog<String>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Appearance'),
-        children: ['system', 'light', 'dark'].map((mode) {
-          return SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, mode),
-            child: Row(
-              children: [
-                Icon(
-                  mode == 'system'
-                      ? Icons.brightness_auto_rounded
-                      : mode == 'light'
-                          ? Icons.light_mode_rounded
-                          : Icons.dark_mode_rounded,
-                  size: AppDimens.iconMd,
-                ),
-                const SizedBox(width: AppDimens.spaceSm),
-                Text(mode[0].toUpperCase() + mode.substring(1)),
-              ],
+    final value = await showNexaSheet<String>(
+      context,
+      isScrollControlled: false,
+      builder: (sheetContext) => NexaSheetBody(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const NexaSheetHeader(
+              title: 'Appearance',
+              subtitle: 'Choose how NexaDrive looks on this device',
             ),
-          );
-        }).toList(),
+            for (final mode in ['system', 'light', 'dark'])
+              NexaSheetAction(
+                icon: mode == 'system'
+                    ? Icons.brightness_auto_rounded
+                    : mode == 'light'
+                        ? Icons.light_mode_rounded
+                        : Icons.dark_mode_rounded,
+                title: mode[0].toUpperCase() + mode.substring(1),
+                subtitle: mode == current ? 'Currently selected' : null,
+                iconColor: mode == current
+                    ? AppColors.accentFor(Theme.of(sheetContext).brightness)
+                    : null,
+                onTap: () => Navigator.pop(sheetContext, mode),
+              ),
+          ],
+        ),
       ),
     );
     if (value == null || value == current) return;
@@ -190,44 +198,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: Column(
+          NexaSurface(
+            level: NexaSurfaceLevel.surface,
+            radius: AppDimens.radiusXLarge,
+            padding: const EdgeInsets.all(AppDimens.space16),
+            child: Row(
               children: [
                 Container(
-                  width: 68,
-                  height: 68,
+                  width: 60,
+                  height: 60,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: brightness == Brightness.dark
-                        ? accent.withValues(alpha: 0.18)
-                        : accent.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
+                    color: AppColors.accentContainerFor(brightness),
+                    borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accent.withValues(alpha: 0.18),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
                   child: Text(
                     _initial,
                     style: NexaTypography.display.copyWith(
-                      color: accent,
-                      fontSize: 30,
+                      color: AppColors.accentTextFor(brightness),
+                      fontSize: 28,
                     ),
                   ),
                 ),
-                const SizedBox(height: AppDimens.spaceSm),
-                Text(
-                  session.displayName ?? session.username ?? '',
-                  style: NexaTypography.sectionHeader.copyWith(
-                    color: AppColors.textPrimaryFor(brightness),
-                    fontWeight: FontWeight.w600,
+                const SizedBox(width: AppDimens.space16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        session.displayName ?? session.username ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: NexaTypography.sectionHeader.copyWith(
+                          color: AppColors.textPrimaryFor(brightness),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: AppDimens.space4),
+                      Text(
+                        session.username ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            NexaTypography.caption.copyWith(color: secondary),
+                      ),
+                      const SizedBox(height: AppDimens.space8),
+                      NexaChip.tonal(
+                        label: isAdmin ? 'Administrator' : 'Member',
+                        leadingIcon: isAdmin
+                            ? Icons.admin_panel_settings_outlined
+                            : Icons.verified_user_outlined,
+                        selected: true,
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: AppDimens.spaceXs),
-                Text(
-                  isAdmin ? 'Administrator' : (session.username ?? ''),
-                  style: NexaTypography.caption.copyWith(color: secondary),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: AppDimens.space2xl),
+          const SizedBox(height: AppDimens.space24),
           NexaGroupedList(
             header: 'General',
             children: [

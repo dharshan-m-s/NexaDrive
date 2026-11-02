@@ -3,7 +3,7 @@ import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 
-/// iOS-style search field for inline use.
+/// Compact, theme-aware search control for inline discovery.
 class NexaSearchField extends StatelessWidget {
   final TextEditingController? controller;
   final String? hint;
@@ -11,6 +11,7 @@ class NexaSearchField extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onClear;
   final bool autofocus;
+  final bool filled;
   final bool readOnly;
   final bool showCancel;
   final String cancelText;
@@ -23,6 +24,7 @@ class NexaSearchField extends StatelessWidget {
     this.onTap,
     this.onClear,
     this.autofocus = false,
+    this.filled = true,
     this.readOnly = false,
     this.showCancel = false,
     this.cancelText = 'Cancel',
@@ -50,8 +52,8 @@ class NexaSearchField extends StatelessWidget {
               hintStyle: AppTextStyle.body.copyWith(
                 color: AppColors.labelTertiaryFor(brightness),
               ),
-              filled: true,
-              fillColor: fillColor,
+              filled: filled,
+              fillColor: filled ? fillColor : Colors.transparent,
               prefixIcon: Padding(
                 padding: const EdgeInsets.only(
                     left: AppDimens.space12, right: AppDimens.space8),
@@ -79,7 +81,7 @@ class NexaSearchField extends StatelessWidget {
                 vertical: AppDimens.space10,
               ),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
                 borderSide: BorderSide.none,
               ),
               enabledBorder: OutlineInputBorder(

@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/design/app_colors.dart';
@@ -15,10 +17,6 @@ import '../../widgets/nexa_components.dart';
 import '../files/file_share_sheet.dart';
 import 'photo_viewer.dart';
 
-/// Grid tile edge in logical pixels. Kept here so the decode size and the
-/// layout size can never drift apart.
-const double _tileExtent = 190;
-
 /// How many thumbnails are fetched eagerly after listing loads. The grid
 /// fetches the rest lazily as tiles scroll into view.
 const int _eagerThumbCount = 24;
@@ -26,7 +24,14 @@ const int _eagerThumbCount = 24;
 class PhotosScreen extends StatefulWidget {
   final Api api;
   final Session session;
-  const PhotosScreen({super.key, required this.api, required this.session});
+  final ValueChanged<bool>? onSelectionChanged;
+
+  const PhotosScreen({
+    super.key,
+    required this.api,
+    required this.session,
+    this.onSelectionChanged,
+  });
 
   @override
   State<PhotosScreen> createState() => _PhotosScreenState();
@@ -58,12 +63,159 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   bool _selecting = false;
   final Set<String> _selected = <String>{};
+  int _gridColumns = 3;
+  int? _activePointer;
+  bool _dragSelecting = false;
+  final Map<String, GlobalKey> _cellKeys = <String, GlobalKey>{};
 
   @override
   void initState() {
     super.initState();
     _attachDiskCache();
+    _loadGridColumns();
     load();
+  }
+
+  static const _gridColumnsPreference = 'nexadrive.photos.grid_columns';
+
+  Future<void> _loadGridColumns() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getInt(_gridColumnsPreference);
+      if (saved != null && mounted) {
+        setState(() => _gridColumns = saved.clamp(1, 8).toInt());
+      }
+    } catch (_) {
+      // A missing preference store does not prevent browsing.
+    }
+  }
+
+  Future<void> _saveGridColumns(int columns) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_gridColumnsPreference, columns);
+    } catch (_) {
+      // The selected density remains active for this session.
+    }
+  }
+
+  Future<void> _showGridDensityPicker() async {
+    var draft = _gridColumns;
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Gallery layout'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '$draft columns',
+                style: AppTextStyle.headline.copyWith(
+                  color: AppColors.labelPrimaryFor(
+                    Theme.of(context).brightness,
+                  ),
+                ),
+              ),
+              Slider(
+                value: draft.toDouble(),
+                min: 1,
+                max: 8,
+                divisions: 7,
+                label: '$draft',
+                onChanged: (value) =>
+                    setDialogState(() => draft = value.round()),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Larger photos'),
+                  Text(
+                    'More columns',
+                    style: AppTextStyle.caption1.copyWith(
+                      color: AppColors.labelSecondaryFor(
+                        Theme.of(context).brightness,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, draft),
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || !mounted || selected == _gridColumns) return;
+    setState(() => _gridColumns = selected);
+    await _saveGridColumns(selected);
+  }
+
+  GlobalKey _keyForCell(String path) =>
+      _cellKeys.putIfAbsent(path, () => GlobalKey());
+
+  void _pruneCellKeys() {
+    _cellKeys.removeWhere((_, key) => key.currentContext == null);
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    _activePointer = event.pointer;
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (!_dragSelecting || event.pointer != _activePointer) return;
+    _selectCellAt(event.position);
+  }
+
+  void _onPointerUp(PointerEvent event) {
+    if (event.pointer != _activePointer) return;
+    _activePointer = null;
+    _dragSelecting = false;
+  }
+
+  void _beginDragSelection(int index, Offset globalPosition) {
+    if (!_selecting) {
+      setState(() {
+        _selecting = true;
+        _selected.add(_pathAt(index));
+      });
+      widget.onSelectionChanged?.call(true);
+    }
+    _dragSelecting = true;
+    _selectCellAt(globalPosition);
+  }
+
+  void _selectCellAt(Offset globalPosition) {
+    String? hitPath;
+    final stale = <String>[];
+    for (final entry in _cellKeys.entries) {
+      final renderObject = entry.value.currentContext?.findRenderObject();
+      if (renderObject is! RenderBox ||
+          !renderObject.attached ||
+          !renderObject.hasSize) {
+        stale.add(entry.key);
+        continue;
+      }
+      final rect = renderObject.localToGlobal(Offset.zero) & renderObject.size;
+      if (rect.contains(globalPosition)) {
+        hitPath = entry.key;
+      }
+    }
+    for (final path in stale) {
+      _cellKeys.remove(path);
+    }
+    if (hitPath == null || _selected.contains(hitPath)) return;
+    setState(() => _selected.add(hitPath!));
   }
 
   /// The disk cache lets previews survive a restart. It is keyed by server +
@@ -190,13 +342,8 @@ class _PhotosScreenState extends State<PhotosScreen> {
     }
   }
 
-  void _onCellLongPress(int index) {
-    if (!_selecting) {
-      setState(() {
-        _selecting = true;
-        _selected.add(_pathAt(index));
-      });
-    }
+  void _onCellLongPress(int index, Offset globalPosition) {
+    _beginDragSelection(index, globalPosition);
   }
 
   void _toggleSelect(int index) {
@@ -221,6 +368,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
       }
       _selecting = _selected.isNotEmpty;
     });
+    widget.onSelectionChanged?.call(_selecting);
   }
 
   String _pathAt(int index) => (_photos[index]['path'] ?? '').toString();
@@ -283,6 +431,9 @@ class _PhotosScreenState extends State<PhotosScreen> {
       _selecting = false;
       _selected.clear();
     });
+    _dragSelecting = false;
+    _activePointer = null;
+    widget.onSelectionChanged?.call(false);
   }
 
   void _toast(String message) {
@@ -341,21 +492,32 @@ class _PhotosScreenState extends State<PhotosScreen> {
       title: _selecting ? Format.count(_selected.length, 'photo') : 'Photos',
       bottomSafeArea: false,
       subtitle: _selecting
-          ? 'Tap photos to include or exclude'
+          ? 'Drag across photos to select · Tap to refine'
           : photoCount == 0
               ? 'All your photos in one place'
               : Format.count(photoCount, 'photo'),
       headerAction: _selecting
-          ? IconButton(
-              tooltip: 'Cancel selection',
-              onPressed: _exitSelection,
-              icon: const Icon(Icons.close_rounded),
-            )
-          : IconButton(
-              tooltip: 'Refresh photos',
-              onPressed: load,
-              icon: Icon(Icons.refresh_rounded,
-                  color: AppColors.accentFor(brightness)),
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Change grid density',
+                  onPressed: _showGridDensityPicker,
+                  icon: Icon(
+                    Icons.grid_4x4_rounded,
+                    color: AppColors.accentTextFor(brightness),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Refresh photos',
+                  onPressed: _loading ? null : load,
+                  icon: Icon(
+                    Icons.refresh_rounded,
+                    color: AppColors.accentTextFor(brightness),
+                  ),
+                ),
+              ],
             ),
       body: _body(),
     );
@@ -382,7 +544,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
     if (_error != null) {
       return NexaEmptyState(
         icon: Icons.cloud_off_rounded,
-        title: 'Can\u2019t load photos',
+        title: 'Can’t load photos',
         hint: _error,
         actionLabel: 'Retry',
         onAction: load,
@@ -392,14 +554,22 @@ class _PhotosScreenState extends State<PhotosScreen> {
       return NexaEmptyState(
         icon: Icons.photo_library_outlined,
         title: 'No photos yet',
-        hint: 'Upload photos from My files and they\u2019ll appear here.',
+        hint: 'Upload photos from My files and they’ll appear here.',
         actionLabel: 'Refresh',
         onAction: load,
       );
     }
 
     final groups = _groups;
-    final bottomClearance = MediaQuery.paddingOf(context).bottom;
+    final bottomClearance =
+        _selecting ? AppDimens.space24 : MediaQuery.paddingOf(context).bottom;
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final contentWidth = (viewportWidth - AppDimens.pageMargin * 2)
+        .clamp(80.0, AppDimens.contentMaxWidth);
+    final tileWidth =
+        (contentWidth - AppDimens.space4 * (_gridColumns - 1)) / _gridColumns;
+    final decodeWidth =
+        (tileWidth * MediaQuery.devicePixelRatioOf(context)).round();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -407,85 +577,143 @@ class _PhotosScreenState extends State<PhotosScreen> {
         Expanded(
           child: RefreshIndicator(
             onRefresh: load,
-            child: CustomScrollView(
-              slivers: [
-                for (final (label, indices) in groups) ...[
-                  SliverToBoxAdapter(
-                    child: _MonthHeader(label: label, count: indices.length),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimens.space4,
-                    ),
-                    sliver: SliverGrid.builder(
-                      gridDelegate:
-                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: _tileExtent,
-                        mainAxisSpacing: AppDimens.space4,
-                        crossAxisSpacing: AppDimens.space4,
+            child: Listener(
+              onPointerDown: _onPointerDown,
+              onPointerMove: _onPointerMove,
+              onPointerUp: _onPointerUp,
+              onPointerCancel: _onPointerUp,
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (_) {
+                  _pruneCellKeys();
+                  return false;
+                },
+                child: CustomScrollView(
+                  slivers: [
+                    for (final (label, indices) in groups) ...[
+                      SliverToBoxAdapter(
+                        child:
+                            _MonthHeader(label: label, count: indices.length),
                       ),
-                      itemCount: indices.length,
-                      itemBuilder: (context, i) {
-                        final index = indices[i];
-                        return _PhotoCell(
-                          bytes: _thumbBytes(index),
-                          unavailable: _noThumbnail.contains(_pathAt(index)),
-                          semanticLabel: _photos[index]['name']?.toString(),
-                          selected: _selected.contains(_pathAt(index)),
-                          selecting: _selecting,
-                          onTap: () => _onCellTap(index),
-                          onLongPress: () => _onCellLongPress(index),
-                          onVisible: () => _ensureThumb(_images, index),
-                        );
-                      },
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimens.space4,
+                        ),
+                        sliver: SliverGrid.builder(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: _gridColumns,
+                            mainAxisSpacing: AppDimens.space4,
+                            crossAxisSpacing: AppDimens.space4,
+                            childAspectRatio: 1,
+                          ),
+                          itemCount: indices.length,
+                          itemBuilder: (context, i) {
+                            final index = indices[i];
+                            final path = _pathAt(index);
+                            return _PhotoCell(
+                              key: _keyForCell(path),
+                              bytes: _thumbBytes(index),
+                              decodeWidth: decodeWidth,
+                              unavailable: _noThumbnail.contains(path),
+                              semanticLabel: _photos[index]['name']?.toString(),
+                              heroTag: 'photo:$path',
+                              selected: _selected.contains(path),
+                              selecting: _selecting,
+                              onTap: () => _onCellTap(index),
+                              onLongPressStart: (position) =>
+                                  _onCellLongPress(index, position),
+                              onVisible: () => _ensureThumb(_images, index),
+                            );
+                          },
+                        ),
+                      ),
+                      const SliverToBoxAdapter(
+                        child: SizedBox(height: AppDimens.space16),
+                      ),
+                    ],
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: bottomClearance > AppDimens.space24
+                            ? bottomClearance
+                            : AppDimens.space24,
+                      ),
                     ),
-                  ),
-                  const SliverToBoxAdapter(
-                    child: SizedBox(height: AppDimens.space16),
-                  ),
-                ],
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: bottomClearance > AppDimens.space24
-                        ? bottomClearance
-                        : AppDimens.space24,
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
         NexaRevealBar(
           visible: _selecting,
-          child: NexaActionBar(
-            leading: IconButton(
-              tooltip: 'Cancel selection',
-              onPressed: _exitSelection,
-              icon: const Icon(Icons.close_rounded),
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppDimens.pageMargin,
+              AppDimens.space4,
+              AppDimens.pageMargin,
+              MediaQuery.viewPaddingOf(context).bottom + AppDimens.space10,
             ),
-            title: Format.count(_selected.length, 'photo'),
-            actions: [
-              NexaActionItem(
-                icon: _photos.isNotEmpty && _selected.length == _photos.length
-                    ? Icons.deselect_rounded
-                    : Icons.select_all_rounded,
-                label: _photos.isNotEmpty && _selected.length == _photos.length
-                    ? 'Clear'
-                    : 'Select all',
-                onTap: _toggleSelectAll,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: NexaLiquidGlass(
+                  borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                  blurSigma: 2,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space6,
+                    vertical: AppDimens.space4,
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Cancel selection',
+                        onPressed: _exitSelection,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                      Expanded(
+                        child: Text(
+                          Format.count(_selected.length, 'photo'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyle.bodyEmphasized.copyWith(
+                            color: AppColors.labelPrimaryFor(
+                              Theme.of(context).brightness,
+                            ),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: _selected.length == _photos.length
+                            ? 'Clear selection'
+                            : 'Select all',
+                        onPressed: _toggleSelectAll,
+                        icon: Icon(
+                          _selected.length == _photos.length
+                              ? Icons.deselect_rounded
+                              : Icons.select_all_rounded,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Share selected photos',
+                        onPressed: _selected.isEmpty ? null : _shareSelected,
+                        icon: const Icon(Icons.share_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Move selected photos to Trash',
+                        onPressed: _selected.isEmpty ? null : _deleteSelected,
+                        icon: Icon(
+                          Icons.delete_outline_rounded,
+                          color: AppColors.errorFor(
+                            Theme.of(context).brightness,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              NexaActionItem(
-                icon: Icons.share_outlined,
-                label: 'Share',
-                onTap: _shareSelected,
-              ),
-              NexaActionItem(
-                icon: Icons.delete_outline_rounded,
-                label: 'Trash',
-                color: AppColors.errorFor(Theme.of(context).brightness),
-                onTap: _deleteSelected,
-              ),
-            ],
+            ),
           ),
         ),
       ],
@@ -521,11 +749,24 @@ class _MonthHeader extends StatelessWidget {
               color: AppColors.textPrimaryFor(brightness),
             ),
           ),
-          const SizedBox(width: AppDimens.space8),
-          Text(
-            Format.count(count, 'photo'),
-            style: AppTextStyle.caption.copyWith(
-              color: AppColors.textSecondaryFor(brightness),
+          const SizedBox(width: AppDimens.space10),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: AppColors.surfaceAltFor(brightness),
+              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.space8,
+                vertical: AppDimens.space4,
+              ),
+              child: Text(
+                Format.count(count, 'photo'),
+                style: AppTextStyle.caption.copyWith(
+                  color: AppColors.textSecondaryFor(brightness),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
         ],
@@ -540,22 +781,27 @@ class _MonthHeader extends StatelessWidget {
 /// lands in the image cache at full size for a 190px tile.
 class _PhotoCell extends StatelessWidget {
   final Uint8List? bytes;
+  final int decodeWidth;
   final bool unavailable;
   final String? semanticLabel;
+  final String heroTag;
   final bool selected;
   final bool selecting;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
+  final ValueChanged<Offset> onLongPressStart;
   final VoidCallback onVisible;
 
   const _PhotoCell({
+    super.key,
     required this.bytes,
+    required this.decodeWidth,
     required this.unavailable,
     required this.semanticLabel,
+    required this.heroTag,
     required this.selected,
     required this.selecting,
     required this.onTap,
-    required this.onLongPress,
+    required this.onLongPressStart,
     required this.onVisible,
   });
 
@@ -563,8 +809,6 @@ class _PhotoCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final onAccent = AppColors.onAccentContainerFor(brightness);
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    final decodeWidth = (_tileExtent * dpr).round();
 
     Widget content;
     if (bytes != null) {
@@ -573,7 +817,7 @@ class _PhotoCell extends StatelessWidget {
         fit: BoxFit.cover,
         filterQuality: FilterQuality.medium,
         gaplessPlayback: true,
-        cacheWidth: decodeWidth,
+        cacheWidth: decodeWidth.clamp(1, 4096).toInt(),
         errorBuilder: (context, _, __) => _placeholder(brightness),
       );
     } else if (unavailable) {
@@ -590,22 +834,46 @@ class _PhotoCell extends StatelessWidget {
       button: true,
       selected: selected,
       label: semanticLabel ?? 'Photo',
-      // Screen readers get the gesture vocabulary the touch user has.
       hint: selecting
           ? 'Activates selection for this photo'
-          : 'Opens the photo. Long press to select.',
+          : 'Opens the photo. Long press and drag to select several.',
       child: GestureDetector(
         onTap: onTap,
-        onLongPress: onLongPress,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            ClipRRect(
+        onLongPressStart: (details) => onLongPressStart(details.globalPosition),
+        child: AnimatedScale(
+          scale: selected ? 0.965 : 1,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppDimens.radiusInner),
-              child: content,
+              border: Border.all(
+                color: selected
+                    ? AppColors.accentFor(brightness)
+                    : Colors.transparent,
+                width: 2.5,
+              ),
             ),
-            if (selected) _SelectedOverlay(onAccent: onAccent),
-          ],
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppDimens.radiusInner),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Hero(tag: heroTag, child: content),
+                  AnimatedOpacity(
+                    opacity: selected ? 1 : 0,
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOut,
+                    child: IgnorePointer(
+                      child: _SelectedOverlay(onAccent: onAccent),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

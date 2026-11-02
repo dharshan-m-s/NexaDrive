@@ -182,12 +182,23 @@ class _SkeletonItemState extends State<_SkeletonItem>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+      duration: AppMotion.ambient,
       vsync: this,
-    )..repeat(reverse: true);
-    _animation = Tween(begin: 0.6, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
+    _animation = Tween(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: AppMotion.standardCurve),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.reducedMotion(context)) {
+      _controller.stop();
+      _controller.value = 0.5;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
   }
 
   @override
@@ -216,8 +227,7 @@ class _SkeletonItemState extends State<_SkeletonItem>
                   decoration: BoxDecoration(
                     color: Color.lerp(widget.baseColor, widget.highlightColor,
                         _animation.value),
-                    borderRadius:
-                        BorderRadius.circular(AppDimens.radiusStandard),
+                    borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
                   ),
                 ),
                 const SizedBox(width: AppDimens.space12),

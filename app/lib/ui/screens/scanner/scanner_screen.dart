@@ -9,6 +9,7 @@ import '../../../core/design/app_motion.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../services/api.dart';
 import '../../../services/scan_processor.dart';
+import '../../widgets/nexa_components.dart';
 import 'scan_edit_screen.dart';
 import 'scan_pages_screen.dart';
 
@@ -259,34 +260,43 @@ class _ScannerScreenState extends State<ScannerScreen>
       right: 0,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppDimens.space8),
-        child: Row(
-          children: [
-            _iconBtn(Icons.close_rounded, 'Close',
-                () => Navigator.of(context).pop()),
-            const Spacer(),
-            if (_pages.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(right: AppDimens.space8),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${_pages.length} page(s)',
-                    style: AppTextStyle.caption
-                        .copyWith(color: Colors.white, fontSize: 11),
-                  ),
+        child: Theme(
+          data: Theme.of(context).copyWith(
+            brightness: Brightness.dark,
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+                  brightness: Brightness.dark,
                 ),
-              ),
-            _iconBtn(
-              _flashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-              'Toggle torch',
-              _toggleFlash,
+          ),
+          child: NexaLiquidGlass(
+            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            blurSigma: 18,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.space4,
+              vertical: AppDimens.space2,
             ),
-          ],
+            showShadow: true,
+            child: Row(
+              children: [
+                _iconBtn(Icons.close_rounded, 'Close',
+                    () => Navigator.of(context).pop()),
+                const Spacer(),
+                if (_pages.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppDimens.space8),
+                    child: NexaChip.tonal(
+                      label: '${_pages.length} pages',
+                      leadingIcon: Icons.description_outlined,
+                      selected: true,
+                    ),
+                  ),
+                _iconBtn(
+                  _flashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+                  'Toggle torch',
+                  _toggleFlash,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -327,7 +337,8 @@ class _ScannerScreenState extends State<ScannerScreen>
                 children: [
                   Expanded(
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius:
+                          BorderRadius.circular(AppDimens.radiusMedium),
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
@@ -376,22 +387,42 @@ class _ScannerScreenState extends State<ScannerScreen>
           child: InkWell(
             onTap: _busy ? null : _capture,
             customBorder: const CircleBorder(),
-            child: AnimatedContainer(
-              duration: AppMotion.fast,
-              width: 76,
-              height: 76,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 4),
-                color: _busy ? Colors.white24 : Colors.white,
+            child: AnimatedScale(
+              scale: _busy ? 0.94 : 1,
+              duration: AppMotion.resolve(context, AppMotion.micro),
+              curve: AppMotion.standardCurve,
+              child: AnimatedContainer(
+                duration: AppMotion.resolve(context, AppMotion.fast),
+                width: 84,
+                height: 84,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.black.withValues(alpha: 0.12),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.88),
+                    width: 3,
+                  ),
+                ),
+                child: Center(
+                  child: _busy
+                      ? const SizedBox(
+                          width: 30,
+                          height: 30,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Container(
+                          width: 64,
+                          height: 64,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                ),
               ),
-              child: _busy
-                  ? const Padding(
-                      padding: EdgeInsets.all(20),
-                      child: CircularProgressIndicator(
-                          strokeWidth: 3, color: Colors.white),
-                    )
-                  : null,
             ),
           ),
         ),
@@ -407,14 +438,17 @@ class _ScannerScreenState extends State<ScannerScreen>
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
-        child: Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: 0.12),
+        child: NexaLiquidGlass(
+          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+          blurSigma: 14,
+          tintOpacity: 0.10,
+          padding: EdgeInsets.zero,
+          showShadow: false,
+          child: SizedBox(
+            width: 52,
+            height: 52,
+            child: Icon(icon, color: Colors.white),
           ),
-          child: Icon(icon, color: Colors.white),
         ),
       ),
     );

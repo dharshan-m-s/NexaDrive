@@ -75,6 +75,28 @@ void main() {
     expect(reloaded, isEmpty);
   });
 
+  test('private staged share sources are journaled and deduplicated', () async {
+    final staged = File('${root.path}/shared-original.mp4');
+    await staged.writeAsBytes(List<int>.filled(16, 7));
+    final source = UploadSource(
+      path: staged.path,
+      name: 'shared-original.mp4',
+      size: 16,
+      temporary: true,
+    );
+
+    final firstId = await manager.enqueue(source, '');
+    final duplicateId = await manager.enqueue(source, '');
+
+    expect(duplicateId, firstId);
+    expect(manager.items(), hasLength(1));
+    expect(manager.items().single.temporarySource, isTrue);
+
+    final restored = await UploadStore(journal).load();
+    expect(restored.single.localPath, staged.path);
+    expect(restored.single.temporarySource, isTrue);
+  });
+
   test('folder sources keep only the document URI, not copied bytes', () async {
     const uri = 'content://com.android.providers.downloads.documents/tree/x';
     final id = await manager.enqueue(

@@ -6,7 +6,7 @@ import 'nexa_surface.dart';
 import 'nexa_chip.dart';
 import 'nexa_list_tile.dart';
 
-/// iOS-style grouped list section.
+/// One UI-inspired grouped section for related settings and actions.
 class NexaGroupedList extends StatelessWidget {
   final String? header;
   final List<Widget> children;
@@ -34,25 +34,32 @@ class NexaGroupedList extends StatelessWidget {
         if (header != null) NexaSectionHeader(header!, padding: padding),
         NexaSurface(
           level: NexaSurfaceLevel.grouped,
+          radius: AppDimens.radiusXLarge,
           padding:
               padding ?? const EdgeInsets.symmetric(vertical: AppDimens.space4),
-          child: Material(
-            type: MaterialType.transparency,
-            child: Column(
-              children: [
-                for (var i = 0; i < children.length; i++) ...[
-                  children[i],
-                  if (withDividers && i < children.length - 1)
-                    Padding(
-                      padding: EdgeInsets.only(
-                        left: _insetFor(children[i]),
-                        right: AppDimens.pageMargin,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+            child: Material(
+              type: MaterialType.transparency,
+              child: Column(
+                children: [
+                  for (var i = 0; i < children.length; i++) ...[
+                    children[i],
+                    if (withDividers && i < children.length - 1)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          left: _insetFor(children[i]),
+                          right: AppDimens.pageMargin,
+                        ),
+                        child: Divider(
+                          color: divider,
+                          height: 0.5,
+                          thickness: 0.5,
+                        ),
                       ),
-                      child:
-                          Divider(color: divider, height: 0.5, thickness: 0.5),
-                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -109,15 +116,31 @@ class NexaPageContainer extends StatelessWidget {
     this.headerForeground,
   });
 
+  IconData _pageIcon(String value) {
+    final title = value.toLowerCase();
+    if (title.contains('file') || title.contains('folder')) {
+      return Icons.folder_copy_rounded;
+    }
+    if (title.contains('photo')) return Icons.photo_library_rounded;
+    if (title.contains('share')) return Icons.people_alt_rounded;
+    if (title.contains('trash')) return Icons.delete_sweep_rounded;
+    if (title.contains('sync')) return Icons.sync_rounded;
+    if (title.contains('transfer')) return Icons.cloud_upload_rounded;
+    if (title.contains('setting')) return Icons.tune_rounded;
+    if (title.contains('notification')) {
+      return Icons.notifications_active_rounded;
+    }
+    return Icons.cloud_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
     final edgeInsets = padding.resolve(Directionality.of(context));
     final effectivePadding =
         scrollable ? EdgeInsets.only(bottom: edgeInsets.bottom) : edgeInsets;
-    final headerForegroundColor = headerForeground ??
-        (Theme.of(context).brightness == Brightness.dark
-            ? Colors.white
-            : Colors.black);
+    final brightness = Theme.of(context).brightness;
+    final headerForegroundColor =
+        headerForeground ?? AppColors.labelPrimaryFor(brightness);
 
     final header = showHeader &&
             (title != null || leading != null || headerAction != null)
@@ -133,6 +156,26 @@ class NexaPageContainer extends StatelessWidget {
               children: [
                 if (leading != null) leading!,
                 if (leading != null) const SizedBox(width: AppDimens.space12),
+                if (title != null)
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.accentContainerFor(brightness),
+                      borderRadius:
+                          BorderRadius.circular(AppDimens.radiusMedium),
+                      border: Border.all(
+                        color: AppColors.accentTextFor(brightness)
+                            .withValues(alpha: 0.12),
+                      ),
+                    ),
+                    child: Icon(
+                      _pageIcon(title!),
+                      size: 21,
+                      color: AppColors.accentTextFor(brightness),
+                    ),
+                  ),
+                if (title != null) const SizedBox(width: AppDimens.space12),
                 if (title != null || subtitle != null)
                   Expanded(
                     child: Column(
@@ -142,8 +185,11 @@ class NexaPageContainer extends StatelessWidget {
                         if (title != null)
                           Text(
                             title!,
-                            style: AppTextStyle.pageTitle.copyWith(
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyle.largeTitle.copyWith(
                               color: headerForegroundColor,
+                              letterSpacing: -0.45,
                             ),
                           ),
                         if (subtitle != null)

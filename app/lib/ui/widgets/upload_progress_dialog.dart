@@ -19,6 +19,52 @@ import '../../services/upload_manager.dart';
 /// The dialog is a *view* of the queue, not the queue itself. Closing it does
 /// not stop a transfer: the upload keeps running and stays visible on the
 /// Transfers screen.
+class _TransferMetric extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _TransferMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space10,
+          vertical: AppDimens.space8,
+        ),
+        decoration: BoxDecoration(
+          color: color.withValues(
+              alpha: brightness == Brightness.dark ? 0.16 : 0.09),
+          borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+          border: Border.all(color: color.withValues(alpha: 0.16)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style: AppTextStyle.caption2.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.7)),
+            const SizedBox(height: AppDimens.space2),
+            Text(value,
+                style: AppTextStyle.title2.copyWith(
+                    color: AppColors.labelPrimaryFor(brightness),
+                    fontWeight: FontWeight.w700)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class UploadProgressDialog extends StatefulWidget {
   final UploadManager manager;
   final List<String> uploadIds;
@@ -226,9 +272,37 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
               style: AppTextStyle.caption.copyWith(color: secondary),
             ),
             const SizedBox(height: AppDimens.space12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-              child: LinearProgressIndicator(value: progress, minHeight: 8),
+            Row(
+              children: [
+                _TransferMetric(
+                    label: 'DONE',
+                    value: completed.toString(),
+                    color: successFor(brightness)),
+                const SizedBox(width: AppDimens.space8),
+                _TransferMetric(
+                    label: 'ACTIVE',
+                    value: active.toString(),
+                    color: AppColors.accentFor(brightness)),
+                const SizedBox(width: AppDimens.space8),
+                _TransferMetric(
+                    label: 'ISSUES',
+                    value: failed.toString(),
+                    color: AppColors.errorFor(brightness)),
+              ],
+            ),
+            const SizedBox(height: AppDimens.space12),
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: progress),
+              duration: AppMotion.resolve(context, AppMotion.normal),
+              curve: AppMotion.standardCurve,
+              builder: (context, value, _) => ClipRRect(
+                borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                child: LinearProgressIndicator(
+                  value: value,
+                  minHeight: 8,
+                  backgroundColor: AppColors.fillFor(brightness),
+                ),
+              ),
             ),
             const SizedBox(height: AppDimens.space6),
             Text(

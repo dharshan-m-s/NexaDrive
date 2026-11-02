@@ -30,7 +30,9 @@ class NexaPageTransitionsBuilder extends PageTransitionsBuilder {
       end: const Offset(-0.3, 0),
     ).animate(secondaryCurve);
     final outgoingFade =
-        Tween<double>(begin: 1.0, end: 0.85).animate(secondaryCurve);
+        Tween<double>(begin: 1.0, end: 0.88).animate(secondaryCurve);
+    final outgoingScale =
+        Tween<double>(begin: 1.0, end: 0.985).animate(secondaryCurve);
 
     // The incoming page slides in from the right edge.
     final primaryCurve = CurvedAnimation(
@@ -42,14 +44,22 @@ class NexaPageTransitionsBuilder extends PageTransitionsBuilder {
       begin: const Offset(1, 0),
       end: Offset.zero,
     ).animate(primaryCurve);
+    final incomingScale =
+        Tween<double>(begin: 0.985, end: 1.0).animate(primaryCurve);
 
     return SlideTransition(
       position: outgoingSlide,
-      child: FadeTransition(
-        opacity: outgoingFade,
-        child: SlideTransition(
-          position: incomingSlide,
-          child: child,
+      child: ScaleTransition(
+        scale: outgoingScale,
+        child: FadeTransition(
+          opacity: outgoingFade,
+          child: SlideTransition(
+            position: incomingSlide,
+            child: ScaleTransition(
+              scale: incomingScale,
+              child: child,
+            ),
+          ),
         ),
       ),
     );

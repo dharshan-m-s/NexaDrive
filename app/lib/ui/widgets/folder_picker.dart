@@ -129,36 +129,62 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
                   if (_path.isNotEmpty)
                     IconButton(
                       tooltip: 'Up one level',
-                      onPressed: _path.isEmpty
-                          ? null
-                          : () {
-                              final p = _path;
-                              final idx = p.lastIndexOf('/');
-                              _navigateTo(idx < 0 ? '' : p.substring(0, idx));
-                            },
+                      onPressed: () {
+                        final p = _path;
+                        final idx = p.lastIndexOf('/');
+                        _navigateTo(idx < 0 ? '' : p.substring(0, idx));
+                      },
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.fillFor(brightness),
+                      ),
                       icon: const Icon(Icons.arrow_upward_rounded),
                     )
                   else
-                    const Icon(Icons.folder_outlined,
-                        size: AppDimens.iconMedium),
-                  const SizedBox(width: AppDimens.space8),
-                  Expanded(
-                    child: Text(
-                      titleText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyle.sectionHeader.copyWith(
-                        color: AppColors.textPrimaryFor(brightness),
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: AppColors.accentContainerFor(brightness),
+                        borderRadius:
+                            BorderRadius.circular(AppDimens.radiusMedium),
+                      ),
+                      child: Icon(
+                        Icons.folder_open_rounded,
+                        size: 22,
+                        color: AppColors.accentTextFor(brightness),
                       ),
                     ),
+                  const SizedBox(width: AppDimens.space12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'DESTINATION',
+                          style: AppTextStyle.caption2.copyWith(
+                            color: AppColors.accentTextFor(brightness),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                        const SizedBox(height: AppDimens.space2),
+                        Text(
+                          titleText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyle.sectionHeader.copyWith(
+                            color: AppColors.labelPrimaryFor(brightness),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  IconButton(
+                  IconButton.filledTonal(
                     tooltip: 'Use this folder',
                     onPressed: _loading
                         ? null
                         : () => Navigator.of(context).pop(_path),
                     icon: const Icon(Icons.check_rounded),
-                    color: AppColors.accentFor(brightness),
                   ),
                 ],
               ),

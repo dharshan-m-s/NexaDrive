@@ -159,27 +159,53 @@ class _LoginScreenState extends State<LoginScreen> {
   /// a soft accent glow so it reads as a brand object rather than a flat shape.
   Widget _brandTile(Brightness brightness) {
     final accent = AppColors.accentFor(brightness);
-    final onAccent =
-        brightness == Brightness.dark ? Colors.black : Colors.white;
-
     return Container(
-      width: 64,
-      height: 64,
-      alignment: Alignment.center,
+      width: 76,
+      height: 76,
       decoration: BoxDecoration(
-        color: accent,
-        borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+        color: AppColors.accentContainerFor(brightness),
+        borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+        border: Border.all(
+          color: accent.withValues(alpha: 0.18),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
             color: accent.withValues(
-              alpha: brightness == Brightness.dark ? 0.30 : 0.28,
-            ),
+                alpha: brightness == Brightness.dark ? 0.16 : 0.10),
             blurRadius: 22,
-            offset: const Offset(0, 10),
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Icon(Icons.cloud_rounded, color: onAccent, size: 34),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceFor(brightness),
+              shape: BoxShape.circle,
+              border: Border.all(color: accent.withValues(alpha: 0.14)),
+            ),
+          ),
+          Icon(
+            Icons.cloud_rounded,
+            color: AppColors.accentTextFor(brightness),
+            size: 30,
+          ),
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -191,7 +217,7 @@ class _LoginScreenState extends State<LoginScreen> {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
-          'Welcome to NexaDrive',
+          'Sign in to your cloud',
           textAlign: TextAlign.center,
           style: AppTextStyle.heroTitle.copyWith(
             fontSize: short ? 22 : 32,
@@ -203,7 +229,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Padding(
             padding: const EdgeInsets.only(top: AppDimens.space6),
             child: Text(
-              'Your files. Your server. Your private cloud.',
+              'Connect to your private cloud.',
               textAlign: TextAlign.center,
               style: AppTextStyle.callout.copyWith(
                 color: AppColors.labelSecondaryFor(brightness),
@@ -306,8 +332,6 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final size = MediaQuery.sizeOf(context);
-    final wide = size.width >= 700;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundFor(brightness),
@@ -323,10 +347,12 @@ class _LoginScreenState extends State<LoginScreen> {
             // without unmounting it. Swapping children in and out by height
             // reshuffles the column, unmounts the focused field and the IME
             // snaps shut; this layout cannot do that.
+            // Use the actual content width; MediaQuery can describe a larger window.
+            final wide = constraints.maxWidth >= 700;
             final short = constraints.maxHeight < 600;
-            final horizontal =
-                wide ? AppDimens.pageMarginWide : AppDimens.pageMargin;
-            final vertical = short ? AppDimens.space12 : AppDimens.space32;
+            // Keep phones edge-to-edge inside SafeArea; add gutters on wide layouts.
+            final horizontal = wide ? AppDimens.pageMarginWide : 0.0;
+            final vertical = short ? AppDimens.space4 : AppDimens.space32;
             final minHeight = (constraints.maxHeight - vertical * 2)
                 .clamp(0.0, double.infinity);
 
@@ -339,8 +365,8 @@ class _LoginScreenState extends State<LoginScreen> {
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: minHeight),
                 child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 440),
+                  child: SizedBox(
+                    width: constraints.maxWidth.clamp(0.0, 440.0),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -353,23 +379,38 @@ class _LoginScreenState extends State<LoginScreen> {
                         SizedBox(
                           height: short ? 0 : AppDimens.space20,
                         ),
-                        // Greeting.
                         _heading(brightness: brightness, short: short),
                         SizedBox(
                           height: short ? AppDimens.space8 : AppDimens.space24,
                         ),
-                        // Credentials.
-                        _fields(dense: short, brightness: brightness),
-                        // Inline, actionable error.
-                        if (error != null) ...[
-                          const SizedBox(height: AppDimens.space12),
-                          _ErrorBanner(message: error!),
-                        ],
                         SizedBox(
-                          height: short ? AppDimens.space8 : AppDimens.space16,
+                          width: double.infinity,
+                          child: NexaSurface(
+                            level: NexaSurfaceLevel.surface,
+                            radius: AppDimens.radiusXLarge,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: wide ? AppDimens.space20 : 0,
+                              vertical:
+                                  wide ? AppDimens.space20 : AppDimens.space8,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _fields(dense: short, brightness: brightness),
+                                if (error != null) ...[
+                                  const SizedBox(height: AppDimens.space12),
+                                  _ErrorBanner(message: error!),
+                                ],
+                                SizedBox(
+                                  height: short
+                                      ? AppDimens.space4
+                                      : AppDimens.space16,
+                                ),
+                                _submitButton(),
+                              ],
+                            ),
+                          ),
                         ),
-                        // Primary action.
-                        _submitButton(),
                         // Quiet footer.
                         Offstage(
                           offstage: short,
