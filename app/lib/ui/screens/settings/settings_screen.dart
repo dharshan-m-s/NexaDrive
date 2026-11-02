@@ -262,7 +262,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-          ),,
+          ),
           const SizedBox(height: AppDimens.space24),
           NexaGroupedList(
             header: 'General',

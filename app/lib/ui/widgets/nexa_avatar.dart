@@ -92,7 +92,7 @@ class NexaAvatar extends StatelessWidget {
             ),
     );
   }
-
+}
 
 /// Avatar with status indicator.
 class NexaAvatarWithStatus extends StatelessWidget {
