@@ -9,7 +9,7 @@ import '../../core/models/file_entry.dart';
 import '../../core/utils/file_kind.dart';
 import '../../core/utils/format.dart';
 
-/// iOS-style file browser list tile.
+/// One UI-inspired file row and thumbnail-led grid tile.
 class NexaFileTile extends StatelessWidget {
   final FileEntry entry;
   final ValueChanged<FileEntry>? onTap;
