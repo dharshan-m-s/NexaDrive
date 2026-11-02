@@ -170,7 +170,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       )
                     : _HomeConnectionNotice(
-                        message: _error ?? 'Check your connection and try again.',
+                        message:
+                            _error ?? 'Check your connection and try again.',
                         onRetry: load,
                       ),
           ),
@@ -298,14 +299,30 @@ class _QuickActionsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <_QuickActionData>[
-      _QuickActionData(Icons.cloud_upload_outlined, 'Upload files',
-          'Add files to your cloud', () => _request(FilesIntent.upload)),
-      _QuickActionData(Icons.drive_folder_upload_outlined, 'Upload folder',
-          'Keep folders together', () => _request(FilesIntent.uploadFolder)),
-      _QuickActionData(Icons.create_new_folder_outlined, 'New folder',
-          'Organise your files', () => _request(FilesIntent.newFolder)),
-      _QuickActionData(Icons.photo_library_outlined, 'Photos',
-          'Browse your memories', () => onNavigate(3)),
+      _QuickActionData(
+        Icons.cloud_upload_outlined,
+        'Upload files',
+        'Add files to your cloud',
+        () => _request(FilesIntent.upload),
+      ),
+      _QuickActionData(
+        Icons.drive_folder_upload_outlined,
+        'Upload folder',
+        'Keep folders together',
+        () => _request(FilesIntent.uploadFolder),
+      ),
+      _QuickActionData(
+        Icons.create_new_folder_outlined,
+        'New folder',
+        'Organise your files',
+        () => _request(FilesIntent.newFolder),
+      ),
+      _QuickActionData(
+        Icons.photo_library_outlined,
+        'Photo library',
+        'Browse your memories',
+        () => onNavigate(3),
+      ),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -350,7 +367,7 @@ class _QuickActionTile extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppDimens.space12,
-            vertical: AppDimens.space14,
+            vertical: AppDimens.space12,
           ),
           child: Row(
             children: [
@@ -361,8 +378,11 @@ class _QuickActionTile extends StatelessWidget {
                   color: AppColors.accentContainerFor(brightness),
                   borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
                 ),
-                child: Icon(data.icon, size: 21,
-                    color: AppColors.accentFor(brightness)),
+                child: Icon(
+                  data.icon,
+                  size: 21,
+                  color: AppColors.accentFor(brightness),
+                ),
               ),
               const SizedBox(width: AppDimens.space10),
               Expanded(
@@ -370,18 +390,24 @@ class _QuickActionTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(data.title, maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyle.subheadline.copyWith(
-                          color: AppColors.labelPrimaryFor(brightness),
-                          fontWeight: FontWeight.w600,
-                        )),
+                    Text(
+                      data.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyle.subheadline.copyWith(
+                        color: AppColors.labelPrimaryFor(brightness),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     const SizedBox(height: AppDimens.space2),
-                    Text(data.subtitle, maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyle.caption2.copyWith(
-                          color: AppColors.labelSecondaryFor(brightness),
-                        )),
+                    Text(
+                      data.subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyle.caption2.copyWith(
+                        color: AppColors.labelSecondaryFor(brightness),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -417,23 +443,29 @@ class _HomeConnectionNotice extends StatelessWidget {
               color: AppColors.errorContainerFor(brightness),
               borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
             ),
-            child: Icon(Icons.cloud_off_rounded,
-                color: AppColors.errorFor(brightness)),
+            child: Icon(
+              Icons.cloud_off_rounded,
+              color: AppColors.errorFor(brightness),
+            ),
           ),
           const SizedBox(width: AppDimens.space12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Server unavailable',
-                    style: AppTextStyle.title3.copyWith(
-                      color: AppColors.labelPrimaryFor(brightness),
-                    )),
+                Text(
+                  'Server unavailable',
+                  style: AppTextStyle.title3.copyWith(
+                    color: AppColors.labelPrimaryFor(brightness),
+                  ),
+                ),
                 const SizedBox(height: AppDimens.space4),
-                Text(message,
-                    style: AppTextStyle.caption1.copyWith(
-                      color: AppColors.labelSecondaryFor(brightness),
-                    )),
+                Text(
+                  message,
+                  style: AppTextStyle.caption1.copyWith(
+                    color: AppColors.labelSecondaryFor(brightness),
+                  ),
+                ),
               ],
             ),
           ),
@@ -443,7 +475,6 @@ class _HomeConnectionNotice extends StatelessWidget {
     );
   }
 }
-
 
 /// Real recently-modified files from the root folder, with a friendly empty
 /// state that never pretends data is loading.

@@ -31,7 +31,7 @@ class NexaBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return NexaLiquidGlass(
       borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-      blurSigma: 8,
+      blurSigma: 18,
       padding: EdgeInsets.zero,
       child: SizedBox(
         width: double.infinity,
@@ -147,14 +147,40 @@ class _NavRowState extends State<_NavRow> with SingleTickerProviderStateMixin {
                         1 - stretch * 0.45,
                         1,
                       ),
-                      child: NexaLiquidGlass(
-                        borderRadius:
-                            BorderRadius.circular(AppDimens.radiusPill),
-                        padding: EdgeInsets.zero,
-                        blurSigma: 10,
-                        enabled: true,
-                        showHighlight: false,
-                        showShadow: false,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius:
+                              BorderRadius.circular(AppDimens.radiusPill),
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: brightness == Brightness.dark
+                                ? [
+                                    Colors.white.withValues(alpha: 0.17),
+                                    const Color(0xFF9A8CFF)
+                                        .withValues(alpha: 0.20),
+                                  ]
+                                : [
+                                    Colors.white.withValues(alpha: 0.46),
+                                    const Color(0xFF6658E8)
+                                        .withValues(alpha: 0.10),
+                                  ],
+                          ),
+                          border: Border.all(
+                            color: brightness == Brightness.dark
+                                ? Colors.white.withValues(alpha: 0.16)
+                                : Colors.white.withValues(alpha: 0.78),
+                            width: 0.7,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF6658E8)
+                                  .withValues(alpha: 0.12),
+                              blurRadius: 12,
+                              spreadRadius: -5,
+                            ),
+                          ],
+                        ),
                         child: const SizedBox.expand(),
                       ),
                     ),

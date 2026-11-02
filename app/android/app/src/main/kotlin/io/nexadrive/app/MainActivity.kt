@@ -9,6 +9,7 @@ import android.content.pm.PackageInstaller
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
+import android.provider.MediaStore
 import android.provider.Settings
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -96,6 +97,7 @@ class MainActivity : FlutterFragmentActivity() {
             when (call.method) {
                 "pickFolder" -> pickFolder(result)
                 "pickFiles" -> pickFiles(result)
+                "pickImages" -> pickImages(result)
                 "listFolder" -> listFolder(
                     call.argument<String>("uri"),
                     result,
@@ -163,6 +165,41 @@ class MainActivity : FlutterFragmentActivity() {
         } catch (e: android.content.ActivityNotFoundException) {
             pendingFilesResult = null
             result.error("unavailable", "No document picker is available", null)
+        }
+    }
+
+    /** Opens the native, permission-scoped photo gallery for multi-image upload. */
+    private fun pickImages(result: MethodChannel.Result) {
+        if (pendingFolderResult != null || pendingFilesResult != null) {
+            result.error("busy", "A document picker is already open", null)
+            return
+        }
+        pendingFilesResult = result
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Intent(MediaStore.ACTION_PICK_IMAGES).apply {
+                type = "image/*"
+                putExtra(
+                    MediaStore.EXTRA_PICK_IMAGES_MAX,
+                    MediaStore.getPickImagesMaxLimit().coerceAtMost(50).coerceAtLeast(2),
+                )
+            }
+        } else {
+            // Older Android versions use the image-filtered SAF picker.
+            Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "image/*"
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
+                )
+            }
+        }
+        try {
+            startActivityForResult(intent, PICK_IMAGES_REQUEST_CODE)
+        } catch (e: android.content.ActivityNotFoundException) {
+            pendingFilesResult = null
+            result.error("unavailable", "No photo picker is available", null)
         }
     }
 
@@ -310,7 +347,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == PICK_FILES_REQUEST_CODE) {
+        if (requestCode == PICK_FILES_REQUEST_CODE || requestCode == PICK_IMAGES_REQUEST_CODE) {
             val result = pendingFilesResult ?: return
             pendingFilesResult = null
             if (resultCode != Activity.RESULT_OK || data == null) {
@@ -585,6 +622,7 @@ class MainActivity : FlutterFragmentActivity() {
         private const val APP_LOCK_CHANNEL = "nexadrive/app_lock"
         private const val FOLDER_PICKER_CHANNEL = "nexadrive/folder_picker"
         private const val PICK_FILES_REQUEST_CODE = 7412
+        private const val PICK_IMAGES_REQUEST_CODE = 7413
         const val ACTION_INSTALL_STATUS = "io.nexadrive.app.INSTALL_STATUS"
     }
 }

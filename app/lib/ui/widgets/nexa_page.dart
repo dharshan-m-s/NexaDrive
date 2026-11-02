@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
+import 'nexa_liquid_glass.dart';
 
 /// The single NexaDrive page shell — iOS-style with large title support.
 class NexaPage extends StatelessWidget {
@@ -69,8 +70,18 @@ class NexaPage extends StatelessWidget {
       bottom: bottomSafeArea,
       child: Material(
         type: MaterialType.transparency,
-        child: ColoredBox(
-          color: bg,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: bg,
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: brightness == Brightness.dark
+                  ? [const Color(0xFF17162D), bg, bg]
+                  : [const Color(0xFFEAE8FF), bg, bg],
+              stops: const [0, 0.42, 1],
+            ),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -134,9 +145,25 @@ class _Header extends StatelessWidget {
     required this.foreground,
   });
 
+  Widget _glassAction() {
+    final current = action;
+    if (current == null || current is NexaLiquidGlass) {
+      return current ?? const SizedBox.shrink();
+    }
+    return NexaLiquidGlass(
+      borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+      padding: EdgeInsets.zero,
+      blurSigma: 16,
+      tintOpacity: 0.24,
+      showShadow: false,
+      child: current,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final glassAction = _glassAction();
 
     if (largeTitle) {
       return Padding(
@@ -179,7 +206,7 @@ class _Header extends StatelessWidget {
                 ),
                 if (action != null) ...[
                   const SizedBox(width: AppDimens.space8),
-                  action!,
+                  glassAction,
                 ],
                 if (actions != null) ...[
                   const SizedBox(width: AppDimens.space8),
@@ -227,7 +254,7 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
-          if (action != null) action!,
+          if (action != null) glassAction,
           if (actions != null) ...actions!,
         ],
       ),

@@ -3,6 +3,7 @@ import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
+import 'nexa_liquid_glass.dart';
 
 /// Opens an iOS-style modal bottom sheet.
 Future<T?> showNexaSheet<T>(
@@ -150,27 +151,22 @@ class NexaSheetBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final surface = AppColors.surfaceFor(brightness);
 
-    return Material(
-      color: Colors.transparent,
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(AppDimens.radiusXLarge),
+    return NexaLiquidGlass(
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(AppDimens.radiusXLarge),
+      ),
+      padding: EdgeInsets.zero,
+      blurSigma: 22,
+      tintOpacity: brightness == Brightness.dark ? 0.40 : 0.52,
+      showShadow: false,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
-        child: Material(
-          color: surface,
-          child: Padding(
-            // Keep text fields above the on-screen keyboard: stop the sheet's
-            // scroll viewport where the keyboard begins.
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.viewInsetsOf(context).bottom,
-            ),
-            child: SingleChildScrollView(
-              padding: padding,
-              child: child,
-            ),
-          ),
+        child: SingleChildScrollView(
+          padding: padding,
+          child: child,
         ),
       ),
     );

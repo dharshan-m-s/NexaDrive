@@ -29,7 +29,7 @@ class NexaHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final onGradient = AppColors.labelPrimaryFor(brightness);
+    final onGradient = AppColors.heroTextOnGradient(brightness);
     final accent = AppColors.accentFor(brightness);
 
     return NexaSurface(
@@ -37,94 +37,108 @@ class NexaHero extends StatelessWidget {
       color: AppColors.surfaceElevatedFor(brightness),
       radius: AppDimens.radiusXLarge,
       onTap: onTap,
-      padding: const EdgeInsets.fromLTRB(
-        AppDimens.space20,
-        AppDimens.space20,
-        AppDimens.space20,
-        AppDimens.space16,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      padding: EdgeInsets.zero,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: brightness == Brightness.dark
+                ? const [Color(0xFF302B68), Color(0xFF174B5A)]
+                : const [Color(0xFFE5E1FF), Color(0xFFDDF5F3)],
+          ),
+          borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppDimens.space20,
+            AppDimens.space20,
+            AppDimens.space20,
+            AppDimens.space16,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label.toUpperCase(),
-                      style: AppTextStyle.caption2.copyWith(
-                        color: AppColors.labelSecondaryFor(brightness),
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.1,
-                        // Subtle gradient-aware tint for light mode
-                      ),
-                    ),
-                    const SizedBox(height: AppDimens.space4),
-                    Text(
-                      value,
-                      style: AppTextStyle.heroTitle.copyWith(
-                        color: onGradient,
-                        height: 1.05,
-                      ),
-                    ),
-                    if (secondary != null && secondary!.isNotEmpty) ...[
-                      const SizedBox(height: AppDimens.space2),
-                      Text(
-                        secondary!,
-                        style: AppTextStyle.metricValue.copyWith(
-                          color: AppColors.labelSecondaryFor(brightness),
-                          fontWeight: FontWeight.w600,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label.toUpperCase(),
+                          style: AppTextStyle.caption2.copyWith(
+                            color: onGradient.withValues(alpha: 0.72),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.1,
+                          ),
                         ),
-                      ),
-                    ],
-                  ],
+                        const SizedBox(height: AppDimens.space4),
+                        Text(
+                          value,
+                          style: AppTextStyle.heroTitle.copyWith(
+                            color: onGradient,
+                            height: 1.05,
+                          ),
+                        ),
+                        if (secondary != null && secondary!.isNotEmpty) ...[
+                          const SizedBox(height: AppDimens.space2),
+                          Text(
+                            secondary!,
+                            style: AppTextStyle.metricValue.copyWith(
+                              color: onGradient.withValues(alpha: 0.72),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppDimens.space16),
+                  if (trailing != null)
+                    trailing!
+                  else
+                    _HeroRing(
+                      fraction: fraction,
+                      size: 88,
+                      stroke: 6,
+                      color: accent,
+                      track: accent.withValues(alpha: 0.18),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppDimens.space16),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(
+                    begin: 0,
+                    end: fraction.clamp(0.0, 1.0),
+                  ),
+                  duration: AppMotion.resolve(context, AppMotion.normal),
+                  curve: AppMotion.standardCurve,
+                  builder: (context, v, _) => LinearProgressIndicator(
+                    value: v,
+                    minHeight: 6,
+                    color: accent,
+                    backgroundColor: accent.withValues(alpha: 0.16),
+                  ),
                 ),
               ),
-              const SizedBox(width: AppDimens.space16),
-              if (trailing != null)
-                trailing!
-              else
-                _HeroRing(
-                  fraction: fraction,
-                  size: 88,
-                  stroke: 6,
-                  color: accent,
-                  track: accent.withValues(alpha: 0.18),
+              const SizedBox(height: AppDimens.space10),
+              Text(
+                detail,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyle.caption1.copyWith(
+                  color: onGradient.withValues(alpha: 0.72),
+                  fontWeight: FontWeight.w500,
                 ),
+              ),
             ],
           ),
-          const SizedBox(height: AppDimens.space16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(
-                begin: 0,
-                end: fraction.clamp(0.0, 1.0),
-              ),
-              duration: AppMotion.resolve(context, AppMotion.normal),
-              curve: AppMotion.standardCurve,
-              builder: (context, v, _) => LinearProgressIndicator(
-                value: v,
-                minHeight: 6,
-                color: accent,
-                backgroundColor: accent.withValues(alpha: 0.16),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppDimens.space10),
-          Text(
-            detail,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyle.caption1.copyWith(
-              color: AppColors.labelSecondaryFor(brightness),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

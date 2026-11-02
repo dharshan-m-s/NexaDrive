@@ -19,6 +19,7 @@ class NexaLiquidGlass extends StatefulWidget {
   final bool forceOpaque;
   final bool showHighlight;
   final bool showShadow;
+  final double? tintOpacity;
 
   const NexaLiquidGlass({
     super.key,
@@ -32,6 +33,7 @@ class NexaLiquidGlass extends StatefulWidget {
     this.forceOpaque = false,
     this.showHighlight = true,
     this.showShadow = true,
+    this.tintOpacity,
   });
 
   @override
@@ -39,6 +41,7 @@ class NexaLiquidGlass extends StatefulWidget {
 }
 
 class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
+  static Future<ui.FragmentProgram>? _program;
   ui.FragmentShader? _shader;
 
   @override
@@ -58,9 +61,9 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
   Future<void> _loadShader() async {
     if (!widget.enabled || !ui.ImageFilter.isShaderFilterSupported) return;
     try {
-      final program = await ui.FragmentProgram.fromAsset(
+      final program = await (_program ??= ui.FragmentProgram.fromAsset(
         'shaders/nexa_liquid_glass.frag',
-      );
+      ));
       final shader = program.fragmentShader();
       if (!mounted) {
         shader.dispose();
@@ -68,6 +71,7 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
       }
       setState(() => _shader = shader);
     } catch (_) {
+      _program = null;
       // The renderer-specific blur fallback remains functional.
     }
   }
@@ -85,7 +89,8 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
         (MediaQuery.maybeOf(context)?.highContrast ?? false);
     final active = widget.enabled && !opaque;
     final dark = brightness == Brightness.dark;
-    final tint = dark ? const Color(0xFF171A22) : const Color(0xFFF7F9FF);
+    final tint = AppColors.glassSurfaceFor(brightness);
+    final tintAlpha = widget.tintOpacity ?? (dark ? 0.14 : 0.10);
     final edge = dark
         ? Colors.white.withValues(alpha: 0.13)
         : Colors.white.withValues(alpha: 0.48);
@@ -116,25 +121,52 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
                 decoration: BoxDecoration(
                   color: opaque
                       ? AppColors.surfaceFor(brightness)
-                      : tint.withValues(alpha: dark ? 0.30 : 0.24),
+                      : tint.withValues(alpha: tintAlpha),
                 ),
               ),
             ),
             if (active)
               Positioned.fill(
                 child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(
-                    sigmaX: widget.blurSigma,
-                    sigmaY: widget.blurSigma,
-                  ),
+                  filter: shader == null
+                      ? ui.ImageFilter.blur(
+                          sigmaX: widget.blurSigma,
+                          sigmaY: widget.blurSigma,
+                        )
+                      : ui.ImageFilter.compose(
+                          outer: ui.ImageFilter.shader(shader),
+                          inner: ui.ImageFilter.blur(
+                            sigmaX: widget.blurSigma,
+                            sigmaY: widget.blurSigma,
+                          ),
+                        ),
                   child: const SizedBox.expand(),
                 ),
               ),
-            if (active && shader != null)
+            if (active)
               Positioned.fill(
-                child: BackdropFilter(
-                  filter: ui.ImageFilter.shader(shader),
-                  child: const SizedBox.expand(),
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: dark
+                            ? [
+                                Colors.white.withValues(alpha: 0.065),
+                                const Color(0xFF9A8CFF)
+                                    .withValues(alpha: 0.045),
+                                Colors.black.withValues(alpha: 0.035),
+                              ]
+                            : [
+                                Colors.white.withValues(alpha: 0.16),
+                                const Color(0xFF8A7CFF)
+                                    .withValues(alpha: 0.035),
+                                Colors.white.withValues(alpha: 0.015),
+                              ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             Padding(padding: widget.padding, child: widget.child),

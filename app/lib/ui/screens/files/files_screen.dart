@@ -36,6 +36,8 @@ enum _Sort { name, size, newOld, oldNew }
 
 enum _FileFilter { all, folders, files }
 
+enum _UploadChoice { gallery, files }
+
 /// A one-shot action another screen wants My files to perform.
 enum FilesIntent { upload, uploadFolder, newFolder }
 
@@ -218,10 +220,51 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   Future<void> _pickAndUpload() async {
+    final choice = await showNexaSheet<_UploadChoice>(
+      context,
+      isScrollControlled: false,
+      builder: (sheetContext) => NexaSheetBody(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            NexaSheetHeader(
+              title: 'Add to your cloud',
+              subtitle: _path.isEmpty
+                  ? 'Choose where to pick your files'
+                  : 'Destination · $_path',
+            ),
+            NexaSheetAction(
+              icon: Icons.photo_library_rounded,
+              title: 'Choose from gallery',
+              subtitle: 'Select multiple photos from your device library',
+              iconColor: AppColors.accentFor(Theme.of(sheetContext).brightness),
+              onTap: () => Navigator.pop(sheetContext, _UploadChoice.gallery),
+            ),
+            NexaSheetAction(
+              icon: Icons.folder_open_rounded,
+              title: 'Browse files',
+              subtitle: 'Choose documents, videos, audio and other files',
+              onTap: () => Navigator.pop(sheetContext, _UploadChoice.files),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+
+    switch (choice) {
+      case _UploadChoice.gallery:
+        await _pickAndUploadGallery();
+      case _UploadChoice.files:
+        await _pickAndUploadFiles();
+    }
+  }
+
+  Future<void> _pickAndUploadFiles() async {
     if (Platform.isAndroid) {
-      // Android's file_picker plugin copies every selected document into its
-      // cache folder. Use SAF URIs instead and stream bounded ranges directly
-      // from ContentResolver, just like folder uploads do.
+      // Keep the SAF URI path: selected documents stream directly from
+      // ContentResolver in bounded chunks instead of being copied to cache.
       final picked = await const SingleFileUploadPicker().pick();
       if (picked == null || picked.isEmpty || !mounted) return;
       final sources = picked
@@ -239,11 +282,41 @@ class _FilesScreenState extends State<FilesScreen> {
         api: widget.api,
       );
     } else {
-      final files = await FilePicker.pickFiles();
-      if (files.isEmpty || !mounted) return;
+      final picked = await FilePicker.pickFiles();
+      if (picked.isEmpty || !mounted) return;
       await UploadProgressDialog.show(
         context,
-        files: files,
+        files: picked,
+        folder: _path,
+      );
+    }
+    if (mounted) await load();
+  }
+
+  Future<void> _pickAndUploadGallery() async {
+    if (Platform.isAndroid) {
+      final picked = await const SingleFileUploadPicker().pickImages();
+      if (picked == null || picked.isEmpty || !mounted) return;
+      final sources = picked
+          .map((file) => UploadSource(
+                path: file.location,
+                sourceUri: file.sourceUri,
+                name: file.name,
+                size: file.size,
+              ))
+          .toList(growable: false);
+      await UploadProgressDialog.showSources(
+        context,
+        sources: sources,
+        folder: _path,
+        api: widget.api,
+      );
+    } else {
+      final picked = await FilePicker.pickFiles(type: FileType.image);
+      if (picked.isEmpty || !mounted) return;
+      await UploadProgressDialog.show(
+        context,
+        files: picked,
         folder: _path,
       );
     }
@@ -480,6 +553,88 @@ class _FilesScreenState extends State<FilesScreen> {
     }
   }
 
+  Future<void> _showMoreActions() async {
+    await showNexaSheet<void>(
+      context,
+      isScrollControlled: false,
+      builder: (sheetContext) => NexaSheetBody(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const NexaSheetHeader(
+              title: 'More actions',
+              subtitle: 'Tools for organising this folder',
+            ),
+            NexaSheetAction(
+              icon: Icons.create_new_folder_outlined,
+              title: 'New folder',
+              subtitle: 'Create a folder here',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _createFolder();
+              },
+            ),
+            NexaSheetAction(
+              icon: Icons.drive_folder_upload_outlined,
+              title: 'Upload folder',
+              subtitle: 'Keep a folder and its structure together',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _pickAndUploadFolder();
+              },
+            ),
+            NexaSheetAction(
+              icon: Icons.document_scanner_outlined,
+              title: 'Scan document',
+              subtitle: 'Capture pages with your camera',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context)
+                    .push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ScannerScreen(api: widget.api, folder: _path),
+                  ),
+                )
+                    .then((saved) {
+                  if (saved == true && mounted) load();
+                });
+              },
+            ),
+            NexaSheetAction(
+              icon: Icons.sort_rounded,
+              title: 'Sort by',
+              subtitle: 'Change the order of files and folders',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _pickSort();
+              },
+            ),
+            NexaSheetAction(
+              icon: _grid ? Icons.view_list_rounded : Icons.grid_view_rounded,
+              title: _grid ? 'Switch to list view' : 'Switch to grid view',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                setState(() => _grid = !_grid);
+              },
+            ),
+            if (_path.isNotEmpty)
+              NexaSheetAction(
+                icon: Icons.arrow_upward_rounded,
+                title: 'Back to My files',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  setState(() => _path = '');
+                  load();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickSort() async {
     final selected = await showDialog<_Sort>(
       context: context,
@@ -631,6 +786,7 @@ class _FilesScreenState extends State<FilesScreen> {
                           builder: (_) => SearchScreen(api: widget.api)),
                     ),
             onSort: _selecting ? null : _pickSort,
+            onMore: _showMoreActions,
             onScan: _selecting
                 ? null
                 : () => Navigator.of(context)
@@ -1040,6 +1196,7 @@ class _ViewArea extends StatelessWidget {
   final VoidCallback? onSearch;
   final VoidCallback? onScan;
   final VoidCallback? onSort;
+  final VoidCallback onMore;
 
   const _ViewArea({
     required this.title,
@@ -1057,6 +1214,7 @@ class _ViewArea extends StatelessWidget {
     this.onSearch,
     this.onScan,
     this.onSort,
+    required this.onMore,
   });
 
   @override
@@ -1132,90 +1290,10 @@ class _ViewArea extends StatelessWidget {
                     onPressed: onSearch,
                     icon: const Icon(Icons.search_rounded),
                   ),
-                  PopupMenuButton<String>(
+                  IconButton(
                     tooltip: 'More actions',
-                    icon: const Icon(Icons.more_vert_rounded),
-                    onSelected: (value) {
-                      switch (value) {
-                        case 'folder':
-                          onNewFolder?.call();
-                        case 'uploadFolder':
-                          onUploadFolder?.call();
-                        case 'scan':
-                          onScan?.call();
-                        case 'sort':
-                          onSort?.call();
-                        case 'view':
-                          onToggleView();
-                        case 'up':
-                          onBackToRoot?.call();
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      if (onNewFolder != null)
-                        const PopupMenuItem(
-                          value: 'folder',
-                          child: ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(Icons.create_new_folder_outlined),
-                            title: Text('New folder'),
-                          ),
-                        ),
-                      if (onUploadFolder != null)
-                        const PopupMenuItem(
-                          value: 'uploadFolder',
-                          child: ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(Icons.drive_folder_upload_outlined),
-                            title: Text('Upload folder'),
-                          ),
-                        ),
-                      if (onScan != null)
-                        const PopupMenuItem(
-                          value: 'scan',
-                          child: ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(Icons.document_scanner_outlined),
-                            title: Text('Scan document'),
-                          ),
-                        ),
-                      if (onSort != null)
-                        const PopupMenuItem(
-                          value: 'sort',
-                          child: ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(Icons.sort_rounded),
-                            title: Text('Sort by'),
-                          ),
-                        ),
-                      PopupMenuItem(
-                        value: 'view',
-                        child: ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            isGrid
-                                ? Icons.view_list_outlined
-                                : Icons.grid_view_outlined,
-                          ),
-                          title: Text(isGrid ? 'List view' : 'Grid view'),
-                        ),
-                      ),
-                      if (onBackToRoot != null)
-                        const PopupMenuItem(
-                          value: 'up',
-                          child: ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(Icons.arrow_upward_rounded),
-                            title: Text('Back to My files'),
-                          ),
-                        ),
-                    ],
+                    onPressed: onMore,
+                    icon: const Icon(Icons.more_horiz_rounded),
                   ),
                 ],
               ),

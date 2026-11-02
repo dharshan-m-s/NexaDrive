@@ -349,11 +349,19 @@ class _ShareScopeSwitch extends StatelessWidget {
       children: [
         Row(
           children: [
-            _ShareScopeOption(label: 'With me', count: receivedCount,
-                selected: !mine, onTap: () => onChanged(false)),
+            _ShareScopeOption(
+              label: 'With me',
+              count: receivedCount,
+              selected: !mine,
+              onTap: () => onChanged(false),
+            ),
             const SizedBox(width: AppDimens.space24),
-            _ShareScopeOption(label: 'Shared by me', count: sentCount,
-                selected: mine, onTap: () => onChanged(true)),
+            _ShareScopeOption(
+              label: 'Shared by me',
+              count: sentCount,
+              selected: mine,
+              onTap: () => onChanged(true),
+            ),
           ],
         ),
         const SizedBox(height: AppDimens.space8),
@@ -411,31 +419,39 @@ class _ShareScopeOption extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(label, style: AppTextStyle.subheadline.copyWith(
-                  color: selected
-                      ? AppColors.labelPrimaryFor(brightness)
-                      : AppColors.labelSecondaryFor(brightness),
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                )),
+                Text(
+                  label,
+                  style: AppTextStyle.subheadline.copyWith(
+                    color: selected
+                        ? AppColors.labelPrimaryFor(brightness)
+                        : AppColors.labelSecondaryFor(brightness),
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
                 const SizedBox(width: AppDimens.space8),
                 AnimatedContainer(
                   duration: AppMotion.resolve(context, AppMotion.fast),
                   constraints: const BoxConstraints(minWidth: 22),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimens.space6, vertical: AppDimens.space2),
+                    horizontal: AppDimens.space6,
+                    vertical: AppDimens.space2,
+                  ),
                   decoration: BoxDecoration(
                     color: selected
                         ? AppColors.accentContainerFor(brightness)
                         : AppColors.fillFor(brightness),
                     borderRadius: BorderRadius.circular(AppDimens.radiusPill),
                   ),
-                  child: Text('$count', textAlign: TextAlign.center,
+                  child: Text(
+                    '$count',
+                    textAlign: TextAlign.center,
                     style: AppTextStyle.caption2.copyWith(
                       color: selected
                           ? AppColors.accentTextFor(brightness)
                           : AppColors.labelSecondaryFor(brightness),
                       fontWeight: FontWeight.w700,
-                    )),
+                    ),
+                  ),
                 ),
               ],
             ),

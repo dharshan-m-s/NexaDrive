@@ -489,7 +489,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                           ).withValues(alpha: 0),
                           AppColors.backgroundFor(
                             Theme.of(context).brightness,
-                          ).withValues(alpha: 0.82),
+                          ).withValues(alpha: 0.34),
                         ],
                       ),
                     ),
@@ -501,7 +501,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 right: 0,
                 // Keep the pill separate from the system gesture area; the pill's
                 // own surface, outline, and shadow create its floating appearance.
-                bottom: AppDimens.space12 + bottomInset,
+                bottom: AppDimens.space10 + bottomInset,
                 child: SafeArea(
                   top: false,
                   bottom: false,
