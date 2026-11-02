@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
+import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
 import '../../core/models/file_entry.dart';
 import '../../core/utils/file_kind.dart';
@@ -126,22 +127,18 @@ class _FileIconTile extends StatelessWidget {
       width: AppDimens.iconTileLarge,
       height: AppDimens.iconTileLarge,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            FileKind.tileFill(category, brightness),
-            tint.withValues(alpha: brightness == Brightness.dark ? 0.18 : 0.10),
-          ],
+        color: tint.withValues(
+          alpha: brightness == Brightness.dark ? 0.20 : 0.11,
         ),
         borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-        border: Border.all(color: tint.withValues(alpha: 0.18), width: 0.7),
+        border: Border.all(
+          color: tint.withValues(
+            alpha: brightness == Brightness.dark ? 0.28 : 0.18,
+          ),
+          width: 0.8,
+        ),
       ),
-      child: Icon(
-        FileKind.icon(category),
-        size: AppDimens.iconMedium,
-        color: tint,
-      ),
+      child: Icon(FileKind.icon(category), size: AppDimens.iconMedium, color: tint),
     );
   }
 }
@@ -227,6 +224,25 @@ class _SelectionBadge extends StatelessWidget {
 double _gridDecodeWidth(BuildContext context) =>
     170 * MediaQuery.devicePixelRatioOf(context);
 
+/// Type-led artwork for files that do not have a raster thumbnail.
+class _GridFileArtwork extends StatelessWidget {
+  final Category category;
+  final Color tint;
+  final Brightness brightness;
+
+  const _GridFileArtwork({required this.category, required this.tint, required this.brightness});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: brightness == Brightness.dark ? 0.20 : 0.10),
+      ),
+      child: Center(child: Icon(FileKind.icon(category), size: 38, color: tint)),
+    );
+  }
+}
+
 /// Grid tile for the Files grid view.
 class NexaFileGridTile extends StatelessWidget {
   final FileEntry entry;
@@ -251,55 +267,57 @@ class NexaFileGridTile extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     final accent = AppColors.accentFor(brightness);
     final category = entry.category;
+    final tint = FileKind.tint(category, brightness);
+    final radius = BorderRadius.circular(AppDimens.radiusLarge);
+    final hasImagePreview = category == Category.image && thumbnail != null;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+        borderRadius: radius,
         onTap: onTap == null ? null : () => onTap!(entry),
         onLongPress: onLongPress,
-        child: Container(
+        child: AnimatedContainer(
+          duration: AppMotion.resolve(context, AppMotion.fast),
+          curve: AppMotion.standardCurve,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppColors.surfaceFor(brightness),
-                AppColors.surfaceGroupedFor(brightness),
-              ],
+            color: selected
+                ? AppColors.accentContainerFor(brightness)
+                : AppColors.surfaceFor(brightness),
+            borderRadius: radius,
+            border: Border.all(
+              color: selected ? accent : AppColors.separatorFor(brightness),
+              width: selected ? 1.5 : 0.7,
             ),
-            borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-            border: selected
-                ? Border.all(
-                    color: AppColors.onAccentContainerFor(brightness), width: 2)
-                : Border.all(color: Colors.transparent, width: 2),
           ),
-          padding: const EdgeInsets.all(AppDimens.space12),
+          padding: const EdgeInsets.all(AppDimens.space10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (category == Category.image)
-                    _ImageThumb(
-                      entry: entry,
-                      bytes: thumbnail,
-                      decodeWidth: _gridDecodeWidth(context),
-                    )
-                  else
-                    _FileIconTile(category: category, brightness: brightness),
-                  if (selecting)
-                    Icon(
-                      selected
-                          ? Icons.check_circle_rounded
-                          : Icons.radio_button_unchecked_rounded,
-                      color: selected
-                          ? accent
-                          : AppColors.labelTertiaryFor(brightness),
-                      size: 20,
-                    ),
-                ],
+              SizedBox(
+                height: 88,
+                width: double.infinity,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+                  child: hasImagePreview
+                      ? Image.memory(
+                          thumbnail!,
+                          fit: BoxFit.cover,
+                          cacheWidth: _gridDecodeWidth(context).round(),
+                          gaplessPlayback: true,
+                          errorBuilder: (context, error, stack) =>
+                              _GridFileArtwork(
+                            category: category,
+                            tint: tint,
+                            brightness: brightness,
+                          ),
+                        )
+                      : _GridFileArtwork(
+                          category: category,
+                          tint: tint,
+                          brightness: brightness,
+                        ),
+                ),
               ),
               const Spacer(),
               Text(
@@ -312,19 +330,32 @@ class NexaFileGridTile extends StatelessWidget {
                   letterSpacing: -0.1,
                 ),
               ),
-              const SizedBox(height: AppDimens.space2),
-              Text(
-                entry.isFolder ? 'Folder' : Format.bytes(entry.size),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyle.caption2.copyWith(
-                  color: AppColors.labelSecondaryFor(brightness),
-                ),
+              const SizedBox(height: AppDimens.space4),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      entry.isFolder ? 'Folder' : Format.bytes(entry.size),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyle.caption2.copyWith(
+                        color: AppColors.labelSecondaryFor(brightness),
+                      ),
+                    ),
+                  ),
+                  if (entry.isFolder)
+                    Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.labelTertiaryFor(brightness)),
+                  if (selecting)
+                    Icon(
+                      selected ? Icons.check_circle_rounded : Icons.circle_outlined,
+                      size: 18,
+                      color: selected ? accent : AppColors.labelTertiaryFor(brightness),
+                    ),
+                ],
               ),
             ],
           ),
         ),
       ),
     );
-  }
-}
+  }}
