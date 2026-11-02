@@ -48,7 +48,7 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
   });
 
-  testWidgets('narrow layout shows a compact More Liquid Glass sheet',
+  testWidgets('narrow layout shows the restored compact More action sheet',
       (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1.0;
@@ -59,7 +59,6 @@ void main() {
         .pumpWidget(NexaDriveApp(session: signedInSession(), prefs: prefs));
     await tester.pumpAndSettle();
 
-    // The redesign replaces the Material NavigationBar with an iOS tab bar.
     expect(find.byType(NexaBottomNav), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
     expect(find.text('Photos'), findsOneWidget);
@@ -67,25 +66,14 @@ void main() {
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
 
-    // More is a content-sized modal bottom sheet. Its optical glass is
-    // retained, while primary destinations stay in the navigation dock.
-    final sheet = find.ancestor(
-      of: find.text('Tools and activity'),
-      matching: find.byType(NexaLiquidGlass),
-    );
-    Finder inSheet(String label) =>
-        find.descendant(of: sheet, matching: find.text(label));
-    expect(sheet, findsOneWidget);
     expect(find.byType(BottomSheet), findsOneWidget);
     expect(
       tester.getSize(find.byType(BottomSheet)).height,
       lessThan(500),
       reason: 'More must remain compact rather than filling the screen',
     );
-    expect(
-      find.descendant(of: sheet, matching: find.byType(GridView)),
-      findsOneWidget,
-    );
+    expect(find.text('Tools and activity'), findsNothing);
+    expect(find.byType(GridView), findsNothing);
     for (final label in [
       'Scan document',
       'Transfers',
@@ -94,10 +82,10 @@ void main() {
       'Notifications',
       'Settings',
     ]) {
-      expect(inSheet(label), findsOneWidget);
+      expect(find.text(label), findsOneWidget);
     }
-    expect(inSheet('Storage insights'), findsNothing);
-    expect(inSheet('My files'), findsNothing);
-    expect(inSheet('Shared'), findsNothing);
+    expect(find.text('Storage Insights'), findsNothing);
+    expect(find.text('My files'), findsNothing);
+    expect(find.text('Shared'), findsNothing);
   });
 }
