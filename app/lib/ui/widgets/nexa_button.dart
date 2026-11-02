@@ -178,6 +178,7 @@ class NexaTextButton extends StatelessWidget {
       onPressed: onPressed,
       style: TextButton.styleFrom(
         foregroundColor: fg,
+        overlayColor: fg.withValues(alpha: 0.08),
         padding: padding ??
             const EdgeInsets.symmetric(
               horizontal: AppDimens.space16,
@@ -356,6 +357,7 @@ class NexaFilledIconButton extends StatelessWidget {
       style: IconButton.styleFrom(
         backgroundColor: bg,
         foregroundColor: fg,
+        overlayColor: fg.withValues(alpha: 0.10),
         minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
         padding: const EdgeInsets.all(AppDimens.space10),
         shape: RoundedRectangleBorder(
