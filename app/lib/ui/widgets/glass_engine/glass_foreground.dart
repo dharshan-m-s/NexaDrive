@@ -80,13 +80,13 @@ class _GlassForegroundState extends State<GlassForeground> {
 
   @override
   Widget build(BuildContext context) => CustomPaint(
-    foregroundPainter: _GlassForegroundPainter(
-      widget.params,
-      MediaQuery.devicePixelRatioOf(context),
-      _shader,
-    ),
-    child: widget.child,
-  );
+        foregroundPainter: _GlassForegroundPainter(
+          widget.params,
+          MediaQuery.devicePixelRatioOf(context),
+          _shader,
+        ),
+        child: widget.child,
+      );
 }
 
 class _GlassForegroundPainter extends CustomPainter {

@@ -58,14 +58,16 @@ class GlassThemeData {
     Color? commandPaletteSurface,
     Color? menuSurface,
     Color? fallbackSurface,
-  }) => GlassThemeData(
-    composerSurface: composerSurface ?? this.composerSurface,
-    navigationSurface: navigationSurface ?? this.navigationSurface,
-    topbarSurface: topbarSurface ?? this.topbarSurface,
-    commandPaletteSurface: commandPaletteSurface ?? this.commandPaletteSurface,
-    menuSurface: menuSurface ?? this.menuSurface,
-    fallbackSurface: fallbackSurface ?? this.fallbackSurface,
-  );
+  }) =>
+      GlassThemeData(
+        composerSurface: composerSurface ?? this.composerSurface,
+        navigationSurface: navigationSurface ?? this.navigationSurface,
+        topbarSurface: topbarSurface ?? this.topbarSurface,
+        commandPaletteSurface:
+            commandPaletteSurface ?? this.commandPaletteSurface,
+        menuSurface: menuSurface ?? this.menuSurface,
+        fallbackSurface: fallbackSurface ?? this.fallbackSurface,
+      );
 
   GlassThemeData lerp(GlassThemeData? other, double t) {
     if (other == null) return this;
@@ -99,13 +101,13 @@ class GlassThemeData {
 
   @override
   int get hashCode => Object.hash(
-    composerSurface,
-    navigationSurface,
-    topbarSurface,
-    commandPaletteSurface,
-    menuSurface,
-    fallbackSurface,
-  );
+        composerSurface,
+        navigationSurface,
+        topbarSurface,
+        commandPaletteSurface,
+        menuSurface,
+        fallbackSurface,
+      );
 }
 
 /// Supplies a [GlassThemeData] to the subtree. Absent = [GlassThemeData]

@@ -62,6 +62,7 @@ void main() {
     testWidgets('an empty folder offers a real next action', (tester) async {
       await pump(tester, FilesScreen(api: listingApi(const [])));
       expect(find.text('Your cloud is empty'), findsOneWidget);
+      expect(tester.getTopLeft(find.text('Your cloud is empty')).dy, lessThan(280));
       expect(find.text('Upload files'), findsWidgets);
       expect(tester.takeException(), isNull);
     });
@@ -71,6 +72,11 @@ void main() {
       await pump(tester, FilesScreen(api: offlineApi()));
       expect(find.textContaining('reach NexaDrive'), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
+      expect(find.text('CONNECTION ISSUE'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.textContaining('reach NexaDrive')).dy,
+        lessThan(280),
+      );
       // The empty-folder copy must not appear when the load failed.
       expect(find.text('Your cloud is empty'), findsNothing);
       expect(find.text('This folder is empty'), findsNothing);

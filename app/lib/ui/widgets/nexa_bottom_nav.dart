@@ -34,9 +34,8 @@ class NexaBottomNav extends StatelessWidget {
     final itemCount = items.length;
     final activeIndex =
         itemCount == 0 ? 0 : currentIndex.clamp(0, itemCount - 1);
-    final activeCenter = itemCount == 0
-        ? 0.0
-        : -1.0 + ((activeIndex + 0.5) * 2.0 / itemCount);
+    final activeCenter =
+        itemCount == 0 ? 0.0 : -1.0 + ((activeIndex + 0.5) * 2.0 / itemCount);
 
     return Stack(
       fit: StackFit.expand,
@@ -51,7 +50,8 @@ class NexaBottomNav extends StatelessWidget {
                   center: Alignment(activeCenter, -0.45),
                   radius: 1.05,
                   colors: [
-                    accent.withValues(alpha: brightness == Brightness.dark ? 0.15 : 0.10),
+                    accent.withValues(
+                        alpha: brightness == Brightness.dark ? 0.15 : 0.10),
                     const Color(0xFF52C7D8).withValues(alpha: 0.045),
                     Colors.transparent,
                   ],

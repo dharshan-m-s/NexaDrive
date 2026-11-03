@@ -113,8 +113,7 @@ class _GlassSurfaceState extends State<GlassSurface> {
                     .withValues(alpha: 1),
             borderRadius: BorderRadius.circular(widget.params.cornerRadius),
           ),
-          child:
-              widget.child ??
+          child: widget.child ??
               const SizedBox.expand(
                 child: ColoredBox(color: Colors.transparent),
               ),
@@ -164,8 +163,7 @@ class _GlassSurfaceState extends State<GlassSurface> {
             : params,
         dpr: MediaQuery.devicePixelRatioOf(context),
         blurSigma: widget.blurSigma,
-        child:
-            widget.child ??
+        child: widget.child ??
             const SizedBox.expand(child: ColoredBox(color: Colors.transparent)),
       ),
     );
@@ -329,8 +327,7 @@ class _RenderGlassBackdrop extends RenderProxyBox {
         // An identity matrix is not free on Impeller: its extra intermediate
         // introduced one-level edge differences even with zero lens displacement.
         // Skip only the exact identity; non-neutral controls still precede blur.
-        final neutral =
-            _params.saturation == 1 &&
+        final neutral = _params.saturation == 1 &&
             _params.brightness == 0 &&
             _params.contrast == 1;
         filter = ui.ImageFilter.compose(

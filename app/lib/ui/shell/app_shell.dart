@@ -408,7 +408,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                               Text(
                                 'Tools and settings',
                                 style: AppTextStyle.caption1.copyWith(
-                                  color: AppColors.labelSecondaryFor(brightness),
+                                  color:
+                                      AppColors.labelSecondaryFor(brightness),
                                 ),
                               ),
                             ],

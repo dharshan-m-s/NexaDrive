@@ -1245,9 +1245,11 @@ class _ViewArea extends StatelessWidget {
                     else if (onBackToRoot != null)
                       InkWell(
                         onTap: onBackToRoot,
-                        borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+                        borderRadius:
+                            BorderRadius.circular(AppDimens.radiusSmall),
                         child: Padding(
-                          padding: const EdgeInsets.only(top: 2, right: 6, bottom: 2),
+                          padding: const EdgeInsets.only(
+                              top: 2, right: 6, bottom: 2),
                           child: Text(
                             'Back to My files',
                             style: NexaTypography.caption.copyWith(
@@ -1406,7 +1408,8 @@ class _ViewArea extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTextStyle.subheadline.copyWith(
-                                    color: AppColors.labelSecondaryFor(brightness),
+                                    color:
+                                        AppColors.labelSecondaryFor(brightness),
                                   ),
                                 ),
                               ),
@@ -1428,7 +1431,8 @@ class _ViewArea extends StatelessWidget {
                         minimumSize: const Size(0, 48),
                         padding: const EdgeInsets.symmetric(horizontal: 13),
                         visualDensity: VisualDensity.compact,
-                        backgroundColor: AppColors.accentContainerFor(brightness),
+                        backgroundColor:
+                            AppColors.accentContainerFor(brightness),
                         foregroundColor: AppColors.accentTextFor(brightness),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -1438,7 +1442,8 @@ class _ViewArea extends StatelessWidget {
                       icon: const Icon(Icons.upload_rounded, size: 18),
                       label: const Text(
                         'Upload',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ),
@@ -1507,7 +1512,8 @@ class _FilesStatePanel extends StatelessWidget {
                       color: isConnectionIssue
                           ? AppColors.errorContainerFor(brightness)
                           : AppColors.accentContainerFor(brightness),
-                      borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+                      borderRadius:
+                          BorderRadius.circular(AppDimens.radiusMedium),
                     ),
                     child: Icon(
                       icon,
@@ -1569,7 +1575,8 @@ class _FilesStatePanel extends StatelessWidget {
                       ),
                       minimumSize: const Size(0, AppDimens.touchTarget),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                        borderRadius:
+                            BorderRadius.circular(AppDimens.radiusPill),
                       ),
                     ),
                     icon: Icon(primaryIcon, size: 18),
@@ -1589,7 +1596,8 @@ class _FilesStatePanel extends StatelessWidget {
                         ),
                         minimumSize: const Size(0, AppDimens.touchTarget),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                          borderRadius:
+                              BorderRadius.circular(AppDimens.radiusPill),
                         ),
                       ),
                       icon: Icon(secondaryIcon, size: 18),
