@@ -278,6 +278,41 @@ jobs:
           else
             echo "::warning::No KEYSTORE_BASE64 secret set; test build is signed with the Flutter debug key (not installable over a signed release)."
           fi
+      # The hosted Android SDK can occasionally return a truncated NDK
+      # archive. Install it before Gradle configures the Android project and
+      # retry from a clean directory when extraction fails.
+      - name: Install Android NDK with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [ -z "$SDK_ROOT" ]; then
+            echo "::error::Android SDK root is not configured."
+            exit 1
+          fi
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          NDK_DIR="$SDK_ROOT/ndk/28.2.13676358"
+          test -x "$SDKMANAGER" || {
+            echo "::error::Android sdkmanager not found at $SDKMANAGER"
+            exit 1
+          }
+          for attempt in 1 2 3; do
+            echo "Installing NDK 28.2.13676358 (attempt $attempt/3)"
+            rm -rf "$NDK_DIR"
+            if "$SDKMANAGER" --install "ndk;28.2.13676358" &&
+              test -s "$NDK_DIR/source.properties" &&
+              test -x "$NDK_DIR/ndk-build"; then
+              echo "NDK installation verified."
+              exit 0
+            fi
+            rm -rf "$NDK_DIR"
+            if [ "$attempt" -lt 3 ]; then
+              echo "NDK download/extraction failed or was incomplete; retrying after cleanup."
+              sleep 15
+            fi
+          done
+          echo "::error::Could not install a valid NDK 28.2.13676358 after 3 attempts."
+          exit 1
       - name: Build release APK
         working-directory: app
         run: |
