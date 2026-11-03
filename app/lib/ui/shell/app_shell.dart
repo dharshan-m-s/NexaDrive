@@ -308,8 +308,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           height: 82,
           decoration: BoxDecoration(
             color: dark
-                ? Colors.white.withValues(alpha: 0.055)
-                : Colors.black.withValues(alpha: 0.035),
+                ? Colors.white.withValues(alpha: 0.025)
+                : Colors.black.withValues(alpha: 0.018),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color:
@@ -349,8 +349,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           padding: const EdgeInsets.symmetric(horizontal: AppDimens.pageMargin),
           child: NexaLiquidGlass(
             borderRadius: BorderRadius.circular(28),
-            blurSigma: 7,
-            tintOpacity: dark ? 0.16 : 0.12,
+            blurSigma: 2.8,
+            tintOpacity: dark ? 0.075 : 0.06,
             padding: const EdgeInsets.all(12),
             showShadow: true,
             child: Column(
@@ -906,7 +906,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     behavior: HitTestBehavior.opaque,
                     onTap: _closeMoreMenu,
                     child: ColoredBox(
-                      color: Colors.black.withValues(alpha: 0.10),
+                      color: Colors.black.withValues(alpha: 0.055),
                     ),
                   ),
                 ),
