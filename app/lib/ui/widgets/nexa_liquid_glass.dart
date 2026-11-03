@@ -52,7 +52,10 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
     if (ui.ImageFilter.isShaderFilterSupported) {
       unawaited(_loadShader());
     } else {
-      debugPrint('NexaDrive glass: Impeller image-filter shaders are unavailable; using compatibility blur.');
+      debugPrint(
+        'NexaDrive glass: Impeller image-filter shaders are unavailable; '
+        'using compatibility blur.',
+      );
     }
   }
 
@@ -117,9 +120,12 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
         inner: blur,
       );
     } catch (error, stackTrace) {
-      // Renderer/device-specific failures degrade safely but remain visible in logs.
+      // Renderer/device-specific failures degrade safely but remain visible
+      // in logs.
       if (!_shaderFilterErrorReported) {
-        debugPrint('NexaDrive glass filter failed; using blur fallback: $error');
+        debugPrint(
+          'NexaDrive glass filter failed; using blur fallback: $error',
+        );
         _shaderFilterErrorReported = true;
         FlutterError.reportError(
           FlutterErrorDetails(
