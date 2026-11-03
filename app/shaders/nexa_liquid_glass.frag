@@ -18,7 +18,7 @@ float cornerRadius(vec2 local) {
 void main() {
   vec2 pixel = FlutterFragCoord().xy;
   vec2 uv = pixel / u_size;
-#ifdef IMPELLER_TARGET_OPENGLES
+#if defined(IMPELLER_TARGET_OPENGLES) && !defined(IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED)
   uv.y = 1.0 - uv.y;
 #endif
 
@@ -64,17 +64,19 @@ void main() {
   vec2 blueUv = clamp(baseUv + bend - dispersion, vec2(0.001), vec2(0.999));
 
   vec4 source = texture(u_texture, baseUv);
-  vec3 refracted;
-  refracted.r = texture(u_texture, redUv).r;
-  refracted.g = texture(u_texture, greenUv).g;
-  refracted.b = texture(u_texture, blueUv).b;
+  vec4 redSample = texture(u_texture, redUv);
+  vec4 greenSample = texture(u_texture, greenUv);
+  vec4 blueSample = texture(u_texture, blueUv);
 
-  // Backdrop textures are premultiplied. Work in straight RGB for the
-  // optical highlights, then premultiply once when writing the output.
-  float safeAlpha = max(source.a, 0.0001);
-  vec3 sourceColor = source.rgb / safeAlpha;
-  vec3 refractedColor = refracted / safeAlpha;
-  float refractionStrength = clamp(edgeMask * 0.72 + softBulge * 0.10, 0.0, 0.78);
+  // Backdrop textures are premultiplied. Unpremultiply each displaced sample
+  // using its own alpha, perform the optical mixing, then premultiply once.
+  vec3 sourceColor = source.rgb / max(source.a, 0.0001);
+  vec3 refractedColor = vec3(
+    redSample.r / max(redSample.a, 0.0001),
+    greenSample.g / max(greenSample.a, 0.0001),
+    blueSample.b / max(blueSample.a, 0.0001));
+  float refractionStrength =
+      clamp(edgeMask * 0.72 + softBulge * 0.10, 0.0, 0.78);
   vec3 optical = mix(sourceColor, refractedColor, refractionStrength);
 
   vec3 spectral = mix(

@@ -110,8 +110,9 @@ jobs:
           channel: stable
       - run: flutter pub get
         working-directory: app
-      # Temporary diagnostic output identifies the exact formatter diff.
-      - run: dart format --output=show lib/ui/shell/app_shell.dart
+      # Print a focused diff if a file drifts from the SDK formatter.
+      - run: diff -u lib/ui/shell/app_shell.dart <(dart format --output=show lib/ui/shell/app_shell.dart) || true
+        shell: bash
         working-directory: app
       # Whitespace-only check: keep the tree formatted with the SDK's own formatter.
       - run: dart format --output=none --set-exit-if-changed lib test integration_test
