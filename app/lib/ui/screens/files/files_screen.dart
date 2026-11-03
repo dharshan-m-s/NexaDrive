@@ -855,6 +855,8 @@ class _FilesScreenState extends State<FilesScreen> {
 
   Widget _buildBody() {
     final bottomClearance = MediaQuery.paddingOf(context).bottom;
+    final bottomPadding = bottomClearance + AppDimens.bottomNavHeight;
+
     if (_loading) {
       return NexaSkeletonList(
         itemCount: 5,
@@ -865,65 +867,61 @@ class _FilesScreenState extends State<FilesScreen> {
     }
 
     if (_error != null) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final topSpace =
-              ((constraints.maxHeight - 300) / 2).clamp(24.0, 160.0).toDouble();
-          return RefreshIndicator(
-            onRefresh: load,
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.only(bottom: bottomClearance),
-              children: [
-                SizedBox(height: topSpace),
-                _FilesStatePanel(
-                  icon: Icons.cloud_off_rounded,
-                  title: "Can't reach NexaDrive",
-                  message: _error!,
-                  primaryLabel: 'Retry',
-                  primaryIcon: Icons.refresh_rounded,
-                  onPrimary: load,
-                ),
-              ],
+      return RefreshIndicator(
+        onRefresh: load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            AppDimens.pageMargin,
+            AppDimens.space16,
+            AppDimens.pageMargin,
+            bottomPadding,
+          ),
+          children: [
+            _FilesStatePanel(
+              icon: Icons.cloud_off_rounded,
+              title: "Can't reach NexaDrive",
+              message: _error!,
+              primaryLabel: 'Retry',
+              primaryIcon: Icons.refresh_rounded,
+              onPrimary: load,
             ),
-          );
-        },
+          ],
+        ),
       );
     }
 
     if (_items.isEmpty) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final topSpace =
-              ((constraints.maxHeight - 340) / 2).clamp(24.0, 150.0).toDouble();
-          return RefreshIndicator(
-            onRefresh: load,
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.only(bottom: bottomClearance),
-              children: [
-                SizedBox(height: topSpace),
-                _FilesStatePanel(
-                  icon: _path.isEmpty
-                      ? Icons.cloud_upload_outlined
-                      : Icons.folder_open_rounded,
-                  title: _path.isEmpty
-                      ? 'Your cloud is empty'
-                      : 'This folder is empty',
-                  message: _path.isEmpty
-                      ? 'Start by adding files or creating a folder. Your private cloud is ready when you are.'
-                      : 'Upload files here, or create a folder to keep this space organised.',
-                  primaryLabel: 'Upload files',
-                  primaryIcon: Icons.upload_rounded,
-                  onPrimary: _pickAndUpload,
-                  secondaryLabel: 'New folder',
-                  secondaryIcon: Icons.create_new_folder_outlined,
-                  onSecondary: _createFolder,
-                ),
-              ],
+      return RefreshIndicator(
+        onRefresh: load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            AppDimens.pageMargin,
+            AppDimens.space16,
+            AppDimens.pageMargin,
+            bottomPadding,
+          ),
+          children: [
+            _FilesStatePanel(
+              icon: _path.isEmpty
+                  ? Icons.cloud_upload_outlined
+                  : Icons.folder_open_rounded,
+              title: _path.isEmpty
+                  ? 'Your cloud is empty'
+                  : 'This folder is empty',
+              message: _path.isEmpty
+                  ? 'Start by adding files or creating a folder. Your private cloud is ready when you are.'
+                  : 'Upload files here, or create a folder to keep this space organised.',
+              primaryLabel: 'Upload files',
+              primaryIcon: Icons.upload_rounded,
+              onPrimary: _pickAndUpload,
+              secondaryLabel: 'New folder',
+              secondaryIcon: Icons.create_new_folder_outlined,
+              onSecondary: _createFolder,
             ),
-          );
-        },
+          ],
+        ),
       );
     }
 
@@ -953,9 +951,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 AppDimens.pageMargin,
                 AppDimens.space8,
                 AppDimens.pageMargin,
-                bottomClearance > AppDimens.spaceLg
-                    ? bottomClearance
-                    : AppDimens.spaceLg,
+                bottomPadding,
               ),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                 maxCrossAxisExtent: 176,
@@ -964,8 +960,8 @@ class _FilesScreenState extends State<FilesScreen> {
                 childAspectRatio: 0.93,
               ),
               itemCount: sorted.length,
-              itemBuilder: (context, i) {
-                final entry = sorted[i];
+              itemBuilder: (context, index) {
+                final entry = sorted[index];
                 return NexaFileGridTile(
                   entry: entry,
                   thumbnail: _thumbFor(entry),
@@ -981,9 +977,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 AppDimens.pageMargin,
                 AppDimens.space4,
                 AppDimens.pageMargin,
-                bottomClearance > AppDimens.spaceLg
-                    ? bottomClearance
-                    : AppDimens.spaceLg,
+                bottomPadding,
               ),
               itemCount: (folders.isEmpty ? 0 : folders.length + 1) +
                   (files.isEmpty ? 0 : files.length + 1),
@@ -1136,6 +1130,8 @@ enum _FileHeaderAction {
 /// The compact file-browser toolbar. Upload, search and overflow actions share
 /// the title row so the page starts with one coherent control group instead
 /// of an oversized upload row floating below a separate header.
+/// My files toolbar. The title and overflow stay on their own row; Search
+/// and Upload share a single compact action row below it.
 class _ViewArea extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -1183,189 +1179,268 @@ class _ViewArea extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
-        AppDimens.space8,
+        AppDimens.space12,
         AppDimens.pageMargin,
-        0,
+        AppDimens.space8,
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AnimatedContainer(
-            duration: AppMotion.resolve(context, AppMotion.fast),
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppColors.accentContainerFor(brightness),
-              borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-              border: Border.all(color: accent.withValues(alpha: 0.14)),
-            ),
-            child: Icon(
-              selecting ? Icons.check_rounded : titleIcon,
-              color: accent,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: AppDimens.space10),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AnimatedSwitcher(
-                  duration: AppMotion.resolve(context, AppMotion.fast),
-                  child: Text(
-                    selecting ? Format.count(selectedCount, 'item') : title,
-                    key: ValueKey(
-                      selecting ? 'selection:$selectedCount' : title,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: NexaTypography.pageTitle.copyWith(
-                      fontSize: 20,
-                      color: selecting
-                          ? accent
-                          : AppColors.labelPrimaryFor(brightness),
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.5,
-                    ),
+          Row(
+            children: [
+              AnimatedContainer(
+                duration: AppMotion.resolve(context, AppMotion.fast),
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: AppColors.accentContainerFor(brightness),
+                  borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+                  border: Border.all(
+                    color: AppColors.accentTextFor(brightness)
+                        .withValues(alpha: 0.12),
                   ),
                 ),
-                if (!selecting)
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: NexaTypography.caption.copyWith(
-                      fontSize: 11.5,
-                      color: AppColors.labelSecondaryFor(brightness),
-                    ),
-                  )
-                else if (onBackToRoot != null)
-                  InkWell(
-                    onTap: onBackToRoot,
-                    borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
-                    child: Padding(
-                      padding:
-                          const EdgeInsets.only(top: 2, right: 6, bottom: 2),
+                child: Icon(
+                  selecting ? Icons.check_rounded : titleIcon,
+                  color: accent,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: AppDimens.space10),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: AppMotion.resolve(context, AppMotion.fast),
                       child: Text(
-                        'Back to My files',
+                        selecting ? Format.count(selectedCount, 'item') : title,
+                        key: ValueKey(
+                          selecting ? 'selection:$selectedCount' : title,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: NexaTypography.pageTitle.copyWith(
+                          fontSize: 20,
+                          color: selecting
+                              ? accent
+                              : AppColors.labelPrimaryFor(brightness),
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.45,
+                        ),
+                      ),
+                    ),
+                    if (!selecting)
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: NexaTypography.caption.copyWith(
-                          color: accent,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 11.5,
+                          color: AppColors.labelSecondaryFor(brightness),
+                        ),
+                      )
+                    else if (onBackToRoot != null)
+                      InkWell(
+                        onTap: onBackToRoot,
+                        borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 2, right: 6, bottom: 2),
+                          child: Text(
+                            'Back to My files',
+                            style: NexaTypography.caption.copyWith(
+                              color: accent,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (selecting)
+                IconButton(
+                  tooltip: 'Cancel selection',
+                  onPressed: onExitSelection,
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.fillFor(brightness),
+                    minimumSize: const Size(
+                      AppDimens.touchTarget,
+                      AppDimens.touchTarget,
+                    ),
+                    padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                  icon: const Icon(Icons.close_rounded),
+                )
+              else
+                PopupMenuButton<_FileHeaderAction>(
+                  tooltip: 'More actions',
+                  icon: const Icon(Icons.more_horiz_rounded, size: 22),
+                  padding: EdgeInsets.zero,
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.fillFor(brightness),
+                    foregroundColor: AppColors.labelPrimaryFor(brightness),
+                    minimumSize: const Size(
+                      AppDimens.touchTarget,
+                      AppDimens.touchTarget,
+                    ),
+                    padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                  onSelected: (action) {
+                    switch (action) {
+                      case _FileHeaderAction.refresh:
+                        onRefresh?.call();
+                        break;
+                      case _FileHeaderAction.newFolder:
+                        onNewFolder?.call();
+                        break;
+                      case _FileHeaderAction.uploadFolder:
+                        onUploadFolder?.call();
+                        break;
+                      case _FileHeaderAction.scan:
+                        onScan?.call();
+                        break;
+                      case _FileHeaderAction.sort:
+                        onSort?.call();
+                        break;
+                      case _FileHeaderAction.toggleView:
+                        onToggleView();
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: _FileHeaderAction.refresh,
+                      child: _FileMenuLabel(
+                        icon: Icons.refresh_rounded,
+                        label: 'Refresh folder',
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    if (onNewFolder != null)
+                      const PopupMenuItem(
+                        value: _FileHeaderAction.newFolder,
+                        child: _FileMenuLabel(
+                          icon: Icons.create_new_folder_outlined,
+                          label: 'New folder',
+                        ),
+                      ),
+                    if (onUploadFolder != null)
+                      const PopupMenuItem(
+                        value: _FileHeaderAction.uploadFolder,
+                        child: _FileMenuLabel(
+                          icon: Icons.drive_folder_upload_outlined,
+                          label: 'Upload folder',
+                        ),
+                      ),
+                    if (onScan != null)
+                      const PopupMenuItem(
+                        value: _FileHeaderAction.scan,
+                        child: _FileMenuLabel(
+                          icon: Icons.document_scanner_outlined,
+                          label: 'Scan document',
+                        ),
+                      ),
+                    if (onSort != null)
+                      const PopupMenuItem(
+                        value: _FileHeaderAction.sort,
+                        child: _FileMenuLabel(
+                          icon: Icons.sort_rounded,
+                          label: 'Sort by…',
+                        ),
+                      ),
+                    PopupMenuItem(
+                      value: _FileHeaderAction.toggleView,
+                      child: _FileMenuLabel(
+                        icon: isGrid
+                            ? Icons.view_list_rounded
+                            : Icons.grid_view_rounded,
+                        label: isGrid ? 'List view' : 'Grid view',
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          if (!selecting) ...[
+            const SizedBox(height: AppDimens.space12),
+            Row(
+              children: [
+                Expanded(
+                  child: Tooltip(
+                    message: 'Search files',
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: onSearch,
+                        borderRadius: BorderRadius.circular(15),
+                        child: Ink(
+                          height: 48,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          decoration: BoxDecoration(
+                            color: AppColors.fillFor(brightness),
+                            borderRadius: BorderRadius.circular(15),
+                            border: Border.all(
+                              color: AppColors.dividerFor(brightness),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.search_rounded,
+                                size: 20,
+                                color: AppColors.labelSecondaryFor(brightness),
+                              ),
+                              const SizedBox(width: AppDimens.space8),
+                              Expanded(
+                                child: Text(
+                                  'Search files',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyle.subheadline.copyWith(
+                                    color: AppColors.labelSecondaryFor(brightness),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppDimens.space8),
-          if (selecting)
-            _FilesHeaderButton(
-              tooltip: 'Cancel selection',
-              icon: Icons.close_rounded,
-              onPressed: onExitSelection,
-            )
-          else ...[
-            if (onUpload != null)
-              _FilesHeaderButton(
-                tooltip: 'Upload files',
-                icon: Icons.upload_rounded,
-                onPressed: onUpload,
-                accent: true,
-              ),
-            const SizedBox(width: AppDimens.space6),
-            _FilesHeaderButton(
-              tooltip: 'Search files',
-              icon: Icons.search_rounded,
-              onPressed: onSearch,
-            ),
-            const SizedBox(width: AppDimens.space6),
-            PopupMenuButton<_FileHeaderAction>(
-              tooltip: 'More actions',
-              icon: const Icon(Icons.more_horiz_rounded, size: 22),
-              padding: EdgeInsets.zero,
-              style: IconButton.styleFrom(
-                backgroundColor: AppColors.fillFor(brightness),
-                foregroundColor: AppColors.labelPrimaryFor(brightness),
-                minimumSize: const Size(
-                  AppDimens.touchTarget,
-                  AppDimens.touchTarget,
                 ),
-                padding: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onSelected: (action) {
-                switch (action) {
-                  case _FileHeaderAction.refresh:
-                    onRefresh?.call();
-                    break;
-                  case _FileHeaderAction.newFolder:
-                    onNewFolder?.call();
-                    break;
-                  case _FileHeaderAction.uploadFolder:
-                    onUploadFolder?.call();
-                    break;
-                  case _FileHeaderAction.scan:
-                    onScan?.call();
-                    break;
-                  case _FileHeaderAction.sort:
-                    onSort?.call();
-                    break;
-                  case _FileHeaderAction.toggleView:
-                    onToggleView();
-                    break;
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: _FileHeaderAction.refresh,
-                  child: _FileMenuLabel(
-                    icon: Icons.refresh_rounded,
-                    label: 'Refresh folder',
-                  ),
-                ),
-                const PopupMenuDivider(),
-                if (onNewFolder != null)
-                  const PopupMenuItem(
-                    value: _FileHeaderAction.newFolder,
-                    child: _FileMenuLabel(
-                      icon: Icons.create_new_folder_outlined,
-                      label: 'New folder',
+                const SizedBox(width: AppDimens.space8),
+                Tooltip(
+                  message: 'Upload files',
+                  child: SizedBox(
+                    height: 48,
+                    child: FilledButton.tonalIcon(
+                      onPressed: onUpload,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                        padding: const EdgeInsets.symmetric(horizontal: 13),
+                        visualDensity: VisualDensity.compact,
+                        backgroundColor: AppColors.accentContainerFor(brightness),
+                        foregroundColor: AppColors.accentTextFor(brightness),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                      ),
+                      icon: const Icon(Icons.upload_rounded, size: 18),
+                      label: const Text(
+                        'Upload',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                      ),
                     ),
-                  ),
-                if (onUploadFolder != null)
-                  const PopupMenuItem(
-                    value: _FileHeaderAction.uploadFolder,
-                    child: _FileMenuLabel(
-                      icon: Icons.drive_folder_upload_outlined,
-                      label: 'Upload folder',
-                    ),
-                  ),
-                if (onScan != null)
-                  const PopupMenuItem(
-                    value: _FileHeaderAction.scan,
-                    child: _FileMenuLabel(
-                      icon: Icons.document_scanner_outlined,
-                      label: 'Scan document',
-                    ),
-                  ),
-                if (onSort != null)
-                  const PopupMenuItem(
-                    value: _FileHeaderAction.sort,
-                    child: _FileMenuLabel(
-                      icon: Icons.sort_rounded,
-                      label: 'Sort by…',
-                    ),
-                  ),
-                PopupMenuItem(
-                  value: _FileHeaderAction.toggleView,
-                  child: _FileMenuLabel(
-                    icon: isGrid
-                        ? Icons.view_list_rounded
-                        : Icons.grid_view_rounded,
-                    label: isGrid ? 'List view' : 'Grid view',
                   ),
                 ),
               ],
@@ -1373,46 +1448,6 @@ class _ViewArea extends StatelessWidget {
           ],
         ],
       ),
-    );
-  }
-}
-
-class _FilesHeaderButton extends StatelessWidget {
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback? onPressed;
-  final bool accent;
-
-  const _FilesHeaderButton({
-    required this.tooltip,
-    required this.icon,
-    required this.onPressed,
-    this.accent = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      style: IconButton.styleFrom(
-        backgroundColor: accent
-            ? AppColors.accentContainerFor(brightness)
-            : AppColors.fillFor(brightness),
-        foregroundColor: accent
-            ? AppColors.accentTextFor(brightness)
-            : AppColors.labelPrimaryFor(brightness),
-        minimumSize: const Size(
-          AppDimens.touchTarget,
-          AppDimens.touchTarget,
-        ),
-        padding: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-      ),
-      icon: Icon(icon, size: 21),
     );
   }
 }
@@ -1444,55 +1479,82 @@ class _FilesStatePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final accent = AppColors.accentFor(brightness);
+    final isConnectionIssue = primaryLabel == 'Retry';
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space24,
-        vertical: AppDimens.space16,
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 340),
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Container(
+          padding: const EdgeInsets.all(AppDimens.space16),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceFor(brightness),
+            borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+            border: Border.all(
+              color: AppColors.dividerFor(brightness).withValues(alpha: 0.9),
+            ),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: 76,
-                height: 76,
-                decoration: BoxDecoration(
-                  color: AppColors.accentContainerFor(brightness),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: accent.withValues(alpha: 0.16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: isConnectionIssue
+                          ? AppColors.errorContainerFor(brightness)
+                          : AppColors.accentContainerFor(brightness),
+                      borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 26,
+                      color: isConnectionIssue
+                          ? AppColors.errorFor(brightness)
+                          : accent,
+                    ),
                   ),
-                ),
-                child: Icon(icon, size: 34, color: accent),
+                  const SizedBox(width: AppDimens.space12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (isConnectionIssue) ...[
+                          Text(
+                            'CONNECTION ISSUE',
+                            style: AppTextStyle.caption1.copyWith(
+                              color: AppColors.errorFor(brightness),
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          const SizedBox(height: AppDimens.space4),
+                        ],
+                        Text(
+                          title,
+                          style: AppTextStyle.title3.copyWith(
+                            color: AppColors.labelPrimaryFor(brightness),
+                          ),
+                        ),
+                        const SizedBox(height: AppDimens.space4),
+                        Text(
+                          message,
+                          style: AppTextStyle.subheadline.copyWith(
+                            color: AppColors.labelSecondaryFor(brightness),
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppDimens.space20),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: NexaTypography.pageTitle.copyWith(
-                  color: AppColors.labelPrimaryFor(brightness),
-                  fontSize: 19,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.35,
-                ),
-              ),
-              const SizedBox(height: AppDimens.space8),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-                style: NexaTypography.body.copyWith(
-                  color: AppColors.labelSecondaryFor(brightness),
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: AppDimens.space20),
+              const SizedBox(height: AppDimens.space16),
               Wrap(
-                alignment: WrapAlignment.center,
+                alignment: WrapAlignment.start,
                 spacing: AppDimens.space8,
                 runSpacing: AppDimens.space8,
                 children: [
@@ -1503,12 +1565,11 @@ class _FilesStatePanel extends StatelessWidget {
                       backgroundColor: AppColors.accentContainerFor(brightness),
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppDimens.space16,
-                        vertical: AppDimens.space10,
+                        vertical: AppDimens.space8,
                       ),
                       minimumSize: const Size(0, AppDimens.touchTarget),
                       shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppDimens.radiusPill),
+                        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
                       ),
                     ),
                     icon: Icon(primaryIcon, size: 18),
@@ -1524,12 +1585,11 @@ class _FilesStatePanel extends StatelessWidget {
                         ),
                         padding: const EdgeInsets.symmetric(
                           horizontal: AppDimens.space16,
-                          vertical: AppDimens.space10,
+                          vertical: AppDimens.space8,
                         ),
                         minimumSize: const Size(0, AppDimens.touchTarget),
                         shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(AppDimens.radiusPill),
+                          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
                         ),
                       ),
                       icon: Icon(secondaryIcon, size: 18),
