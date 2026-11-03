@@ -1183,9 +1183,9 @@ class _ViewArea extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
-        AppDimens.space12,
-        AppDimens.pageMargin,
         AppDimens.space8,
+        AppDimens.pageMargin,
+        0,
       ),
       child: Row(
         children: [
@@ -1849,12 +1849,7 @@ class _FileFilterBar extends StatelessWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppDimens.pageMargin,
-        AppDimens.space2,
-        AppDimens.pageMargin,
-        AppDimens.space8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppDimens.pageMargin),
       child: Row(
         children: [
           Expanded(
