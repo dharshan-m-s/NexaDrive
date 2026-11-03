@@ -16,338 +16,336 @@ import 'nexa_liquid_glass.dart';
 /// hairline edge and soft shadow create depth without frosting page content.
 /// The selected tab travels on a spring and stretches subtly before settling.
 class NexaBottomNav extends StatelessWidget {
-  final int currentIndex;
-  final ValueChanged<int> onTap;
-  final List<NexaBottomNavItem> items;
+final int currentIndex;
+final ValueChanged<int> onTap;
+final List<NexaBottomNavItem> items;
 
-  const NexaBottomNav({
-    super.key,
-    required this.currentIndex,
-    required this.onTap,
-    required this.items,
-  });
+const NexaBottomNav({
+super.key,
+required this.currentIndex,
+required this.onTap,
+required this.items,
+});
 
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return NexaLiquidGlass(
-      borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-      blurSigma: 2.2,
-      tintOpacity: dark ? 0.035 : 0.03,
-      refractionHeight: 18,
-      refractionAmount: -36,
-      depthEffect: 0.8,
-      chromaticDispersion: 1.05,
-      padding: EdgeInsets.zero,
-      child: SizedBox(
-        width: double.infinity,
-        height: AppDimens.bottomNavHeight,
-        child: _NavRow(
-          items: items,
-          currentIndex: currentIndex,
-          onTap: onTap,
-        ),
-      ),
-    );
-  }
+@override
+Widget build(BuildContext context) {
+final dark = Theme.of(context).brightness == Brightness.dark;
+return NexaLiquidGlass(
+borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+blurSigma: 2.2,
+tintOpacity: dark ? 0.035 : 0.03,
+refractionHeight: 18,
+refractionAmount: -36,
+depthEffect: 0.8,
+chromaticDispersion: 1.05,
+padding: EdgeInsets.zero,
+child: SizedBox(
+width: double.infinity,
+height: AppDimens.bottomNavHeight,
+child: _NavRow(
+items: items,
+currentIndex: currentIndex,
+onTap: onTap,
+),
+),
+);
+}
 }
 
 class _NavRow extends StatefulWidget {
-  final List<NexaBottomNavItem> items;
-  final int currentIndex;
-  final ValueChanged<int> onTap;
+final List<NexaBottomNavItem> items;
+final int currentIndex;
+final ValueChanged<int> onTap;
 
-  const _NavRow({
-    required this.items,
-    required this.currentIndex,
-    required this.onTap,
-  });
+const _NavRow({
+required this.items,
+required this.currentIndex,
+required this.onTap,
+});
 
-  @override
-  State<_NavRow> createState() => _NavRowState();
+@override
+State<_NavRow> createState() => _NavRowState();
 }
 
 class _NavRowState extends State<_NavRow> with SingleTickerProviderStateMixin {
-  late final AnimationController _selection = AnimationController.unbounded(
-    vsync: this,
-    value: _safeIndex(widget.currentIndex).toDouble(),
-    debugLabel: 'NexaBottomNav.selection',
-  );
+late final AnimationController _selection = AnimationController.unbounded(
+vsync: this,
+value: _safeIndex(widget.currentIndex).toDouble(),
+debugLabel: 'NexaBottomNav.selection',
+);
 
-  int _safeIndex(int index) {
-    if (widget.items.isEmpty) return 0;
-    return index.clamp(0, widget.items.length - 1);
-  }
+int _safeIndex(int index) {
+if (widget.items.isEmpty) return 0;
+return index.clamp(0, widget.items.length - 1);
+}
 
-  @override
-  void didUpdateWidget(covariant _NavRow oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentIndex != widget.currentIndex ||
-        oldWidget.items.length != widget.items.length) {
-      _moveSelection();
-    }
-  }
+@override
+void didUpdateWidget(covariant _NavRow oldWidget) {
+super.didUpdateWidget(oldWidget);
+if (oldWidget.currentIndex != widget.currentIndex ||
+oldWidget.items.length != widget.items.length) {
+_moveSelection();
+}
+}
 
-  void _moveSelection() {
-    final target = _safeIndex(widget.currentIndex).toDouble();
-    if (AppMotion.reducedMotion(context)) {
-      _selection
-        ..stop()
-        ..value = target;
-      return;
-    }
-    _selection.animateWith(
-      SpringSimulation(
-        AppMotion.glassSpring,
-        _selection.value,
-        target,
-        _selection.velocity,
-      ),
-    );
-  }
+void _moveSelection() {
+final target = _safeIndex(widget.currentIndex).toDouble();
+if (AppMotion.reducedMotion(context)) {
+_selection
+..stop()
+..value = target;
+return;
+}
+_selection.animateWith(
+SpringSimulation(
+AppMotion.glassSpring,
+_selection.value,
+target,
+_selection.velocity,
+),
+);
+}
 
-  @override
-  void dispose() {
-    _selection.dispose();
-    super.dispose();
-  }
+@override
+void dispose() {
+_selection.dispose();
+super.dispose();
+}
 
-  @override
-  Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final items = widget.items;
-    if (items.isEmpty) return const SizedBox.shrink();
+@override
+Widget build(BuildContext context) {
+final brightness = Theme.of(context).brightness;
+final items = widget.items;
+if (items.isEmpty) return const SizedBox.shrink();
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final count = items.length;
-        final itemWidth = constraints.maxWidth / count;
-        const horizontalInset = 5.0;
-        const indicatorHeight = 48.0;
-        final indicatorWidth =
-            (itemWidth - horizontalInset * 2).clamp(0.0, itemWidth);
+return LayoutBuilder(
+builder: (context, constraints) {
+final count = items.length;
+final itemWidth = constraints.maxWidth / count;
+const horizontalInset = 5.0;
+const indicatorHeight = 48.0;
+final indicatorWidth =
+(itemWidth - horizontalInset * 2).clamp(0.0, itemWidth);
 
-        return AnimatedBuilder(
-          animation: _selection,
-          builder: (context, _) {
-            final selectedPosition =
-                _selection.value.clamp(0.0, (count - 1).toDouble());
-            final velocity = _selection.isAnimating ? _selection.velocity : 0.0;
-            final stretch = (velocity.abs() / 80.0).clamp(0.0, 0.16);
-            final left =
-                selectedPosition * itemWidth + (itemWidth - indicatorWidth) / 2;
+return AnimatedBuilder(
+animation: _selection,
+builder: (context, _) {
+final selectedPosition =
+_selection.value.clamp(0.0, (count - 1).toDouble());
+final velocity = _selection.isAnimating ? _selection.velocity : 0.0;
+final stretch = (velocity.abs() / 80.0).clamp(0.0, 0.16);
+final left =
+selectedPosition * itemWidth + (itemWidth - indicatorWidth) / 2;
 
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                if (widget.currentIndex >= 0 && widget.currentIndex < count)
-                  Positioned(
-                    left: left,
-                    top: (AppDimens.bottomNavHeight - indicatorHeight) / 2,
-                    width: indicatorWidth,
-                    height: indicatorHeight,
-                    child: Transform(
-                      alignment: Alignment.center,
-                      transform: Matrix4.diagonal3Values(
-                        1 + stretch,
-                        1 - stretch * 0.45,
-                        1,
-                      ),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius:
-                              BorderRadius.circular(AppDimens.radiusPill),
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              AppColors.accentFor(brightness).withValues(
-                                alpha: brightness == Brightness.dark
-                                    ? 0.15
-                                    : 0.10,
-                              ),
-                              AppColors.accentFor(brightness).withValues(
-                                alpha: brightness == Brightness.dark
-                                    ? 0.055
-                                    : 0.035,
-                              ),
-                            ],
-                          ),
-                          border: Border.all(
-                            color: AppColors.accentFor(brightness).withValues(
-                              alpha: brightness == Brightness.dark
-                                  ? 0.28
-                                  : 0.20,
-                            ),
-                            width: 0.7,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.accentFor(brightness).withValues(
-                                alpha: brightness == Brightness.dark
-                                    ? 0.075
-                                    : 0.045,
-                              ),
-                              blurRadius: 12,
-                              spreadRadius: -7,
-                            ),
-                          ],
-                        ),
-                        child: const SizedBox.expand(),
-                      ),
-                    ),
-                  ),
-                Row(
-                  children: List.generate(count, (index) {
-                    return Expanded(
-                      child: _NavItem(
-                        item: items[index],
-                        isSelected: index == widget.currentIndex,
-                        onTap: () => widget.onTap(index),
-                        brightness: brightness,
-                      ),
-                    );
-                  }),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
+return Stack(
+fit: StackFit.expand,
+children: [
+if (widget.currentIndex >= 0 && widget.currentIndex < count)
+Positioned(
+left: left,
+top: (AppDimens.bottomNavHeight - indicatorHeight) / 2,
+width: indicatorWidth,
+height: indicatorHeight,
+child: Transform(
+alignment: Alignment.center,
+transform: Matrix4.diagonal3Values(
+1 + stretch,
+1 - stretch * 0.45,
+1,
+),
+child: DecoratedBox(
+decoration: BoxDecoration(
+borderRadius:
+BorderRadius.circular(AppDimens.radiusPill),
+gradient: LinearGradient(
+begin: Alignment.topLeft,
+end: Alignment.bottomRight,
+colors: [
+AppColors.accentFor(brightness).withValues(
+alpha:
+brightness == Brightness.dark ? 0.15 : 0.10,
+),
+AppColors.accentFor(brightness).withValues(
+alpha: brightness == Brightness.dark
+? 0.055
+: 0.035,
+),
+],
+),
+border: Border.all(
+color: AppColors.accentFor(brightness).withValues(
+alpha:
+brightness == Brightness.dark ? 0.28 : 0.20,
+),
+width: 0.7,
+),
+boxShadow: [
+BoxShadow(
+color: AppColors.accentFor(brightness).withValues(
+alpha: brightness == Brightness.dark
+? 0.075
+: 0.045,
+),
+blurRadius: 12,
+spreadRadius: -7,
+),
+],
+),
+child: const SizedBox.expand(),
+),
+),
+),
+Row(
+children: List.generate(count, (index) {
+return Expanded(
+child: _NavItem(
+item: items[index],
+isSelected: index == widget.currentIndex,
+onTap: () => widget.onTap(index),
+brightness: brightness,
+),
+);
+}),
+),
+],
+);
+},
+);
+},
+);
+}
 }
 
 class _NavItem extends StatelessWidget {
-  final NexaBottomNavItem item;
-  final bool isSelected;
-  final VoidCallback onTap;
-  final Brightness brightness;
+final NexaBottomNavItem item;
+final bool isSelected;
+final VoidCallback onTap;
+final Brightness brightness;
 
-  const _NavItem({
-    required this.item,
-    required this.isSelected,
-    required this.onTap,
-    required this.brightness,
-  });
+const _NavItem({
+required this.item,
+required this.isSelected,
+required this.onTap,
+required this.brightness,
+});
 
-  @override
-  Widget build(BuildContext context) {
-    final activeColor = brightness == Brightness.dark
-        ? Colors.white
-        : AppColors.accentTextFor(brightness);
-    final inactiveColor = AppColors.textSecondaryFor(brightness).withValues(
-      alpha: brightness == Brightness.dark ? 0.78 : 0.72,
-    );
+@override
+Widget build(BuildContext context) {
+final activeColor = brightness == Brightness.dark
+? Colors.white
+: AppColors.accentTextFor(brightness);
+final inactiveColor = AppColors.textSecondaryFor(brightness).withValues(
+alpha: brightness == Brightness.dark ? 0.78 : 0.72,
+);
 
-    return Semantics(
-      button: true,
-      selected: isSelected,
-      label: item.label,
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: () {
-            if (!isSelected) unawaited(HapticFeedback.selectionClick());
-            onTap();
-          },
-          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-          child: SizedBox(
-            height: AppDimens.bottomNavHeight,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimens.space2,
-                vertical: AppDimens.space6,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AnimatedSwitcher(
-                    duration: AppMotion.resolve(context, AppMotion.fast),
-                    switchInCurve: AppMotion.curveFor(context, AppMotion.enter),
-                    switchOutCurve: AppMotion.curveFor(context, AppMotion.exit),
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: ScaleTransition(
-                        scale: Tween<double>(begin: 0.82, end: 1.0)
-                            .animate(animation),
-                        child: child,
-                      ),
-                    ),
-                    child: Icon(
-                      isSelected ? item.selectedIcon : item.icon,
-                      key: ValueKey<bool>(isSelected),
-                      size: 22,
-                      color: isSelected ? activeColor : inactiveColor,
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.space2),
-                  AnimatedDefaultTextStyle(
-                    duration: AppMotion.resolve(context, AppMotion.fast),
-                    curve: AppMotion.curveFor(context, AppMotion.standardCurve),
-                    style: AppTextStyle.navLabel.copyWith(
-                      fontSize: 10.5,
-                      color: isSelected ? activeColor : inactiveColor,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.w500,
-                    ),
-                    child: Text(
-                      item.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+return Semantics(
+button: true,
+selected: isSelected,
+label: item.label,
+child: Material(
+type: MaterialType.transparency,
+child: InkWell(
+onTap: () {
+if (!isSelected) unawaited(HapticFeedback.selectionClick());
+onTap();
+},
+borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+child: SizedBox(
+height: AppDimens.bottomNavHeight,
+child: Padding(
+padding: const EdgeInsets.symmetric(
+horizontal: AppDimens.space2,
+vertical: AppDimens.space6,
+),
+child: Column(
+mainAxisAlignment: MainAxisAlignment.center,
+mainAxisSize: MainAxisSize.min,
+children: [
+AnimatedSwitcher(
+duration: AppMotion.resolve(context, AppMotion.fast),
+switchInCurve: AppMotion.curveFor(context, AppMotion.enter),
+switchOutCurve: AppMotion.curveFor(context, AppMotion.exit),
+transitionBuilder: (child, animation) => FadeTransition(
+opacity: animation,
+child: ScaleTransition(
+scale: Tween<double>(begin: 0.82, end: 1.0)
+.animate(animation),
+child: child,
+),
+),
+child: Icon(
+isSelected ? item.selectedIcon : item.icon,
+key: ValueKey<bool>(isSelected),
+size: 22,
+color: isSelected ? activeColor : inactiveColor,
+),
+),
+const SizedBox(height: AppDimens.space2),
+AnimatedDefaultTextStyle(
+duration: AppMotion.resolve(context, AppMotion.fast),
+curve: AppMotion.curveFor(context, AppMotion.standardCurve),
+style: AppTextStyle.navLabel.copyWith(
+fontSize: 10.5,
+color: isSelected ? activeColor : inactiveColor,
+fontWeight:
+isSelected ? FontWeight.w600 : FontWeight.w500,
+),
+child: Text(
+item.label,
+maxLines: 1,
+overflow: TextOverflow.ellipsis,
+),
+),
+],
+),
+),
+),
+),
+),
+);
+}
 }
 
 /// Bottom navigation item definition.
 class NexaBottomNavItem {
-  final IconData icon;
-  final IconData selectedIcon;
-  final String label;
+final IconData icon;
+final IconData selectedIcon;
+final String label;
 
-  const NexaBottomNavItem({
-    required this.icon,
-    required this.selectedIcon,
-    required this.label,
-  });
+const NexaBottomNavItem({
+required this.icon,
+required this.selectedIcon,
+required this.label,
+});
 }
 
 /// Standard NexaDrive bottom navigation items.
 class NexaBottomNavItems {
-  static const List<NexaBottomNavItem> primary = [
-    NexaBottomNavItem(
-      icon: Icons.home_outlined,
-      selectedIcon: Icons.home_rounded,
-      label: 'Home',
-    ),
-    NexaBottomNavItem(
-      icon: Icons.folder_outlined,
-      selectedIcon: Icons.folder_rounded,
-      label: 'Files',
-    ),
-    NexaBottomNavItem(
-      icon: Icons.people_outline_rounded,
-      selectedIcon: Icons.people_rounded,
-      label: 'Shared',
-    ),
-    NexaBottomNavItem(
-      icon: Icons.photo_library_outlined,
-      selectedIcon: Icons.photo_library_rounded,
-      label: 'Photos',
-    ),
-    NexaBottomNavItem(
-      icon: Icons.more_horiz_rounded,
-      selectedIcon: Icons.more_horiz_rounded,
-      label: 'More',
-    ),
-  ];
+static const List<NexaBottomNavItem> primary = [
+NexaBottomNavItem(
+icon: Icons.home_outlined,
+selectedIcon: Icons.home_rounded,
+label: 'Home',
+),
+NexaBottomNavItem(
+icon: Icons.folder_outlined,
+selectedIcon: Icons.folder_rounded,
+label: 'Files',
+),
+NexaBottomNavItem(
+icon: Icons.people_outline_rounded,
+selectedIcon: Icons.people_rounded,
+label: 'Shared',
+),
+NexaBottomNavItem(
+icon: Icons.photo_library_outlined,
+selectedIcon: Icons.photo_library_rounded,
+label: 'Photos',
+),
+NexaBottomNavItem(
+icon: Icons.more_horiz_rounded,
+selectedIcon: Icons.more_horiz_rounded,
+label: 'More',
+),
+];
 }
