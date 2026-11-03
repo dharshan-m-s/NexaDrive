@@ -16,7 +16,8 @@ enum _SearchFilter { all, folders, files }
 /// a slow earlier response from replacing the result of a newer query.
 class SearchScreen extends StatefulWidget {
   final Api api;
-  const SearchScreen({super.key, required this.api});
+  final String initialQuery;
+  const SearchScreen({super.key, required this.api, this.initialQuery = ''});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -32,6 +33,17 @@ class _SearchScreenState extends State<SearchScreen> {
   String? _error;
   int _requestGeneration = 0;
   _SearchFilter _filter = _SearchFilter.all;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialQuery.trim().isNotEmpty) {
+      _controller.text = widget.initialQuery;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _onChanged(widget.initialQuery);
+      });
+    }
+  }
 
   @override
   void dispose() {
