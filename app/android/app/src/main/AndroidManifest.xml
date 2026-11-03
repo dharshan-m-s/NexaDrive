@@ -28,6 +28,10 @@
         android:name="${applicationName}"
         android:networkSecurityConfig="@xml/network_security_config"
         android:icon="@mipmap/ic_launcher">
+        <!-- The glass refraction ImageFilter requires Impeller. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="true" />
         <!-- App Lock hosts androidx.biometric's authentication prompt, which
              requires a FragmentActivity. -->
         <activity
