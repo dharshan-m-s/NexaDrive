@@ -289,6 +289,7 @@ class _RenderGlassBackdrop extends RenderProxyBox {
   GlassParams _params;
   double _dpr;
   double _blurSigma;
+  bool _filterFailed = false;
 
   void update(GlassParams params, double dpr, double blurSigma) {
     if (_params == params && _dpr == dpr && _blurSigma == blurSigma) return;
@@ -310,31 +311,41 @@ class _RenderGlassBackdrop extends RenderProxyBox {
       getTransformTo(null),
       Offset.zero & size,
     );
-    _params.bind(
-      _shader,
-      bounds.left * _dpr,
-      bounds.top * _dpr,
-      bounds.width * _dpr,
-      bounds.height * _dpr,
-      backdropColorControlled: true,
-    );
     final blur = ui.ImageFilter.blur(
       sigmaX: _blurSigma > 0 ? _blurSigma : 0.0001,
       sigmaY: _blurSigma > 0 ? _blurSigma : 0.0001,
     );
-    // An identity matrix is not free on Impeller: its extra intermediate
-    // introduced one-level edge differences even with zero lens displacement.
-    // Skip only the exact identity; non-neutral controls still precede blur.
-    final neutral =
-        _params.saturation == 1 &&
-        _params.brightness == 0 &&
-        _params.contrast == 1;
-    final filter = ui.ImageFilter.compose(
-      outer: ui.ImageFilter.shader(_shader),
-      inner: neutral
-          ? blur
-          : ui.ImageFilter.compose(outer: blur, inner: _params.colorFilter),
-    );
+    ui.ImageFilter filter = blur;
+    if (!_filterFailed) {
+      try {
+        _params.bind(
+          _shader,
+          bounds.left * _dpr,
+          bounds.top * _dpr,
+          bounds.width * _dpr,
+          bounds.height * _dpr,
+          backdropColorControlled: true,
+        );
+        // An identity matrix is not free on Impeller: its extra intermediate
+        // introduced one-level edge differences even with zero lens displacement.
+        // Skip only the exact identity; non-neutral controls still precede blur.
+        final neutral =
+            _params.saturation == 1 &&
+            _params.brightness == 0 &&
+            _params.contrast == 1;
+        filter = ui.ImageFilter.compose(
+          outer: ui.ImageFilter.shader(_shader),
+          inner: neutral
+              ? blur
+              : ui.ImageFilter.compose(outer: blur, inner: _params.colorFilter),
+        );
+      } catch (error) {
+        // An unsupported/failed shader must not crash the navigation shell.
+        // Keep a usable frosted fallback for this surface and log only once.
+        _filterFailed = true;
+        debugPrint('Liquid glass filter failed; using blur fallback: $error');
+      }
+    }
     final backdropLayer =
         (layer ??= BackdropFilterLayer()) as BackdropFilterLayer;
     backdropLayer
