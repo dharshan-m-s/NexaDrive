@@ -138,9 +138,8 @@ class _FilesScreenState extends State<FilesScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e is ApiException
-            ? e.message
-            : 'The folder could not be listed.';
+        _error =
+            e is ApiException ? e.message : 'The folder could not be listed.';
         _loading = false;
       });
     }
@@ -157,10 +156,10 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   ImageKey _thumbKey(FileEntry entry) => ImageRepository.keyFor(
-    entry.toJson(),
-    namespace: widget.api.session.cacheNamespace,
-    rendition: ImageRendition.thumbnail,
-  );
+        entry.toJson(),
+        namespace: widget.api.session.cacheNamespace,
+        rendition: ImageRendition.thumbnail,
+      );
 
   Future<void> _ensureThumb(FileEntry entry) async {
     if (_noThumbnail.contains(entry.path) ||
@@ -394,8 +393,7 @@ class _FilesScreenState extends State<FilesScreen> {
   void _toggleSelectAll() {
     final visible = _visibleItems;
     setState(() {
-      final allVisibleSelected =
-          visible.isNotEmpty &&
+      final allVisibleSelected = visible.isNotEmpty &&
           visible.every((entry) => _selected.contains(entry.path));
       if (allVisibleSelected) {
         _selected.removeAll(visible.map((entry) => entry.path));
@@ -578,9 +576,8 @@ class _FilesScreenState extends State<FilesScreen> {
                   Text(
                     _sortLabel(option),
                     style: NexaTypography.rowTitle.copyWith(
-                      fontWeight: option == _sort
-                          ? FontWeight.w600
-                          : FontWeight.w400,
+                      fontWeight:
+                          option == _sort ? FontWeight.w600 : FontWeight.w400,
                     ),
                   ),
                 ],
@@ -598,13 +595,13 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   static String _sortLabel(FileSortOrder sort) => switch (sort) {
-    FileSortOrder.nameAscending => 'Name (A–Z)',
-    FileSortOrder.nameDescending => 'Name (Z–A)',
-    FileSortOrder.sizeDescending => 'Size (largest first)',
-    FileSortOrder.sizeAscending => 'Size (smallest first)',
-    FileSortOrder.modifiedNewest => 'Newest first',
-    FileSortOrder.modifiedOldest => 'Oldest first',
-  };
+        FileSortOrder.nameAscending => 'Name (A–Z)',
+        FileSortOrder.nameDescending => 'Name (Z–A)',
+        FileSortOrder.sizeDescending => 'Size (largest first)',
+        FileSortOrder.sizeAscending => 'Size (smallest first)',
+        FileSortOrder.modifiedNewest => 'Newest first',
+        FileSortOrder.modifiedOldest => 'Oldest first',
+      };
 
   Future<void> _downloadItem(FileEntry entry) async {
     if (_busyDownloads.contains(entry.path)) return;
@@ -633,8 +630,9 @@ class _FilesScreenState extends State<FilesScreen> {
   List<FileEntry> get _sorted => _sortedCache ??= _computeSorted();
 
   /// The current folder listing after the user's type filter is applied.
-  List<FileEntry> get _visibleItems =>
-      filterFileEntries(_sorted, switch (_filter) {
+  List<FileEntry> get _visibleItems => filterFileEntries(
+      _sorted,
+      switch (_filter) {
         _FileFilter.all => FileEntryFilter.all,
         _FileFilter.folders => FileEntryFilter.folders,
         _FileFilter.files => FileEntryFilter.files,
@@ -683,24 +681,24 @@ class _FilesScreenState extends State<FilesScreen> {
             onSearch: _selecting
                 ? null
                 : () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => SearchScreen(api: widget.api),
+                      MaterialPageRoute(
+                        builder: (_) => SearchScreen(api: widget.api),
+                      ),
                     ),
-                  ),
             onSort: _selecting ? null : _pickSort,
             onRefresh: load,
             onScan: _selecting
                 ? null
                 : () => Navigator.of(context)
-                      .push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              ScannerScreen(api: widget.api, folder: _path),
-                        ),
-                      )
-                      .then((saved) {
-                        if (saved == true) load();
-                      }),
+                        .push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            ScannerScreen(api: widget.api, folder: _path),
+                      ),
+                    )
+                        .then((saved) {
+                      if (saved == true) load();
+                    }),
           ),
           NexaRevealBar(
             visible: !_selecting && _path.isNotEmpty,
@@ -740,15 +738,13 @@ class _FilesScreenState extends State<FilesScreen> {
               title: Format.count(_selected.length, 'item'),
               actions: [
                 NexaActionItem(
-                  icon:
-                      _visibleItems.isNotEmpty &&
+                  icon: _visibleItems.isNotEmpty &&
                           _visibleItems.every(
                             (entry) => _selected.contains(entry.path),
                           )
                       ? Icons.deselect_rounded
                       : Icons.select_all_rounded,
-                  label:
-                      _visibleItems.isNotEmpty &&
+                  label: _visibleItems.isNotEmpty &&
                           _visibleItems.every(
                             (entry) => _selected.contains(entry.path),
                           )
@@ -847,12 +843,12 @@ class _FilesScreenState extends State<FilesScreen> {
   String get _bodyState => _loading
       ? 'loading'
       : _error != null
-      ? 'error'
-      : _items.isEmpty
-      ? 'empty'
-      : _visibleItems.isEmpty
-      ? 'filtered-empty:${_filter.name}'
-      : 'content:${_grid ? 'grid' : 'list'}:${_filter.name}';
+          ? 'error'
+          : _items.isEmpty
+              ? 'empty'
+              : _visibleItems.isEmpty
+                  ? 'filtered-empty:${_filter.name}'
+                  : 'content:${_grid ? 'grid' : 'list'}:${_filter.name}';
 
   Widget _buildBody() {
     final bottomClearance = MediaQuery.paddingOf(context).bottom;
@@ -980,8 +976,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 AppDimens.pageMargin,
                 bottomPadding,
               ),
-              itemCount:
-                  (folders.isEmpty ? 0 : folders.length + 1) +
+              itemCount: (folders.isEmpty ? 0 : folders.length + 1) +
                   (files.isEmpty ? 0 : files.length + 1),
               itemBuilder: (context, index) {
                 if (folders.isNotEmpty && index <= folders.length) {
