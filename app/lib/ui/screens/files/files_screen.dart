@@ -397,8 +397,7 @@ class _FilesScreenState extends State<FilesScreen> {
           visible.every((entry) => _selected.contains(entry.path));
       if (allVisibleSelected) {
         _selected.removeAll(visible.map((entry) => entry.path));
-      } else {
-        _selected.addAll(visible.map((entry) => entry.path));
+      } else {        _selected.addAll(visible.map((entry) => entry.path));
       }
       _selecting = _selected.isNotEmpty;
     });
@@ -797,8 +796,7 @@ class _FilesScreenState extends State<FilesScreen> {
     }
     final destination = await _downloads.pickBatchDestination();
     if (destination == null) return;
-    if (!mounted) return;
-    final cancel = CancelToken();
+    if (!mounted) return;    final cancel = CancelToken();
     final outcome = await showDialog<BatchSaveResult>(
       context: context,
       barrierDismissible: false,
@@ -1189,25 +1187,6 @@ class _ViewArea extends StatelessWidget {
         children: [
           Row(
             children: [
-              AnimatedContainer(
-                duration: AppMotion.resolve(context, AppMotion.fast),
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: AppColors.accentContainerFor(brightness),
-                  borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-                  border: Border.all(
-                    color: AppColors.accentTextFor(brightness)
-                        .withValues(alpha: 0.12),
-                  ),
-                ),
-                child: Icon(
-                  selecting ? Icons.check_rounded : titleIcon,
-                  color: accent,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: AppDimens.space10),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1223,7 +1202,7 @@ class _ViewArea extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: NexaTypography.pageTitle.copyWith(
-                          fontSize: 20,
+                          fontSize: 22,
                           color: selecting
                               ? accent
                               : AppColors.labelPrimaryFor(brightness),
@@ -1373,7 +1352,7 @@ class _ViewArea extends StatelessWidget {
             ],
           ),
           if (!selecting) ...[
-            const SizedBox(height: AppDimens.space12),
+            const SizedBox(height: AppDimens.space10),
             Row(
               children: [
                 Expanded(
@@ -1383,13 +1362,13 @@ class _ViewArea extends StatelessWidget {
                       color: Colors.transparent,
                       child: InkWell(
                         onTap: onSearch,
-                        borderRadius: BorderRadius.circular(15),
+                        borderRadius: BorderRadius.circular(13),
                         child: Ink(
-                          height: 48,
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          height: 44,
+                          padding: const EdgeInsets.symmetric(horizontal: 13),
                           decoration: BoxDecoration(
                             color: AppColors.fillFor(brightness),
-                            borderRadius: BorderRadius.circular(15),
+                            borderRadius: BorderRadius.circular(13),
                             border: Border.all(
                               color: AppColors.dividerFor(brightness),
                             ),
@@ -1424,27 +1403,23 @@ class _ViewArea extends StatelessWidget {
                 Tooltip(
                   message: 'Upload files',
                   child: SizedBox(
-                    height: 48,
-                    child: FilledButton.tonalIcon(
+                    width: 44,
+                    height: 44,
+                    child: FilledButton(
                       onPressed: onUpload,
                       style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 48),
-                        padding: const EdgeInsets.symmetric(horizontal: 13),
+                        minimumSize: const Size(44, 44),
+                        padding: EdgeInsets.zero,
                         visualDensity: VisualDensity.compact,
                         backgroundColor:
                             AppColors.accentContainerFor(brightness),
                         foregroundColor: AppColors.accentTextFor(brightness),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
+                          borderRadius: BorderRadius.circular(13),
                         ),
                       ),
-                      icon: const Icon(Icons.upload_rounded, size: 18),
-                      label: const Text(
-                        'Upload',
-                        style: TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w700),
-                      ),
+                      child: const Icon(Icons.upload_rounded, size: 19),
                     ),
                   ),
                 ),
@@ -1597,8 +1572,7 @@ class _FilesStatePanel extends StatelessWidget {
                         minimumSize: const Size(0, AppDimens.touchTarget),
                         shape: RoundedRectangleBorder(
                           borderRadius:
-                              BorderRadius.circular(AppDimens.radiusPill),
-                        ),
+                              BorderRadius.circular(AppDimens.radiusPill),                        ),
                       ),
                       icon: Icon(secondaryIcon, size: 18),
                       label: Text(secondaryLabel!),
