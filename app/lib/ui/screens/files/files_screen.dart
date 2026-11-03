@@ -1303,10 +1303,10 @@ class _ViewAreaState extends State<_ViewArea> {
                     backgroundColor: AppColors.fillFor(brightness),
                     foregroundColor: AppColors.labelPrimaryFor(brightness),
                     minimumSize: const Size(
-                      AppDimens.touchTarget, AppDimens.touchTarget),
+                        AppDimens.touchTarget, AppDimens.touchTarget),
                     padding: EdgeInsets.zero,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15)),
+                        borderRadius: BorderRadius.circular(15)),
                   ),
                   icon: Icon(_searchExpanded
                       ? Icons.close_rounded
@@ -1319,9 +1319,11 @@ class _ViewAreaState extends State<_ViewArea> {
                   style: IconButton.styleFrom(
                     backgroundColor: AppColors.accentContainerFor(brightness),
                     foregroundColor: AppColors.accentTextFor(brightness),
-                    minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+                    minimumSize: const Size(
+                        AppDimens.touchTarget, AppDimens.touchTarget),
                     padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15)),
                   ),
                   icon: const Icon(Icons.upload_rounded, size: 19),
                 ),
@@ -1451,11 +1453,12 @@ class _ViewAreaState extends State<_ViewArea> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(13),
                         borderSide:
-                          BorderSide(color: AppColors.dividerFor(brightness)),
+                            BorderSide(color: AppColors.dividerFor(brightness)),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(13),
-                        borderSide: BorderSide(color: AppColors.dividerFor(brightness)),
+                        borderSide:
+                            BorderSide(color: AppColors.dividerFor(brightness)),
                       ),
                     ),
                   ),
