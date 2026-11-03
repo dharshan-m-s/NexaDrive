@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_dimensions.dart';
 import '../../../../core/design/app_motion.dart';
@@ -137,8 +138,9 @@ class _FilesScreenState extends State<FilesScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error =
-            e is ApiException ? e.message : 'The folder could not be listed.';
+        _error = e is ApiException
+            ? e.message
+            : 'The folder could not be listed.';
         _loading = false;
       });
     }
@@ -155,10 +157,10 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   ImageKey _thumbKey(FileEntry entry) => ImageRepository.keyFor(
-        entry.toJson(),
-        namespace: widget.api.session.cacheNamespace,
-        rendition: ImageRendition.thumbnail,
-      );
+    entry.toJson(),
+    namespace: widget.api.session.cacheNamespace,
+    rendition: ImageRendition.thumbnail,
+  );
 
   Future<void> _ensureThumb(FileEntry entry) async {
     if (_noThumbnail.contains(entry.path) ||
@@ -198,8 +200,9 @@ class _FilesScreenState extends State<FilesScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
             child: const Text('Create'),
@@ -266,12 +269,14 @@ class _FilesScreenState extends State<FilesScreen> {
       final picked = await const SingleFileUploadPicker().pick();
       if (picked == null || picked.isEmpty || !mounted) return;
       final sources = picked
-          .map((file) => UploadSource(
-                path: file.location,
-                sourceUri: file.sourceUri,
-                name: file.name,
-                size: file.size,
-              ))
+          .map(
+            (file) => UploadSource(
+              path: file.location,
+              sourceUri: file.sourceUri,
+              name: file.name,
+              size: file.size,
+            ),
+          )
           .toList(growable: false);
       await UploadProgressDialog.showSources(
         context,
@@ -282,11 +287,7 @@ class _FilesScreenState extends State<FilesScreen> {
     } else {
       final picked = await FilePicker.pickFiles();
       if (picked.isEmpty || !mounted) return;
-      await UploadProgressDialog.show(
-        context,
-        files: picked,
-        folder: _path,
-      );
+      await UploadProgressDialog.show(context, files: picked, folder: _path);
     }
     if (mounted) await load();
   }
@@ -296,12 +297,14 @@ class _FilesScreenState extends State<FilesScreen> {
       final picked = await const SingleFileUploadPicker().pickImages();
       if (picked == null || picked.isEmpty || !mounted) return;
       final sources = picked
-          .map((file) => UploadSource(
-                path: file.location,
-                sourceUri: file.sourceUri,
-                name: file.name,
-                size: file.size,
-              ))
+          .map(
+            (file) => UploadSource(
+              path: file.location,
+              sourceUri: file.sourceUri,
+              name: file.name,
+              size: file.size,
+            ),
+          )
           .toList(growable: false);
       await UploadProgressDialog.showSources(
         context,
@@ -312,11 +315,7 @@ class _FilesScreenState extends State<FilesScreen> {
     } else {
       final picked = await FilePicker.pickFiles(type: FileType.image);
       if (picked.isEmpty || !mounted) return;
-      await UploadProgressDialog.show(
-        context,
-        files: picked,
-        folder: _path,
-      );
+      await UploadProgressDialog.show(context, files: picked, folder: _path);
     }
     if (mounted) await load();
   }
@@ -329,14 +328,16 @@ class _FilesScreenState extends State<FilesScreen> {
     if (!mounted) return;
     final sources = <UploadSource>[];
     for (final file in selection.files) {
-      sources.add(UploadSource(
-        path: file.location,
-        sourceUri: file.sourceUri,
-        name: file.name,
-        size: file.size,
-        relativePath: file.relativePath,
-        temporary: selection.root != null,
-      ));
+      sources.add(
+        UploadSource(
+          path: file.location,
+          sourceUri: file.sourceUri,
+          name: file.name,
+          size: file.size,
+          relativePath: file.relativePath,
+          temporary: selection.root != null,
+        ),
+      );
     }
     if (sources.isEmpty) return;
     // Keep the selected folder as a visible destination, even when empty.
@@ -393,7 +394,8 @@ class _FilesScreenState extends State<FilesScreen> {
   void _toggleSelectAll() {
     final visible = _visibleItems;
     setState(() {
-      final allVisibleSelected = visible.isNotEmpty &&
+      final allVisibleSelected =
+          visible.isNotEmpty &&
           visible.every((entry) => _selected.contains(entry.path));
       if (allVisibleSelected) {
         _selected.removeAll(visible.map((entry) => entry.path));
@@ -433,12 +435,7 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   void _openFile(FileEntry entry) {
-    FileOpener.open(
-      context,
-      api: widget.api,
-      entry: entry,
-      siblings: _items,
-    );
+    FileOpener.open(context, api: widget.api, entry: entry, siblings: _items);
   }
 
   Future<void> _renameItem(FileEntry entry) async {
@@ -455,8 +452,9 @@ class _FilesScreenState extends State<FilesScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
             child: const Text('Rename'),
@@ -527,13 +525,16 @@ class _FilesScreenState extends State<FilesScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Move to Trash'),
-        content: Text(sourcePaths.length == 1
-            ? 'Move $names to trash?'
-            : 'Move ${sourcePaths.length} items to trash?'),
+        content: Text(
+          sourcePaths.length == 1
+              ? 'Move $names to trash?'
+              : 'Move ${sourcePaths.length} items to trash?',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Trash'),
@@ -570,14 +571,16 @@ class _FilesScreenState extends State<FilesScreen> {
                     color: option == _sort
                         ? AppColors.accentFor(Theme.of(context).brightness)
                         : AppColors.textTertiaryFor(
-                            Theme.of(context).brightness),
+                            Theme.of(context).brightness,
+                          ),
                   ),
                   const SizedBox(width: AppDimens.spaceSm),
                   Text(
                     _sortLabel(option),
                     style: NexaTypography.rowTitle.copyWith(
-                      fontWeight:
-                          option == _sort ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight: option == _sort
+                          ? FontWeight.w600
+                          : FontWeight.w400,
                     ),
                   ),
                 ],
@@ -595,13 +598,13 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   static String _sortLabel(FileSortOrder sort) => switch (sort) {
-        FileSortOrder.nameAscending => 'Name (A–Z)',
-        FileSortOrder.nameDescending => 'Name (Z–A)',
-        FileSortOrder.sizeDescending => 'Size (largest first)',
-        FileSortOrder.sizeAscending => 'Size (smallest first)',
-        FileSortOrder.modifiedNewest => 'Newest first',
-        FileSortOrder.modifiedOldest => 'Oldest first',
-      };
+    FileSortOrder.nameAscending => 'Name (A–Z)',
+    FileSortOrder.nameDescending => 'Name (Z–A)',
+    FileSortOrder.sizeDescending => 'Size (largest first)',
+    FileSortOrder.sizeAscending => 'Size (smallest first)',
+    FileSortOrder.modifiedNewest => 'Newest first',
+    FileSortOrder.modifiedOldest => 'Oldest first',
+  };
 
   Future<void> _downloadItem(FileEntry entry) async {
     if (_busyDownloads.contains(entry.path)) return;
@@ -630,14 +633,12 @@ class _FilesScreenState extends State<FilesScreen> {
   List<FileEntry> get _sorted => _sortedCache ??= _computeSorted();
 
   /// The current folder listing after the user's type filter is applied.
-  List<FileEntry> get _visibleItems => filterFileEntries(
-        _sorted,
-        switch (_filter) {
-          _FileFilter.all => FileEntryFilter.all,
-          _FileFilter.folders => FileEntryFilter.folders,
-          _FileFilter.files => FileEntryFilter.files,
-        },
-      );
+  List<FileEntry> get _visibleItems =>
+      filterFileEntries(_sorted, switch (_filter) {
+        _FileFilter.all => FileEntryFilter.all,
+        _FileFilter.folders => FileEntryFilter.folders,
+        _FileFilter.files => FileEntryFilter.files,
+      });
 
   int get _folderCount => _items.where((entry) => entry.isFolder).length;
   int get _fileCount => _items.where((entry) => !entry.isFolder).length;
@@ -682,26 +683,24 @@ class _FilesScreenState extends State<FilesScreen> {
             onSearch: _selecting
                 ? null
                 : () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => SearchScreen(api: widget.api),
-                      ),
+                    MaterialPageRoute(
+                      builder: (_) => SearchScreen(api: widget.api),
                     ),
+                  ),
             onSort: _selecting ? null : _pickSort,
             onRefresh: load,
             onScan: _selecting
                 ? null
                 : () => Navigator.of(context)
-                        .push(
-                      MaterialPageRoute(
-                        builder: (_) => ScannerScreen(
-                          api: widget.api,
-                          folder: _path,
+                      .push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ScannerScreen(api: widget.api, folder: _path),
                         ),
-                      ),
-                    )
-                        .then((saved) {
-                      if (saved == true) load();
-                    }),
+                      )
+                      .then((saved) {
+                        if (saved == true) load();
+                      }),
           ),
           NexaRevealBar(
             visible: !_selecting && _path.isNotEmpty,
@@ -741,14 +740,18 @@ class _FilesScreenState extends State<FilesScreen> {
               title: Format.count(_selected.length, 'item'),
               actions: [
                 NexaActionItem(
-                  icon: _visibleItems.isNotEmpty &&
-                          _visibleItems
-                              .every((entry) => _selected.contains(entry.path))
+                  icon:
+                      _visibleItems.isNotEmpty &&
+                          _visibleItems.every(
+                            (entry) => _selected.contains(entry.path),
+                          )
                       ? Icons.deselect_rounded
                       : Icons.select_all_rounded,
-                  label: _visibleItems.isNotEmpty &&
-                          _visibleItems
-                              .every((entry) => _selected.contains(entry.path))
+                  label:
+                      _visibleItems.isNotEmpty &&
+                          _visibleItems.every(
+                            (entry) => _selected.contains(entry.path),
+                          )
                       ? 'Clear'
                       : 'Select all',
                   onTap: _toggleSelectAll,
@@ -837,21 +840,19 @@ class _FilesScreenState extends State<FilesScreen> {
 
   /// The body, cross-faded between states so a resolved listing settles in
   /// place instead of replacing the screen outright.
-  Widget _body() => NexaStateSwitcher(
-        stateKey: ValueKey(_bodyState),
-        child: _buildBody(),
-      );
+  Widget _body() =>
+      NexaStateSwitcher(stateKey: ValueKey(_bodyState), child: _buildBody());
 
   /// A stable identity for whichever body state is showing.
   String get _bodyState => _loading
       ? 'loading'
       : _error != null
-          ? 'error'
-          : _items.isEmpty
-              ? 'empty'
-              : _visibleItems.isEmpty
-                  ? 'filtered-empty:${_filter.name}'
-                  : 'content:${_grid ? 'grid' : 'list'}:${_filter.name}';
+      ? 'error'
+      : _items.isEmpty
+      ? 'empty'
+      : _visibleItems.isEmpty
+      ? 'filtered-empty:${_filter.name}'
+      : 'content:${_grid ? 'grid' : 'list'}:${_filter.name}';
 
   Widget _buildBody() {
     final bottomClearance = MediaQuery.paddingOf(context).bottom;
@@ -979,7 +980,8 @@ class _FilesScreenState extends State<FilesScreen> {
                 AppDimens.pageMargin,
                 bottomPadding,
               ),
-              itemCount: (folders.isEmpty ? 0 : folders.length + 1) +
+              itemCount:
+                  (folders.isEmpty ? 0 : folders.length + 1) +
                   (files.isEmpty ? 0 : files.length + 1),
               itemBuilder: (context, index) {
                 if (folders.isNotEmpty && index <= folders.length) {
@@ -1390,8 +1392,9 @@ class _ViewArea extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTextStyle.subheadline.copyWith(
-                                    color:
-                                        AppColors.labelSecondaryFor(brightness),
+                                    color: AppColors.labelSecondaryFor(
+                                      brightness,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1414,8 +1417,9 @@ class _ViewArea extends StatelessWidget {
                         minimumSize: const Size(44, 44),
                         padding: EdgeInsets.zero,
                         visualDensity: VisualDensity.compact,
-                        backgroundColor:
-                            AppColors.accentContainerFor(brightness),
+                        backgroundColor: AppColors.accentContainerFor(
+                          brightness,
+                        ),
                         foregroundColor: AppColors.accentTextFor(brightness),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -1490,8 +1494,9 @@ class _FilesStatePanel extends StatelessWidget {
                       color: isConnectionIssue
                           ? AppColors.errorContainerFor(brightness)
                           : AppColors.accentContainerFor(brightness),
-                      borderRadius:
-                          BorderRadius.circular(AppDimens.radiusMedium),
+                      borderRadius: BorderRadius.circular(
+                        AppDimens.radiusMedium,
+                      ),
                     ),
                     child: Icon(
                       icon,
@@ -1553,8 +1558,9 @@ class _FilesStatePanel extends StatelessWidget {
                       ),
                       minimumSize: const Size(0, AppDimens.touchTarget),
                       shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppDimens.radiusPill),
+                        borderRadius: BorderRadius.circular(
+                          AppDimens.radiusPill,
+                        ),
                       ),
                     ),
                     icon: Icon(primaryIcon, size: 18),
@@ -1574,8 +1580,9 @@ class _FilesStatePanel extends StatelessWidget {
                         ),
                         minimumSize: const Size(0, AppDimens.touchTarget),
                         shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(AppDimens.radiusPill),
+                          borderRadius: BorderRadius.circular(
+                            AppDimens.radiusPill,
+                          ),
                         ),
                       ),
                       icon: Icon(secondaryIcon, size: 18),
@@ -1884,10 +1891,7 @@ class _FileFilterBar extends StatelessWidget {
     final buttonStyle = IconButton.styleFrom(
       backgroundColor: AppColors.fillFor(brightness),
       foregroundColor: AppColors.labelSecondaryFor(brightness),
-      minimumSize: const Size(
-        AppDimens.touchTarget,
-        AppDimens.touchTarget,
-      ),
+      minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
       padding: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
@@ -1947,4 +1951,3 @@ class _FileFilterBar extends StatelessWidget {
       ),
     );
   }
-}
