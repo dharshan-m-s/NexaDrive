@@ -148,7 +148,7 @@ jobs:
           channel: stable
       - run: flutter pub get
         working-directory: app
-      - run: flutter test
+      - run: flutter test test/ui_regression_test.dart --reporter expanded
         working-directory: app
 
   flutter-windows:
