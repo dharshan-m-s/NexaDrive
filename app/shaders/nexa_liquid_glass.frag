@@ -116,9 +116,9 @@ void main() {
     float rim = exp(-pow((inset - 1.0) / 1.65, 2.0));
     float innerRim = exp(-pow((inset - 7.0) / 5.0, 2.0));
     float shoulder = exp(-pow((inset - 20.0) / 12.0, 2.0));
-    color += vec3(1.0) * (rim * 0.20 + innerRim * 0.055 + shoulder * 0.018);
+    color += vec3(1.0) * (rim * 0.075 + innerRim * 0.020 + shoulder * 0.007);
     color += vec3(0.66, 0.79, 1.0) * pow(clamp(1.0 - inset /
-        max(u_refraction_height, 1.0), 0.0, 1.0), 1.45) * 0.035;
+        max(u_refraction_height, 1.0), 0.0, 1.0), 1.45) * 0.014;
 
     // ImageFilter shader input is premultiplied. Keep RGB within alpha so the
     // filtered glass remains correct at its anti-aliased boundary.

@@ -191,15 +191,16 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
                         end: Alignment.bottomRight,
                         colors: dark
                             ? [
-                                Colors.white.withValues(alpha: 0.105),
-                                Colors.white.withValues(alpha: 0.018),
-                                Colors.black.withValues(alpha: 0.035),
+                                const Color(0xFFB7C8E8)
+                                    .withValues(alpha: 0.035),
+                                Colors.white.withValues(alpha: 0.006),
+                                Colors.black.withValues(alpha: 0.025),
                               ]
                             : [
-                                Colors.white.withValues(alpha: 0.30),
-                                Colors.white.withValues(alpha: 0.045),
+                                Colors.white.withValues(alpha: 0.16),
+                                Colors.white.withValues(alpha: 0.025),
                                 const Color(0xFF7770A8)
-                                    .withValues(alpha: 0.025),
+                                    .withValues(alpha: 0.018),
                               ],
                         stops: const [0, 0.48, 1],
                       ),
@@ -442,30 +443,30 @@ class _NexaGlassEdgePainter extends CustomPainter {
     final rrect = borderRadius.resolve(TextDirection.ltr).toRRect(rect);
     final upper = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.15
+      ..strokeWidth = 0.8
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: dark
             ? [
-                Colors.white.withValues(alpha: 0.62),
-                Colors.white.withValues(alpha: 0.10),
-                Colors.black.withValues(alpha: 0.25),
+                const Color(0xFFB9C9E6).withValues(alpha: 0.24),
+                Colors.white.withValues(alpha: 0.035),
+                Colors.black.withValues(alpha: 0.20),
               ]
             : [
-                Colors.white.withValues(alpha: 0.94),
-                Colors.white.withValues(alpha: 0.26),
-                Colors.black.withValues(alpha: 0.10),
+                Colors.white.withValues(alpha: 0.46),
+                Colors.white.withValues(alpha: 0.12),
+                Colors.black.withValues(alpha: 0.08),
               ],
-        stops: const [0, 0.45, 1],
+        stops: const [0, 0.42, 1],
       ).createShader(rect);
     canvas.drawRRect(rrect.deflate(0.55), upper);
 
     final inner = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.65
-      ..color = (dark ? Colors.white : Colors.white).withValues(
-        alpha: dark ? 0.18 : 0.34,
+      ..strokeWidth = 0.55
+      ..color = (dark ? const Color(0xFFB9C9E6) : Colors.white).withValues(
+        alpha: dark ? 0.055 : 0.18,
       );
     canvas.drawRRect(rrect.deflate(2.0), inner);
   }

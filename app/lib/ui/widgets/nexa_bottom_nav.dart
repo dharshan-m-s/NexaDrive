@@ -33,7 +33,7 @@ class NexaBottomNav extends StatelessWidget {
     return NexaLiquidGlass(
       borderRadius: BorderRadius.circular(AppDimens.radiusPill),
       blurSigma: 2.2,
-      tintOpacity: dark ? 0.06 : 0.045,
+      tintOpacity: dark ? 0.035 : 0.03,
       refractionHeight: 18,
       refractionAmount: -36,
       depthEffect: 0.8,
@@ -160,29 +160,35 @@ class _NavRowState extends State<_NavRow> with SingleTickerProviderStateMixin {
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: brightness == Brightness.dark
-                                ? [
-                                    Colors.white.withValues(alpha: 0.13),
-                                    Colors.white.withValues(alpha: 0.035),
-                                  ]
-                                : [
-                                    Colors.white.withValues(alpha: 0.34),
-                                    Colors.white.withValues(alpha: 0.10),
-                                  ],
+                            colors: [
+                              AppColors.accentFor(brightness).withValues(
+                                alpha: brightness == Brightness.dark
+                                    ? 0.15
+                                    : 0.10,
+                              ),
+                              AppColors.accentFor(brightness).withValues(
+                                alpha: brightness == Brightness.dark
+                                    ? 0.055
+                                    : 0.035,
+                              ),
+                            ],
                           ),
                           border: Border.all(
-                            color: brightness == Brightness.dark
-                                ? Colors.white.withValues(alpha: 0.28)
-                                : Colors.white.withValues(alpha: 0.72),
+                            color: AppColors.accentFor(brightness).withValues(
+                              alpha: brightness == Brightness.dark
+                                  ? 0.28
+                                  : 0.20,
+                            ),
                             width: 0.7,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.white.withValues(
-                                alpha:
-                                    brightness == Brightness.dark ? 0.10 : 0.18,
+                              color: AppColors.accentFor(brightness).withValues(
+                                alpha: brightness == Brightness.dark
+                                    ? 0.075
+                                    : 0.045,
                               ),
-                              blurRadius: 14,
+                              blurRadius: 12,
                               spreadRadius: -7,
                             ),
                           ],

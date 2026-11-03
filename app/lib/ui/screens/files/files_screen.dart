@@ -859,6 +859,9 @@ class _FilesScreenState extends State<FilesScreen> {
         hint: _error,
         actionLabel: 'Retry',
         onAction: load,
+        actionIcon: Icons.refresh_rounded,
+        centered: true,
+        iconSize: 48,
       );
     }
     if (_items.isEmpty) {
@@ -1225,53 +1228,57 @@ class _ViewArea extends StatelessWidget {
             if (onUpload != null)
               Tooltip(
                 message: 'Upload files',
-                child: FilledButton.tonalIcon(
+                child: IconButton(
                   onPressed: onUpload,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, AppDimens.touchTarget),
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                    backgroundColor: AppColors.accentContainerFor(brightness),
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.fillFor(brightness),
                     foregroundColor: AppColors.accentTextFor(brightness),
-                    elevation: 0,
+                    minimumSize: const Size(
+                      AppDimens.touchTarget,
+                      AppDimens.touchTarget,
+                    ),
+                    padding: EdgeInsets.zero,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  icon: const Icon(Icons.upload_rounded, size: 17),
-                  label: const Text(
-                    'Upload',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                  ),
+                  icon: const Icon(Icons.upload_rounded, size: 21),
                 ),
               ),
-            const SizedBox(width: 3),
+            const SizedBox(width: 6),
             IconButton(
               tooltip: 'Search files',
               onPressed: onSearch,
               style: IconButton.styleFrom(
                 backgroundColor: AppColors.fillFor(brightness),
+                foregroundColor: AppColors.labelPrimaryFor(brightness),
                 minimumSize: const Size(
                   AppDimens.touchTarget,
                   AppDimens.touchTarget,
                 ),
                 padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               icon: const Icon(Icons.search_rounded),
             ),
-            const SizedBox(width: 2),
+            const SizedBox(width: 6),
             PopupMenuButton<_FileHeaderAction>(
               tooltip: 'More actions',
               icon: const Icon(Icons.more_horiz_rounded),
               padding: EdgeInsets.zero,
               style: IconButton.styleFrom(
                 backgroundColor: AppColors.fillFor(brightness),
+                foregroundColor: AppColors.labelPrimaryFor(brightness),
                 minimumSize: const Size(
                   AppDimens.touchTarget,
                   AppDimens.touchTarget,
                 ),
                 padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               onSelected: (action) {
                 switch (action) {
