@@ -1223,24 +1223,28 @@ class _ViewArea extends StatelessWidget {
             )
           else ...[
             if (onUpload != null)
-              FilledButton.tonalIcon(
-                onPressed: onUpload,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, AppDimens.touchTarget),
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                  backgroundColor: AppColors.accentContainerFor(brightness),
-                  foregroundColor: AppColors.accentTextFor(brightness),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+              Tooltip(
+                message: 'Upload files',
+                child: FilledButton.tonalIcon(
+                  onPressed: onUpload,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, AppDimens.touchTarget),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                    backgroundColor: AppColors.accentContainerFor(brightness),
+                    foregroundColor: AppColors.accentTextFor(brightness),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
-                ),
-                icon: const Icon(Icons.upload_rounded, size: 17),
-                label: const Text(
-                  'Upload',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                  icon: const Icon(Icons.upload_rounded, size: 17),
+                  label: const Text(
+                    'Upload',
+                    style:
+                        TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ),
             const SizedBox(width: 3),
