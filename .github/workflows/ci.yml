@@ -117,9 +117,11 @@ jobs:
           set -euo pipefail
           if ! dart format --output=none --set-exit-if-changed lib test integration_test; then
             echo "::group::Dart formatter expected output for the flagged file"
-            cp lib/ui/screens/files/files_screen.dart /tmp/files_screen.dart
-            dart format /tmp/files_screen.dart
-            diff -u lib/ui/screens/files/files_screen.dart /tmp/files_screen.dart || true
+            formatted_copy="lib/ui/screens/files/.files_screen_format_check.dart"
+            cp lib/ui/screens/files/files_screen.dart "$formatted_copy"
+            dart format "$formatted_copy"
+            diff -u lib/ui/screens/files/files_screen.dart "$formatted_copy" || true
+            rm -f "$formatted_copy"
             echo "::endgroup::"
             exit 1
           fi
