@@ -1302,11 +1302,15 @@ class _ViewAreaState extends State<_ViewArea> {
                   style: IconButton.styleFrom(
                     backgroundColor: AppColors.fillFor(brightness),
                     foregroundColor: AppColors.labelPrimaryFor(brightness),
-                    minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+                    minimumSize: const Size(
+                      AppDimens.touchTarget, AppDimens.touchTarget),
                     padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15)),
                   ),
-                  icon: Icon(_searchExpanded ? Icons.close_rounded : Icons.search_rounded),
+                  icon: Icon(_searchExpanded
+                      ? Icons.close_rounded
+                      : Icons.search_rounded),
                 ),
                 const SizedBox(width: AppDimens.space6),
                 IconButton(
@@ -1426,7 +1430,7 @@ class _ViewAreaState extends State<_ViewArea> {
                     textInputAction: TextInputAction.search,
                     onSubmitted: (query) {
                       final value = query.trim();
-                      if (value.isNotEmpty) widget.onSearch?.call(value);
+                      if (value.isNotEmpty) onSearch?.call(value);
                     },
                     decoration: InputDecoration(
                       hintText: 'Search files',
@@ -1446,7 +1450,8 @@ class _ViewAreaState extends State<_ViewArea> {
                       contentPadding: const EdgeInsets.symmetric(vertical: 11),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(13),
-                        borderSide: BorderSide(color: AppColors.dividerFor(brightness)),
+                        borderSide:
+                          BorderSide(color: AppColors.dividerFor(brightness)),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(13),
@@ -1460,13 +1465,14 @@ class _ViewAreaState extends State<_ViewArea> {
                   tooltip: 'Search',
                   onPressed: () {
                     final value = _searchController.text.trim();
-                    if (value.isNotEmpty) widget.onSearch?.call(value);
+                    if (value.isNotEmpty) onSearch?.call(value);
                   },
                   style: IconButton.styleFrom(
                     backgroundColor: AppColors.accentContainerFor(brightness),
                     foregroundColor: AppColors.accentTextFor(brightness),
                     minimumSize: const Size(44, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13)),
                   ),
                   icon: const Icon(Icons.arrow_forward_rounded),
                 ),
