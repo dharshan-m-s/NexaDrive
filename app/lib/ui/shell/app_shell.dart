@@ -164,7 +164,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       if (!mounted) return;
       if (result.conflicts > 0 || result.errors > 0) {
         _toast(
-            'Sync needs attention: ${result.conflicts} conflict(s), ${result.errors} error(s).');
+          'Sync needs attention: ${result.conflicts} conflict(s), ${result.errors} error(s).',
+        );
       }
     } finally {
       _syncRunning = false;
@@ -200,7 +201,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           previous.isNotEmpty &&
           previous != current) {
         _toast(
-            'The server restarted. Interrupted transfers are safe in the queue.');
+          'The server restarted. Interrupted transfers are safe in the queue.',
+        );
       }
       final manager = UploadManager.current;
       manager.attach(api);
@@ -310,7 +312,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 : Colors.black.withValues(alpha: 0.035),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: (dark ? Colors.white : Colors.black).withValues(alpha: 0.075),
+              color: (dark ? Colors.white : Colors.black)
+                  .withValues(alpha: 0.075),
             ),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 9),

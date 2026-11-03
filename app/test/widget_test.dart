@@ -75,7 +75,7 @@ void main() {
       expect(find.text(label), findsOneWidget);
     }
     expect(find.text('Storage Insights'), findsNothing);
-    expect(find.text('My files'), findsOneWidget);
+    expect(find.text('My files'), findsNothing);
     expect(find.text('Shared'), findsNothing);
     expect(find.byType(NexaBottomNav), findsOneWidget);
     expect(tester.takeException(), isNull);
