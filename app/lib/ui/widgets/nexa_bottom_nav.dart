@@ -42,48 +42,48 @@ class NexaBottomNav extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-        // Subtle reflected colour lives behind the capsule, not on top of it.
-        // The glass shader refracts this and the page underneath together.
-        Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(activeCenter, -0.45),
-                  radius: 1.05,
-                  colors: [
-                    accent.withValues(
-                        alpha: brightness == Brightness.dark ? 0.15 : 0.10),
-                    const Color(0xFF52C7D8).withValues(alpha: 0.045),
-                    Colors.transparent,
-                  ],
-                  stops: const [0, 0.46, 1],
+          // Subtle reflected colour lives behind the capsule, not on top of it.
+          // The glass shader refracts this and the page underneath together.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment(activeCenter, -0.45),
+                    radius: 1.05,
+                    colors: [
+                      accent.withValues(
+                          alpha: brightness == Brightness.dark ? 0.15 : 0.10),
+                      const Color(0xFF52C7D8).withValues(alpha: 0.045),
+                      Colors.transparent,
+                    ],
+                    stops: const [0, 0.46, 1],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-        Positioned.fill(
-          child: NexaLiquidGlass(
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            blurSigma: 1.35,
-            tintOpacity: brightness == Brightness.dark ? 0.095 : 0.07,
-            refractionHeight: 18,
-            refractionAmount: -36,
-            depthEffect: 1.0,
-            chromaticDispersion: 1.9,
-            padding: EdgeInsets.zero,
-            child: SizedBox(
-              width: double.infinity,
-              height: AppDimens.bottomNavHeight,
-              child: _NavRow(
-                items: items,
-                currentIndex: currentIndex,
-                onTap: onTap,
+          Positioned.fill(
+            child: NexaLiquidGlass(
+              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+              blurSigma: 1.35,
+              tintOpacity: brightness == Brightness.dark ? 0.095 : 0.07,
+              refractionHeight: 18,
+              refractionAmount: -36,
+              depthEffect: 1.0,
+              chromaticDispersion: 1.9,
+              padding: EdgeInsets.zero,
+              child: SizedBox(
+                width: double.infinity,
+                height: AppDimens.bottomNavHeight,
+                child: _NavRow(
+                  items: items,
+                  currentIndex: currentIndex,
+                  onTap: onTap,
+                ),
               ),
             ),
           ),
-        ),
         ],
       ),
     );

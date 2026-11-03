@@ -347,15 +347,23 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final brightness = Theme.of(context).brightness;
     final dark = brightness == Brightness.dark;
     final accent = AppColors.accentFor(brightness);
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // The local ambient reflection sits behind the lens, so the optical
-        // edge has real scene colour to bend even over a near-black page.
-        Positioned.fill(
-          child: IgnorePointer(
+    final radius = BorderRadius.circular(28);
+
+    // This card is bottom-positioned by the shell, so it must shrink-wrap its
+    // natural content height. The reflection is painted inside the card bounds
+    // before the optical surface, never in an unbounded full-screen Stack.
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.pageMargin,
+          ),
+          child: ClipRRect(
+            borderRadius: radius,
             child: DecoratedBox(
               decoration: BoxDecoration(
+                borderRadius: radius,
                 gradient: RadialGradient(
                   center: const Alignment(0.1, 0.55),
                   radius: 0.82,
@@ -366,18 +374,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   stops: const [0, 1],
                 ),
               ),
-            ),
-          ),
-        ),
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimens.pageMargin,
-              ),
               child: NexaLiquidGlass(
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: radius,
                 blurSigma: 2.4,
                 tintOpacity: dark ? 0.15 : 0.115,
                 refractionHeight: 22,
@@ -485,7 +483,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 
