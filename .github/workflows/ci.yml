@@ -117,7 +117,6 @@ jobs:
           set -euo pipefail
           if ! dart format --output=none --set-exit-if-changed lib test integration_test; then
             echo "::group::Dart formatter expected output for the flagged file"
-            dart format --output=show lib/ui/screens/files/files_screen.dart
             dart format --output=show lib/ui/widgets/nexa_bottom_nav.dart
             echo "::endgroup::"
             exit 1

@@ -691,7 +691,7 @@ class _FilesScreenState extends State<FilesScreen> {
             onScan: _selecting
                 ? null
                 : () => Navigator.of(context)
-                    .push(
+                        .push(
                       MaterialPageRoute(
                         builder: (_) => ScannerScreen(
                           api: widget.api,
@@ -699,7 +699,7 @@ class _FilesScreenState extends State<FilesScreen> {
                         ),
                       ),
                     )
-                    .then((saved) {
+                        .then((saved) {
                       if (saved == true) load();
                     }),
           ),
@@ -786,7 +786,6 @@ class _FilesScreenState extends State<FilesScreen> {
       ),
     );
   }
-
 
   Future<void> _downloadSelected() async {
     final entries = _items.where((e) => _selected.contains(e.path)).toList();
@@ -1009,8 +1008,6 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-
-
   Widget _fileRow(FileEntry entry) {
     final brightness = Theme.of(context).brightness;
     final radius = BorderRadius.circular(AppDimens.radiusMedium);
@@ -1047,8 +1044,6 @@ class _FilesScreenState extends State<FilesScreen> {
       ),
     );
   }
-
-
 
   void _showFileMenu(BuildContext context, FileEntry entry) {
     showNexaSheet<void>(
@@ -1249,7 +1244,8 @@ class _ViewArea extends StatelessWidget {
                     onTap: onBackToRoot,
                     borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
                     child: Padding(
-                      padding: const EdgeInsets.only(top: 2, right: 6, bottom: 2),
+                      padding:
+                          const EdgeInsets.only(top: 2, right: 6, bottom: 2),
                       child: Text(
                         'Back to My files',
                         style: NexaTypography.caption.copyWith(
@@ -1421,8 +1417,6 @@ class _FilesHeaderButton extends StatelessWidget {
   }
 }
 
-
-
 class _FilesStatePanel extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -1551,7 +1545,6 @@ class _FilesStatePanel extends StatelessWidget {
   }
 }
 
-
 class _FileMenuLabel extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -1676,8 +1669,6 @@ class _Breadcrumb extends StatelessWidget {
   }
 }
 
-
-
 class _GroupHeader extends StatelessWidget {
   final String title;
   final int count;
@@ -1728,8 +1719,6 @@ class _GroupHeader extends StatelessWidget {
     );
   }
 }
-
-
 
 class _BatchDownloadDialog extends StatefulWidget {
   final List<BatchItem> items;
@@ -1918,5 +1907,3 @@ class _FileFilterBar extends StatelessWidget {
     );
   }
 }
-
-
