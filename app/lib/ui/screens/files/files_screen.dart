@@ -1150,8 +1150,8 @@ class _ViewArea extends StatelessWidget {
               color: AppColors.accentContainerFor(brightness),
               borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
               border: Border.all(
-                color: AppColors.accentTextFor(brightness)
-                    .withValues(alpha: 0.12),
+                color:
+                    AppColors.accentTextFor(brightness).withValues(alpha: 0.12),
               ),
             ),
             child: Icon(

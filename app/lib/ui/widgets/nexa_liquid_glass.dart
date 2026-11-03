@@ -58,10 +58,10 @@ class NexaLiquidGlass extends StatefulWidget {
     this.refractionAmount = -34,
     this.depthEffect = 0.72,
     this.chromaticDispersion = 1.0,
-  }) : assert(refractionHeight >= 0),
-       assert(depthEffect >= 0 && depthEffect <= 1.5),
-       assert(chromaticDispersion >= 0 && chromaticDispersion <= 3);
-  
+  })  : assert(refractionHeight >= 0),
+        assert(depthEffect >= 0 && depthEffect <= 1.5),
+        assert(chromaticDispersion >= 0 && chromaticDispersion <= 3);
+
   @override
   State<NexaLiquidGlass> createState() => _NexaLiquidGlassState();
 }
