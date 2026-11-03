@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -5,12 +6,12 @@ import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 
-/// A bounded, translucent glass surface over the live scene.
+/// A bounded optical-glass surface over the live scene.
 ///
-/// The rounded clip is deliberately outside BackdropFilter: Flutter then
-/// filters only the pixels visible through this surface, not the whole route.
-/// Keep the tint light enough for the page to remain visible underneath.
-class NexaLiquidGlass extends StatelessWidget {
+/// On Impeller, the backdrop is first blurred by Flutter's optimized Gaussian
+/// filter and then passed through the registered refraction shader. Other
+/// renderers keep the same translucent glass treatment with a blur fallback.
+class NexaLiquidGlass extends StatefulWidget {
   final Widget child;
   final BorderRadiusGeometry borderRadius;
   final EdgeInsetsGeometry padding;
@@ -37,22 +38,99 @@ class NexaLiquidGlass extends StatelessWidget {
   });
 
   @override
+  State<NexaLiquidGlass> createState() => _NexaLiquidGlassState();
+}
+
+class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
+  static Future<ui.FragmentProgram>? _programFuture;
+
+  ui.FragmentShader? _shader;
+
+  @override
+  void initState() {
+    super.initState();
+    if (ui.ImageFilter.isShaderFilterSupported) {
+      unawaited(_loadShader());
+    }
+  }
+
+  Future<void> _loadShader() async {
+    try {
+      final program = await (_programFuture ??= ui.FragmentProgram.fromAsset(
+        'shaders/nexa_liquid_glass.frag',
+      ));
+      final shader = program.fragmentShader();
+      if (!mounted) {
+        shader.dispose();
+        return;
+      }
+      setState(() => _shader = shader);
+    } catch (error, stackTrace) {
+      // A shader compilation/asset failure must never make the whole app
+      // unusable. The normal GPU blur remains a fully functional fallback.
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'NexaDrive Liquid Glass',
+          context: ErrorDescription('while loading the optional glass shader'),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _shader?.dispose();
+    super.dispose();
+  }
+
+  ui.ImageFilter _backdropFilter(BuildContext context) {
+    final sigma = widget.blurSigma.clamp(0.0, 24.0).toDouble();
+    final blur = ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma);
+    final shader = _shader;
+
+    if (shader == null || !ui.ImageFilter.isShaderFilterSupported) {
+      return blur;
+    }
+
+    // ImageFilter.shader reserves floats 0 and 1 for the input texture size.
+    // The vec4 corner radii therefore begin at float slot 2. Flutter supplies
+    // the size and sampler automatically; Dart must not overwrite either.
+    final radii = widget.borderRadius.resolve(Directionality.of(context));
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    shader
+      ..setFloat(2, radii.topLeft.x * pixelRatio)
+      ..setFloat(3, radii.topRight.x * pixelRatio)
+      ..setFloat(4, radii.bottomRight.x * pixelRatio)
+      ..setFloat(5, radii.bottomLeft.x * pixelRatio);
+
+    // ImageFilter.compose applies inner first, then outer: blur the scene,
+    // then refract that blurred scene through the glass lens.
+    return ui.ImageFilter.compose(
+      outer: ui.ImageFilter.shader(shader),
+      inner: blur,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final highContrast = MediaQuery.maybeOf(context)?.highContrast ?? false;
-    final opaque = forceOpaque || highContrast || !enabled;
+    final opaque = widget.forceOpaque || highContrast || !widget.enabled;
     final dark = brightness == Brightness.dark;
     final tint = AppColors.glassSurfaceFor(brightness);
-    final tintAlpha =
-        (tintOpacity ?? (dark ? 0.14 : 0.105)).clamp(0.0, 0.24).toDouble();
+    final tintAlpha = (widget.tintOpacity ?? (dark ? 0.14 : 0.105))
+        .clamp(0.0, 0.24)
+        .toDouble();
     final edge = dark
         ? Colors.white.withValues(alpha: 0.24)
         : Colors.white.withValues(alpha: 0.72);
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: borderRadius,
-        boxShadow: showShadow
+        borderRadius: widget.borderRadius,
+        boxShadow: widget.showShadow
             ? [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: dark ? 0.28 : 0.10),
@@ -64,7 +142,7 @@ class NexaLiquidGlass extends StatelessWidget {
             : const [],
       ),
       child: ClipRRect(
-        borderRadius: borderRadius,
+        borderRadius: widget.borderRadius,
         clipBehavior: Clip.antiAlias,
         child: Stack(
           fit: StackFit.passthrough,
@@ -72,10 +150,7 @@ class NexaLiquidGlass extends StatelessWidget {
             if (!opaque)
               Positioned.fill(
                 child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(
-                    sigmaX: blurSigma.clamp(0.0, 24.0).toDouble(),
-                    sigmaY: blurSigma.clamp(0.0, 24.0).toDouble(),
-                  ),
+                  filter: _backdropFilter(context),
                   blendMode: BlendMode.srcOver,
                   child: const SizedBox.expand(),
                 ),
@@ -89,7 +164,7 @@ class NexaLiquidGlass extends StatelessWidget {
                 ),
               ),
             ),
-            if (!opaque && showHighlight)
+            if (!opaque && widget.showHighlight)
               Positioned.fill(
                 child: IgnorePointer(
                   child: DecoratedBox(
@@ -116,17 +191,17 @@ class NexaLiquidGlass extends StatelessWidget {
                 ),
               ),
             Padding(
-              padding: padding,
+              padding: widget.padding,
               child: Material(
                 type: MaterialType.transparency,
-                child: child,
+                child: widget.child,
               ),
             ),
             Positioned.fill(
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    borderRadius: borderRadius,
+                    borderRadius: widget.borderRadius,
                     border: Border.all(color: edge, width: 0.8),
                   ),
                 ),

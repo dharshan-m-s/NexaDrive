@@ -31,7 +31,7 @@ dependencies:
   pdf: ^3.13.1
   image: ^4.12.0
   # 10.x: AGP 9+ (the pinned Android Gradle Plugin) rejects plugins that
-  # apply the explicit `kotlin-android` plugin; 8.x/9.x do, 10.x does not.
+  # apply the explicit kotlin-android plugin; 8.x/9.x do, 10.x does not.
   package_info_plus: ^10.2.2
   # ZIP payloads for the Windows portable update flow.
   archive: ^4.5.1
@@ -45,3 +45,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  shaders:
+    - shaders/nexa_liquid_glass.frag
