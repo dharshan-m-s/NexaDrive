@@ -1951,3 +1951,4 @@ class _FileFilterBar extends StatelessWidget {
       ),
     );
   }
+}
