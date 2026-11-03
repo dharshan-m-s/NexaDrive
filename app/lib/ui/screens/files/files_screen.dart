@@ -680,9 +680,12 @@ class _FilesScreenState extends State<FilesScreen> {
             onUploadFolder: _selecting ? null : _pickAndUploadFolder,
             onSearch: _selecting
                 ? null
-                : () => Navigator.of(context).push(
+                : (query) => Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => SearchScreen(api: widget.api),
+                        builder: (_) => SearchScreen(
+                          api: widget.api,
+                          initialQuery: query,
+                        ),
                       ),
                     ),
             onSort: _selecting ? null : _pickSort,
@@ -1129,7 +1132,7 @@ enum _FileHeaderAction {
 /// of an oversized upload row floating below a separate header.
 /// My files toolbar. The title and overflow stay on their own row; Search
 /// and Upload share a single compact action row below it.
-class _ViewArea extends StatelessWidget {
+class _ViewArea extends StatefulWidget {
   final String title;
   final String subtitle;
   final bool selecting;
@@ -1142,7 +1145,7 @@ class _ViewArea extends StatelessWidget {
   final VoidCallback? onNewFolder;
   final VoidCallback? onUpload;
   final VoidCallback? onUploadFolder;
-  final VoidCallback? onSearch;
+  final ValueChanged<String>? onSearch;
   final VoidCallback? onScan;
   final VoidCallback? onSort;
   final VoidCallback? onRefresh;
@@ -1167,8 +1170,23 @@ class _ViewArea extends StatelessWidget {
   });
 
   @override
+  State<_ViewArea> createState() => _ViewAreaState();
+}
+
+class _ViewAreaState extends State<_ViewArea> {
+  bool _searchExpanded = false;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final widget = this.widget;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -1258,7 +1276,36 @@ class _ViewArea extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.close_rounded),
                 )
-              else
+              else ...[
+                IconButton(
+                  tooltip: 'Search files',
+                  onPressed: () => setState(() {
+                    _searchExpanded = !_searchExpanded;
+                    if (!_searchExpanded) _searchController.clear();
+                  }),
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.fillFor(brightness),
+                    foregroundColor: AppColors.labelPrimaryFor(brightness),
+                    minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+                    padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  ),
+                  icon: Icon(_searchExpanded ? Icons.close_rounded : Icons.search_rounded),
+                ),
+                const SizedBox(width: AppDimens.space6),
+                IconButton(
+                  tooltip: 'Upload files',
+                  onPressed: onUpload,
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.accentContainerFor(brightness),
+                    foregroundColor: AppColors.accentTextFor(brightness),
+                    minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+                    padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  ),
+                  icon: const Icon(Icons.upload_rounded, size: 19),
+                ),
+                const SizedBox(width: AppDimens.space6),
                 PopupMenuButton<_FileHeaderAction>(
                   tooltip: 'More actions',
                   icon: const Icon(Icons.more_horiz_rounded, size: 22),
@@ -1349,81 +1396,63 @@ class _ViewArea extends StatelessWidget {
                     ),
                   ],
                 ),
+              ],
             ],
           ),
-          if (!selecting) ...[
-            const SizedBox(height: AppDimens.space10),
+          if (!selecting && _searchExpanded) ...[
+            const SizedBox(height: AppDimens.space8),
             Row(
               children: [
                 Expanded(
-                  child: Tooltip(
-                    message: 'Search files',
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: onSearch,
+                  child: TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (query) {
+                      final value = query.trim();
+                      if (value.isNotEmpty) widget.onSearch?.call(value);
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search files',
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                      suffixIcon: IconButton(
+                        tooltip: 'Close search',
+                        onPressed: () {
+                          setState(() {
+                            _searchExpanded = false;
+                            _searchController.clear();
+                          });
+                        },
+                        icon: const Icon(Icons.close_rounded, size: 19),
+                      ),
+                      filled: true,
+                      fillColor: AppColors.fillFor(brightness),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 11),
+                      border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(13),
-                        child: Ink(
-                          height: 44,
-                          padding: const EdgeInsets.symmetric(horizontal: 13),
-                          decoration: BoxDecoration(
-                            color: AppColors.fillFor(brightness),
-                            borderRadius: BorderRadius.circular(13),
-                            border: Border.all(
-                              color: AppColors.dividerFor(brightness),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.search_rounded,
-                                size: 20,
-                                color: AppColors.labelSecondaryFor(brightness),
-                              ),
-                              const SizedBox(width: AppDimens.space8),
-                              Expanded(
-                                child: Text(
-                                  'Search files',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyle.subheadline.copyWith(
-                                    color: AppColors.labelSecondaryFor(
-                                      brightness,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        borderSide: BorderSide(color: AppColors.dividerFor(brightness)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(13),
+                        borderSide: BorderSide(color: AppColors.dividerFor(brightness)),
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: AppDimens.space8),
-                Tooltip(
-                  message: 'Upload files',
-                  child: SizedBox(
-                    width: 44,
-                    height: 44,
-                    child: FilledButton(
-                      onPressed: onUpload,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(44, 44),
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                        backgroundColor: AppColors.accentContainerFor(
-                          brightness,
-                        ),
-                        foregroundColor: AppColors.accentTextFor(brightness),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(13),
-                        ),
-                      ),
-                      child: const Icon(Icons.upload_rounded, size: 19),
-                    ),
+                IconButton(
+                  tooltip: 'Search',
+                  onPressed: () {
+                    final value = _searchController.text.trim();
+                    if (value.isNotEmpty) widget.onSearch?.call(value);
+                  },
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.accentContainerFor(brightness),
+                    foregroundColor: AppColors.accentTextFor(brightness),
+                    minimumSize: const Size(44, 48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
                   ),
+                  icon: const Icon(Icons.arrow_forward_rounded),
                 ),
               ],
             ),
