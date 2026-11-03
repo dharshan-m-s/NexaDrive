@@ -350,7 +350,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           child: NexaLiquidGlass(
             borderRadius: BorderRadius.circular(28),
             blurSigma: 2.8,
-            tintOpacity: dark ? 0.075 : 0.06,
+            tintOpacity: dark ? 0.085 : 0.065,
+            refractionHeight: 24,
+            refractionAmount: -42,
+            depthEffect: 0.88,
+            chromaticDispersion: 1.15,
             padding: const EdgeInsets.all(12),
             showShadow: true,
             child: Column(

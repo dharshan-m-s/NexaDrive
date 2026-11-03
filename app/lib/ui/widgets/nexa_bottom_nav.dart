@@ -33,7 +33,11 @@ class NexaBottomNav extends StatelessWidget {
     return NexaLiquidGlass(
       borderRadius: BorderRadius.circular(AppDimens.radiusPill),
       blurSigma: 2.2,
-      tintOpacity: dark ? 0.055 : 0.045,
+      tintOpacity: dark ? 0.06 : 0.045,
+      refractionHeight: 18,
+      refractionAmount: -36,
+      depthEffect: 0.8,
+      chromaticDispersion: 1.05,
       padding: EdgeInsets.zero,
       child: SizedBox(
         width: double.infinity,
