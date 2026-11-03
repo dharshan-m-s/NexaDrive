@@ -650,6 +650,9 @@ class _FilesScreenState extends State<FilesScreen> {
     final brightness = Theme.of(context).brightness;
     final accent = AppColors.accentFor(brightness);
     final crumb = _path.isEmpty ? 'My files' : _path.split('/').last;
+    final subtitle = _path.isEmpty
+        ? 'Your private cloud'
+        : Format.count(_items.length, 'item');
 
     return PopScope(
       canPop: false,
@@ -661,7 +664,7 @@ class _FilesScreenState extends State<FilesScreen> {
         children: [
           _ViewArea(
             title: crumb,
-            subtitle: _path.isEmpty ? 'Browse your private cloud' : _path,
+            subtitle: subtitle,
             selecting: _selecting,
             selectedCount: _selected.length,
             accent: accent,
@@ -681,14 +684,15 @@ class _FilesScreenState extends State<FilesScreen> {
                 ? null
                 : () => Navigator.of(context).push(
                       MaterialPageRoute(
-                          builder: (_) => SearchScreen(api: widget.api)),
+                        builder: (_) => SearchScreen(api: widget.api),
+                      ),
                     ),
             onSort: _selecting ? null : _pickSort,
             onRefresh: load,
             onScan: _selecting
                 ? null
                 : () => Navigator.of(context)
-                        .push(
+                    .push(
                       MaterialPageRoute(
                         builder: (_) => ScannerScreen(
                           api: widget.api,
@@ -696,20 +700,9 @@ class _FilesScreenState extends State<FilesScreen> {
                         ),
                       ),
                     )
-                        .then((saved) {
+                    .then((saved) {
                       if (saved == true) load();
                     }),
-          ),
-          NexaRevealBar(
-            visible:
-                !_selecting && !_loading && _error == null && _items.isNotEmpty,
-            alignment: Alignment.topLeft,
-            child: _FileFilterBar(
-              selected: _filter,
-              folderCount: _folderCount,
-              fileCount: _fileCount,
-              onChanged: (value) => setState(() => _filter = value),
-            ),
           ),
           NexaRevealBar(
             visible: !_selecting && _path.isNotEmpty,
@@ -721,6 +714,20 @@ class _FilesScreenState extends State<FilesScreen> {
                 setState(() => _path = p);
                 load();
               },
+            ),
+          ),
+          NexaRevealBar(
+            visible:
+                !_selecting && !_loading && _error == null && _items.isNotEmpty,
+            alignment: Alignment.topLeft,
+            child: _FileFilterBar(
+              selected: _filter,
+              folderCount: _folderCount,
+              fileCount: _fileCount,
+              isGrid: _grid,
+              onChanged: (value) => setState(() => _filter = value),
+              onSort: _pickSort,
+              onToggleView: () => setState(() => _grid = !_grid),
             ),
           ),
           Expanded(child: _body()),
@@ -780,6 +787,7 @@ class _FilesScreenState extends State<FilesScreen> {
       ),
     );
   }
+
 
   Future<void> _downloadSelected() async {
     final entries = _items.where((e) => _selected.contains(e.path)).toList();
@@ -850,43 +858,74 @@ class _FilesScreenState extends State<FilesScreen> {
   Widget _buildBody() {
     final bottomClearance = MediaQuery.paddingOf(context).bottom;
     if (_loading) {
-      return const NexaLoadingState();
-    }
-    if (_error != null) {
-      return NexaEmptyState(
-        icon: Icons.cloud_off_rounded,
-        title: "Can't reach NexaDrive",
-        hint: _error,
-        actionLabel: 'Retry',
-        onAction: load,
-        actionIcon: Icons.refresh_rounded,
-        centered: true,
-        iconSize: 48,
+      return NexaSkeletonList(
+        itemCount: 5,
+        height: AppDimens.listHeightHero,
+        showLeading: true,
+        showTrailing: true,
       );
     }
-    if (_items.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: load,
-        child: ListView(
-          padding: EdgeInsets.only(bottom: bottomClearance),
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            SizedBox(height: MediaQuery.sizeOf(context).height * 0.16),
-            NexaEmptyState(
-              icon: _path.isEmpty
-                  ? Icons.cloud_upload_outlined
-                  : Icons.folder_open_rounded,
-              title: _path.isEmpty
-                  ? 'Your cloud is empty'
-                  : 'This folder is empty',
-              hint: _path.isEmpty
-                  ? 'Upload files or create a folder to get started.'
-                  : 'Upload something here, or move files in from another folder.',
-              actionLabel: 'Upload files',
-              onAction: _pickAndUpload,
+
+    if (_error != null) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final topSpace =
+              ((constraints.maxHeight - 300) / 2).clamp(24.0, 160.0);
+          return RefreshIndicator(
+            onRefresh: load,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(bottom: bottomClearance),
+              children: [
+                SizedBox(height: topSpace),
+                _FilesStatePanel(
+                  icon: Icons.cloud_off_rounded,
+                  title: "Can't reach NexaDrive",
+                  message: _error!,
+                  primaryLabel: 'Retry',
+                  primaryIcon: Icons.refresh_rounded,
+                  onPrimary: load,
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
+      );
+    }
+
+    if (_items.isEmpty) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final topSpace =
+              ((constraints.maxHeight - 340) / 2).clamp(24.0, 150.0);
+          return RefreshIndicator(
+            onRefresh: load,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(bottom: bottomClearance),
+              children: [
+                SizedBox(height: topSpace),
+                _FilesStatePanel(
+                  icon: _path.isEmpty
+                      ? Icons.cloud_upload_outlined
+                      : Icons.folder_open_rounded,
+                  title: _path.isEmpty
+                      ? 'Your cloud is ready'
+                      : 'This folder is empty',
+                  message: _path.isEmpty
+                      ? 'Start by adding files or creating a folder. Your private cloud is ready when you are.'
+                      : 'Upload files here, or create a folder to keep this space organised.',
+                  primaryLabel: 'Upload files',
+                  primaryIcon: Icons.upload_rounded,
+                  onPrimary: _pickAndUpload,
+                  secondaryLabel: 'New folder',
+                  secondaryIcon: Icons.create_new_folder_outlined,
+                  onSecondary: _createFolder,
+                ),
+              ],
+            ),
+          );
+        },
       );
     }
 
@@ -894,15 +933,17 @@ class _FilesScreenState extends State<FilesScreen> {
     if (sorted.isEmpty) {
       final noun = _filter == _FileFilter.folders ? 'folders' : 'files';
       return Center(
-        child: NexaEmptyState(
-          icon: Icons.filter_list_off_rounded,
+        child: _FilesStatePanel(
+          icon: Icons.filter_alt_off_rounded,
           title: 'No $noun in this view',
-          hint: 'Try another filter to see the rest of this folder.',
-          actionLabel: 'Show all items',
-          onAction: () => setState(() => _filter = _FileFilter.all),
+          message: 'Change the filter to see the rest of this folder.',
+          primaryLabel: 'Show all items',
+          primaryIcon: Icons.filter_list_rounded,
+          onPrimary: () => setState(() => _filter = _FileFilter.all),
         ),
       );
     }
+
     final folders = sorted.where((e) => e.isFolder).toList();
     final files = sorted.where((e) => !e.isFolder).toList();
 
@@ -912,35 +953,35 @@ class _FilesScreenState extends State<FilesScreen> {
           ? GridView.builder(
               padding: EdgeInsets.fromLTRB(
                 AppDimens.pageMargin,
-                AppDimens.spaceSm,
+                AppDimens.space8,
                 AppDimens.pageMargin,
                 bottomClearance > AppDimens.spaceLg
                     ? bottomClearance
                     : AppDimens.spaceLg,
               ),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 170,
-                mainAxisSpacing: AppDimens.spaceSm,
-                crossAxisSpacing: AppDimens.spaceSm,
-                childAspectRatio: 0.95,
+                maxCrossAxisExtent: 176,
+                mainAxisSpacing: AppDimens.space12,
+                crossAxisSpacing: AppDimens.space12,
+                childAspectRatio: 0.93,
               ),
               itemCount: sorted.length,
               itemBuilder: (context, i) {
-                final e = sorted[i];
+                final entry = sorted[i];
                 return NexaFileGridTile(
-                  entry: e,
-                  thumbnail: _thumbFor(e),
-                  selected: _selected.contains(e.path),
+                  entry: entry,
+                  thumbnail: _thumbFor(entry),
+                  selected: _selected.contains(entry.path),
                   selecting: _selecting,
-                  onTap: (v) => _openEntry(v),
-                  onLongPress: () => _enterSelection(e.path),
+                  onTap: _openEntry,
+                  onLongPress: () => _enterSelection(entry.path),
                 );
               },
             )
           : ListView.builder(
               padding: EdgeInsets.fromLTRB(
                 AppDimens.pageMargin,
-                AppDimens.spaceXs,
+                AppDimens.space4,
                 AppDimens.pageMargin,
                 bottomClearance > AppDimens.spaceLg
                     ? bottomClearance
@@ -948,59 +989,67 @@ class _FilesScreenState extends State<FilesScreen> {
               ),
               itemCount: (folders.isEmpty ? 0 : folders.length + 1) +
                   (files.isEmpty ? 0 : files.length + 1),
-              itemBuilder: (context, i) {
-                final Widget row;
-                if (folders.isNotEmpty) {
-                  if (i == 0) {
-                    row = const _GroupHeader('Folders');
-                  } else if (i <= folders.length) {
-                    final e = folders[i - 1];
-                    row = _fileRow(e);
-                  } else if (files.isNotEmpty) {
-                    final j = i - (folders.length + 1);
-                    if (j == 0) {
-                      row = const _GroupHeader('Files');
-                    } else {
-                      row = _fileRow(files[j - 1]);
-                    }
-                  } else {
-                    row = const SizedBox.shrink();
-                  }
-                } else if (files.isNotEmpty) {
-                  if (i == 0) {
-                    row = const _GroupHeader('Files');
-                  } else {
-                    row = _fileRow(files[i - 1]);
-                  }
-                } else {
-                  row = const SizedBox.shrink();
+              itemBuilder: (context, index) {
+                if (folders.isNotEmpty && index <= folders.length) {
+                  return index == 0
+                      ? _GroupHeader('Folders', count: folders.length)
+                      : _fileRow(folders[index - 1]);
                 }
-                return row;
+
+                final fileIndex =
+                    index - (folders.isEmpty ? 0 : folders.length + 1);
+                if (files.isNotEmpty && fileIndex == 0) {
+                  return _GroupHeader('Files', count: files.length);
+                }
+                final itemIndex = fileIndex - 1;
+                return itemIndex >= 0 && itemIndex < files.length
+                    ? _fileRow(files[itemIndex])
+                    : const SizedBox.shrink();
               },
             ),
     );
   }
 
-  Widget _fileRow(FileEntry e) {
-    return NexaFileTile(
-      entry: e,
-      thumbnail: _thumbFor(e),
-      selected: _selected.contains(e.path),
-      selecting: _selecting,
-      onTap: (v) => _openEntry(v),
-      onLongPress: () => _enterSelection(e.path),
-      trailing: _selecting
-          ? null
-          : IconButton(
-              tooltip: 'More options',
-              icon: Icon(
-                Icons.more_vert_rounded,
-                color: AppColors.textSecondaryFor(Theme.of(context).brightness),
-              ),
-              onPressed: () => _showFileMenu(context, e),
-            ),
+
+
+  Widget _fileRow(FileEntry entry) {
+    final brightness = Theme.of(context).brightness;
+    final radius = BorderRadius.circular(AppDimens.radiusMedium);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppDimens.space8),
+      child: Material(
+        color: AppColors.surfaceFor(brightness),
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: BorderSide(
+            color: AppColors.separatorFor(brightness).withValues(alpha: 0.72),
+            width: 0.7,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: NexaFileTile(
+          entry: entry,
+          thumbnail: _thumbFor(entry),
+          selected: _selected.contains(entry.path),
+          selecting: _selecting,
+          onTap: _openEntry,
+          onLongPress: () => _enterSelection(entry.path),
+          trailing: _selecting
+              ? null
+              : IconButton(
+                  tooltip: 'More options',
+                  icon: Icon(
+                    Icons.more_horiz_rounded,
+                    color: AppColors.textSecondaryFor(brightness),
+                  ),
+                  onPressed: () => _showFileMenu(context, entry),
+                ),
+        ),
+      ),
     );
   }
+
+
 
   void _showFileMenu(BuildContext context, FileEntry entry) {
     showNexaSheet<void>(
@@ -1140,26 +1189,24 @@ class _ViewArea extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
-        AppDimens.space16,
+        AppDimens.space12,
         AppDimens.pageMargin,
         AppDimens.space8,
       ),
       child: Row(
         children: [
-          Container(
+          AnimatedContainer(
+            duration: AppMotion.resolve(context, AppMotion.fast),
             width: 44,
             height: 44,
             decoration: BoxDecoration(
               color: AppColors.accentContainerFor(brightness),
               borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-              border: Border.all(
-                color:
-                    AppColors.accentTextFor(brightness).withValues(alpha: 0.12),
-              ),
+              border: Border.all(color: accent.withValues(alpha: 0.14)),
             ),
             child: Icon(
               selecting ? Icons.check_rounded : titleIcon,
-              color: selecting ? accent : AppColors.accentTextFor(brightness),
+              color: accent,
               size: 22,
             ),
           ),
@@ -1183,7 +1230,8 @@ class _ViewArea extends StatelessWidget {
                       color: selecting
                           ? accent
                           : AppColors.labelPrimaryFor(brightness),
-                      letterSpacing: -0.45,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
                     ),
                   ),
                 ),
@@ -1193,80 +1241,53 @@ class _ViewArea extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: NexaTypography.caption.copyWith(
-                      fontSize: 11,
+                      fontSize: 11.5,
                       color: AppColors.labelSecondaryFor(brightness),
                     ),
                   )
                 else if (onBackToRoot != null)
-                  TextButton(
-                    onPressed: onBackToRoot,
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, AppDimens.touchTarget),
-                      alignment: Alignment.centerLeft,
+                  InkWell(
+                    onTap: onBackToRoot,
+                    borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2, right: 6, bottom: 2),
+                      child: Text(
+                        'Back to My files',
+                        style: NexaTypography.caption.copyWith(
+                          color: accent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                    child: const Text('Back to My files'),
                   ),
               ],
             ),
           ),
+          const SizedBox(width: AppDimens.space8),
           if (selecting)
-            IconButton(
+            _FilesHeaderButton(
               tooltip: 'Cancel selection',
+              icon: Icons.close_rounded,
               onPressed: onExitSelection,
-              style: IconButton.styleFrom(
-                backgroundColor: AppColors.fillFor(brightness),
-                minimumSize: const Size(
-                  AppDimens.touchTarget,
-                  AppDimens.touchTarget,
-                ),
-                padding: EdgeInsets.zero,
-              ),
-              icon: const Icon(Icons.close_rounded),
             )
           else ...[
             if (onUpload != null)
-              Tooltip(
-                message: 'Upload files',
-                child: IconButton(
-                  onPressed: onUpload,
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.fillFor(brightness),
-                    foregroundColor: AppColors.accentTextFor(brightness),
-                    minimumSize: const Size(
-                      AppDimens.touchTarget,
-                      AppDimens.touchTarget,
-                    ),
-                    padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  icon: const Icon(Icons.upload_rounded, size: 21),
-                ),
+              _FilesHeaderButton(
+                tooltip: 'Upload files',
+                icon: Icons.upload_rounded,
+                onPressed: onUpload,
+                accent: true,
               ),
-            const SizedBox(width: 6),
-            IconButton(
+            const SizedBox(width: AppDimens.space6),
+            _FilesHeaderButton(
               tooltip: 'Search files',
+              icon: Icons.search_rounded,
               onPressed: onSearch,
-              style: IconButton.styleFrom(
-                backgroundColor: AppColors.fillFor(brightness),
-                foregroundColor: AppColors.labelPrimaryFor(brightness),
-                minimumSize: const Size(
-                  AppDimens.touchTarget,
-                  AppDimens.touchTarget,
-                ),
-                padding: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              icon: const Icon(Icons.search_rounded),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: AppDimens.space6),
             PopupMenuButton<_FileHeaderAction>(
               tooltip: 'More actions',
-              icon: const Icon(Icons.more_horiz_rounded),
+              icon: const Icon(Icons.more_horiz_rounded, size: 22),
               padding: EdgeInsets.zero,
               style: IconButton.styleFrom(
                 backgroundColor: AppColors.fillFor(brightness),
@@ -1361,6 +1382,177 @@ class _ViewArea extends StatelessWidget {
   }
 }
 
+class _FilesHeaderButton extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool accent;
+
+  const _FilesHeaderButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.accent = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      style: IconButton.styleFrom(
+        backgroundColor: accent
+            ? AppColors.accentContainerFor(brightness)
+            : AppColors.fillFor(brightness),
+        foregroundColor: accent
+            ? AppColors.accentTextFor(brightness)
+            : AppColors.labelPrimaryFor(brightness),
+        minimumSize: const Size(
+          AppDimens.touchTarget,
+          AppDimens.touchTarget,
+        ),
+        padding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+      icon: Icon(icon, size: 21),
+    );
+  }
+}
+
+
+
+class _FilesStatePanel extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+  final String primaryLabel;
+  final IconData primaryIcon;
+  final VoidCallback onPrimary;
+  final String? secondaryLabel;
+  final IconData? secondaryIcon;
+  final VoidCallback? onSecondary;
+
+  const _FilesStatePanel({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.primaryLabel,
+    required this.primaryIcon,
+    required this.onPrimary,
+    this.secondaryLabel,
+    this.secondaryIcon,
+    this.onSecondary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final accent = AppColors.accentFor(brightness);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.space24,
+        vertical: AppDimens.space16,
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                  color: AppColors.accentContainerFor(brightness),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: accent.withValues(alpha: 0.16),
+                  ),
+                ),
+                child: Icon(icon, size: 34, color: accent),
+              ),
+              const SizedBox(height: AppDimens.space20),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: NexaTypography.pageTitle.copyWith(
+                  color: AppColors.labelPrimaryFor(brightness),
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.35,
+                ),
+              ),
+              const SizedBox(height: AppDimens.space8),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: NexaTypography.body.copyWith(
+                  color: AppColors.labelSecondaryFor(brightness),
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: AppDimens.space20),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: AppDimens.space8,
+                runSpacing: AppDimens.space8,
+                children: [
+                  FilledButton.tonalIcon(
+                    onPressed: onPrimary,
+                    style: FilledButton.styleFrom(
+                      foregroundColor: AppColors.accentTextFor(brightness),
+                      backgroundColor: AppColors.accentContainerFor(brightness),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppDimens.space16,
+                        vertical: AppDimens.space10,
+                      ),
+                      minimumSize: const Size(0, AppDimens.touchTarget),
+                      shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppDimens.radiusPill),
+                      ),
+                    ),
+                    icon: Icon(primaryIcon, size: 18),
+                    label: Text(primaryLabel),
+                  ),
+                  if (secondaryLabel != null && onSecondary != null)
+                    OutlinedButton.icon(
+                      onPressed: onSecondary,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.labelPrimaryFor(brightness),
+                        side: BorderSide(
+                          color: AppColors.separatorFor(brightness),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimens.space16,
+                          vertical: AppDimens.space10,
+                        ),
+                        minimumSize: const Size(0, AppDimens.touchTarget),
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppDimens.radiusPill),
+                        ),
+                      ),
+                      icon: Icon(secondaryIcon, size: 18),
+                      label: Text(secondaryLabel!),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
 class _FileMenuLabel extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -1396,17 +1588,27 @@ class _Breadcrumb extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     final parts = path.split('/');
     return SizedBox(
-      height: AppDimens.touchTarget,
+      height: 44,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceMd),
+        padding: const EdgeInsets.symmetric(horizontal: AppDimens.pageMargin),
         children: [
-          _crumb(context, brightness, 'My files', '', true),
+          _crumb(
+            context,
+            brightness,
+            'My files',
+            '',
+            false,
+            icon: Icons.home_outlined,
+          ),
           for (var i = 0; i < parts.length; i++) ...[
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 16,
-              color: AppColors.textTertiaryFor(brightness),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Icon(
+                Icons.chevron_right_rounded,
+                size: 17,
+                color: AppColors.labelTertiaryFor(brightness),
+              ),
             ),
             _crumb(
               context,
@@ -1426,25 +1628,47 @@ class _Breadcrumb extends StatelessWidget {
     Brightness brightness,
     String label,
     String value,
-    bool last,
-  ) {
+    bool last, {
+    IconData? icon,
+  }) {
     return Semantics(
       button: !last,
       label: last ? '$label, current folder' : 'Go to $label',
-      child: InkWell(
-        onTap: last ? null : () => onBreadcrumb(value),
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        child: Container(
-          alignment: Alignment.center,
-          constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
-          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space2xs),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: NexaTypography.caption.copyWith(
-              color: last ? AppColors.textPrimaryFor(brightness) : accent,
-              fontWeight: last ? FontWeight.w600 : FontWeight.w500,
+      child: Material(
+        color: last
+            ? AppColors.accentContainerFor(brightness).withValues(alpha: 0.68)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+        child: InkWell(
+          onTap: last ? null : () => onBreadcrumb(value),
+          borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppDimens.space8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 16, color: accent),
+                    const SizedBox(width: AppDimens.space4),
+                  ],
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 180),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: NexaTypography.caption.copyWith(
+                        color: last
+                            ? AppColors.labelPrimaryFor(brightness)
+                            : accent,
+                        fontWeight: last ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1453,30 +1677,60 @@ class _Breadcrumb extends StatelessWidget {
   }
 }
 
+
+
 class _GroupHeader extends StatelessWidget {
   final String title;
-  const _GroupHeader(this.title);
+  final int count;
+
+  const _GroupHeader(this.title, {required this.count});
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppDimens.spaceXs,
-        AppDimens.spaceSm,
-        AppDimens.spaceXs,
-        AppDimens.spaceXs,
+        AppDimens.space4,
+        AppDimens.space16,
+        AppDimens.space4,
+        AppDimens.space8,
       ),
-      child: Text(
-        title,
-        style: NexaTypography.sectionHeader.copyWith(
-          color: AppColors.textSecondaryFor(brightness),
-          fontSize: NexaTypography.sectionHeader.fontSize! * 0.82,
-        ),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: NexaTypography.sectionHeader.copyWith(
+              color: AppColors.labelPrimaryFor(brightness),
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.2,
+            ),
+          ),
+          const SizedBox(width: AppDimens.space6),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.space6,
+              vertical: AppDimens.space2,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.fillFor(brightness),
+              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            ),
+            child: Text(
+              '$count',
+              style: NexaTypography.caption.copyWith(
+                color: AppColors.labelSecondaryFor(brightness),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
+
+
 
 class _BatchDownloadDialog extends StatefulWidget {
   final List<BatchItem> items;
@@ -1575,43 +1829,92 @@ class _FileFilterBar extends StatelessWidget {
   final _FileFilter selected;
   final int folderCount;
   final int fileCount;
+  final bool isGrid;
   final ValueChanged<_FileFilter> onChanged;
+  final VoidCallback onSort;
+  final VoidCallback onToggleView;
 
   const _FileFilterBar({
     required this.selected,
     required this.folderCount,
     required this.fileCount,
+    required this.isGrid,
     required this.onChanged,
+    required this.onSort,
+    required this.onToggleView,
   });
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: AppDimens.pageMargin),
+    final brightness = Theme.of(context).brightness;
+    final buttonStyle = IconButton.styleFrom(
+      backgroundColor: AppColors.fillFor(brightness),
+      foregroundColor: AppColors.labelSecondaryFor(brightness),
+      minimumSize: const Size(40, 40),
+      padding: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppDimens.pageMargin,
+        AppDimens.space2,
+        AppDimens.pageMargin,
+        AppDimens.space8,
+      ),
       child: Row(
         children: [
-          NexaChip.tonal(
-            label: 'All ${folderCount + fileCount}',
-            selected: selected == _FileFilter.all,
-            onTap: () => onChanged(_FileFilter.all),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  NexaChip.tonal(
+                    label: 'All ${folderCount + fileCount}',
+                    selected: selected == _FileFilter.all,
+                    onTap: () => onChanged(_FileFilter.all),
+                  ),
+                  const SizedBox(width: AppDimens.space6),
+                  NexaChip.tonal(
+                    label: 'Folders $folderCount',
+                    leadingIcon: Icons.folder_outlined,
+                    selected: selected == _FileFilter.folders,
+                    onTap: () => onChanged(_FileFilter.folders),
+                  ),
+                  const SizedBox(width: AppDimens.space6),
+                  NexaChip.tonal(
+                    label: 'Files $fileCount',
+                    leadingIcon: Icons.insert_drive_file_outlined,
+                    selected: selected == _FileFilter.files,
+                    onTap: () => onChanged(_FileFilter.files),
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(width: AppDimens.space8),
-          NexaChip.tonal(
-            label: 'Folders $folderCount',
-            leadingIcon: Icons.folder_outlined,
-            selected: selected == _FileFilter.folders,
-            onTap: () => onChanged(_FileFilter.folders),
+          const SizedBox(width: AppDimens.space6),
+          IconButton(
+            tooltip: 'Sort files',
+            onPressed: onSort,
+            style: buttonStyle,
+            icon: const Icon(Icons.sort_rounded, size: 20),
           ),
-          const SizedBox(width: AppDimens.space8),
-          NexaChip.tonal(
-            label: 'Files $fileCount',
-            leadingIcon: Icons.insert_drive_file_outlined,
-            selected: selected == _FileFilter.files,
-            onTap: () => onChanged(_FileFilter.files),
+          const SizedBox(width: AppDimens.space4),
+          IconButton(
+            tooltip: isGrid ? 'Switch to list view' : 'Switch to grid view',
+            onPressed: onToggleView,
+            style: buttonStyle,
+            icon: Icon(
+              isGrid ? Icons.view_list_rounded : Icons.grid_view_rounded,
+              size: 19,
+            ),
           ),
         ],
       ),
     );
   }
 }
+
+
