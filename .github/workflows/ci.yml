@@ -111,7 +111,16 @@ jobs:
       - run: flutter pub get
         working-directory: app
       # Whitespace-only check: keep the tree formatted with the SDK's own formatter.
-      - run: dart format --output=none --set-exit-if-changed lib test integration_test
+      - name: Check Dart formatting and print exact formatter output on failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! dart format --output=none --set-exit-if-changed lib test integration_test; then
+            echo "::group::Dart formatter expected output for the flagged file"
+            dart format --output=show lib/ui/widgets/nexa_bottom_nav.dart
+            echo "::endgroup::"
+            exit 1
+          fi
         working-directory: app
 
   flutter-analyze:
