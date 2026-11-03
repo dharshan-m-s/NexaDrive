@@ -32,8 +32,8 @@ class NexaBottomNav extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return NexaLiquidGlass(
       borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-      blurSigma: 6,
-      tintOpacity: dark ? 0.14 : 0.10,
+      blurSigma: 2.2,
+      tintOpacity: dark ? 0.055 : 0.045,
       padding: EdgeInsets.zero,
       child: SizedBox(
         width: double.infinity,
@@ -158,28 +158,25 @@ class _NavRowState extends State<_NavRow> with SingleTickerProviderStateMixin {
                             end: Alignment.bottomRight,
                             colors: brightness == Brightness.dark
                                 ? [
-                                    Colors.white.withValues(alpha: 0.12),
-                                    const Color(0xFF9A8CFF)
-                                        .withValues(alpha: 0.13),
+                                    Colors.white.withValues(alpha: 0.13),
+                                    Colors.white.withValues(alpha: 0.035),
                                   ]
                                 : [
-                                    Colors.white.withValues(alpha: 0.26),
-                                    const Color(0xFF6658E8)
-                                        .withValues(alpha: 0.075),
+                                    Colors.white.withValues(alpha: 0.34),
+                                    Colors.white.withValues(alpha: 0.10),
                                   ],
                           ),
                           border: Border.all(
                             color: brightness == Brightness.dark
-                                ? Colors.white.withValues(alpha: 0.16)
-                                : Colors.white.withValues(alpha: 0.56),
+                                ? Colors.white.withValues(alpha: 0.28)
+                                : Colors.white.withValues(alpha: 0.72),
                             width: 0.7,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF6658E8)
-                                  .withValues(alpha: 0.12),
-                              blurRadius: 12,
-                              spreadRadius: -5,
+                              color: Colors.white.withValues(alpha: brightness == Brightness.dark ? 0.10 : 0.18),
+                              blurRadius: 14,
+                              spreadRadius: -7,
                             ),
                           ],
                         ),
