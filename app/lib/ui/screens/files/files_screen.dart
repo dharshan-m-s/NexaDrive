@@ -1223,11 +1223,15 @@ class _ViewArea extends StatelessWidget {
                     else if (onBackToRoot != null)
                       InkWell(
                         onTap: onBackToRoot,
-                        borderRadius:
-                            BorderRadius.circular(AppDimens.radiusSmall),
+                        borderRadius: BorderRadius.circular(
+                          AppDimens.radiusSmall,
+                        ),
                         child: Padding(
                           padding: const EdgeInsets.only(
-                              top: 2, right: 6, bottom: 2),
+                            top: 2,
+                            right: 6,
+                            bottom: 2,
+                          ),
                           child: Text(
                             'Back to My files',
                             style: NexaTypography.caption.copyWith(
