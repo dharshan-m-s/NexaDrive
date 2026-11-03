@@ -69,6 +69,7 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
         shader.dispose();
         return;
       }
+      debugPrint('NexaDrive glass: Impeller optical refraction shader loaded.');
       setState(() => _shader = shader);
     } catch (error, stackTrace) {
       // A shader compilation/asset failure must never make the whole app
