@@ -397,7 +397,9 @@ class _FilesScreenState extends State<FilesScreen> {
           visible.every((entry) => _selected.contains(entry.path));
       if (allVisibleSelected) {
         _selected.removeAll(visible.map((entry) => entry.path));
-      } else {        _selected.addAll(visible.map((entry) => entry.path));      }
+      } else {
+        _selected.addAll(visible.map((entry) => entry.path));
+      }
       _selecting = _selected.isNotEmpty;
     });
   }
@@ -795,8 +797,10 @@ class _FilesScreenState extends State<FilesScreen> {
     }
     final destination = await _downloads.pickBatchDestination();
     if (destination == null) return;
-    if (!mounted) return;    final cancel = CancelToken();
-    final outcome = await showDialog<BatchSaveResult>(      context: context,
+    if (!mounted) return;
+    final cancel = CancelToken();
+    final outcome = await showDialog<BatchSaveResult>(
+      context: context,
       barrierDismissible: false,
       builder: (_) => _BatchDownloadDialog(
         items: [
@@ -1168,6 +1172,10 @@ class _ViewArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final titleIcon = title == 'My files' || title == 'My Files'
+        ? Icons.folder_copy_rounded
+        : Icons.folder_open_rounded;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
@@ -1191,7 +1199,8 @@ class _ViewArea extends StatelessWidget {
                       child: Text(
                         selecting ? Format.count(selectedCount, 'item') : title,
                         key: ValueKey(
-                          selecting ? 'selection:$selectedCount' : title,                        ),
+                          selecting ? 'selection:$selectedCount' : title,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: NexaTypography.pageTitle.copyWith(
@@ -1565,7 +1574,8 @@ class _FilesStatePanel extends StatelessWidget {
                         minimumSize: const Size(0, AppDimens.touchTarget),
                         shape: RoundedRectangleBorder(
                           borderRadius:
-                              BorderRadius.circular(AppDimens.radiusPill),                        ),
+                              BorderRadius.circular(AppDimens.radiusPill),
+                        ),
                       ),
                       icon: Icon(secondaryIcon, size: 18),
                       label: Text(secondaryLabel!),
@@ -1590,7 +1600,8 @@ class _FileMenuLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: [        Icon(icon, size: AppDimens.iconSm),
+      children: [
+        Icon(icon, size: AppDimens.iconSm),
         const SizedBox(width: AppDimens.space10),
         Text(label),
       ],
