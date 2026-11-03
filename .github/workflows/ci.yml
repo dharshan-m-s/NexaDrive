@@ -148,7 +148,9 @@ jobs:
           channel: stable
       - run: flutter pub get
         working-directory: app
-      - run: flutter test test/ui_regression_test.dart --reporter expanded
+      # Run the complete Flutter suite so CI exercises the same tests as
+      # the release verification gate (including design-system and glass audits).
+      - run: flutter test --reporter expanded
         working-directory: app
 
   flutter-windows:
