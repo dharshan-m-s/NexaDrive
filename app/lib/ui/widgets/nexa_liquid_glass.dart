@@ -8,9 +8,8 @@ import '../../core/design/app_dimensions.dart';
 
 /// A bounded optical-glass surface over the live scene.
 ///
-/// On Impeller, the backdrop is first blurred by Flutter's optimized Gaussian
-/// filter and then passed through the registered refraction shader. Other
-/// renderers keep the same translucent glass treatment with a blur fallback.
+/// Impeller uses a GPU image-filter shader for real backdrop displacement and
+/// curved-edge refraction. The blur-only path is a compatibility fallback.
 class NexaLiquidGlass extends StatefulWidget {
   final Widget child;
   final BorderRadiusGeometry borderRadius;
@@ -52,6 +51,8 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
     super.initState();
     if (ui.ImageFilter.isShaderFilterSupported) {
       unawaited(_loadShader());
+    } else {
+      debugPrint('NexaDrive glass: Impeller image-filter shaders are unavailable; using compatibility blur.');
     }
   }
 
@@ -69,12 +70,14 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
     } catch (error, stackTrace) {
       // A shader compilation/asset failure must never make the whole app
       // unusable. The normal GPU blur remains a fully functional fallback.
+      _programFuture = null;
+      debugPrint('NexaDrive glass shader failed to load: $error');
       FlutterError.reportError(
         FlutterErrorDetails(
           exception: error,
           stack: stackTrace,
           library: 'NexaDrive Liquid Glass',
-          context: ErrorDescription('while loading the optional glass shader'),
+          context: ErrorDescription('while loading the optical glass shader'),
         ),
       );
     }
@@ -114,9 +117,9 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
         inner: blur,
       );
     } catch (error, stackTrace) {
-      // Renderer/device-specific shader failures must degrade to ordinary
-      // glass, never take down a screen or navigation interaction.
+      // Renderer/device-specific failures degrade safely but remain visible in logs.
       if (!_shaderFilterErrorReported) {
+        debugPrint('NexaDrive glass filter failed; using blur fallback: $error');
         _shaderFilterErrorReported = true;
         FlutterError.reportError(
           FlutterErrorDetails(
@@ -138,11 +141,11 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
     final opaque = widget.forceOpaque || highContrast || !widget.enabled;
     final dark = brightness == Brightness.dark;
     final tint = AppColors.glassSurfaceFor(brightness);
-    final tintAlpha = (widget.tintOpacity ?? (dark ? 0.14 : 0.105))
+    final tintAlpha = (widget.tintOpacity ?? (dark ? 0.075 : 0.065))
         .clamp(0.0, 0.24)
         .toDouble();
     final edge = dark
-        ? Colors.white.withValues(alpha: 0.24)
+        ? Colors.white.withValues(alpha: 0.34)
         : Colors.white.withValues(alpha: 0.72);
 
     return DecoratedBox(
@@ -192,13 +195,13 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
                         end: Alignment.bottomCenter,
                         colors: dark
                             ? [
-                                Colors.white.withValues(alpha: 0.105),
-                                Colors.white.withValues(alpha: 0.018),
-                                Colors.black.withValues(alpha: 0.045),
+                                Colors.white.withValues(alpha: 0.075),
+                                Colors.white.withValues(alpha: 0.012),
+                                Colors.black.withValues(alpha: 0.018),
                               ]
                             : [
-                                Colors.white.withValues(alpha: 0.32),
-                                Colors.white.withValues(alpha: 0.055),
+                                Colors.white.withValues(alpha: 0.22),
+                                Colors.white.withValues(alpha: 0.035),
                                 const Color(0xFF7770A8)
                                     .withValues(alpha: 0.025),
                               ],
