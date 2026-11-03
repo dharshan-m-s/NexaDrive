@@ -312,16 +312,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 : Colors.black.withValues(alpha: 0.035),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: (dark ? Colors.white : Colors.black)
-                  .withValues(alpha: 0.075),
+              color:
+                  (dark ? Colors.white : Colors.black).withValues(alpha: 0.075),
             ),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 9),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 23,
-                  color: AppColors.accentTextFor(brightness)),
+              Icon(icon, size: 23, color: AppColors.accentTextFor(brightness)),
               const SizedBox(height: 7),
               Text(
                 title,
@@ -915,7 +914,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   left: 0,
                   right: 0,
                   bottom: AppDimens.bottomNavHeight +
-                      AppDimens.space10 * 2 + bottomInset + 28,
+                      AppDimens.space10 * 2 +
+                      bottomInset +
+                      28,
                   child: _buildMoreMenu(),
                 ),
               ],
