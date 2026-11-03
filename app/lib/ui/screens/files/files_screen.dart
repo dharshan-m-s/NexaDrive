@@ -1172,9 +1172,6 @@ class _ViewArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final titleIcon = title == 'My files' || title == 'My Files'
-        ? Icons.folder_copy_rounded
-        : Icons.folder_open_rounded;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
