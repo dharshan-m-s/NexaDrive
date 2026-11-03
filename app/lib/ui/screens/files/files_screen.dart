@@ -1242,8 +1242,7 @@ class _ViewArea extends StatelessWidget {
                   icon: const Icon(Icons.upload_rounded, size: 17),
                   label: const Text(
                     'Upload',
-                    style:
-                        TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
