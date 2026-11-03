@@ -118,6 +118,13 @@ jobs:
           if ! dart format --output=none --set-exit-if-changed lib test integration_test; then
             echo "::group::Dart formatter expected output for the flagged file"
             dart format --output=show lib/ui/widgets/nexa_bottom_nav.dart
+            dart format --output=show lib/ui/screens/files/files_screen.dart
+            dart format --output=show lib/ui/shell/app_shell.dart
+            dart format --output=show lib/ui/widgets/glass_engine/glass_foreground.dart
+            dart format --output=show lib/ui/widgets/glass_engine/glass_params.dart
+            dart format --output=show lib/ui/widgets/glass_engine/glass_surface.dart
+            dart format --output=show lib/ui/widgets/glass_engine/glass_theme.dart
+            dart format --output=show lib/ui/widgets/nexa_liquid_glass.dart
             echo "::endgroup::"
             exit 1
           fi
