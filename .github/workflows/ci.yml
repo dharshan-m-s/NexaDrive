@@ -193,6 +193,36 @@ jobs:
           channel: stable
       - run: flutter pub get
         working-directory: app
+      # Preinstall the exact NDK selected by this Flutter SDK. Android's
+      # sdkmanager occasionally returns a truncated NDK archive on hosted
+      # runners; retry cleanly before Gradle configures the Android project.
+      - name: Install Android NDK with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [ -z "$SDK_ROOT" ]; then
+            echo "::error::Android SDK root is not configured."
+            exit 1
+          fi
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER" || {
+            echo "::error::Android sdkmanager not found at $SDKMANAGER"
+            exit 1
+          }
+          for attempt in 1 2 3; do
+            echo "Installing NDK 28.2.13676358 (attempt $attempt/3)"
+            rm -rf "$SDK_ROOT/ndk/28.2.13676358"
+            if "$SDKMANAGER" --install "ndk;28.2.13676358"; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "NDK download/extraction failed; retrying after cleanup."
+              sleep 15
+            fi
+          done
+          echo "::error::Could not install NDK 28.2.13676358 after 3 attempts."
+          exit 1
       - run: flutter build apk --debug --dart-define=NEXADRIVE_UPDATE_REPO=dharshan-m-s/NexaDrive
         working-directory: app
 
