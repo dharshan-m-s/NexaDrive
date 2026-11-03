@@ -176,8 +176,8 @@ class _NavRowState extends State<_NavRow> with SingleTickerProviderStateMixin {
                             BoxShadow(
                               color: Colors.white.withValues(
                                 alpha: brightness == Brightness.dark
-                                  ? 0.10
-                                  : 0.18,
+                                    ? 0.10
+                                    : 0.18,
                               ),
                               blurRadius: 14,
                               spreadRadius: -7,
