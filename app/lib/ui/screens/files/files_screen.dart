@@ -1187,6 +1187,22 @@ class _ViewAreaState extends State<_ViewArea> {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final widget = this.widget;
+    final title = widget.title;
+    final subtitle = widget.subtitle;
+    final selecting = widget.selecting;
+    final selectedCount = widget.selectedCount;
+    final accent = widget.accent;
+    final onBackToRoot = widget.onBackToRoot;
+    final onExitSelection = widget.onExitSelection;
+    final onToggleView = widget.onToggleView;
+    final isGrid = widget.isGrid;
+    final onNewFolder = widget.onNewFolder;
+    final onUpload = widget.onUpload;
+    final onUploadFolder = widget.onUploadFolder;
+    final onSearch = widget.onSearch;
+    final onScan = widget.onScan;
+    final onSort = widget.onSort;
+    final onRefresh = widget.onRefresh;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
