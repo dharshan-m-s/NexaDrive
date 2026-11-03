@@ -29,25 +29,60 @@ class NexaBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return NexaLiquidGlass(
-      borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-      blurSigma: 2.2,
-      tintOpacity: dark ? 0.035 : 0.03,
-      refractionHeight: 18,
-      refractionAmount: -36,
-      depthEffect: 0.8,
-      chromaticDispersion: 1.05,
-      padding: EdgeInsets.zero,
-      child: SizedBox(
-        width: double.infinity,
-        height: AppDimens.bottomNavHeight,
-        child: _NavRow(
-          items: items,
-          currentIndex: currentIndex,
-          onTap: onTap,
+    final brightness = Theme.of(context).brightness;
+    final accent = AppColors.accentFor(brightness);
+    final itemCount = items.length;
+    final activeIndex =
+        itemCount == 0 ? 0 : currentIndex.clamp(0, itemCount - 1);
+    final activeCenter = itemCount == 0
+        ? 0.0
+        : -1.0 + ((activeIndex + 0.5) * 2.0 / itemCount);
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Subtle reflected colour lives behind the capsule, not on top of it.
+        // The glass shader refracts this and the page underneath together.
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(activeCenter, -0.45),
+                  radius: 1.05,
+                  colors: [
+                    accent.withValues(alpha: brightness == Brightness.dark ? 0.15 : 0.10),
+                    const Color(0xFF52C7D8).withValues(alpha: 0.045),
+                    Colors.transparent,
+                  ],
+                  stops: const [0, 0.46, 1],
+                ),
+              ),
+            ),
+          ),
         ),
-      ),
+        Positioned.fill(
+          child: NexaLiquidGlass(
+            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            blurSigma: 1.35,
+            tintOpacity: brightness == Brightness.dark ? 0.095 : 0.07,
+            refractionHeight: 18,
+            refractionAmount: -36,
+            depthEffect: 1.0,
+            chromaticDispersion: 1.9,
+            padding: EdgeInsets.zero,
+            child: SizedBox(
+              width: double.infinity,
+              height: AppDimens.bottomNavHeight,
+              child: _NavRow(
+                items: items,
+                currentIndex: currentIndex,
+                onTap: onTap,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -167,8 +202,8 @@ class _NavRowState extends State<_NavRow> with SingleTickerProviderStateMixin {
                               ),
                               AppColors.accentFor(brightness).withValues(
                                 alpha: brightness == Brightness.dark
-                                    ? 0.055
-                                    : 0.035,
+                                    ? 0.04
+                                    : 0.025,
                               ),
                             ],
                           ),

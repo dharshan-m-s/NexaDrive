@@ -298,29 +298,33 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     required VoidCallback onTap,
   }) {
     final brightness = Theme.of(context).brightness;
-    final dark = brightness == Brightness.dark;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () => _openMoreAction(onTap),
         borderRadius: BorderRadius.circular(18),
-        child: Container(
+        child: SizedBox(
           height: 82,
-          decoration: BoxDecoration(
-            color: dark
-                ? Colors.white.withValues(alpha: 0.025)
-                : Colors.black.withValues(alpha: 0.018),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color:
-                  (dark ? Colors.white : Colors.black).withValues(alpha: 0.075),
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 9),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 23, color: AppColors.accentTextFor(brightness)),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.accentContainerFor(brightness),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(
+                    color: AppColors.accentTextFor(brightness)
+                        .withValues(alpha: 0.11),
+                  ),
+                ),
+                child: Icon(
+                  icon,
+                  size: 22,
+                  color: AppColors.accentTextFor(brightness),
+                ),
+              ),
               const SizedBox(height: 7),
               Text(
                 title,
@@ -342,108 +346,145 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Widget _buildMoreMenu() {
     final brightness = Theme.of(context).brightness;
     final dark = brightness == Brightness.dark;
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppDimens.pageMargin),
-          child: NexaLiquidGlass(
-            borderRadius: BorderRadius.circular(28),
-            blurSigma: 2.8,
-            tintOpacity: dark ? 0.055 : 0.045,
-            refractionHeight: 24,
-            refractionAmount: -42,
-            depthEffect: 0.88,
-            chromaticDispersion: 1.15,
-            padding: const EdgeInsets.all(12),
-            showShadow: true,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'More',
-                        style: AppTextStyle.title3.copyWith(
-                          color: AppColors.labelPrimaryFor(brightness),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Close',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: _closeMoreMenu,
-                      icon: const Icon(Icons.close_rounded),
-                    ),
+    final accent = AppColors.accentFor(brightness);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // The local ambient reflection sits behind the lens, so the optical
+        // edge has real scene colour to bend even over a near-black page.
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0.1, 0.55),
+                  radius: 0.82,
+                  colors: [
+                    accent.withValues(alpha: dark ? 0.10 : 0.075),
+                    Colors.transparent,
                   ],
+                  stops: const [0, 1],
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _moreMenuTile(
-                        icon: Icons.document_scanner_outlined,
-                        title: 'Scan',
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ScannerScreen(api: api),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: _moreMenuTile(
-                        icon: Icons.cloud_upload_outlined,
-                        title: 'Transfers',
-                        onTap: _openTransfers,
-                      ),
-                    ),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: _moreMenuTile(
-                        icon: Icons.delete_outline_rounded,
-                        title: 'Trash',
-                        onTap: () => _goTo(4),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 9),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _moreMenuTile(
-                        icon: Icons.sync_rounded,
-                        title: 'Sync',
-                        onTap: _openSyncCenter,
-                      ),
-                    ),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: _moreMenuTile(
-                        icon: Icons.notifications_outlined,
-                        title: 'Alerts',
-                        onTap: _openNotifications,
-                      ),
-                    ),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: _moreMenuTile(
-                        icon: Icons.settings_outlined,
-                        title: 'Settings',
-                        onTap: () => _goTo(5),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         ),
-      ),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.pageMargin,
+              ),
+              child: NexaLiquidGlass(
+                borderRadius: BorderRadius.circular(28),
+                blurSigma: 2.4,
+                tintOpacity: dark ? 0.15 : 0.115,
+                refractionHeight: 22,
+                refractionAmount: -44,
+                depthEffect: 1.0,
+                chromaticDispersion: 2.0,
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                showShadow: true,
+                showHighlight: true,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'More',
+                                style: AppTextStyle.title3.copyWith(
+                                  color: AppColors.labelPrimaryFor(brightness),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Tools and settings',
+                                style: AppTextStyle.caption1.copyWith(
+                                  color: AppColors.labelSecondaryFor(brightness),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Close',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: _closeMoreMenu,
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _moreMenuTile(
+                            icon: Icons.document_scanner_outlined,
+                            title: 'Scan',
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => ScannerScreen(api: api),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: _moreMenuTile(
+                            icon: Icons.cloud_upload_outlined,
+                            title: 'Transfers',
+                            onTap: _openTransfers,
+                          ),
+                        ),
+                        Expanded(
+                          child: _moreMenuTile(
+                            icon: Icons.delete_outline_rounded,
+                            title: 'Trash',
+                            onTap: () => _goTo(4),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _moreMenuTile(
+                            icon: Icons.sync_rounded,
+                            title: 'Sync',
+                            onTap: _openSyncCenter,
+                          ),
+                        ),
+                        Expanded(
+                          child: _moreMenuTile(
+                            icon: Icons.notifications_outlined,
+                            title: 'Alerts',
+                            onTap: _openNotifications,
+                          ),
+                        ),
+                        Expanded(
+                          child: _moreMenuTile(
+                            icon: Icons.settings_outlined,
+                            title: 'Settings',
+                            onTap: () => _goTo(5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
