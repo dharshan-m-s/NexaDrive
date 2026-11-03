@@ -108,6 +108,12 @@ void main() {
       expect(find.byTooltip('Upload files'), findsOneWidget);
       expect(find.byTooltip('Search files'), findsOneWidget);
       expect(find.byTooltip('More actions'), findsOneWidget);
+      expect(find.byTooltip('Sort files'), findsOneWidget);
+      expect(find.byTooltip('Switch to grid view'), findsOneWidget);
+      await tester.tap(find.byTooltip('Switch to grid view'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Switch to list view'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('breadcrumb crumbs meet the 48dp touch-target floor',

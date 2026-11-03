@@ -22,7 +22,6 @@ import '../../../services/upload_manager.dart';
 import '../../widgets/folder_picker.dart';
 import '../../widgets/nexa_action_bar.dart';
 import '../../widgets/nexa_chip.dart';
-import '../../widgets/nexa_empty_state.dart';
 import '../../widgets/nexa_file_tile.dart';
 import '../../widgets/nexa_loading_state.dart';
 import '../../widgets/nexa_sheet.dart';
@@ -870,7 +869,7 @@ class _FilesScreenState extends State<FilesScreen> {
       return LayoutBuilder(
         builder: (context, constraints) {
           final topSpace =
-              ((constraints.maxHeight - 300) / 2).clamp(24.0, 160.0);
+              ((constraints.maxHeight - 300) / 2).clamp(24.0, 160.0).toDouble();
           return RefreshIndicator(
             onRefresh: load,
             child: ListView(
@@ -897,7 +896,7 @@ class _FilesScreenState extends State<FilesScreen> {
       return LayoutBuilder(
         builder: (context, constraints) {
           final topSpace =
-              ((constraints.maxHeight - 340) / 2).clamp(24.0, 150.0);
+              ((constraints.maxHeight - 340) / 2).clamp(24.0, 150.0).toDouble();
           return RefreshIndicator(
             onRefresh: load,
             child: ListView(
@@ -910,7 +909,7 @@ class _FilesScreenState extends State<FilesScreen> {
                       ? Icons.cloud_upload_outlined
                       : Icons.folder_open_rounded,
                   title: _path.isEmpty
-                      ? 'Your cloud is ready'
+                      ? 'Your cloud is empty'
                       : 'This folder is empty',
                   message: _path.isEmpty
                       ? 'Start by adding files or creating a folder. Your private cloud is ready when you are.'
@@ -1588,7 +1587,7 @@ class _Breadcrumb extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     final parts = path.split('/');
     return SizedBox(
-      height: 44,
+      height: AppDimens.touchTarget,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppDimens.pageMargin),
@@ -1850,7 +1849,10 @@ class _FileFilterBar extends StatelessWidget {
     final buttonStyle = IconButton.styleFrom(
       backgroundColor: AppColors.fillFor(brightness),
       foregroundColor: AppColors.labelSecondaryFor(brightness),
-      minimumSize: const Size(40, 40),
+      minimumSize: const Size(
+        AppDimens.touchTarget,
+        AppDimens.touchTarget,
+      ),
       padding: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
