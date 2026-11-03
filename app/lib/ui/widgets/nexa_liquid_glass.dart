@@ -29,7 +29,7 @@ class NexaLiquidGlass extends StatefulWidget {
       Radius.circular(AppDimens.radiusMedium),
     ),
     this.padding = const EdgeInsets.all(AppDimens.space12),
-    this.blurSigma = 18,
+    this.blurSigma = 6,
     this.enabled = true,
     this.forceOpaque = false,
     this.showHighlight = true,
@@ -45,6 +45,7 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
   static Future<ui.FragmentProgram>? _programFuture;
 
   ui.FragmentShader? _shader;
+  bool _shaderFilterErrorReported = false;
 
   @override
   void initState() {
@@ -97,20 +98,37 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
     // ImageFilter.shader reserves floats 0 and 1 for the input texture size.
     // The vec4 corner radii therefore begin at float slot 2. Flutter supplies
     // the size and sampler automatically; Dart must not overwrite either.
-    final radii = widget.borderRadius.resolve(Directionality.of(context));
-    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
-    shader
-      ..setFloat(2, radii.topLeft.x * pixelRatio)
-      ..setFloat(3, radii.topRight.x * pixelRatio)
-      ..setFloat(4, radii.bottomRight.x * pixelRatio)
-      ..setFloat(5, radii.bottomLeft.x * pixelRatio);
+    try {
+      final radii = widget.borderRadius.resolve(Directionality.of(context));
+      final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+      shader
+        ..setFloat(2, radii.topLeft.x * pixelRatio)
+        ..setFloat(3, radii.topRight.x * pixelRatio)
+        ..setFloat(4, radii.bottomRight.x * pixelRatio)
+        ..setFloat(5, radii.bottomLeft.x * pixelRatio);
 
-    // ImageFilter.compose applies inner first, then outer: blur the scene,
-    // then refract that blurred scene through the glass lens.
-    return ui.ImageFilter.compose(
-      outer: ui.ImageFilter.shader(shader),
-      inner: blur,
-    );
+      // ImageFilter.compose applies inner first, then outer: blur the scene,
+      // then refract that blurred scene through the glass lens.
+      return ui.ImageFilter.compose(
+        outer: ui.ImageFilter.shader(shader),
+        inner: blur,
+      );
+    } catch (error, stackTrace) {
+      // Renderer/device-specific shader failures must degrade to ordinary
+      // glass, never take down a screen or navigation interaction.
+      if (!_shaderFilterErrorReported) {
+        _shaderFilterErrorReported = true;
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stackTrace,
+            library: 'NexaDrive Liquid Glass',
+            context: ErrorDescription('while creating the glass image filter'),
+          ),
+        );
+      }
+      return blur;
+    }
   }
 
   @override

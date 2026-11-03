@@ -350,7 +350,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           padding: const EdgeInsets.symmetric(horizontal: AppDimens.pageMargin),
           child: NexaLiquidGlass(
             borderRadius: BorderRadius.circular(28),
-            blurSigma: 20,
+            blurSigma: 7,
             tintOpacity: dark ? 0.16 : 0.12,
             padding: const EdgeInsets.all(12),
             showShadow: true,

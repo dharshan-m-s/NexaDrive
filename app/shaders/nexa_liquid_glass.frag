@@ -68,8 +68,14 @@ void main() {
   refracted.r = texture(u_texture, redUv).r;
   refracted.g = texture(u_texture, greenUv).g;
   refracted.b = texture(u_texture, blueUv).b;
+
+  // Backdrop textures are premultiplied. Work in straight RGB for the
+  // optical highlights, then premultiply once when writing the output.
+  float safeAlpha = max(source.a, 0.0001);
+  vec3 sourceColor = source.rgb / safeAlpha;
+  vec3 refractedColor = refracted / safeAlpha;
   float refractionStrength = clamp(edgeMask * 0.72 + softBulge * 0.10, 0.0, 0.78);
-  vec3 optical = mix(source.rgb, refracted, refractionStrength);
+  vec3 optical = mix(sourceColor, refractedColor, refractionStrength);
 
   vec3 spectral = mix(
       vec3(0.22, 0.78, 0.96),
@@ -86,5 +92,5 @@ void main() {
   optical += vec3(0.10, 0.20, 0.33) * fresnel * 0.035;
 
   // Runtime-effect output is premultiplied alpha.
-  fragColor = vec4(clamp(optical, 0.0, 1.0), source.a);
+  fragColor = vec4(clamp(optical, 0.0, 1.0) * source.a, source.a);
 }
