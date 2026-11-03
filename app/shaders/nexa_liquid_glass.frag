@@ -86,5 +86,5 @@ void main() {
   optical += vec3(0.10, 0.20, 0.33) * fresnel * 0.035;
 
   // Runtime-effect output is premultiplied alpha.
-  fragColor = vec4(clamp(optical, 0.0, 1.0) * source.a, source.a);
+  fragColor = vec4(clamp(optical, 0.0, 1.0), source.a);
 }
