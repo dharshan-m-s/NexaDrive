@@ -122,10 +122,6 @@ class _NexaLiquidGlassState extends State<NexaLiquidGlass> {
     final tintAlpha = (widget.tintOpacity ?? (dark ? 0.075 : 0.06))
         .clamp(0.0, 0.24)
         .toDouble();
-    final edge = dark
-        ? Colors.white.withValues(alpha: 0.46)
-        : Colors.white.withValues(alpha: 0.86);
-
     final radius = widget.borderRadius.resolve(Directionality.of(context));
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final params = _NexaGlassParams(
@@ -271,10 +267,10 @@ class _NexaGlassParams {
       ..setFloat(3, origin.dy)
       ..setFloat(4, size.width)
       ..setFloat(5, size.height)
-      ..setFloat(6, topLeftRadius.clamp(0.0, maxRadius))
-      ..setFloat(7, topRightRadius.clamp(0.0, maxRadius))
-      ..setFloat(8, bottomRightRadius.clamp(0.0, maxRadius))
-      ..setFloat(9, bottomLeftRadius.clamp(0.0, maxRadius))
+      ..setFloat(6, topLeftRadius.clamp(0.0, maxRadius).toDouble())
+      ..setFloat(7, topRightRadius.clamp(0.0, maxRadius).toDouble())
+      ..setFloat(8, bottomRightRadius.clamp(0.0, maxRadius).toDouble())
+      ..setFloat(9, bottomLeftRadius.clamp(0.0, maxRadius).toDouble())
       ..setFloat(10, refractionHeight)
       ..setFloat(11, refractionAmount)
       ..setFloat(12, depthEffect)
@@ -365,26 +361,25 @@ class _NexaGlassBackdropRenderObject extends RenderProxyBox {
       getTransformTo(null),
       Offset.zero & size,
     );
-    _params.bind(
-      _shader,
-      origin: Offset(
-        sceneBounds.left * _devicePixelRatio,
-        sceneBounds.top * _devicePixelRatio,
-      ),
-      size: Size(
-        sceneBounds.width * _devicePixelRatio,
-        sceneBounds.height * _devicePixelRatio,
-      ),
-    );
-
     final blur = ui.ImageFilter.blur(
-      sigmaX: _blurSigma.clamp(0.0, 24.0),
-      sigmaY: _blurSigma.clamp(0.0, 24.0),
+      sigmaX: _blurSigma.clamp(0.0, 24.0).toDouble(),
+      sigmaY: _blurSigma.clamp(0.0, 24.0).toDouble(),
     );
 
     ui.ImageFilter filter = blur;
     if (!_shaderFilterFailed && ui.ImageFilter.isShaderFilterSupported) {
       try {
+        _params.bind(
+          _shader,
+          origin: Offset(
+            sceneBounds.left * _devicePixelRatio,
+            sceneBounds.top * _devicePixelRatio,
+          ),
+          size: Size(
+            sceneBounds.width * _devicePixelRatio,
+            sceneBounds.height * _devicePixelRatio,
+          ),
+        );
         // ImageFilter.compose applies inner first: blur the scene, then bend
         // its pixels through the SDF lens.
         filter = ui.ImageFilter.compose(
@@ -392,6 +387,9 @@ class _NexaGlassBackdropRenderObject extends RenderProxyBox {
           inner: blur,
         );
       } catch (error, stackTrace) {
+        // Shader uniform/filter failures are contained to this surface. The
+        // normal backdrop blur remains available and must never take down the
+        // page or navigation shell.
         _shaderFilterFailed = true;
         debugPrint(
           'NexaDrive glass filter failed; using blur fallback: $error',
