@@ -62,7 +62,10 @@ void main() {
     testWidgets('an empty folder offers a real next action', (tester) async {
       await pump(tester, FilesScreen(api: listingApi(const [])));
       expect(find.text('Your cloud is empty'), findsOneWidget);
-      expect(tester.getTopLeft(find.text('Your cloud is empty')).dy, lessThan(280));
+      expect(
+        tester.getTopLeft(find.text('Your cloud is empty')).dy,
+        lessThan(280),
+      );
       expect(find.text('Upload files'), findsWidgets);
       expect(tester.takeException(), isNull);
     });

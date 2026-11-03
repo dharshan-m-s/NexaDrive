@@ -957,7 +957,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 maxCrossAxisExtent: 176,
                 mainAxisSpacing: AppDimens.space12,
                 crossAxisSpacing: AppDimens.space12,
-                childAspectRatio: 0.93,
+                childAspectRatio: 0.80,
               ),
               itemCount: sorted.length,
               itemBuilder: (context, index) {

@@ -37,9 +37,11 @@ class NexaBottomNav extends StatelessWidget {
     final activeCenter =
         itemCount == 0 ? 0.0 : -1.0 + ((activeIndex + 0.5) * 2.0 / itemCount);
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
+    return SizedBox(
+      height: AppDimens.bottomNavHeight,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
         // Subtle reflected colour lives behind the capsule, not on top of it.
         // The glass shader refracts this and the page underneath together.
         Positioned.fill(
@@ -82,7 +84,8 @@ class NexaBottomNav extends StatelessWidget {
             ),
           ),
         ),
-      ],
+        ],
+      ),
     );
   }
 }
