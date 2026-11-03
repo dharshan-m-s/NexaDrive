@@ -73,7 +73,9 @@ void main() {
         of: find.byType(BackdropFilter),
         matching: find.byType(ClipRRect),
       ),
-      findsOneWidget,
+      findsAtLeastNWidgets(1),
+      reason:
+          'the shader backdrop must be protected by a rounded clipping surface',
     );
     expect(tester.takeException(), isNull);
   });
