@@ -112,8 +112,7 @@ class NexaFileTile extends StatelessWidget {
     return NexaPressable(
       enabled: onTap != null || onLongPress != null,
       scale: false,
-      tintColor:
-          AppColors.labelPrimaryFor(brightness).withValues(alpha: 0.045),
+      tintColor: AppColors.labelPrimaryFor(brightness).withValues(alpha: 0.045),
       borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
       child: row,
     );
@@ -291,96 +290,96 @@ class NexaFileGridTile extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-        borderRadius: radius,
-        onTap: onTap == null ? null : () => onTap!(entry),
-        onLongPress: onLongPress,
-        child: AnimatedContainer(
-          duration: AppMotion.resolve(context, AppMotion.fast),
-          curve: AppMotion.standardCurve,
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.accentContainerFor(brightness)
-                : AppColors.surfaceFor(brightness),
-            borderRadius: radius,
-            border: Border.all(
-              color: selected ? accent : AppColors.separatorFor(brightness),
-              width: selected ? 1.5 : 0.7,
+          borderRadius: radius,
+          onTap: onTap == null ? null : () => onTap!(entry),
+          onLongPress: onLongPress,
+          child: AnimatedContainer(
+            duration: AppMotion.resolve(context, AppMotion.fast),
+            curve: AppMotion.standardCurve,
+            decoration: BoxDecoration(
+              color: selected
+                  ? AppColors.accentContainerFor(brightness)
+                  : AppColors.surfaceFor(brightness),
+              borderRadius: radius,
+              border: Border.all(
+                color: selected ? accent : AppColors.separatorFor(brightness),
+                width: selected ? 1.5 : 0.7,
+              ),
             ),
-          ),
-          padding: const EdgeInsets.all(AppDimens.space10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                height: 88,
-                width: double.infinity,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-                  child: hasImagePreview
-                      ? Image.memory(
-                          thumbnail!,
-                          fit: BoxFit.cover,
-                          cacheWidth: _gridDecodeWidth(context).round(),
-                          gaplessPlayback: true,
-                          errorBuilder: (context, error, stack) =>
-                              _GridFileArtwork(
+            padding: const EdgeInsets.all(AppDimens.space10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: 88,
+                  width: double.infinity,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+                    child: hasImagePreview
+                        ? Image.memory(
+                            thumbnail!,
+                            fit: BoxFit.cover,
+                            cacheWidth: _gridDecodeWidth(context).round(),
+                            gaplessPlayback: true,
+                            errorBuilder: (context, error, stack) =>
+                                _GridFileArtwork(
+                              category: category,
+                              tint: tint,
+                              brightness: brightness,
+                            ),
+                          )
+                        : _GridFileArtwork(
                             category: category,
                             tint: tint,
                             brightness: brightness,
                           ),
-                        )
-                      : _GridFileArtwork(
-                          category: category,
-                          tint: tint,
-                          brightness: brightness,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  entry.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyle.subheadline.copyWith(
+                    color: AppColors.labelPrimaryFor(brightness),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        entry.isFolder ? 'Folder' : Format.bytes(entry.size),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyle.caption2.copyWith(
+                          color: AppColors.labelSecondaryFor(brightness),
                         ),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                entry.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyle.subheadline.copyWith(
-                  color: AppColors.labelPrimaryFor(brightness),
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.1,
-                ),
-              ),
-              const SizedBox(height: AppDimens.space4),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      entry.isFolder ? 'Folder' : Format.bytes(entry.size),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyle.caption2.copyWith(
-                        color: AppColors.labelSecondaryFor(brightness),
                       ),
                     ),
-                  ),
-                  if (entry.isFolder)
-                    Icon(Icons.chevron_right_rounded,
-                        size: 16,
-                        color: AppColors.labelTertiaryFor(brightness)),
-                  if (selecting)
-                    Icon(
-                      selected
-                          ? Icons.check_circle_rounded
-                          : Icons.circle_outlined,
-                      size: 18,
-                      color: selected
-                          ? accent
-                          : AppColors.labelTertiaryFor(brightness),
-                    ),
-                ],
-              ),
-            ],
+                    if (entry.isFolder)
+                      Icon(Icons.chevron_right_rounded,
+                          size: 16,
+                          color: AppColors.labelTertiaryFor(brightness)),
+                    if (selecting)
+                      Icon(
+                        selected
+                            ? Icons.check_circle_rounded
+                            : Icons.circle_outlined,
+                        size: 18,
+                        color: selected
+                            ? accent
+                            : AppColors.labelTertiaryFor(brightness),
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 }

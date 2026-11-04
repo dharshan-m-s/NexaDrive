@@ -159,8 +159,7 @@ class NexaListTile extends StatelessWidget {
     return NexaPressable(
       enabled: enabled && (onTap != null || onLongPress != null),
       scale: false,
-      tintColor:
-          AppColors.labelPrimaryFor(brightness).withValues(alpha: 0.045),
+      tintColor: AppColors.labelPrimaryFor(brightness).withValues(alpha: 0.045),
       borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
       child: row,
     );

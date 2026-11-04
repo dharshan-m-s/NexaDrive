@@ -278,91 +278,90 @@ class _NexaSheetActionState extends State<NexaSheetAction> {
     return NexaPressable(
       scale: false,
       enabled: widget.enabled && widget.onTap != null,
-      tintColor:
-          AppColors.labelPrimaryFor(brightness).withValues(alpha: 0.04),
+      tintColor: AppColors.labelPrimaryFor(brightness).withValues(alpha: 0.04),
       borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-        onTap: widget.enabled ? widget.onTap : null,
-        onHover: (hovered) {
-          if (widget.enabled && _hovered != hovered) {
-            setState(() => _hovered = hovered);
-          }
-        },
-        borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-        child: AnimatedContainer(
-          duration: AppMotion.resolve(context, AppMotion.fast),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space16,
-            vertical: AppDimens.space12,
-          ),
-          decoration: BoxDecoration(
-            color: widget.enabled && _hovered
-                ? AppColors.fillFor(brightness).withValues(alpha: 0.58)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-          ),
-          child: Row(
-            children: [
-              AnimatedScale(
-                scale: _hovered && widget.enabled ? 1.035 : 1,
-                duration: AppMotion.resolve(context, AppMotion.fast),
-                child: Container(
-                  width: AppDimens.iconTileLarge,
-                  height: AppDimens.iconTileLarge,
-                  decoration: BoxDecoration(
-                    color: bg,
-                    borderRadius: BorderRadius.circular(
-                      AppDimens.radiusStandard,
-                    ),
-                  ),
-                  child: Icon(
-                    widget.icon,
-                    color: widget.enabled
-                        ? fg
-                        : AppColors.labelTertiaryFor(brightness),
-                    size: AppDimens.iconMedium,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppDimens.space16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.title,
-                      style: AppTextStyle.rowTitle.copyWith(
-                        color: widget.enabled
-                            ? AppColors.labelPrimaryFor(brightness)
-                            : AppColors.labelTertiaryFor(brightness),
-                        fontWeight: FontWeight.w500,
+          onTap: widget.enabled ? widget.onTap : null,
+          onHover: (hovered) {
+            if (widget.enabled && _hovered != hovered) {
+              setState(() => _hovered = hovered);
+            }
+          },
+          borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+          child: AnimatedContainer(
+            duration: AppMotion.resolve(context, AppMotion.fast),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.space16,
+              vertical: AppDimens.space12,
+            ),
+            decoration: BoxDecoration(
+              color: widget.enabled && _hovered
+                  ? AppColors.fillFor(brightness).withValues(alpha: 0.58)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+            ),
+            child: Row(
+              children: [
+                AnimatedScale(
+                  scale: _hovered && widget.enabled ? 1.035 : 1,
+                  duration: AppMotion.resolve(context, AppMotion.fast),
+                  child: Container(
+                    width: AppDimens.iconTileLarge,
+                    height: AppDimens.iconTileLarge,
+                    decoration: BoxDecoration(
+                      color: bg,
+                      borderRadius: BorderRadius.circular(
+                        AppDimens.radiusStandard,
                       ),
                     ),
-                    if (widget.subtitle != null) ...[
-                      const SizedBox(height: AppDimens.space2),
+                    child: Icon(
+                      widget.icon,
+                      color: widget.enabled
+                          ? fg
+                          : AppColors.labelTertiaryFor(brightness),
+                      size: AppDimens.iconMedium,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppDimens.space16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        widget.subtitle!,
-                        style: AppTextStyle.caption1.copyWith(
-                          color: AppColors.labelSecondaryFor(brightness),
+                        widget.title,
+                        style: AppTextStyle.rowTitle.copyWith(
+                          color: widget.enabled
+                              ? AppColors.labelPrimaryFor(brightness)
+                              : AppColors.labelTertiaryFor(brightness),
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
+                      if (widget.subtitle != null) ...[
+                        const SizedBox(height: AppDimens.space2),
+                        Text(
+                          widget.subtitle!,
+                          style: AppTextStyle.caption1.copyWith(
+                            color: AppColors.labelSecondaryFor(brightness),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              if (widget.onTap != null && !isDestructive)
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: AppDimens.iconMedium,
-                  color: AppColors.labelTertiaryFor(brightness),
-                ),
-            ],
+                if (widget.onTap != null && !isDestructive)
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: AppDimens.iconMedium,
+                    color: AppColors.labelTertiaryFor(brightness),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
     );
   }
 }

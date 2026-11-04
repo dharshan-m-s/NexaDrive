@@ -308,8 +308,7 @@ class NexaIconButton extends StatelessWidget {
           backgroundColor: bg,
           foregroundColor: fg,
           overlayColor: fg.withValues(alpha: 0.10),
-          minimumSize:
-              const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+          minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
           padding: const EdgeInsets.all(AppDimens.space8),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
@@ -387,8 +386,7 @@ class NexaFilledIconButton extends StatelessWidget {
           backgroundColor: bg,
           foregroundColor: fg,
           overlayColor: fg.withValues(alpha: 0.10),
-          minimumSize:
-              const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+          minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
           padding: const EdgeInsets.all(AppDimens.space10),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
