@@ -563,10 +563,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _activeSharedUris.addAll(files.map((file) => file.uri));
 
     try {
-      files = await AndroidShareIntents.stage(files);
       if (!mounted) return;
       final failed = files.where(
-        (file) => file.localPath == null || file.stageError != null,
+        (file) => file.stageError != null || file.size < 0,
       );
       if (failed.isNotEmpty) {
         final reason = failed.first.stageError;
@@ -756,10 +755,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       final sources = files
           .map(
             (file) => UploadSource(
-              path: file.localPath!,
+              path: file.localPath ?? file.uri,
+              sourceUri: file.localPath == null ? file.uri : null,
               name: file.name,
               size: file.size,
-              temporary: true,
+              temporary: file.localPath != null,
             ),
           )
           .toList(growable: false);

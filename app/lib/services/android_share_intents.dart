@@ -63,14 +63,7 @@ class AndroidShareIntents {
     Future<void> deliver(Object? raw) async {
       final files = _parse(raw);
       if (files.isEmpty) return;
-      try {
-        final staged = await stage(files);
-        if (staged.isNotEmpty) onFiles(staged);
-      } catch (error) {
-        onFiles(files
-            .map((file) => file.withStageError(error.toString()))
-            .toList(growable: false));
-      }
+      onFiles(files);
     }
 
     _channel.setMethodCallHandler((call) async {
@@ -87,20 +80,6 @@ class AndroidShareIntents {
     } on MissingPluginException {
       // Non-Android and stale host builds simply have no share target.
     }
-  }
-
-  /// Copies incoming content URIs into app-private storage on Android. This
-  /// turns temporary Sharesheet grants into durable local upload sources and
-  /// determines the true size even when a provider omits metadata.
-  static Future<List<AndroidSharedFile>> stage(
-    List<AndroidSharedFile> files,
-  ) async {
-    if (!Platform.isAndroid || files.isEmpty) return files;
-    final staged = await _channel.invokeMethod<List<dynamic>>(
-      'stageSharedFiles',
-      files.map((file) => file.toMap()).toList(growable: false),
-    );
-    return _parse(staged);
   }
 
   /// Acknowledges only after the files have entered the durable upload queue.

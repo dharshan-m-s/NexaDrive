@@ -8,12 +8,12 @@ import android.content.IntentSender
 import android.content.pm.PackageInstaller
 import android.net.Uri
 import android.os.Build
+import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import android.provider.MediaStore
 import android.provider.Settings
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.UUID
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
@@ -23,6 +23,8 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileInputStream
 import java.util.concurrent.Executor
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 
@@ -59,8 +61,12 @@ class MainActivity : FlutterFragmentActivity() {
     /// folder is never copied into app storage.
     private val sourceExecutor: Executor = Executors.newFixedThreadPool(4)
 
-    /// Serialize share staging so a repeated callback cannot create duplicate copies.
-    private val shareExecutor: Executor = Executors.newSingleThreadExecutor()
+    /** Open provider streams stay alive across sequential chunk reads. */
+    private data class SourceSession(
+        val descriptor: ParcelFileDescriptor,
+        val input: FileInputStream,
+    )
+    private val sourceSessions = ConcurrentHashMap<String, SourceSession>()
 
     /// The pending result of an open tree picker.
     private var pendingFolderResult: MethodChannel.Result? = null
@@ -117,6 +123,9 @@ class MainActivity : FlutterFragmentActivity() {
                     call.argument<Number>("length")?.toInt(),
                     result,
                 )
+                "openSource" -> openSource(call.argument<String>("uri"), call.argument<Number>("offset")?.toLong(), result)
+                "readSourceChunk" -> readSourceChunk(call.argument<String>("sessionId"), call.argument<Number>("length")?.toInt(), result)
+                "closeSource" -> closeSource(call.argument<String>("sessionId"), result)
                 else -> result.notImplemented()
             }
         }
@@ -130,13 +139,6 @@ class MainActivity : FlutterFragmentActivity() {
                         // Flutter acknowledges only after the user chooses a
                         // destination and the upload has entered the durable queue.
                         result.success(pendingSharedFiles)
-                    }
-                    "stageSharedFiles" -> {
-                        val incoming = (call.arguments as? List<*>)?.mapNotNull { raw ->
-                            val map = raw as? Map<*, *> ?: return@mapNotNull null
-                            map.entries.associate { it.key.toString() to it.value }
-                        }.orEmpty()
-                        stageSharedFiles(incoming, result)
                     }
                     "acknowledgeSharedFiles" -> {
                         val acknowledged = (call.arguments as? List<*>)
@@ -195,69 +197,13 @@ class MainActivity : FlutterFragmentActivity() {
                     "name" to json.optString("name", "Shared file"),
                     "mimeType" to json.optString("mimeType", "application/octet-stream"),
                     "size" to json.optLong("size", -1L))
-                json.optString("localPath").takeIf { it.isNotBlank() }?.let { item["localPath"] = it }
+                json.optString("localPath").takeIf { it.isNotBlank() && File(it).isFile }?.let { item["localPath"] = it }
                 json.optString("stageError").takeIf { it.isNotBlank() }?.let { item["stageError"] = it }
                 item
             }
         } catch (_: Exception) { emptyList() }
     }
 
-    /// Copy the incoming content URI to private storage using a fixed-size buffer.
-    private fun stageSharedFile(incoming: Map<String, Any?>): Map<String, Any?> {
-        val uri = incoming["uri"]?.toString()?.takeIf { it.isNotBlank() }
-            ?: throw IllegalArgumentException("The shared file has no content URI")
-        val existing = synchronized(this) { pendingSharedFiles.firstOrNull { it["uri"] == uri } }
-        val existingPath = existing?.get("localPath") as? String
-        if (existing != null && existingPath != null && File(existingPath).isFile) return existing
-        val name = incoming["name"]?.toString()?.takeIf { it.isNotBlank() } ?: "Shared file"
-        val mimeType = incoming["mimeType"]?.toString() ?: "application/octet-stream"
-        val directory = File(filesDir, "shared-imports")
-        if (!directory.exists() && !directory.mkdirs()) throw IllegalStateException("Could not prepare private upload storage")
-        val extension = name.substringAfterLast('.', "").takeIf { it.isNotBlank() && it.length <= 10 && it.all(Char::isLetterOrDigit) }?.let { ".$it" } ?: ""
-        val id = UUID.randomUUID().toString()
-        val temporary = File(directory, "$id.partial")
-        val destination = File(directory, "$id$extension")
-        try {
-            val input = contentResolver.openInputStream(Uri.parse(uri))
-                ?: throw IllegalStateException("The shared file is no longer available")
-            input.use { source ->
-                temporary.outputStream().buffered(128 * 1024).use { sink ->
-                    val buffer = ByteArray(128 * 1024)
-                    while (true) {
-                        val count = source.read(buffer)
-                        if (count < 0) break
-                        if (count > 0) sink.write(buffer, 0, count)
-                    }
-                    sink.flush()
-                }
-            }
-            if (!temporary.renameTo(destination)) throw IllegalStateException("Could not finish preparing the shared file")
-            return mapOf("uri" to uri, "name" to name, "mimeType" to mimeType,
-                "size" to destination.length(), "localPath" to destination.absolutePath)
-        } catch (error: Exception) {
-            temporary.delete()
-            destination.delete()
-            throw error
-        }
-    }
-
-    private fun stageSharedFiles(incoming: List<Map<String, Any?>>, result: MethodChannel.Result) {
-        shareExecutor.execute {
-            val staged = incoming.map { file ->
-                val value = try { stageSharedFile(file) } catch (error: Exception) {
-                    file + ("stageError" to (error.message ?: "Could not import this file"))
-                }
-                synchronized(this) {
-                    val uri = value["uri"]
-                    val index = pendingSharedFiles.indexOfFirst { it["uri"] == uri }
-                    pendingSharedFiles = if (index >= 0) pendingSharedFiles.toMutableList().also { it[index] = value } else pendingSharedFiles + value
-                    persistPendingSharedFilesLocked()
-                }
-                value
-            }
-            runOnUiThread { result.success(staged) }
-        }
-    }
     /// Extracts share streams and ClipData once per URI. File contents are read
     /// later in bounded ranges by the existing folder-picker content channel.
     private fun sharedFilesFrom(source: Intent?): List<Map<String, Any?>> {
@@ -401,7 +347,7 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    /** Opens the native, permission-scoped photo gallery for multi-image upload. */
+    /** Opens Android's native photo picker for both photos and videos. */
     private fun pickImages(result: MethodChannel.Result) {
         if (pendingFolderResult != null || pendingFilesResult != null) {
             result.error("busy", "A document picker is already open", null)
@@ -410,17 +356,19 @@ class MainActivity : FlutterFragmentActivity() {
         pendingFilesResult = result
         val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Intent(MediaStore.ACTION_PICK_IMAGES).apply {
-                type = "image/*"
+                // ACTION_PICK_IMAGES treats */* as both image/* and video/*.
+                type = "*/*"
                 putExtra(
                     MediaStore.EXTRA_PICK_IMAGES_MAX,
                     MediaStore.getPickImagesMaxLimit().coerceAtMost(50).coerceAtLeast(2),
                 )
             }
         } else {
-            // Older Android versions use the image-filtered SAF picker.
+            // Older Android versions use SAF with a visual-media allow-list.
             Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
-                type = "image/*"
+                type = "*/*"
+                putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
                 addFlags(
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or
@@ -553,6 +501,63 @@ class MainActivity : FlutterFragmentActivity() {
                     result.error("read_failed", e.message ?: "The document could not be read", null)
                 }
             }
+        }
+    }
+
+    /** Open one provider stream per upload chunk; seek/skip only once. */
+    private fun openSource(uri: String?, offset: Long?, result: MethodChannel.Result) {
+        if (uri.isNullOrEmpty() || offset == null || offset < 0) {
+            result.error("invalid", "Invalid source URI or offset", null)
+            return
+        }
+        sourceExecutor.execute {
+            var descriptor: ParcelFileDescriptor? = null
+            var input: FileInputStream? = null
+            try {
+                val openedDescriptor = contentResolver.openFileDescriptor(Uri.parse(uri), "r")
+                    ?: throw IllegalStateException("The document is no longer available")
+                descriptor = openedDescriptor
+                val openedInput = FileInputStream(openedDescriptor.fileDescriptor)
+                input = openedInput
+                try { openedInput.channel.position(offset) } catch (_: Exception) { skipFully(openedInput, offset) }
+                val sessionId = UUID.randomUUID().toString()
+                sourceSessions[sessionId] = SourceSession(openedDescriptor, openedInput)
+                descriptor = null
+                input = null
+                runOnUiThread { result.success(sessionId) }
+            } catch (error: Exception) {
+                try { input?.close() } catch (_: Exception) {}
+                try { descriptor?.close() } catch (_: Exception) {}
+                runOnUiThread { result.error("open_failed", error.message ?: "The document could not be opened", null) }
+            }
+        }
+    }
+
+    /** Reads the next sequential range from an open provider stream. */
+    private fun readSourceChunk(sessionId: String?, length: Int?, result: MethodChannel.Result) {
+        if (sessionId.isNullOrEmpty() || length == null || length < 0 || length > 4 * 1024 * 1024) {
+            result.error("invalid", "Invalid source session or chunk length", null)
+            return
+        }
+        sourceExecutor.execute {
+            try {
+                val session = sourceSessions[sessionId] ?: throw IllegalStateException("The source session has expired")
+                val bytes = synchronized(session) { readExactly(session.input, length) }
+                runOnUiThread { result.success(bytes) }
+            } catch (error: Exception) {
+                runOnUiThread { result.error("read_failed", error.message ?: "The document could not be read", null) }
+            }
+        }
+    }
+
+    /** Releases an open provider stream. */
+    private fun closeSource(sessionId: String?, result: MethodChannel.Result) {
+        if (sessionId.isNullOrEmpty()) { result.success(null); return }
+        sourceExecutor.execute {
+            val session = sourceSessions.remove(sessionId)
+            try { session?.input?.close() } catch (_: Exception) {}
+            try { session?.descriptor?.close() } catch (_: Exception) {}
+            runOnUiThread { result.success(null) }
         }
     }
 
@@ -848,6 +853,15 @@ class MainActivity : FlutterFragmentActivity() {
             .build()
 
         runOnUiThread { prompt.authenticate(promptInfo) }
+    }
+
+    override fun onDestroy() {
+        sourceSessions.keys.toList().forEach { id ->
+            val session = sourceSessions.remove(id) ?: return@forEach
+            try { session.input.close() } catch (_: Exception) {}
+            try { session.descriptor.close() } catch (_: Exception) {}
+        }
+        super.onDestroy()
     }
 
     companion object {
