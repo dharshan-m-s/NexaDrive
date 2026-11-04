@@ -174,11 +174,13 @@ class UploadManager extends ChangeNotifier {
 
   /// How many files still owe bytes to the server.
   int get pendingCount => _items.values
-      .where((UploadItem item) =>
-          item.state == UploadState.queued ||
-          item.state == UploadState.uploading ||
-          item.state == UploadState.retrying ||
-          item.state == UploadState.paused)
+      .where(
+        (UploadItem item) =>
+            item.state == UploadState.queued ||
+            item.state == UploadState.uploading ||
+            item.state == UploadState.retrying ||
+            item.state == UploadState.paused,
+      )
       .length;
 
   /// How many transfers failed and can be retried.
@@ -215,6 +217,7 @@ class UploadManager extends ChangeNotifier {
     // such copies when no queued item references them (for example after the
     // app was killed between copying a folder and persisting the queue).
     await _cleanupOwnedFolderCache();
+    await _cleanupLegacySharedImports();
     if (!_readyCompleter.isCompleted) _readyCompleter.complete();
   }
 
@@ -712,60 +715,97 @@ class UploadManager extends ChangeNotifier {
       return;
     }
 
-    // The server owns the offset. A brand-new item, or one whose journal
-    // never recorded progress, starts at zero without paying for a status
-    // round trip; if the server actually has more, its offset_mismatch reply
-    // puts us back on the right byte.
+    // The server owns the offset. A brand-new item starts at zero; an
+    // interrupted transfer reconciles with the server before resuming.
     var offset = item.transferred > 0 ? await _serverOffset(api, id) : 0;
     if (offset < 0 || offset > item.size) offset = 0;
 
-    var attempts = 0;
-    while (offset < item.size) {
-      if (_cancelled.contains(id)) {
-        _cancelled.remove(id);
-        return;
-      }
-      final current = _items[id];
-      if (current == null || current.state == UploadState.paused) return;
-
-      final end = min(offset + chunkSize, item.size);
-      try {
-        final result = await api.uploadChunk(
-          uploadId: id,
-          folder: item.folder,
-          name: item.name,
-          offset: offset,
-          total: item.size,
-          bytes: _chunkStream(item, offset, end),
-          contentLength: end - offset,
-          onProgress: (sent) => unawaited(_progress(id, offset + sent)),
-        );
-        final confirmed = (result['offset'] as num?)?.toInt() ?? end;
-        offset = confirmed < 0 ? end : confirmed;
-        attempts = 0;
-        await _progress(id, offset);
-        if (result['status'] == 'completed') {
-          await _complete(id);
-          return;
+    final sourceUri = item.sourceUri;
+    String? sourceSessionId;
+    Future<void> resetSourceSession(int at) async {
+      if (sourceUri == null) return;
+      final previous = sourceSessionId;
+      sourceSessionId = null;
+      if (previous != null) {
+        try {
+          await ContentSource.closeStream(previous);
+        } catch (_) {
+          // The host may already be shutting down; opening the next source
+          // will fail with the original provider error if access is gone.
         }
-      } on ApiException catch (error) {
-        if (error.code == 'offset_mismatch') {
-          // The server is at a different offset. Trust it and continue there.
-          offset = await _serverOffset(api, id);
-          if (offset < 0 || offset > item.size) offset = 0;
-          continue;
-        }
-        if (!isTransient(error) || attempts >= maxAttempts) rethrow;
-        await _backoff(id, attempts);
-        attempts++;
-      } catch (error) {
-        if (!isTransient(error) || attempts >= maxAttempts) rethrow;
-        await _backoff(id, attempts);
-        attempts++;
       }
+      sourceSessionId = await ContentSource.openStream(sourceUri, at);
     }
 
-    await _complete(id);
+    var attempts = 0;
+    try {
+      // Keep one provider descriptor open for the whole transfer. This is
+      // essential for cloud providers that expose non-seekable pipes: they
+      // must not resend every earlier byte for each 16 MiB HTTP request.
+      await resetSourceSession(offset);
+      while (offset < item.size) {
+        if (_cancelled.contains(id)) {
+          _cancelled.remove(id);
+          return;
+        }
+        final current = _items[id];
+        if (current == null || current.state == UploadState.paused) return;
+
+        final end = min(offset + chunkSize, item.size);
+        try {
+          final result = await api.uploadChunk(
+            uploadId: id,
+            folder: item.folder,
+            name: item.name,
+            offset: offset,
+            total: item.size,
+            bytes: _chunkStream(item, offset, end, sourceSessionId),
+            contentLength: end - offset,
+            onProgress: (sent) => unawaited(_progress(id, offset + sent)),
+          );
+          final confirmed = (result['offset'] as num?)?.toInt() ?? end;
+          offset = confirmed < 0 ? end : confirmed;
+          attempts = 0;
+          await _progress(id, offset);
+          if (result['status'] == 'completed') {
+            await _complete(id);
+            return;
+          }
+          if (sourceUri != null && offset != end) {
+            await resetSourceSession(offset);
+          }
+        } on ApiException catch (error) {
+          if (error.code == 'offset_mismatch') {
+            // Reconcile and reposition the single provider stream once.
+            offset = await _serverOffset(api, id);
+            if (offset < 0 || offset > item.size) offset = 0;
+            await resetSourceSession(offset);
+            continue;
+          }
+          if (!isTransient(error) || attempts >= maxAttempts) rethrow;
+          await _backoff(id, attempts);
+          attempts++;
+          await resetSourceSession(offset);
+        } catch (error) {
+          if (!isTransient(error) || attempts >= maxAttempts) rethrow;
+          await _backoff(id, attempts);
+          attempts++;
+          await resetSourceSession(offset);
+        }
+      }
+
+      await _complete(id);
+    } finally {
+      final sessionId = sourceSessionId;
+      sourceSessionId = null;
+      if (sessionId != null) {
+        try {
+          await ContentSource.closeStream(sessionId);
+        } catch (_) {
+          // Native Activity teardown also closes any remaining source handles.
+        }
+      }
+    }
   }
 
   /// The offset the server has confirmed for [id].
@@ -827,10 +867,19 @@ class UploadManager extends ChangeNotifier {
     if (done.temporarySource) _deleteTemporarySource(done);
   }
 
-  Stream<List<int>> _chunkStream(UploadItem item, int start, int end) {
-    final sourceUri = item.sourceUri;
-    if (sourceUri != null) {
-      return _contentChunkStream(sourceUri, start, end);
+  Stream<List<int>> _chunkStream(
+    UploadItem item,
+    int start,
+    int end,
+    String? sourceSessionId,
+  ) {
+    if (item.sourceUri != null) {
+      if (sourceSessionId == null) {
+        throw const FileSystemException(
+          'The Android source session is not open',
+        );
+      }
+      return _contentChunkStream(sourceSessionId, start, end);
     }
     final file = File(item.localPath);
     if (!file.existsSync()) {
@@ -844,13 +893,15 @@ class UploadManager extends ChangeNotifier {
   /// Each HTTP chunk is one provider read. Nothing is written to the cache:
   /// the only copy outside the original document is the transient chunk the
   /// HTTP client is sending.
-  Stream<List<int>> _contentChunkStream(String uri, int start, int end) async* {
-    // Read in small slices so each platform-channel message stays cheap; the
-    // provider stream is still only read, never copied to app storage.
+  Stream<List<int>> _contentChunkStream(
+    String sessionId,
+    int start,
+    int end,
+  ) async* {
     var position = start;
     while (position < end) {
       final length = min(ContentSource.maxRange, end - position);
-      final bytes = await ContentSource.readRange(uri, position, length);
+      final bytes = await ContentSource.readNext(sessionId, length);
       if (bytes.length != length) {
         throw const FileSystemException(
           'The document ended before the requested byte range',
@@ -947,6 +998,58 @@ class UploadManager extends ChangeNotifier {
       }
     } catch (_) {
       // Cleanup is best-effort; it must never block the queue from loading.
+    }
+  }
+
+  /// Old app versions copied Sharesheet files into filesDir/shared-imports.
+  /// Remove abandoned copies after the upload journal is loaded, but preserve
+  /// every path still owned by a queued, paused, or retryable transfer.
+  ///
+  /// Partial files are safe to remove after one hour because the current
+  /// share pipeline no longer creates them. Completed orphan copies are kept
+  /// for 24 hours to allow an interrupted upgrade to recover its queue.
+  static const Duration _legacySharePartialAge = Duration(hours: 1);
+  static const Duration _legacyShareOrphanAge = Duration(hours: 24);
+
+  Future<void> _cleanupLegacySharedImports() async {
+    if (!Platform.isAndroid) return;
+    try {
+      final support = await getApplicationSupportDirectory();
+      final base = Directory(
+        '${support.path}${Platform.pathSeparator}shared-imports',
+      );
+      if (!await base.exists()) return;
+
+      final referenced = _items.values
+          .where(
+            (item) =>
+                item.temporarySource &&
+                item.state != UploadState.completed &&
+                item.state != UploadState.cancelled,
+          )
+          .map((item) => item.localPath)
+          .toSet();
+      final now = DateTime.now();
+
+      await for (final entity in base.list(followLinks: false)) {
+        if (entity is! File || referenced.contains(entity.path)) continue;
+        try {
+          final stat = await entity.stat();
+          final age = now.difference(stat.modified);
+          final partial = entity.path.endsWith('.partial');
+          final expiry =
+              partial ? _legacySharePartialAge : _legacyShareOrphanAge;
+          if (age >= expiry) await entity.delete();
+        } catch (_) {
+          // A file that is busy or already gone can be retried next launch.
+        }
+      }
+
+      try {
+        if (await base.list().isEmpty) await base.delete();
+      } catch (_) {}
+    } catch (_) {
+      // Best-effort maintenance must never prevent transfers from starting.
     }
   }
 

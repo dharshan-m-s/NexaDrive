@@ -8,6 +8,8 @@ import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_motion.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../services/api.dart';
+import '../../../services/content_source.dart';
+import '../../../services/folder_source.dart';
 import '../../../services/scan_processor.dart';
 import '../../widgets/nexa_components.dart';
 import 'scan_edit_screen.dart';
@@ -135,20 +137,52 @@ class _ScannerScreenState extends State<ScannerScreen>
 
   Future<void> _importGallery() async {
     if (_busy) return;
+
+    if (Platform.isAndroid) {
+      // Android Photo Picker returns only document URIs and metadata. The
+      // scanner reads bytes directly into memory for image decoding; it never
+      // asks FilePicker to create a second file in NexaDrive's cache.
+      final picked = await const SingleFileUploadPicker().pickImages();
+      if (picked == null || picked.isEmpty || !mounted) return;
+      setState(() => _busy = true);
+      try {
+        for (final file in picked) {
+          final uri = file.sourceUri;
+          if (uri == null || uri.isEmpty) {
+            throw StateError('The selected image has no readable URI');
+          }
+          final bytes = await ContentSource.readAll(uri, file.size);
+          final prepared = ScanProcessor.prepareOriginal(bytes);
+          _pages.add(ScanPage(original: prepared, number: ++_pageCounter));
+        }
+        if (!mounted) return;
+        setState(() => _busy = false);
+        _toast('${picked.length} page(s) imported');
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _busy = false);
+        _toast('Import failed: $e');
+      }
+      return;
+    }
+
+    // Desktop fallback: the platform file picker supplies the local source.
     final files = await FilePicker.pickFiles(type: FileType.image);
     if (files.isEmpty) return;
     setState(() => _busy = true);
     try {
-      for (final f in files) {
-        final bytes = f.path == null
-            ? await f.readAsBytes()
-            : await File(f.path!).readAsBytes();
+      for (final file in files) {
+        final bytes = file.path == null
+            ? await file.readAsBytes()
+            : await File(file.path!).readAsBytes();
         final prepared = ScanProcessor.prepareOriginal(bytes);
         _pages.add(ScanPage(original: prepared, number: ++_pageCounter));
       }
+      if (!mounted) return;
       setState(() => _busy = false);
       _toast('${files.length} page(s) imported');
     } catch (e) {
+      if (!mounted) return;
       setState(() => _busy = false);
       _toast('Import failed: $e');
     }
