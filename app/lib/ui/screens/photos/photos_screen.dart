@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
+import '../../../core/design/app_haptics.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
 import '../../../core/utils/format.dart';
@@ -185,6 +186,10 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   void _beginDragSelection(int index, Offset globalPosition) {
     if (!_selecting) {
+      // Entering multi-select: one light impact confirms the gesture. Cells
+      // touched during the continuing drag stay silent on purpose — repeated
+      // feedback mid-drag reads as noise, not signal.
+      AppHaptics.impact();
       setState(() {
         _selecting = true;
         _selected.add(_pathAt(index));
@@ -348,6 +353,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   void _toggleSelect(int index) {
     final path = _pathAt(index);
+    AppHaptics.selection();
     setState(() {
       if (_selected.contains(path)) {
         _selected.remove(path);
@@ -358,6 +364,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
   }
 
   void _toggleSelectAll() {
+    AppHaptics.selection();
     setState(() {
       if (_photos.isNotEmpty && _selected.length == _photos.length) {
         _selected.clear();

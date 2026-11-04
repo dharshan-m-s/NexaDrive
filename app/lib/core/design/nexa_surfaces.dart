@@ -4,6 +4,9 @@ import 'app_colors.dart';
 import 'app_dimensions.dart';
 import 'app_motion.dart';
 import 'app_shadows.dart';
+// NexaSurface is a member of the Nexa* component library even though it lives
+// beside the design tokens, so it reuses the library's press primitive.
+import '../../ui/widgets/nexa_pressable.dart';
 
 /// Surface hierarchy levels:
 ///   L0: Porcelain/graphite page canvas.
@@ -23,7 +26,7 @@ enum NexaSurfaceLevel { background, surface, grouped, floating, modal }
 /// semantic tokens — tonal separation first, a restrained shadow second, and
 /// optional blur only for floating/modal contexts. This is the base the
 /// grouped lists, panels, sheets and control clusters are built from.
-class NexaSurface extends StatefulWidget {
+class NexaSurface extends StatelessWidget {
   final NexaSurfaceLevel level;
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -48,52 +51,31 @@ class NexaSurface extends StatefulWidget {
   });
 
   @override
-  State<NexaSurface> createState() => _NexaSurfaceState();
-}
-
-class _NexaSurfaceState extends State<NexaSurface> {
-  bool _pressed = false;
-
-  @override
-  void didUpdateWidget(covariant NexaSurface oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.onTap == null && widget.onLongPress == null && _pressed) {
-      _pressed = false;
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final baseFill = widget.color ?? _resolveColor(widget.level, brightness);
-    final fill = _pressed
-        ? Color.alphaBlend(
-            AppColors.labelPrimaryFor(brightness).withValues(alpha: 0.035),
-            baseFill,
-          )
-        : baseFill;
-    final edge = widget.radius ?? _radiusFor(widget.level);
-    final interactive = widget.onTap != null || widget.onLongPress != null;
+    final fill = color ?? _resolveColor(level, brightness);
+    final edge = radius ?? _radiusFor(level);
+    final interactive = onTap != null || onLongPress != null;
 
     final decoration = BoxDecoration(
       color: fill,
       borderRadius: BorderRadius.circular(edge),
-      boxShadow: _shadowFor(widget.level, brightness),
-      border: _borderFor(widget.level, brightness),
+      boxShadow: _shadowFor(level, brightness),
+      border: _borderFor(level, brightness),
     );
 
     Widget content = AnimatedContainer(
       duration: AppMotion.resolve(context, AppMotion.fast),
       curve: AppMotion.curveFor(context, AppMotion.standardCurve),
-      margin: widget.margin,
-      padding: widget.padding,
+      margin: margin,
+      padding: padding,
       decoration: decoration,
-      child: widget.child,
+      child: child,
     );
 
-    if (widget.useBlur &&
-        (widget.level == NexaSurfaceLevel.floating ||
-            widget.level == NexaSurfaceLevel.modal)) {
+    if (useBlur &&
+        (level == NexaSurfaceLevel.floating ||
+            level == NexaSurfaceLevel.modal)) {
       content = ClipRRect(
         borderRadius: BorderRadius.circular(edge),
         child: BackdropFilter(
@@ -107,19 +89,18 @@ class _NexaSurfaceState extends State<NexaSurface> {
     }
 
     if (interactive) {
-      content = Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(edge),
-          onTap: widget.onTap,
-          onLongPress: widget.onLongPress,
-          onHighlightChanged: (value) {
-            if (_pressed != value) setState(() => _pressed = value);
-          },
-          child: AnimatedScale(
-            scale: _pressed ? 0.985 : 1,
-            duration: AppMotion.resolve(context, AppMotion.micro),
-            curve: AppMotion.curveFor(context, AppMotion.standardCurve),
+      // Spring-scaled press with a tonal wash instead of the (globally
+      // disabled) Material ripple.
+      content = NexaPressable(
+        tintColor:
+            AppColors.labelPrimaryFor(brightness).withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(edge),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(edge),
+            onTap: onTap,
+            onLongPress: onLongPress,
             child: content,
           ),
         ),

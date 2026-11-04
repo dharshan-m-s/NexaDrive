@@ -7,6 +7,7 @@
 library;
 
 export 'nexa_surface.dart';
+export 'nexa_pressable.dart';
 export 'nexa_bottom_nav.dart';
 export 'nexa_liquid_glass.dart';
 export 'nexa_button.dart';

@@ -3,6 +3,7 @@ import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
+import 'nexa_pressable.dart';
 
 /// Opens an iOS-style modal bottom sheet.
 Future<T?> showNexaSheet<T>(
@@ -23,6 +24,7 @@ Future<T?> showNexaSheet<T>(
         barrierColor ?? AppColors.scrimFor(Theme.of(context).brightness),
     backgroundColor: Colors.transparent,
     useSafeArea: true,
+    sheetAnimationStyle: AppMotion.sheetAnimationStyle,
     constraints:
         maxHeight != null ? BoxConstraints(maxHeight: maxHeight) : null,
     builder: (context) => builder(context),
@@ -54,6 +56,7 @@ Future<T?> showNexaFormSheet<T>(
     enableDrag: enableDrag,
     barrierColor:
         barrierColor ?? AppColors.scrimFor(Theme.of(context).brightness),
+    sheetAnimationStyle: AppMotion.sheetAnimationStyle,
     constraints:
         maxHeight != null ? BoxConstraints(maxHeight: maxHeight) : null,
     builder: builder,
@@ -272,9 +275,15 @@ class _NexaSheetActionState extends State<NexaSheetAction> {
             ? AppColors.errorContainerFor(brightness)
             : AppColors.fillFor(brightness));
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
+    return NexaPressable(
+      scale: false,
+      enabled: widget.enabled && widget.onTap != null,
+      tintColor:
+          AppColors.labelPrimaryFor(brightness).withValues(alpha: 0.04),
+      borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
         onTap: widget.enabled ? widget.onTap : null,
         onHover: (hovered) {
           if (widget.enabled && _hovered != hovered) {
@@ -353,6 +362,7 @@ class _NexaSheetActionState extends State<NexaSheetAction> {
           ),
         ),
       ),
+    ),
     );
   }
 }

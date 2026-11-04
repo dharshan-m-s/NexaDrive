@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_dimensions.dart';
+import '../../../../core/design/app_haptics.dart';
 import '../../../../core/design/app_motion.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/models/file_entry.dart';
@@ -367,6 +368,9 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   void _enterSelection(String path) {
+    // Entering multi-select is a state change the visuals confirm quietly; the
+    // light impact is what keeps the long press from feeling weightless.
+    AppHaptics.impact();
     setState(() {
       _selecting = true;
       _selected.add(path);
@@ -374,6 +378,7 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   void _toggleSelect(String path) {
+    AppHaptics.selection();
     setState(() {
       if (_selected.contains(path)) {
         _selected.remove(path);
@@ -391,6 +396,7 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   void _toggleSelectAll() {
+    AppHaptics.selection();
     final visible = _visibleItems;
     setState(() {
       final allVisibleSelected = visible.isNotEmpty &&

@@ -1,10 +1,8 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/physics.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
+import '../../core/design/app_haptics.dart';
 import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
 import 'nexa_liquid_glass.dart';
@@ -284,7 +282,7 @@ class _NavItem extends StatelessWidget {
         type: MaterialType.transparency,
         child: InkWell(
           onTap: () {
-            if (!isSelected) unawaited(HapticFeedback.selectionClick());
+            if (!isSelected) AppHaptics.selection();
             onTap();
           },
           borderRadius: BorderRadius.circular(AppDimens.radiusPill),

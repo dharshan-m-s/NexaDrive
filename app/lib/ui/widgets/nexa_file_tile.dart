@@ -8,6 +8,7 @@ import '../../core/design/app_typography.dart';
 import '../../core/models/file_entry.dart';
 import '../../core/utils/file_kind.dart';
 import '../../core/utils/format.dart';
+import 'nexa_pressable.dart';
 
 /// One UI-inspired file row and thumbnail-led grid tile.
 class NexaFileTile extends StatelessWidget {
@@ -62,7 +63,7 @@ class NexaFileTile extends StatelessWidget {
             ? Format.bytes(entry.size)
             : 'File';
 
-    return ListTile(
+    final row = ListTile(
       onTap: onTap == null ? null : () => onTap!(entry),
       onLongPress: onLongPress,
       selected: selected,
@@ -106,6 +107,15 @@ class NexaFileTile extends StatelessWidget {
         vertical: AppDimens.space6,
       ),
       visualDensity: VisualDensity.compact,
+    );
+
+    return NexaPressable(
+      enabled: onTap != null || onLongPress != null,
+      scale: false,
+      tintColor:
+          AppColors.labelPrimaryFor(brightness).withValues(alpha: 0.045),
+      borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+      child: row,
     );
   }
 }
@@ -275,9 +285,12 @@ class NexaFileGridTile extends StatelessWidget {
     final radius = BorderRadius.circular(AppDimens.radiusLarge);
     final hasImagePreview = category == Category.image && thumbnail != null;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
+    return NexaPressable(
+      enabled: onTap != null || onLongPress != null,
+      pressedScale: AppMotion.pressScaleMedia,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
         borderRadius: radius,
         onTap: onTap == null ? null : () => onTap!(entry),
         onLongPress: onLongPress,
@@ -367,6 +380,7 @@ class NexaFileGridTile extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }

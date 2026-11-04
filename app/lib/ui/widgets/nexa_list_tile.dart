@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
+import 'nexa_pressable.dart';
 
 /// Standard list row with leading icon, title, subtitle, trailing.
 class NexaListTile extends StatelessWidget {
@@ -104,7 +105,7 @@ class NexaListTile extends StatelessWidget {
       );
     }
 
-    return ListTile(
+    final row = ListTile(
       enabled: enabled,
       selected: selected,
       onTap: onTap,
@@ -153,6 +154,15 @@ class NexaListTile extends StatelessWidget {
             vertical: AppDimens.space4,
           ),
       visualDensity: VisualDensity.compact,
+    );
+
+    return NexaPressable(
+      enabled: enabled && (onTap != null || onLongPress != null),
+      scale: false,
+      tintColor:
+          AppColors.labelPrimaryFor(brightness).withValues(alpha: 0.045),
+      borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+      child: row,
     );
   }
 }

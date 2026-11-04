@@ -373,35 +373,23 @@ class _QuickActionData {
   );
 }
 
-class _QuickActionTile extends StatefulWidget {
+class _QuickActionTile extends StatelessWidget {
   final _QuickActionData data;
   const _QuickActionTile({required this.data});
-
-  @override
-  State<_QuickActionTile> createState() => _QuickActionTileState();
-}
-
-class _QuickActionTileState extends State<_QuickActionTile> {
-  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final radius = BorderRadius.circular(AppDimens.radiusLarge);
-    final tint = widget.data.tint;
+    final tint = data.tint;
 
-    return AnimatedScale(
-      scale: _pressed ? 0.975 : 1,
-      duration: AppMotion.resolve(context, AppMotion.micro),
-      curve: AppMotion.standardCurve,
+    return NexaPressable(
+      pressedScale: AppMotion.pressScaleMedia,
       child: Material(
         color: AppColors.surfaceFor(brightness),
         borderRadius: radius,
         child: InkWell(
-          onTap: widget.data.onTap,
-          onHighlightChanged: (value) {
-            if (_pressed != value) setState(() => _pressed = value);
-          },
+          onTap: data.onTap,
           borderRadius: radius,
           child: Ink(
             decoration: BoxDecoration(
@@ -441,7 +429,7 @@ class _QuickActionTileState extends State<_QuickActionTile> {
                           ),
                         ),
                         child: Icon(
-                          widget.data.icon,
+                          data.icon,
                           size: 21,
                           color: tint,
                         ),
@@ -456,7 +444,7 @@ class _QuickActionTileState extends State<_QuickActionTile> {
                   ),
                   const Spacer(),
                   Text(
-                    widget.data.title,
+                    data.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyle.subheadline.copyWith(
@@ -467,7 +455,7 @@ class _QuickActionTileState extends State<_QuickActionTile> {
                   ),
                   const SizedBox(height: AppDimens.space2),
                   Text(
-                    widget.data.subtitle,
+                    data.subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyle.caption2.copyWith(

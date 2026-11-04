@@ -6,6 +6,7 @@ import 'services/api.dart';
 import 'services/app_lock.dart';
 import 'services/background_transfer_service.dart';
 import 'services/session.dart';
+import 'core/design/app_scroll.dart';
 import 'core/design/app_theme.dart';
 import 'ui/screens/login/login_screen.dart';
 import 'ui/shell/app_shell.dart';
@@ -107,6 +108,7 @@ class _NexaDriveAppState extends State<NexaDriveApp> {
           child: MaterialApp(
             title: 'NexaDrive',
             debugShowCheckedModeBanner: false,
+            scrollBehavior: const NexaScrollBehavior(),
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),
             themeMode: mode == 'light'

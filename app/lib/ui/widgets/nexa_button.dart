@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
+import 'nexa_pressable.dart';
 
 /// Primary filled button — most prominent action.
 class NexaFilledButton extends StatelessWidget {
@@ -73,7 +74,14 @@ class NexaFilledButton extends StatelessWidget {
       child: buttonChild,
     );
 
-    return fullWidth ? SizedBox(width: double.infinity, child: button) : button;
+    final pressable = NexaPressable(
+      enabled: !isLoading && onPressed != null,
+      child: button,
+    );
+
+    return fullWidth
+        ? SizedBox(width: double.infinity, child: pressable)
+        : pressable;
   }
 }
 
@@ -137,7 +145,14 @@ class NexaOutlinedButton extends StatelessWidget {
       child: buttonChild,
     );
 
-    return fullWidth ? SizedBox(width: double.infinity, child: button) : button;
+    final pressable = NexaPressable(
+      enabled: onPressed != null,
+      child: button,
+    );
+
+    return fullWidth
+        ? SizedBox(width: double.infinity, child: pressable)
+        : pressable;
   }
 }
 
@@ -174,23 +189,26 @@ class NexaTextButton extends StatelessWidget {
           )
         : child;
 
-    return TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        foregroundColor: fg,
-        overlayColor: fg.withValues(alpha: 0.08),
-        padding: padding ??
-            const EdgeInsets.symmetric(
-              horizontal: AppDimens.space16,
-              vertical: AppDimens.space8,
-            ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+    return NexaPressable(
+      enabled: onPressed != null,
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          foregroundColor: fg,
+          overlayColor: fg.withValues(alpha: 0.08),
+          padding: padding ??
+              const EdgeInsets.symmetric(
+                horizontal: AppDimens.space16,
+                vertical: AppDimens.space8,
+              ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+          ),
+          textStyle: AppTextStyle.buttonSmall,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
-        textStyle: AppTextStyle.buttonSmall,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        child: buttonChild,
       ),
-      child: buttonChild,
     );
   }
 }
@@ -215,34 +233,37 @@ class NexaDestructiveButton extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     final error = AppColors.errorFor(brightness);
 
-    return FilledButton(
-      onPressed: isLoading ? null : onPressed,
-      style: FilledButton.styleFrom(
-        backgroundColor: error,
-        foregroundColor: Colors.white,
-        overlayColor: Colors.white.withValues(alpha: 0.12),
-        disabledBackgroundColor: error.withValues(alpha: 0.4),
-        disabledForegroundColor: Colors.white.withValues(alpha: 0.6),
-        minimumSize:
-            Size(fullWidth ? double.infinity : 64, AppDimens.touchTargetLarge),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimens.space24,
-          vertical: AppDimens.space12,
+    return NexaPressable(
+      enabled: !isLoading && onPressed != null,
+      child: FilledButton(
+        onPressed: isLoading ? null : onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: error,
+          foregroundColor: Colors.white,
+          overlayColor: Colors.white.withValues(alpha: 0.12),
+          disabledBackgroundColor: error.withValues(alpha: 0.4),
+          disabledForegroundColor: Colors.white.withValues(alpha: 0.6),
+          minimumSize: Size(
+              fullWidth ? double.infinity : 64, AppDimens.touchTargetLarge),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space24,
+            vertical: AppDimens.space12,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+          ),
+          textStyle: AppTextStyle.button,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        ),
-        textStyle: AppTextStyle.button,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        child: isLoading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              )
+            : child,
       ),
-      child: isLoading
-          ? const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Colors.white),
-            )
-          : child,
     );
   }
 }
@@ -277,18 +298,22 @@ class NexaIconButton extends StatelessWidget {
             ? AppColors.accentContainerFor(brightness)
             : Colors.transparent);
 
-    return IconButton(
-      onPressed: onPressed,
-      tooltip: tooltip,
-      icon: Icon(icon, size: size, color: fg),
-      style: IconButton.styleFrom(
-        backgroundColor: bg,
-        foregroundColor: fg,
-        overlayColor: fg.withValues(alpha: 0.10),
-        minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
-        padding: const EdgeInsets.all(AppDimens.space8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+    return NexaPressable(
+      enabled: onPressed != null,
+      child: IconButton(
+        onPressed: onPressed,
+        tooltip: tooltip,
+        icon: Icon(icon, size: size, color: fg),
+        style: IconButton.styleFrom(
+          backgroundColor: bg,
+          foregroundColor: fg,
+          overlayColor: fg.withValues(alpha: 0.10),
+          minimumSize:
+              const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+          padding: const EdgeInsets.all(AppDimens.space8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+          ),
         ),
       ),
     );
@@ -313,14 +338,16 @@ class NexaBackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
 
-    return IconButton(
-      tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-      onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
-      icon: Icon(icon, color: AppColors.labelPrimaryFor(brightness)),
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(
-        minWidth: AppDimens.touchTarget,
-        minHeight: AppDimens.touchTarget,
+    return NexaPressable(
+      child: IconButton(
+        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+        onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
+        icon: Icon(icon, color: AppColors.labelPrimaryFor(brightness)),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(
+          minWidth: AppDimens.touchTarget,
+          minHeight: AppDimens.touchTarget,
+        ),
       ),
     );
   }
@@ -350,18 +377,22 @@ class NexaFilledIconButton extends StatelessWidget {
     final fg = foregroundColor ??
         (brightness == Brightness.dark ? Colors.black : Colors.white);
 
-    return IconButton.filled(
-      onPressed: onPressed,
-      tooltip: tooltip,
-      icon: Icon(icon, size: AppDimens.iconMedium, color: fg),
-      style: IconButton.styleFrom(
-        backgroundColor: bg,
-        foregroundColor: fg,
-        overlayColor: fg.withValues(alpha: 0.10),
-        minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
-        padding: const EdgeInsets.all(AppDimens.space10),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+    return NexaPressable(
+      enabled: onPressed != null,
+      child: IconButton.filled(
+        onPressed: onPressed,
+        tooltip: tooltip,
+        icon: Icon(icon, size: AppDimens.iconMedium, color: fg),
+        style: IconButton.styleFrom(
+          backgroundColor: bg,
+          foregroundColor: fg,
+          overlayColor: fg.withValues(alpha: 0.10),
+          minimumSize:
+              const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+          padding: const EdgeInsets.all(AppDimens.space10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+          ),
         ),
       ),
     );

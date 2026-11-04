@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 
 /// NexaDrive motion tokens.
 ///
@@ -82,7 +83,71 @@ abstract final class AppMotion {
     damping: 25.75,
   );
 
+  // -------------------------------------------------------- press feedback
+  /// Scale applied while a control is held. Small enough to read as pressure
+  /// rather than a layout change.
+  static const double pressScale = 0.985;
+
+  /// Slightly deeper press for artwork-like tiles (grid cards, media).
+  static const double pressScaleMedia = 0.975;
+
+  /// Press-down: stiff and critically damped (ζ = 1.0), so the control reaches
+  /// its pressed scale in roughly 150 ms without wobbling on the way in.
+  static const SpringDescription pressSpring = SpringDescription(
+    mass: 1.0,
+    stiffness: 1200.0,
+    damping: 69.282, // ζ = 1.0
+  );
+
+  /// Press-release: lightly underdamped (ζ = 0.78) so the control settles back
+  /// with a whisper of overshoot instead of snapping flat.
+  static const SpringDescription pressReleaseSpring = SpringDescription(
+    mass: 1.0,
+    stiffness: 900.0,
+    damping: 46.8, // ζ = 0.78
+  );
+
+  // ---------------------------------------------------------- scroll settle
+  /// Settle spring for bouncing overscroll: the same calm return iOS uses when
+  /// a rubber-banded scroll comes to rest. Matches Flutter's own bouncing
+  /// spring so native platform feel is preserved.
+  static const SpringDescription scrollSpring = SpringDescription(
+    mass: 0.5,
+    stiffness: 100.0,
+    damping: 15.5563, // ζ = 1.1
+  );
+
   // ------------------------------------------------------------- helpers
+  /// Drives [controller] toward [target] with [spring].
+  ///
+  /// Reduced motion skips the simulation and jumps to the target, so press
+  /// feedback never becomes waiting.
+  static void springTo(
+    AnimationController controller, {
+    required double target,
+    required SpringDescription spring,
+    required bool reducedMotion,
+  }) {
+    if (reducedMotion) {
+      controller
+        ..stop()
+        ..value = target;
+      return;
+    }
+    controller.animateWith(
+      SpringSimulation(spring, controller.value, target, controller.velocity),
+    );
+  }
+
+  /// Sheet route motion: the body rises on the enter curve and dismisses a
+  /// touch faster than it arrived, so closing never feels sticky.
+  static const AnimationStyle sheetAnimationStyle = AnimationStyle(
+    duration: normal,
+    reverseDuration: fast,
+    curve: enter,
+    reverseCurve: exit,
+  );
+
   /// A standard animated swapper for content changes.
   static AnimatedSwitcher defaultSwitcher({Key? key, Widget? child}) =>
       AnimatedSwitcher(

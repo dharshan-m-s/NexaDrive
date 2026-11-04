@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
+import 'nexa_pressable.dart';
 
 /// Semantic badge/chip with consistent styling.
 class NexaChip extends StatelessWidget {
@@ -129,10 +130,12 @@ class NexaChip extends StatelessWidget {
 
     if (onTap == null) return widget;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-      child: widget,
+    return NexaPressable(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+        child: widget,
+      ),
     );
   }
 }
