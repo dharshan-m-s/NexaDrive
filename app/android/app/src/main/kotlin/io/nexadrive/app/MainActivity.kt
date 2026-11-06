@@ -652,8 +652,12 @@ class MainActivity : FlutterFragmentActivity() {
                 Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
         } catch (_: SecurityException) {
-            // Some providers do not offer a persistable grant; the tree is
-            // still readable for this session.
+            result.error(
+                "persist_failed",
+                "This folder provider cannot keep access after NexaDrive closes. Choose a folder from Android Files.",
+                null,
+            )
+            return
         }
         result.success(uri.toString())
     }

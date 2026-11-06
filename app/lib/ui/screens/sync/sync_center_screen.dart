@@ -87,9 +87,13 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
   }
 
   Future<void> _chooseFolder() async {
-    final path = await SyncManager(widget.api).pickAndSetFolder();
-    if (path == null) return;
-    setState(() => _folderPath = path);
+    try {
+      final path = await SyncManager(widget.api).pickAndSetFolder();
+      if (path == null) return;
+      setState(() => _folderPath = path);
+    } catch (error) {
+      if (mounted) _toast(error.toString());
+    }
   }
 
   Future<void> _runSync() async {
