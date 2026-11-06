@@ -144,7 +144,6 @@ class SyncManager {
   }
 
   Future<String> _deviceName() async {
-    if (Platform.isAndroid) return 'NexaDrive Android';
     final prefs = await SharedPreferences.getInstance();
     final existing = prefs.getString(_deviceNameKey);
     if (existing != null && existing.trim().isNotEmpty) return existing;
