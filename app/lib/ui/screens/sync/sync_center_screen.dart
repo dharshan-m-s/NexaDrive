@@ -35,8 +35,10 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
   bool _syncing = false;
   String _progress = '';
 
-  bool get _syncSupported =>
-      Platform.isAndroid || Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+  bool get _syncSupported => Platform.isAndroid ||
+      Platform.isWindows ||
+      Platform.isLinux ||
+      Platform.isMacOS;
 
   @override
   void initState() {

@@ -334,7 +334,8 @@ class SyncManager {
           deviceName: await _deviceName(),
           platform: 'android',
         );
-        final result = await AndroidFolderBackup(api).sync(onProgress: onProgress);
+        final result = await AndroidFolderBackup(api)
+            .sync(onProgress: onProgress);
         return SyncResult(
           uploaded: result.uploaded,
           errors: result.errors,

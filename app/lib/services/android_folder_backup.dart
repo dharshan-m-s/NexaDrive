@@ -107,7 +107,9 @@ class AndroidFolderBackup {
           );
         }
         if (bytes.length > remaining) {
-          throw const FormatException('The document provider returned too much data.');
+          throw const FormatException(
+            'The document provider returned too much data.',
+          );
         }
         remaining -= bytes.length;
         yield bytes;
@@ -130,7 +132,9 @@ class AndroidFolderBackup {
         );
       }
       if (bytes.length > remaining) {
-        throw const FormatException('The document provider returned too much data.');
+        throw const FormatException(
+          'The document provider returned too much data.',
+        );
       }
       remaining -= bytes.length;
       yield bytes;
@@ -139,7 +143,8 @@ class AndroidFolderBackup {
 
   Future<String> _hashUri(String uri, int size) async {
     if (size == 0) return sha256.convert(const <int>[]).toString();
-    return sha256.bind(_readUri(uri, 0, size)).first.then((digest) => digest.toString());
+    final digest = await sha256.bind(_readUri(uri, 0, size)).first;
+    return digest.toString();
   }
 
   Future<void> _ensureRemoteFolder(
@@ -233,7 +238,11 @@ class AndroidFolderBackup {
     final treeUri = prefs.getString(_treeKey);
     final rootName = prefs.getString(_nameKey);
     if (treeUri == null || treeUri.isEmpty || rootName == null) {
-      return (uploaded: 0, errors: 1, error: 'Choose a folder to back up first.');
+      return (
+        uploaded: 0,
+        errors: 1,
+        error: 'Choose a folder to back up first.',
+      );
     }
 
     try {
@@ -246,13 +255,16 @@ class AndroidFolderBackup {
         return (
           uploaded: 0,
           errors: 1,
-          error: 'The selected folder is no longer accessible. Select it again.',
+          error:
+              'The selected folder is no longer accessible. Select it again.',
         );
       }
 
       final rawFiles = payload['files'];
       if (rawFiles is! List) {
-        throw const FormatException('Android returned an invalid folder listing.');
+        throw const FormatException(
+          'Android returned an invalid folder listing.',
+        );
       }
 
       final state = await _loadState();
@@ -269,7 +281,11 @@ class AndroidFolderBackup {
         final relative = file['path']?.toString() ?? '';
         final name = file['name']?.toString() ?? '';
         final size = (file['size'] as num?)?.toInt();
-        if (uri == null || uri.isEmpty || name.isEmpty || size == null || size < 0) {
+        if (uri == null ||
+            uri.isEmpty ||
+            name.isEmpty ||
+            size == null ||
+            size < 0) {
           errors++;
           continue;
         }
@@ -302,7 +318,8 @@ class AndroidFolderBackup {
           }
 
           var current = rootName;
-          for (final segment in relativeDirectory.split('/').where((p) => p.isNotEmpty)) {
+          for (final segment
+              in relativeDirectory.split('/').where((p) => p.isNotEmpty)) {
             current = '$current/$segment';
             await _ensureRemoteFolder(current, createdFolders);
           }
@@ -330,12 +347,16 @@ class AndroidFolderBackup {
       // An empty folder is still a valid backup target. A zero-file scan does
       // not imply deletion: cloud contents and saved fingerprints are retained.
       await _saveState(state);
-      await prefs.setString(_lastSyncKey, DateTime.now().toUtc().toIso8601String());
+      await prefs.setString(
+        _lastSyncKey,
+        DateTime.now().toUtc().toIso8601String(),
+      );
       return (
         uploaded: uploaded,
         errors: errors,
         error: errors > 0
-            ? 'Backup checked $processed file(s); $errors could not be processed.'
+            ? 'Backup checked $processed file(s); '
+                '$errors could not be processed.'
             : null,
       );
     } on PlatformException catch (error) {
@@ -343,7 +364,8 @@ class AndroidFolderBackup {
         uploaded: 0,
         errors: 1,
         error: error.code == 'open_failed' || error.code == 'read_failed'
-            ? 'Android could not read the selected folder. Re-select it in Sync Center to restore access.'
+            ? 'Android could not read the selected folder. '
+                'Re-select it in Sync Center to restore access.'
             : (error.message ?? 'The selected folder could not be read.'),
       );
     } catch (error) {
