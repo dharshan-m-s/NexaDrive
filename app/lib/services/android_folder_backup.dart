@@ -117,6 +117,26 @@ class AndroidFolderBackup {
     }
   }
 
+  Stream<List<int>> _readSession(String sessionId, int length) async* {
+    var remaining = length;
+    while (remaining > 0) {
+      final count = remaining < ContentSource.maxRange
+          ? remaining
+          : ContentSource.maxRange;
+      final bytes = await ContentSource.readNext(sessionId, count);
+      if (bytes.isEmpty) {
+        throw const FormatException(
+          'The selected file changed or ended while it was being read.',
+        );
+      }
+      if (bytes.length > remaining) {
+        throw const FormatException('The document provider returned too much data.');
+      }
+      remaining -= bytes.length;
+      yield bytes;
+    }
+  }
+
   Future<String> _hashUri(String uri, int size) async {
     if (size == 0) return sha256.convert(const <int>[]).toString();
     return sha256.bind(_readUri(uri, 0, size)).first.then((digest) => digest.toString());
@@ -148,6 +168,7 @@ class AndroidFolderBackup {
     final uploadId = const Uuid().v4();
 
     for (var attempt = 1; attempt <= _maxAttempts; attempt++) {
+      String? sourceSession;
       try {
         final remote = await api.uploadStatus(uploadId);
         if (remote['status'] == 'completed') return;
@@ -167,6 +188,10 @@ class AndroidFolderBackup {
           return;
         }
 
+        // Keep one provider stream open for the entire file. Reopening a
+        // non-seekable SAF provider for every chunk would require skipping
+        // from byte zero repeatedly and become quadratic for large files.
+        sourceSession = await ContentSource.openStream(uri, offset);
         while (offset < size) {
           final end = offset + _chunkSize > size ? size : offset + _chunkSize;
           final result = await api.uploadChunk(
@@ -175,7 +200,7 @@ class AndroidFolderBackup {
             name: name,
             offset: offset,
             total: size,
-            bytes: _readUri(uri, offset, end - offset),
+            bytes: _readSession(sourceSession, end - offset),
             contentLength: end - offset,
           );
           final next = (result['offset'] as num?)?.toInt() ?? end;
@@ -184,8 +209,15 @@ class AndroidFolderBackup {
           }
           offset = next;
         }
+        await ContentSource.closeStream(sourceSession);
+        sourceSession = null;
         return;
       } catch (_) {
+        if (sourceSession != null) {
+          try {
+            await ContentSource.closeStream(sourceSession);
+          } catch (_) {}
+        }
         if (attempt == _maxAttempts) rethrow;
         await Future<void>.delayed(Duration(seconds: attempt * 2));
       }
