@@ -74,7 +74,6 @@ class AndroidFolderBackup {
     final decoded = jsonDecode(raw) as Map<String, dynamic>;
     return decoded.map(
       (key, value) => MapEntry(key, Map<String, dynamic>.from(value as Map)),
-
     );
   }
 
