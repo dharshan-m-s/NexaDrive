@@ -77,16 +77,25 @@ internal class FolderPickerBridge(private val context: Context) {
                     val id = c.getString(0) ?: continue
                     val name = c.getString(1) ?: continue
                     val mime = c.getString(2) ?: ""
-                    val size = if (c.isNull(3)) 0L else c.getLong(3)
+                    val reportedSize = if (c.isNull(3)) -1L else c.getLong(3)
                     val childUri = DocumentsContract.buildDocumentUriUsingTree(
                         treeUri,
                         id,
                     )
+                    val size = if (reportedSize >= 0L) {
+                        reportedSize
+                    } else {
+                        try {
+                            resolver.openAssetFileDescriptor(childUri, "r")?.use { it.length } ?: -1L
+                        } catch (_: Exception) {
+                            -1L
+                        }
+                    }
                     val relative =
                         if (parentPath.isEmpty()) name else "$parentPath/$name"
                     if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
                         queue.add(id to relative)
-                    } else {
+                    } else if (size >= 0L) {
                         entries.add(Entry(relative, name, size, childUri.toString()))
                     }
                 }
