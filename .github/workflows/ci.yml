@@ -116,12 +116,17 @@ jobs:
         run: |
           set -euo pipefail
           if ! dart format --output=none --set-exit-if-changed lib test integration_test; then
-            echo "::group::Dart formatter expected output for the flagged file"
-            formatted_copy="lib/ui/screens/files/.files_screen_format_check.dart"
-            cp lib/ui/screens/files/files_screen.dart "$formatted_copy"
-            dart format "$formatted_copy"
-            diff -u lib/ui/screens/files/files_screen.dart "$formatted_copy" || true
-            rm -f "$formatted_copy"
+            echo "::group::Dart formatter expected output for flagged files"
+            for source in \
+                lib/services/android_folder_backup.dart \
+                lib/services/sync_service.dart \
+                lib/ui/screens/sync/sync_center_screen.dart; do
+              formatted_copy="${source%.dart}.format_check.dart"
+              cp "$source" "$formatted_copy"
+              dart format "$formatted_copy"
+              diff -u "$source" "$formatted_copy" || true
+              rm -f "$formatted_copy"
+            done
             echo "::endgroup::"
             exit 1
           fi
