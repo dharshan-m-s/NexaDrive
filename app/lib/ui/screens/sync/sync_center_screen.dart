@@ -36,7 +36,7 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
   String _progress = '';
 
   bool get _syncSupported =>
-      Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+      Platform.isAndroid || Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
   @override
   void initState() {
@@ -293,15 +293,16 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
                           currentActivity: _syncing ? _progress : null,
                           conflicts: _conflicts,
                         ),
-                        if (!_syncSupported) ...[
+                        if (Platform.isAndroid) ...[
                           const SizedBox(height: AppDimens.space16),
                           const _Notice(
                             icon: Icons.info_outline_rounded,
-                            title: 'Folder sync runs on desktop',
+                            title: 'One-way phone folder backup',
                             body:
-                                'Windows, Linux and macOS keep a local folder in step '
-                                'with your cloud. On Android, uploads are queued and '
-                                'resumed instead.',
+                                'Sync now backs up every file in this folder, including '
+                                'files in subfolders. New and changed files upload to '
+                                'NexaDrive. Phone files are never deleted and cloud '
+                                'files are never downloaded into this folder.',
                           ),
                         ],
                         const SizedBox(height: AppDimens.space24),

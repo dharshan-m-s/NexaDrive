@@ -138,7 +138,7 @@ class SyncManager {
     final prefs = await SharedPreferences.getInstance();
     final existing = prefs.getString(_deviceNameKey);
     if (existing != null && existing.trim().isNotEmpty) return existing;
-    var name = 'NexaDrive desktop';
+    var name = Platform.isAndroid ? 'NexaDrive Android' : 'NexaDrive desktop';
     try {
       name = Platform.localHostname.trim().isEmpty
           ? name
