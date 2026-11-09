@@ -205,7 +205,8 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
     if (result.error != null) {
       _toast(result.error!);
     } else if (result.uploaded > 0 || result.errors > 0) {
-      _toast('Backup finished: ${result.uploaded} uploaded, ${result.errors} error(s)');
+      _toast(
+          'Backup finished: ${result.uploaded} uploaded, ${result.errors} error(s)');
     } else {
       _toast('All selected folders are up to date');
     }
