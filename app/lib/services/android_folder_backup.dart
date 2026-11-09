@@ -40,16 +40,20 @@ class AndroidFolderBackup {
     if (raw != null && raw.isNotEmpty) {
       final decoded = jsonDecode(raw);
       if (decoded is List) {
-        return decoded.whereType<Map>().map((entry) {
-          final map = Map<String, dynamic>.from(entry);
-          return <String, String>{
-            'uri': map['uri']?.toString() ?? '',
-            'name': map['name']?.toString() ?? 'Phone backup',
-            'remoteName': map['remoteName']?.toString() ??
-                map['name']?.toString() ??
-                'Phone backup',
-          };
-        }).where((entry) => entry['uri']!.isNotEmpty).toList();
+        return decoded
+            .whereType<Map>()
+            .map((entry) {
+              final map = Map<String, dynamic>.from(entry);
+              return <String, String>{
+                'uri': map['uri']?.toString() ?? '',
+                'name': map['name']?.toString() ?? 'Phone backup',
+                'remoteName': map['remoteName']?.toString() ??
+                    map['name']?.toString() ??
+                    'Phone backup',
+              };
+            })
+            .where((entry) => entry['uri']!.isNotEmpty)
+            .toList();
       }
     }
 
@@ -91,9 +95,7 @@ class AndroidFolderBackup {
 
   String _safePathSegment(String value) {
     final cleaned = value.replaceAll(RegExp(r'[/\\]'), '_').trim();
-    return cleaned.isEmpty || cleaned == '.' || cleaned == '..'
-        ? '_'
-        : cleaned;
+    return cleaned.isEmpty || cleaned == '.' || cleaned == '..' ? '_' : cleaned;
   }
 
   Future<String?> folderLabel() async {
@@ -392,9 +394,8 @@ class AndroidFolderBackup {
       final relativeDirectory = segments.length > 1
           ? segments.sublist(0, segments.length - 1).join('/')
           : '';
-      final remoteFolder = relativeDirectory.isEmpty
-          ? rootName
-          : '$rootName/$relativeDirectory';
+      final remoteFolder =
+          relativeDirectory.isEmpty ? rootName : '$rootName/$relativeDirectory';
       final stateKey = '$uri::$relative';
       checked++;
 
