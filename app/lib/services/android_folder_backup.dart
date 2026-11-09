@@ -433,10 +433,11 @@ class AndroidFolderBackup {
           continue;
         }
         final remotePath = '$remoteFolder/$fileName';
-        final resumableUploadId =
-            (previous?['pendingSha256'] == hash &&
-                previous?['pendingRemotePath'] == remotePath)
-            ? previous?['uploadId']?.toString()
+        final hasMatchingPendingUpload = previous != null &&
+            previous['pendingSha256'] == hash &&
+            previous['pendingRemotePath'] == remotePath;
+        final resumableUploadId = hasMatchingPendingUpload
+            ? previous['uploadId']?.toString()
             : null;
         final uploadId = resumableUploadId?.isNotEmpty == true
             ? resumableUploadId!
