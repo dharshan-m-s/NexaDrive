@@ -168,8 +168,12 @@ class AndroidFolderBackup {
     final records = await folderRecords();
     records.removeWhere((entry) => entry['uri'] == uri);
     await _saveFolderRecords(records);
-    // Retain fingerprints so re-adding the same SAF tree does not upload
-    // every unchanged file again. Existing server files remain untouched.
+    // Drop fingerprints for a removed source. If it is added again later,
+    // it may receive a collision-safe new destination folder and must be
+    // populated there rather than incorrectly skipped as already uploaded.
+    final state = await _loadState();
+    state.removeWhere((key, _) => key.startsWith('$uri::'));
+    await _saveState(state);
   }
 
   Future<void> clearFolder() async {
