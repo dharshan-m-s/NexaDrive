@@ -435,9 +435,8 @@ class AndroidFolderBackup {
         final hasMatchingPendingUpload = previous != null &&
             previous['pendingSha256'] == hash &&
             previous['pendingRemotePath'] == remotePath;
-        final resumableUploadId = hasMatchingPendingUpload
-            ? previous['uploadId']?.toString()
-            : null;
+        final resumableUploadId =
+            hasMatchingPendingUpload ? previous['uploadId']?.toString() : null;
         final uploadId = resumableUploadId?.isNotEmpty == true
             ? resumableUploadId!
             : const Uuid().v4();
