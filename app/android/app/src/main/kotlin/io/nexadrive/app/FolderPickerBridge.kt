@@ -46,7 +46,10 @@ internal class FolderPickerBridge(private val context: Context) {
         val documentId = try {
             DocumentsContract.getTreeDocumentId(treeUri)
         } catch (e: Exception) {
-            return entries
+            throw IllegalArgumentException(
+                "The selected folder URI is invalid or no longer accessible",
+                e,
+            )
         }
         val queue = ArrayDeque<Pair<String, String>>()
         var visitedEntries = 0
