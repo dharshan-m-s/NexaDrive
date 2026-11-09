@@ -130,9 +130,8 @@ class AndroidFolderBackup {
     }
 
     final base = _safeFolderName(safeName);
-    final used = records
-        .map((entry) => entry['remoteName']!.toLowerCase())
-        .toSet();
+    final used =
+        records.map((entry) => entry['remoteName']!.toLowerCase()).toSet();
     // Do not silently merge a phone backup into an unrelated folder that
     // already exists in My Files. If the server is temporarily unreachable,
     // still allow the folder to be configured; the actual sync will report
