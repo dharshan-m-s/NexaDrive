@@ -512,11 +512,16 @@ class AndroidFolderBackup {
           onProgress?.call('Could not scan ${folder['name']}: $error');
         }
       }
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _lastSyncKey,
-        DateTime.now().toUtc().toIso8601String(),
-      );
+      // "Last synced" means every selected source completed, not merely
+      // that an attempt was made. Partial failures remain visible in the
+      // result and do not advance this successful-sync timestamp.
+      if (errors == 0) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(
+          _lastSyncKey,
+          DateTime.now().toUtc().toIso8601String(),
+        );
+      }
       onProgress?.call(
         uploaded == 0
             ? 'Checked $checked file(s); no new or changed files.'
