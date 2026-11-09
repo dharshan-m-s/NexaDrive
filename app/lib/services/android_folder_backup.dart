@@ -130,11 +130,25 @@ class AndroidFolderBackup {
     }
 
     final base = _safeFolderName(safeName);
-    final used = records.map((entry) => entry['remoteName']!).toSet();
+    final used = records
+        .map((entry) => entry['remoteName']!.toLowerCase())
+        .toSet();
+    // Do not silently merge a phone backup into an unrelated folder that
+    // already exists in My Files. If the server is temporarily unreachable,
+    // still allow the folder to be configured; the actual sync will report
+    // the network error rather than losing the user's selection.
+    try {
+      final existing = await api.listFiles('');
+      used.addAll(
+        existing
+            .map((entry) => entry['name']?.toString().toLowerCase() ?? '')
+            .where((name) => name.isNotEmpty),
+      );
+    } catch (_) {}
     var remoteName = base;
     var suffix = 2;
-    while (used.contains(remoteName)) {
-      remoteName = '$base ($suffix)';
+    while (used.contains(remoteName.toLowerCase())) {
+      remoteName = '$base (Phone Backup $suffix)';
       suffix++;
     }
     records.add({
@@ -154,9 +168,8 @@ class AndroidFolderBackup {
     final records = await folderRecords();
     records.removeWhere((entry) => entry['uri'] == uri);
     await _saveFolderRecords(records);
-    final state = await _loadState();
-    state.removeWhere((key, _) => key.startsWith('$uri::'));
-    await _saveState(state);
+    // Retain fingerprints so re-adding the same SAF tree does not upload
+    // every unchanged file again. Existing server files remain untouched.
   }
 
   Future<void> clearFolder() async {
