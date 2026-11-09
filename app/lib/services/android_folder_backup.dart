@@ -312,16 +312,24 @@ class AndroidFolderBackup {
         if (remote['status'] == 'completed') return;
         var offset = (remote['bytes_received'] as num?)?.toInt() ?? 0;
         if (offset < 0 || offset > size) offset = 0;
-        if (size == 0) {
-          await api.uploadChunk(
+        if (size == 0 || offset == size) {
+          // A previous attempt may have delivered every byte but failed while
+          // atomically replacing the destination file. Sending an empty final
+          // chunk makes the server re-run checksum/finalization instead of
+          // treating "all bytes received" as proof that the file is complete.
+          final finalized = await api.uploadChunk(
             uploadId: uploadId,
             folder: remoteFolder,
             name: name,
-            offset: 0,
-            total: 0,
+            offset: offset,
+            total: size,
             bytes: const Stream<List<int>>.empty(),
             contentLength: 0,
           );
+          if (finalized['status'] != 'completed' &&
+              (finalized['offset'] as num?)?.toInt() != size) {
+            throw StateError('The server did not finalize the uploaded file.');
+          }
           return;
         }
         sourceSession = await ContentSource.openStream(uri, offset);
