@@ -81,8 +81,8 @@ class AndroidFolderBackup {
 
   String _safeFolderName(String value) {
     final cleaned = value
-        .replaceAll(RegExp(r'[/\\\\:*?"<>|]'), '_')
-        .replaceAll(RegExp(r'\\s+'), ' ')
+        .replaceAll(RegExp(r'[/\\:*?"<>|]'), '_')
+        .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
     return cleaned.isEmpty || cleaned == '.' || cleaned == '..'
         ? 'Phone backup'
@@ -112,6 +112,12 @@ class AndroidFolderBackup {
     final records = await folderRecords();
     if (records.any((entry) => entry['uri'] == uri)) {
       return safeName;
+    }
+    // If this installation is upgrading from the original one-folder
+    // setting, migrate its fingerprints before a second source is added.
+    if (records.length == 1) {
+      final state = await _loadState();
+      await _migrateLegacyState(records, state);
     }
 
     final base = _safeFolderName(safeName);
