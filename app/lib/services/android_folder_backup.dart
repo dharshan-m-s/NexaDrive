@@ -300,11 +300,11 @@ class AndroidFolderBackup {
 
   Future<void> _uploadDocument({
     required String uri,
+    required String uploadId,
     required int size,
     required String name,
     required String remoteFolder,
   }) async {
-    final uploadId = const Uuid().v4();
     for (var attempt = 1; attempt <= _maxAttempts; attempt++) {
       String? sourceSession;
       try {
@@ -424,6 +424,27 @@ class AndroidFolderBackup {
             (previous?['size'] as num?)?.toInt() == size) {
           continue;
         }
+        final remotePath = '$remoteFolder/$fileName';
+        final resumableUploadId =
+            previous?['pendingSha256'] == hash &&
+                previous?['pendingRemotePath'] == remotePath
+            ? previous?['uploadId']?.toString()
+            : null;
+        final uploadId = resumableUploadId?.isNotEmpty == true
+            ? resumableUploadId!
+            : const Uuid().v4();
+        // Persist the in-flight transfer identity before sending any bytes.
+        // If Android is killed or the connection drops, the next Sync now
+        // asks the server for this same upload's confirmed offset and resumes.
+        state[stateKey] = {
+          'sha256': previous?['sha256'],
+          'size': size,
+          'remotePath': remotePath,
+          'pendingSha256': hash,
+          'pendingRemotePath': remotePath,
+          'uploadId': uploadId,
+        };
+        await _saveState(state);
         var current = rootName;
         for (final segment
             in relativeDirectory.split('/').where((part) => part.isNotEmpty)) {
@@ -433,6 +454,7 @@ class AndroidFolderBackup {
         onProgress?.call('Uploading $sourceName/$relative');
         await _uploadDocument(
           uri: sourceUri,
+          uploadId: uploadId,
           size: size,
           name: fileName,
           remoteFolder: remoteFolder,
@@ -440,7 +462,7 @@ class AndroidFolderBackup {
         state[stateKey] = {
           'sha256': hash,
           'size': size,
-          'remotePath': '$remoteFolder/$fileName',
+          'remotePath': remotePath,
         };
         await _saveState(state);
         uploaded++;
