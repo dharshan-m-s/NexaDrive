@@ -89,6 +89,13 @@ class AndroidFolderBackup {
         : cleaned;
   }
 
+  String _safePathSegment(String value) {
+    final cleaned = value.replaceAll(RegExp(r'[/\\]'), '_').trim();
+    return cleaned.isEmpty || cleaned == '.' || cleaned == '..'
+        ? '_'
+        : cleaned;
+  }
+
   Future<String?> folderLabel() async {
     final records = await folderRecords();
     if (records.isEmpty) return null;
@@ -375,12 +382,13 @@ class AndroidFolderBackup {
       final segments = relative
           .split('/')
           .where((part) => part.isNotEmpty)
+          .map(_safePathSegment)
           .toList(growable: false);
       if (segments.isEmpty) {
         errors++;
         continue;
       }
-      final fileName = segments.last;
+      final fileName = _safePathSegment(segments.last);
       final relativeDirectory = segments.length > 1
           ? segments.sublist(0, segments.length - 1).join('/')
           : '';
