@@ -39,6 +39,18 @@ class SyncManager {
     return (await SharedPreferences.getInstance()).getString(_folderKey);
   }
 
+  /// Android backup sources are independent SAF trees. Desktop keeps its
+  /// existing single local sync root.
+  Future<List<Map<String, String>>> androidFolders() async {
+    if (!Platform.isAndroid) return const [];
+    return AndroidFolderBackup(api).folderRecords();
+  }
+
+  Future<void> removeAndroidFolder(String uri) async {
+    if (!Platform.isAndroid) return;
+    await AndroidFolderBackup(api).removeFolder(uri);
+  }
+
   Future<void> setFolder(String path) async {
     final p = await SharedPreferences.getInstance();
     await p.setString(_folderKey, path);
@@ -326,24 +338,26 @@ class SyncManager {
 
   Future<SyncResult> _runSync({void Function(String)? onProgress}) async {
     if (Platform.isAndroid) {
+      // The phone backup pipeline writes ordinary files through the upload
+      // API; it must not depend on the desktop sync manifest endpoint. A
+      // manifest/network failure previously prevented the actual upload from
+      // even starting, making Sync now appear to do nothing.
+      final result =
+          await AndroidFolderBackup(api).sync(onProgress: onProgress);
+      // Device registration is informational only for Android backup. Keep
+      // it best-effort and never let it block successful file uploads.
       try {
-        final deviceId = await ensureDeviceId();
         await api.syncManifest(
-          deviceId: deviceId,
+          deviceId: await ensureDeviceId(),
           deviceName: await _deviceName(),
           platform: 'android',
         );
-        final result =
-            await AndroidFolderBackup(api).sync(onProgress: onProgress);
-
-        return SyncResult(
-          uploaded: result.uploaded,
-          errors: result.errors,
-          error: result.error,
-        );
-      } catch (error) {
-        return SyncResult(errors: 1, error: error.toString());
-      }
+      } catch (_) {}
+      return SyncResult(
+        uploaded: result.uploaded,
+        errors: result.errors,
+        error: result.error,
+      );
     }
     if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) {
       return const SyncResult(
