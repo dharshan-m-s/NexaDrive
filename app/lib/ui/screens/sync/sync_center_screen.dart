@@ -27,6 +27,7 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
   bool _loading = true;
   String? _loadError;
   String? _folderPath;
+  List<Map<String, String>> _androidFolders = [];
   DateTime? _lastSyncAt;
   String? _thisDeviceId;
   List<Map<String, dynamic>> _devices = [];
@@ -55,6 +56,9 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
     final manager = SyncManager(widget.api);
     try {
       final folder = await manager.folder();
+      final androidFolders = Platform.isAndroid
+          ? await manager.androidFolders()
+          : <Map<String, String>>[];
       final lastSync = await manager.lastSyncAt();
       final deviceId = await manager.deviceId();
       final conflicts = await manager.conflictCount();
@@ -62,6 +66,7 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
       if (!mounted) return;
       setState(() {
         _folderPath = folder;
+        _androidFolders = androidFolders;
         _lastSyncAt = lastSync;
         _thisDeviceId = deviceId;
         _conflicts = conflicts;
@@ -72,11 +77,15 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
       // Local state still renders even when the device list cannot be fetched,
       // so a network blip never blanks the whole screen.
       final folder = await manager.folder();
+      final androidFolders = Platform.isAndroid
+          ? await manager.androidFolders()
+          : <Map<String, String>>[];
       final lastSync = await manager.lastSyncAt();
       final deviceId = await manager.deviceId();
       if (!mounted) return;
       setState(() {
         _folderPath = folder;
+        _androidFolders = androidFolders;
         _lastSyncAt = lastSync;
         _thisDeviceId = deviceId;
         _loading = false;
@@ -89,30 +98,98 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
 
   Future<void> _chooseFolder() async {
     try {
-      final path = await SyncManager(widget.api).pickAndSetFolder();
+      final manager = SyncManager(widget.api);
+      final path = await manager.pickAndSetFolder();
       if (path == null) return;
-      setState(() => _folderPath = path);
+      final folders = Platform.isAndroid
+          ? await manager.androidFolders()
+          : <Map<String, String>>[];
+      final label = await manager.folder();
+      if (mounted) {
+        setState(() {
+          _folderPath = label;
+          _androidFolders = folders;
+        });
+        _toast('Added “$path” to phone backup');
+      }
+    } catch (error) {
+      if (mounted) _toast(error.toString());
+    }
+  }
+
+  Future<void> _removeAndroidFolder(Map<String, String> folder) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove backup folder?'),
+        content: Text(
+          'NexaDrive will stop scanning “${folder['name']}”. Files already uploaded remain in My Files.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove folder'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final manager = SyncManager(widget.api);
+      await manager.removeAndroidFolder(folder['uri']!);
+      final folders = await manager.androidFolders();
+      final label = await manager.folder();
+      if (mounted) {
+        setState(() {
+          _androidFolders = folders;
+          _folderPath = label;
+        });
+      }
     } catch (error) {
       if (mounted) _toast(error.toString());
     }
   }
 
   Future<void> _runSync() async {
+    if (_syncing) return;
     setState(() {
       _syncing = true;
-      _progress = 'Starting…';
+      _progress = 'Preparing selected folders…';
+      _lastResult = null;
     });
     final manager = SyncManager(widget.api);
-    final result = await manager.sync(onProgress: (p) {
-      if (mounted) setState(() => _progress = p);
-    });
-    final conflicts = await manager.conflictCount();
-    final lastSync = await manager.lastSyncAt();
-    final deviceId = await manager.deviceId();
+    SyncResult result;
+    try {
+      result = await manager.sync(onProgress: (progress) {
+        if (mounted) setState(() => _progress = progress);
+      });
+    } catch (error) {
+      result = SyncResult(errors: 1, error: error.toString());
+    }
+
+    var conflicts = _conflicts;
+    DateTime? lastSync = _lastSyncAt;
+    var deviceId = _thisDeviceId;
+    var folders = _androidFolders;
+    var folderLabel = _folderPath;
     List<Map<String, dynamic>> devices = _devices;
     try {
+      conflicts = await manager.conflictCount();
+      lastSync = await manager.lastSyncAt();
+      deviceId = await manager.deviceId();
+      if (Platform.isAndroid) {
+        folders = await manager.androidFolders();
+        folderLabel = await manager.folder();
+      }
       devices = await widget.api.syncDevices();
-    } catch (_) {}
+    } catch (_) {
+      // The upload result is still authoritative even if refreshing metadata
+      // or the linked-device list fails.
+    }
     if (!mounted) return;
     setState(() {
       _lastResult = result;
@@ -120,24 +197,18 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
       _lastSyncAt = lastSync;
       _thisDeviceId = deviceId;
       _devices = devices;
+      _androidFolders = folders;
+      _folderPath = folderLabel;
       _syncing = false;
       _progress = '';
     });
     if (result.error != null) {
       _toast(result.error!);
-    } else if (result.uploaded +
-            result.downloaded +
-            result.deleted +
-            result.conflicts +
-            result.errors >
-        0) {
+    } else if (result.uploaded > 0 || result.errors > 0) {
       _toast(
-        'Sync finished: ${result.uploaded} up, ${result.downloaded} down, '
-        '${result.deleted} deleted, ${result.conflicts} conflict(s), '
-        '${result.errors} error(s)',
-      );
+          'Backup finished: ${result.uploaded} uploaded, ${result.errors} error(s)');
     } else {
-      _toast('Everything is up to date');
+      _toast('All selected folders are up to date');
     }
   }
 
@@ -306,20 +377,28 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
                             icon: Icons.info_outline_rounded,
                             title: 'One-way phone folder backup',
                             body:
-                                'Sync now backs up every file in this folder, including '
-                                'files in subfolders. New and changed files upload to '
-                                'NexaDrive. Phone files are never deleted and cloud '
-                                'files are never downloaded into this folder.',
+                                'Add multiple phone folders. Sync now uploads every file '
+                                'and subfolder from each one, then uploads new or changed '
+                                'files on later runs. Phone files are never deleted.',
                           ),
                         ],
                         const SizedBox(height: AppDimens.space24),
-                        const _SectionLabel('SYNCED FOLDER'),
+                        _SectionLabel(Platform.isAndroid
+                            ? 'PHONE FOLDERS'
+                            : 'SYNCED FOLDER'),
                         const SizedBox(height: AppDimens.space8),
-                        _FolderCard(
-                          folder: _folderPath,
-                          onChoose: _chooseFolder,
-                          onClear: _clearFolder,
-                        ),
+                        if (Platform.isAndroid)
+                          _AndroidFoldersCard(
+                            folders: _androidFolders,
+                            onChoose: _chooseFolder,
+                            onRemove: _removeAndroidFolder,
+                          )
+                        else
+                          _FolderCard(
+                            folder: _folderPath,
+                            onChoose: _chooseFolder,
+                            onClear: _clearFolder,
+                          ),
                         const SizedBox(height: AppDimens.space24),
                         SizedBox(
                           height: 52,
@@ -518,6 +597,91 @@ class _StatusCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AndroidFoldersCard extends StatelessWidget {
+  final List<Map<String, String>> folders;
+  final VoidCallback onChoose;
+  final ValueChanged<Map<String, String>> onRemove;
+
+  const _AndroidFoldersCard({
+    required this.folders,
+    required this.onChoose,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
+      radius: AppDimens.radiusCard,
+      padding: const EdgeInsets.all(AppDimens.space16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (folders.isEmpty)
+            Text(
+              'No phone folders selected yet',
+              style: AppTextStyle.rowSubtitle.copyWith(
+                color: AppColors.textSecondaryFor(brightness),
+              ),
+            )
+          else
+            for (final folder in folders) ...[
+              Row(
+                children: [
+                  Icon(
+                    Icons.folder_rounded,
+                    color: AppColors.accentFor(brightness),
+                  ),
+                  const SizedBox(width: AppDimens.space12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          folder['name'] ?? 'Phone folder',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyle.rowTitle.copyWith(
+                            color: AppColors.textPrimaryFor(brightness),
+                          ),
+                        ),
+                        Text(
+                          'Saved to My Files/${folder['remoteName'] ?? folder['name']}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyle.caption.copyWith(
+                            color: AppColors.textSecondaryFor(brightness),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Remove folder',
+                    onPressed: () => onRemove(folder),
+                    icon: const Icon(Icons.remove_circle_outline_rounded),
+                  ),
+                ],
+              ),
+              if (folder != folders.last)
+                const Divider(height: AppDimens.space20),
+            ],
+          const SizedBox(height: AppDimens.space12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onChoose,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add another folder'),
             ),
           ),
         ],
