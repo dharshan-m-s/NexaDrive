@@ -250,20 +250,28 @@ class Api {
     // breaks the connection mid-send. The server's answer is the useful one,
     // so it is preferred over the resulting socket error.
     Object? bodyError;
+    var sent = 0;
     try {
-      var sent = 0;
-      await request.sink.addStream(bytes.transform(
-        StreamTransformer<List<int>, List<int>>.fromHandlers(
-          handleData: (chunk, sink) {
-            sent += chunk.length;
-            onProgress?.call(sent);
-            sink.add(chunk);
-          },
-        ),
-      ));
-      await request.sink.close();
+      // Use await-for rather than StreamSink.addStream: addStream forwards
+      // source errors to the outgoing request stream but does not reliably
+      // surface them to this caller. A provider read failure must stop this
+      // chunk and must never be mistaken for a successful upload.
+      await for (final chunk in bytes) {
+        sent += chunk.length;
+        onProgress?.call(sent);
+        request.sink.add(chunk);
+      }
     } catch (error) {
       bodyError = error;
+    } finally {
+      // Always terminate the request body. If the source failed part-way
+      // through, closing it lets the server return its confirmed offset
+      // instead of leaving the request waiting for the remaining bytes.
+      try {
+        await request.sink.close();
+      } catch (error) {
+        bodyError ??= error;
+      }
     }
 
     http.StreamedResponse streamed;
@@ -277,21 +285,15 @@ class Api {
     final response =
         await http.Response.fromStream(streamed).timeout(_controlTimeout);
     _check(response);
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     if (bodyError != null) {
-      // The server accepted the chunk but the body did not fully arrive; the
-      // offset the server reports is the truth, so this is not fatal.
-      final offset = (jsonDecode(response.body) as Map)['offset'];
-      if (offset is num) {
-        return <String, dynamic>{
-          'upload_id': uploadId,
-          'status': offset >= total ? 'completed' : 'receiving',
-          'offset': offset.toInt(),
-          'total': total,
-        };
-      }
+      // A byte offset alone is not proof that the server finalized the file.
+      // Only the server's explicit completed response may override a local
+      // stream error; otherwise the caller must resume from uploadStatus().
+      if (decoded['status'] == 'completed') return decoded;
       throw bodyError;
     }
-    return jsonDecode(response.body) as Map<String, dynamic>;
+    return decoded;
   }
 
   /// Releases an upload session.

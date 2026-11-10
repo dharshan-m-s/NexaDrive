@@ -8,6 +8,26 @@ import 'package:nexadrive/services/api.dart';
 import 'package:nexadrive/services/session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+class _ImmediateResponseClient extends http.BaseClient {
+  _ImmediateResponseClient(this.response);
+
+  final http.Response response;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    // Consume the request body independently from the early response, as a
+    // server can reject a chunk before the client finishes streaming it.
+    request.finalize().listen((_) {}, onError: (Object _) {});
+    return Future<http.StreamedResponse>.value(
+      http.StreamedResponse(
+        Stream<List<int>>.value(utf8.encode(response.body)),
+        response.statusCode,
+        headers: response.headers,
+      ),
+    );
+  }
+}
+
 void setUpStorage() {
   SharedPreferences.setMockInitialValues(<String, Object>{});
   FlutterSecureStorage.setMockInitialValues(<String, String>{});
@@ -417,6 +437,81 @@ void main() {
       );
       expect(unauthorizedFired, isTrue,
           reason: 'onUnauthorized should be invoked when a 401 is returned');
+    });
+  });
+  group('Resumable upload completion', () {
+    setUp(() async {
+      setUpStorage();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('server_url', 'https://server.com');
+      FlutterSecureStorage.setMockInitialValues(
+        <String, String>{'token': 'secret-token'},
+      );
+    });
+
+    test('does not infer completion from a final byte offset', () async {
+      final session = await loadSession();
+      final api = Api(
+        session,
+        client: _ImmediateResponseClient(
+          http.Response(
+            jsonEncode({
+              'upload_id': 'upload-1',
+              'status': 'receiving',
+              'offset': 4,
+              'total': 4,
+            }),
+            200,
+          ),
+        ),
+      );
+
+      await expectLater(
+        api.uploadChunk(
+          uploadId: 'upload-1',
+          folder: 'Phone backup',
+          name: 'file.bin',
+          offset: 0,
+          total: 4,
+          bytes: Stream<List<int>>.error(StateError('source stream failed')),
+          contentLength: 4,
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('accepts a stream error only when the server confirms completion',
+        () async {
+      final session = await loadSession();
+      final api = Api(
+        session,
+        client: _ImmediateResponseClient(
+          http.Response(
+            jsonEncode({
+              'upload_id': 'upload-1',
+              'status': 'completed',
+              'offset': 4,
+              'total': 4,
+              'checksum_sha256': 'expected-checksum',
+            }),
+            200,
+          ),
+        ),
+      );
+
+      final result = await api.uploadChunk(
+        uploadId: 'upload-1',
+        folder: 'Phone backup',
+        name: 'file.bin',
+        offset: 0,
+        total: 4,
+        bytes: Stream<List<int>>.error(StateError('late local stream error')),
+        contentLength: 4,
+      );
+
+      expect(result['status'], 'completed');
+      expect(result['offset'], 4);
+      expect(result['checksum_sha256'], 'expected-checksum');
     });
   });
 }

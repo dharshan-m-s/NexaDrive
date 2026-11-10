@@ -117,6 +117,10 @@ class MainActivity : FlutterFragmentActivity() {
                     call.argument<String>("uri"),
                     result,
                 )
+                "releaseFolderPermission" -> releaseFolderPermission(
+                    call.argument<String>("uri"),
+                    result,
+                )
                 "readSourceRange" -> readSourceRange(
                     call.argument<String>("uri"),
                     (call.argument<Number>("offset"))?.toLong(),
@@ -301,8 +305,8 @@ class MainActivity : FlutterFragmentActivity() {
      * tree readable, so no storage permission is involved.
      */
     private fun pickFolder(result: MethodChannel.Result) {
-        if (pendingFolderResult != null) {
-            result.error("busy", "A folder picker is already open", null)
+        if (pendingFolderResult != null || pendingFilesResult != null) {
+            result.error("busy", "A document picker is already open", null)
             return
         }
         pendingFolderResult = result
@@ -421,6 +425,33 @@ class MainActivity : FlutterFragmentActivity() {
             "name" to name,
             "size" to size,
         )
+    }
+
+    /** Releases a persisted SAF read grant when a backup source is removed. */
+    private fun releaseFolderPermission(uri: String?, result: MethodChannel.Result) {
+        if (uri.isNullOrBlank()) {
+            result.error("invalid", "No folder URI was supplied", null)
+            return
+        }
+        try {
+            val target = Uri.parse(uri)
+            val hasGrant = contentResolver.persistedUriPermissions.any {
+                it.uri == target && it.isReadPermission
+            }
+            if (hasGrant) {
+                contentResolver.releasePersistableUriPermission(
+                    target,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            result.success(null)
+        } catch (error: Exception) {
+            result.error(
+                "release_failed",
+                error.message ?: "The folder access grant could not be released",
+                null,
+            )
+        }
     }
 
     /**
