@@ -349,7 +349,15 @@ class UploadManager extends ChangeNotifier {
     }
 
     final existing = _duplicateOf(source, destination);
-    if (existing != null) return existing.id;
+    if (existing != null) {
+      // A previous attempt for this same source may have failed after a
+      // temporary provider/network error. Re-enqueueing it must revive the
+      // durable transfer instead of returning a terminal failed id forever.
+      if (existing.state == UploadState.failed) {
+        await retry(existing.id);
+      }
+      return existing.id;
+    }
 
     final now = DateTime.now();
     final item = UploadItem(
