@@ -106,7 +106,7 @@ void main() {
         id: 'previous-failed-upload',
         localPath: sourceFile.path,
         name: 'retry-source.bin',
-        folder: 'Camera',
+        folder: '',
         size: 8,
         transferred: 0,
         state: UploadState.failed,
