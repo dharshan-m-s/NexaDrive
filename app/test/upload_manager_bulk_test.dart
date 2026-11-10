@@ -106,7 +106,7 @@ void main() {
         id: 'previous-failed-upload',
         localPath: sourceFile.path,
         name: 'retry-source.bin',
-        folder: '',
+        folder: 'Camera',
         size: 8,
         transferred: 0,
         state: UploadState.failed,
@@ -124,7 +124,7 @@ void main() {
 
       final id = await manager.enqueue(
         UploadSource(path: sourceFile.path, name: 'retry-source.bin', size: 8),
-        '',
+        'Camera',
       );
 
       expect(id, 'previous-failed-upload');
