@@ -8,6 +8,17 @@ import 'package:uuid/uuid.dart';
 
 import 'api.dart';
 import 'content_source.dart';
+import 'upload_manager.dart';
+import 'upload_item.dart';
+
+class _UploadIntegrityException implements Exception {
+  const _UploadIntegrityException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
 
 /// Android's selected Storage Access Framework trees are one-way backup
 /// sources. Every tree is tracked independently and backed up into a normal
@@ -24,8 +35,6 @@ class AndroidFolderBackup {
   static const _stateFormatKey = 'android_sync_backup_state_format_v2';
   static const _lastSyncKey = 'android_sync_last_backup_at_v1';
   static const _channel = MethodChannel('nexadrive/folder_picker');
-  static const _chunkSize = 8 * 1024 * 1024;
-  static const _maxAttempts = 4;
 
   Future<DateTime?> lastSyncAt() async {
     final prefs = await SharedPreferences.getInstance();
@@ -108,12 +117,20 @@ class AndroidFolderBackup {
     final uri = await _channel.invokeMethod<String>('pickFolder');
     if (uri == null || uri.isEmpty) return null;
 
-    final payload = await _channel.invokeMapMethod<String, dynamic>(
-      'listFolder',
-      <String, Object>{'uri': uri},
-    );
-    if (payload == null || payload['files'] is! List) {
-      throw StateError('Android could not read the selected folder.');
+    Map<String, dynamic>? payload;
+    try {
+      payload = await _channel.invokeMapMethod<String, dynamic>(
+        'listFolder',
+        <String, Object>{'uri': uri},
+      );
+      if (payload == null || payload['files'] is! List) {
+        throw StateError('Android could not read the selected folder.');
+      }
+    } catch (_) {
+      // The native picker persisted the grant before returning. If validating
+      // the selected tree fails, release that unused permission immediately.
+      await _releaseTreePermission(uri);
+      rethrow;
     }
 
     final name = (payload['name'] as String?)?.trim();
@@ -163,8 +180,21 @@ class AndroidFolderBackup {
   /// replacing a configured source.
   Future<String?> pickAndSetFolder() => pickAndAddFolder();
 
+  Future<void> _releaseTreePermission(String uri) async {
+    try {
+      await _channel.invokeMethod<void>(
+        'releaseFolderPermission',
+        <String, Object>{'uri': uri},
+      );
+    } catch (_) {
+      // The user may already have revoked the grant, or the native host may
+      // be an older build. Removing the backup source must still complete.
+    }
+  }
+
   Future<void> removeFolder(String uri) async {
     final records = List<Map<String, String>>.of(await folderRecords());
+    final removed = records.any((entry) => entry['uri'] == uri);
     records.removeWhere((entry) => entry['uri'] == uri);
     await _saveFolderRecords(records);
     // Drop fingerprints for a removed source. If it is added again later,
@@ -173,16 +203,33 @@ class AndroidFolderBackup {
     final state = await _loadState();
     state.removeWhere((key, _) => key.startsWith('$uri::'));
     await _saveState(state);
+    if (removed) await _releaseTreePermission(uri);
   }
 
   Future<void> clearFolder() async {
     final prefs = await SharedPreferences.getInstance();
+    List<Map<String, String>> records;
+    try {
+      records = await folderRecords();
+    } catch (_) {
+      // A malformed multi-folder preference must not make it impossible to
+      // stop backup and clear the legacy source record.
+      final legacyUri = prefs.getString(_treeKey);
+      records = legacyUri == null
+          ? <Map<String, String>>[]
+          : <Map<String, String>>[
+              {'uri': legacyUri}
+            ];
+    }
     await prefs.remove(_foldersKey);
     await prefs.remove(_treeKey);
     await prefs.remove(_nameKey);
     await prefs.remove(_stateKey);
     await prefs.remove(_stateFormatKey);
     await prefs.remove(_lastSyncKey);
+    for (final record in records) {
+      await _releaseTreePermission(record['uri']!);
+    }
   }
 
   Future<Map<String, Map<String, dynamic>>> _loadState() async {
@@ -214,10 +261,12 @@ class AndroidFolderBackup {
     final uri = records.single['uri']!;
     final migrated = <String, Map<String, dynamic>>{};
     for (final entry in state.entries) {
-      if (!entry.key.contains('::')) {
-        migrated['$uri::${entry.key}'] = entry.value;
-      } else {
+      if (entry.key.startsWith('$uri::')) {
         migrated[entry.key] = entry.value;
+      } else {
+        // Legacy keys were relative paths. A filename may itself contain
+        // "::", so checking for that substring would misclassify valid paths.
+        migrated['$uri::${entry.key}'] = entry.value;
       }
     }
     state
@@ -256,28 +305,6 @@ class AndroidFolderBackup {
     }
   }
 
-  Stream<List<int>> _readSession(String sessionId, int length) async* {
-    var remaining = length;
-    while (remaining > 0) {
-      final count = remaining < ContentSource.maxRange
-          ? remaining
-          : ContentSource.maxRange;
-      final bytes = await ContentSource.readNext(sessionId, count);
-      if (bytes.isEmpty) {
-        throw const FormatException(
-          'The selected file changed or ended while it was being read.',
-        );
-      }
-      if (bytes.length > remaining) {
-        throw const FormatException(
-          'The document provider returned too much data.',
-        );
-      }
-      remaining -= bytes.length;
-      yield bytes;
-    }
-  }
-
   Future<String> _hashUri(String uri, int size) async {
     if (size == 0) return sha256.convert(const <int>[]).toString();
     final digest = await sha256.bind(_readUri(uri, 0, size)).first;
@@ -297,70 +324,30 @@ class AndroidFolderBackup {
     created.add(path);
   }
 
-  Future<void> _uploadDocument({
-    required String uri,
-    required String uploadId,
+  void _verifyCompletedUpload(
+    Map<String, dynamic> response, {
     required int size,
-    required String name,
-    required String remoteFolder,
-  }) async {
-    for (var attempt = 1; attempt <= _maxAttempts; attempt++) {
-      String? sourceSession;
-      try {
-        final remote = await api.uploadStatus(uploadId);
-        if (remote['status'] == 'completed') return;
-        var offset = (remote['bytes_received'] as num?)?.toInt() ?? 0;
-        if (offset < 0 || offset > size) offset = 0;
-        if (size == 0 || offset == size) {
-          // A previous attempt may have delivered every byte but failed while
-          // atomically replacing the destination file. Sending an empty final
-          // chunk makes the server re-run checksum/finalization instead of
-          // treating "all bytes received" as proof that the file is complete.
-          final finalized = await api.uploadChunk(
-            uploadId: uploadId,
-            folder: remoteFolder,
-            name: name,
-            offset: offset,
-            total: size,
-            bytes: const Stream<List<int>>.empty(),
-            contentLength: 0,
-          );
-          if (finalized['status'] != 'completed' &&
-              (finalized['offset'] as num?)?.toInt() != size) {
-            throw StateError('The server did not finalize the uploaded file.');
-          }
-          return;
-        }
-        sourceSession = await ContentSource.openStream(uri, offset);
-        while (offset < size) {
-          final end = offset + _chunkSize > size ? size : offset + _chunkSize;
-          final result = await api.uploadChunk(
-            uploadId: uploadId,
-            folder: remoteFolder,
-            name: name,
-            offset: offset,
-            total: size,
-            bytes: _readSession(sourceSession, end - offset),
-            contentLength: end - offset,
-          );
-          final next = (result['offset'] as num?)?.toInt() ?? end;
-          if (next <= offset || next > size) {
-            throw StateError('The server returned an invalid upload offset.');
-          }
-          offset = next;
-        }
-        await ContentSource.closeStream(sourceSession);
-        sourceSession = null;
-        return;
-      } catch (_) {
-        if (sourceSession != null) {
-          try {
-            await ContentSource.closeStream(sourceSession);
-          } catch (_) {}
-        }
-        if (attempt == _maxAttempts) rethrow;
-        await Future<void>.delayed(Duration(seconds: attempt * 2));
-      }
+    required String expectedSha256,
+    required String expectedRemotePath,
+  }) {
+    final received = (response['offset'] as num?)?.toInt() ??
+        (response['bytes_received'] as num?)?.toInt();
+    if (response['status'] != 'completed' || received != size) {
+      throw StateError(
+        'The server has not confirmed completion of this upload.',
+      );
+    }
+    final actualPath = response['path']?.toString();
+    if (actualPath != expectedRemotePath) {
+      throw _UploadIntegrityException(
+        'The server upload belongs to a different destination path.',
+      );
+    }
+    final checksum = response['checksum_sha256']?.toString();
+    if (checksum != expectedSha256) {
+      throw _UploadIntegrityException(
+        'The uploaded bytes do not match the selected source file.',
+      );
     }
   }
 
@@ -388,6 +375,7 @@ class AndroidFolderBackup {
     var uploaded = 0;
     var errors = 0;
     var checked = 0;
+    final seenRemotePaths = <String>{};
 
     for (final item in rawFiles) {
       if (item is! Map) continue;
@@ -420,6 +408,14 @@ class AndroidFolderBackup {
           : '';
       final remoteFolder =
           relativeDirectory.isEmpty ? rootName : '$rootName/$relativeDirectory';
+      final remotePath = '$remoteFolder/$fileName';
+      if (!seenRemotePaths.add(remotePath.toLowerCase())) {
+        errors++;
+        onProgress?.call(
+          'Two source items map to the same backup path: $remotePath',
+        );
+        continue;
+      }
       final stateKey = '$uri::$relative';
       checked++;
 
@@ -431,18 +427,18 @@ class AndroidFolderBackup {
             (previous?['size'] as num?)?.toInt() == size) {
           continue;
         }
-        final remotePath = '$remoteFolder/$fileName';
         final hasMatchingPendingUpload = previous != null &&
             previous['pendingSha256'] == hash &&
             previous['pendingRemotePath'] == remotePath;
         final resumableUploadId =
             hasMatchingPendingUpload ? previous['uploadId']?.toString() : null;
-        final uploadId = resumableUploadId?.isNotEmpty == true
+        var uploadId = resumableUploadId?.isNotEmpty == true
             ? resumableUploadId!
             : const Uuid().v4();
-        // Persist the in-flight transfer identity before sending any bytes.
-        // If Android is killed or the connection drops, the next Sync now
-        // asks the server for this same upload's confirmed offset and resumes.
+
+        // Persist the identity before queueing. The normal UploadManager owns
+        // the durable queue, retries, chunk streaming and resume offset for
+        // both manual uploads and automatic folder backup.
         state[stateKey] = {
           'sha256': previous?['sha256'],
           'size': size,
@@ -452,19 +448,55 @@ class AndroidFolderBackup {
           'uploadId': uploadId,
         };
         await _saveState(state);
+
         var current = rootName;
         for (final segment
             in relativeDirectory.split('/').where((part) => part.isNotEmpty)) {
           current = '$current/$segment';
           await _ensureRemoteFolder(current, createdFolders);
         }
+
         onProgress?.call('Uploading $sourceName/$relative');
-        await _uploadDocument(
-          uri: sourceUri,
+        final manager = UploadManager.current;
+        manager.attach(api);
+        await manager.ready;
+        final queuedId = await manager.enqueue(
+          UploadSource(
+            path: sourceUri,
+            sourceUri: sourceUri,
+            name: fileName,
+            size: size,
+            relativePath: segments.join('/'),
+          ),
+          rootName,
           uploadId: uploadId,
+        );
+        if (queuedId != uploadId) {
+          uploadId = queuedId;
+          state[stateKey] = {
+            'sha256': previous?['sha256'],
+            'size': size,
+            'remotePath': remotePath,
+            'pendingSha256': hash,
+            'pendingRemotePath': remotePath,
+            'uploadId': uploadId,
+          };
+          await _saveState(state);
+        }
+
+        final transfer = await manager.waitForCompletion(uploadId);
+        if (transfer.state != UploadState.completed) {
+          throw StateError(
+            transfer.error ??
+                'The upload was ${transfer.state.name} before completion.',
+          );
+        }
+        final completed = await api.uploadStatus(uploadId);
+        _verifyCompletedUpload(
+          completed,
           size: size,
-          name: fileName,
-          remoteFolder: remoteFolder,
+          expectedSha256: hash,
+          expectedRemotePath: remotePath,
         );
         state[stateKey] = {
           'sha256': hash,
@@ -474,6 +506,17 @@ class AndroidFolderBackup {
         await _saveState(state);
         uploaded++;
       } catch (error) {
+        if (error is _UploadIntegrityException) {
+          // The server published bytes that differ from the pre-upload hash.
+          // Drop this transfer identity so the next run starts a clean upload.
+          final failed = Map<String, dynamic>.from(state[stateKey] ?? {});
+          failed
+            ..remove('pendingSha256')
+            ..remove('pendingRemotePath')
+            ..remove('uploadId');
+          state[stateKey] = failed;
+          await _saveState(state);
+        }
         errors++;
         onProgress?.call('Could not back up $sourceName/$relative: $error');
       }

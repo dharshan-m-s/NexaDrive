@@ -97,6 +97,42 @@ void main() {
     expect(restored.single.temporarySource, isTrue);
   });
 
+  test(
+    'enqueue revives a previously failed source instead of returning a dead id',
+    () async {
+      final sourceFile = File('${root.path}/retry-source.bin');
+      await sourceFile.writeAsBytes(List<int>.filled(8, 3));
+      final failed = UploadItem(
+        id: 'previous-failed-upload',
+        localPath: sourceFile.path,
+        name: 'retry-source.bin',
+        folder: 'Camera',
+        size: 8,
+        transferred: 0,
+        state: UploadState.failed,
+        error: 'Temporary provider failure',
+        attempts: 1,
+        temporarySource: false,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      await UploadStore(journal).appendAll([failed]);
+
+      manager.dispose();
+      manager = UploadManager.forTesting(journal);
+      await manager.ready;
+
+      final id = await manager.enqueue(
+        UploadSource(path: sourceFile.path, name: 'retry-source.bin', size: 8),
+        'Camera',
+      );
+
+      expect(id, 'previous-failed-upload');
+      expect(manager.item(id)?.state, UploadState.queued);
+      expect(manager.item(id)?.error, isNull);
+    },
+  );
+
   test('folder sources keep only the document URI, not copied bytes', () async {
     const uri = 'content://com.android.providers.downloads.documents/tree/x';
     final id = await manager.enqueue(

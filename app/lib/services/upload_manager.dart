@@ -172,6 +172,25 @@ class UploadManager extends ChangeNotifier {
   /// A snapshot of every item in the queue.
   List<UploadItem> items() => _items.values.toList(growable: false);
 
+  /// Looks up one queued transfer without exposing the mutable queue.
+  UploadItem? item(String id) => _items[id];
+
+  /// Waits until [id] reaches a terminal state.
+  ///
+  /// Android folder backup uses the same durable queue as manual uploads and
+  /// waits on the queue result rather than maintaining a second transfer loop.
+  Future<UploadItem> waitForCompletion(String id) async {
+    await ready;
+    while (true) {
+      final current = _items[id];
+      if (current == null) {
+        throw StateError('Upload $id was removed before it finished.');
+      }
+      if (current.state.isTerminal) return current;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+  }
+
   /// How many files still owe bytes to the server.
   int get pendingCount => _items.values
       .where(
@@ -295,15 +314,54 @@ class UploadManager extends ChangeNotifier {
   /// The same file is never queued twice while an earlier copy is still
   /// pending: a second "upload" of the same file would only make the server
   /// fight the first transfer over the same destination.
-  Future<String> enqueue(UploadSource source, String folder) async {
+  Future<String> enqueue(
+    UploadSource source,
+    String folder, {
+    String? uploadId,
+  }) async {
     await ready;
+    await _reloadChain;
     final destination = destinationFolder(folder, source.relativePath);
+
+    // Sync stores its upload identity before enqueueing so a process death in
+    // between those two writes can safely recover the same server session.
+    var requestedId = uploadId;
+    if (requestedId != null) {
+      final known = _items[requestedId];
+      if (known != null) {
+        if (known.localPath != source.path ||
+            known.sourceUri != source.sourceUri ||
+            known.folder != destination ||
+            known.name != source.name ||
+            known.size != source.size) {
+          throw StateError(
+            'The saved upload identity belongs to another source.',
+          );
+        }
+        if (known.state == UploadState.cancelled) {
+          // A cancelled server session cannot be resumed. Start a fresh id.
+          requestedId = null;
+        } else {
+          if (known.state == UploadState.failed) await retry(requestedId);
+          return requestedId;
+        }
+      }
+    }
+
     final existing = _duplicateOf(source, destination);
-    if (existing != null) return existing.id;
+    if (existing != null) {
+      // A previous attempt for this same source may have failed after a
+      // temporary provider/network error. Re-enqueueing it must revive the
+      // durable transfer instead of returning a terminal failed id forever.
+      if (existing.state == UploadState.failed) {
+        await retry(existing.id);
+      }
+      return existing.id;
+    }
 
     final now = DateTime.now();
     final item = UploadItem(
-      id: const Uuid().v4(),
+      id: requestedId ?? const Uuid().v4(),
       localPath: source.path,
       sourceUri: source.sourceUri,
       name: source.name,
@@ -700,28 +758,9 @@ class UploadManager extends ChangeNotifier {
   /// The body of one transfer: reconcile with the server, then stream.
   Future<void> _transfer(Api api, UploadItem item) async {
     final id = item.id;
-
-    if (item.size == 0) {
-      await api.uploadChunk(
-        uploadId: id,
-        folder: item.folder,
-        name: item.name,
-        offset: 0,
-        total: 0,
-        bytes: const Stream<List<int>>.empty(),
-        contentLength: 0,
-      );
-      await _complete(id);
-      return;
-    }
-
-    // The server owns the offset. A brand-new item starts at zero; an
-    // interrupted transfer reconciles with the server before resuming.
-    var offset = item.transferred > 0 ? await _serverOffset(api, id) : 0;
-    if (offset < 0 || offset > item.size) offset = 0;
-
     final sourceUri = item.sourceUri;
     String? sourceSessionId;
+
     Future<void> resetSourceSession(int at) async {
       if (sourceUri == null) return;
       final previous = sourceSessionId;
@@ -731,18 +770,90 @@ class UploadManager extends ChangeNotifier {
           await ContentSource.closeStream(previous);
         } catch (_) {
           // The host may already be shutting down; opening the next source
-          // will fail with the original provider error if access is gone.
+          // reports the original provider error if access is gone.
         }
       }
       sourceSessionId = await ContentSource.openStream(sourceUri, at);
     }
 
-    var attempts = 0;
+    Future<void> verifyCompleted(Map<String, dynamic> response) async {
+      final received = (response['bytes_received'] as num?)?.toInt() ??
+          (response['offset'] as num?)?.toInt();
+      if (response['status'] != 'completed' || received != item.size) {
+        throw StateError('The server has not confirmed upload completion.');
+      }
+      final actualPath = response['path']?.toString();
+      final expectedPath =
+          item.folder.isEmpty ? item.name : '${item.folder}/${item.name}';
+      if (actualPath != null && actualPath != expectedPath) {
+        throw StateError(
+          'The server completed this upload at an unexpected path.',
+        );
+      }
+    }
+
+    Future<void> finalize() async {
+      var status = await api.uploadStatus(id);
+      if (status['status'] == 'completed') {
+        await verifyCompleted(status);
+        await _complete(id);
+        return;
+      }
+
+      final received = (status['bytes_received'] as num?)?.toInt() ??
+          (status['status'] == 'unknown' ? 0 : -1);
+      if (received != item.size) {
+        throw StateError(
+          'The server has received $received of ${item.size} bytes; '
+          'it cannot finalize this upload yet.',
+        );
+      }
+
+      final finalized = await api.uploadChunk(
+        uploadId: id,
+        folder: item.folder,
+        name: item.name,
+        offset: item.size,
+        total: item.size,
+        bytes: const Stream<List<int>>.empty(),
+        contentLength: 0,
+      );
+      if (finalized['status'] == 'completed') {
+        await verifyCompleted(finalized);
+        await _complete(id);
+        return;
+      }
+
+      // A full byte offset is not completion. Ask the server again after the
+      // explicit finalization request and require its durable completed state.
+      status = await api.uploadStatus(id);
+      await verifyCompleted(status);
+      await _complete(id);
+    }
+
     try {
-      // Keep one provider descriptor open for the whole transfer. This is
-      // essential for cloud providers that expose non-seekable pipes: they
-      // must not resend every earlier byte for each 16 MiB HTTP request.
-      await resetSourceSession(offset);
+      // Always reconcile, including a fresh queue row: the app may have died
+      // after the server committed the final chunk but before the journal did.
+      final initial = await api.uploadStatus(id);
+      if (initial['status'] == 'completed') {
+        await verifyCompleted(initial);
+        await _complete(id);
+        return;
+      }
+
+      var offset = (initial['bytes_received'] as num?)?.toInt() ?? 0;
+      if (offset < 0 || offset > item.size) {
+        throw StateError('The server returned an invalid upload offset.');
+      }
+
+      if (item.size == 0 || offset == item.size) {
+        await finalize();
+        return;
+      }
+
+      if (sourceUri != null) await resetSourceSession(offset);
+      var attempts = 0;
+
       while (offset < item.size) {
         if (_cancelled.contains(id)) {
           _cancelled.remove(id);
@@ -763,22 +874,40 @@ class UploadManager extends ChangeNotifier {
             contentLength: end - offset,
             onProgress: (sent) => unawaited(_progress(id, offset + sent)),
           );
-          final confirmed = (result['offset'] as num?)?.toInt() ?? end;
-          offset = confirmed < 0 ? end : confirmed;
-          attempts = 0;
-          await _progress(id, offset);
+
+          final confirmed = (result['offset'] as num?)?.toInt();
+          if (confirmed == null || confirmed < offset || confirmed > end) {
+            throw StateError('The server returned an invalid upload offset.');
+          }
           if (result['status'] == 'completed') {
+            if (confirmed != item.size) {
+              throw StateError('The server completed an incomplete upload.');
+            }
+            await verifyCompleted(result);
             await _complete(id);
             return;
           }
+          if (result['status'] != 'receiving') {
+            throw StateError('The server returned an unknown upload status.');
+          }
+          if (confirmed == offset) {
+            throw StateError(
+              'The server did not accept any bytes from this chunk.',
+            );
+          }
+
+          offset = confirmed;
+          attempts = 0;
+          await _progress(id, offset);
           if (sourceUri != null && offset != end) {
             await resetSourceSession(offset);
           }
         } on ApiException catch (error) {
           if (error.code == 'offset_mismatch') {
-            // Reconcile and reposition the single provider stream once.
             offset = await _serverOffset(api, id);
-            if (offset < 0 || offset > item.size) offset = 0;
+            if (offset < 0 || offset > item.size) {
+              throw StateError('The server returned an invalid resume offset.');
+            }
             await resetSourceSession(offset);
             continue;
           }
@@ -794,7 +923,7 @@ class UploadManager extends ChangeNotifier {
         }
       }
 
-      await _complete(id);
+      await finalize();
     } finally {
       final sessionId = sourceSessionId;
       sourceSessionId = null;
