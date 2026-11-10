@@ -49,6 +49,7 @@ internal class FolderPickerBridge(private val context: Context) {
             return entries
         }
         val queue = ArrayDeque<Pair<String, String>>()
+        var visitedEntries = 0
         queue.add(documentId to "")
         while (queue.isNotEmpty()) {
             val (parentId, parentPath) = queue.removeFirst()
@@ -71,22 +72,40 @@ internal class FolderPickerBridge(private val context: Context) {
                 )
             } catch (e: Exception) {
                 null
-            } ?: continue
+            } ?: throw IllegalStateException(
+                "Could not read folder ${if (parentPath.isEmpty()) "root" else parentPath}",
+            )
             cursor.use { c ->
-                while (c.moveToNext() && entries.size < maxEntries) {
+                while (c.moveToNext()) {
+                    visitedEntries++
+                    if (visitedEntries > maxEntries) {
+                        throw IllegalStateException(
+                            "The selected folder contains more than $maxEntries entries. Choose a smaller folder.",
+                        )
+                    }
                     val id = c.getString(0) ?: continue
                     val name = c.getString(1) ?: continue
                     val mime = c.getString(2) ?: ""
-                    val size = if (c.isNull(3)) 0L else c.getLong(3)
+                    val reportedSize = if (c.isNull(3)) -1L else c.getLong(3)
                     val childUri = DocumentsContract.buildDocumentUriUsingTree(
                         treeUri,
                         id,
                     )
+                    val size = if (reportedSize >= 0L) {
+                        reportedSize
+                    } else {
+                        try {
+                            resolver.openAssetFileDescriptor(childUri, "r")?.use { it.length } ?: -1L
+                        } catch (_: Exception) {
+                            -1L
+                        }
+                    }
                     val relative =
                         if (parentPath.isEmpty()) name else "$parentPath/$name"
                     if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
                         queue.add(id to relative)
                     } else {
+                        // Preserve unknown sizes so Flutter can report an error instead of silently skipping a file.
                         entries.add(Entry(relative, name, size, childUri.toString()))
                     }
                 }

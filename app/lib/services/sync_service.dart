@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'api.dart';
+import 'android_folder_backup.dart';
 import 'upload_manager.dart';
 
 class SyncResult {
@@ -33,16 +34,23 @@ class SyncManager {
   final Api api;
   SyncManager(this.api);
 
-  Future<String?> folder() async =>
-      (await SharedPreferences.getInstance()).getString(_folderKey);
+  Future<String?> folder() async {
+    if (Platform.isAndroid) return AndroidFolderBackup(api).folderLabel();
+    return (await SharedPreferences.getInstance()).getString(_folderKey);
+  }
 
   Future<void> setFolder(String path) async {
     final p = await SharedPreferences.getInstance();
     await p.setString(_folderKey, path);
   }
 
-  Future<void> clearFolder() async =>
-      (await SharedPreferences.getInstance()).remove(_folderKey);
+  Future<void> clearFolder() async {
+    if (Platform.isAndroid) {
+      await AndroidFolderBackup(api).clearFolder();
+      return;
+    }
+    await (await SharedPreferences.getInstance()).remove(_folderKey);
+  }
 
   /// Memoised in-flight resolution, so concurrent callers cannot each generate
   /// their own id. Reading `getString` and then writing is only safe because
@@ -105,6 +113,7 @@ class SyncManager {
 
   /// When the last sync finished on this device, or null if never.
   Future<DateTime?> lastSyncAt() async {
+    if (Platform.isAndroid) return AndroidFolderBackup(api).lastSyncAt();
     final state = await _state();
     return DateTime.tryParse(
       state['__meta__']?['lastSyncAt']?.toString() ?? '',
@@ -138,7 +147,7 @@ class SyncManager {
     final prefs = await SharedPreferences.getInstance();
     final existing = prefs.getString(_deviceNameKey);
     if (existing != null && existing.trim().isNotEmpty) return existing;
-    var name = 'NexaDrive desktop';
+    var name = Platform.isAndroid ? 'NexaDrive Android' : 'NexaDrive desktop';
     try {
       name = Platform.localHostname.trim().isEmpty
           ? name
@@ -316,6 +325,26 @@ class SyncManager {
   }
 
   Future<SyncResult> _runSync({void Function(String)? onProgress}) async {
+    if (Platform.isAndroid) {
+      try {
+        final deviceId = await ensureDeviceId();
+        await api.syncManifest(
+          deviceId: deviceId,
+          deviceName: await _deviceName(),
+          platform: 'android',
+        );
+        final result =
+            await AndroidFolderBackup(api).sync(onProgress: onProgress);
+
+        return SyncResult(
+          uploaded: result.uploaded,
+          errors: result.errors,
+          error: result.error,
+        );
+      } catch (error) {
+        return SyncResult(errors: 1, error: error.toString());
+      }
+    }
     if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) {
       return const SyncResult(
           errors: 1,
@@ -672,6 +701,9 @@ class SyncManager {
   }
 
   Future<String?> pickAndSetFolder() async {
+    if (Platform.isAndroid) {
+      return AndroidFolderBackup(api).pickAndSetFolder();
+    }
     final path = await FilePicker.getDirectoryPath(
       dialogTitle: 'Choose NexaDrive sync folder',
       windowsOptions: const WindowsOptions(lockParentWindow: true),
