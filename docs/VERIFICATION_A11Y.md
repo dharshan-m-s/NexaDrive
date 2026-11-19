@@ -1,5 +1,7 @@
 # NexaDrive Redesign — Verification & Accessibility Report
 
+> **Historical record — superseded.** This document is a point-in-time record of NexaDrive's former One UI / Liquid Glass design. It is not current guidance: see [docs/DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) (Material 3 / Material You) and `docs/UI_DESIGN_TOKENS.md`.
+
 > How the Samsung One UI redesign of the Flutter client was verified, and the
 > accessibility review grid it was measured against. Version note: gates below
 > reflect the completed 13-stage redesign (token foundations through final

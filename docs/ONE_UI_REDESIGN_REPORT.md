@@ -1,5 +1,7 @@
 # One UI Redesign Report
 
+> **Historical record — superseded.** This document is a point-in-time record of NexaDrive's former One UI / Liquid Glass design. It is not current guidance: see [docs/DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) (Material 3 / Material You) and `docs/UI_DESIGN_TOKENS.md`.
+
 NexaDrive's client was rebuilt around Samsung One UI's interaction language.
 This report summarizes what changed, why, and the design-token system that now
 governs the Flutter app.

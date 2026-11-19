@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Material 3 redesign
+
+The Flutter client now uses Material 3 (Material You) as its single design
+language. A seeded `ColorScheme` drives tonal surfaces, the Material type,
+shape, elevation and motion scales are centralized in `App*`, and the `Nexa*`
+components and every screen have been restyled around them. The floating
+navigation pill remains the NexaDrive signature, now built from Material 3
+surfaces with its spring-driven selection preserved. The old optical-glass
+engine and its shaders were removed.
+
+Design rules and reference docs now describe Material 3 rather than the
+previous iOS/One UI-inspired language.
+
+This pass also tightened the daily flows: completed transfers are pruned from
+the queue and its journal automatically; Files keeps one compact title row with
+secondary actions in a single overflow menu; file, transfer and home rows are
+flat tonal sections rather than stacks of elevated cards; the Photos gallery
+groups media by month, includes videos and PDFs alongside images, opens each
+type with the existing viewers, and confirms select-all deletion; and the
+floating pill is narrower with calmer, near-critically damped motion.
+
 ### Sync engine: three real defects found by a deterministic test matrix
 
 The sync engine had no end-to-end coverage — every previous claim about it rested

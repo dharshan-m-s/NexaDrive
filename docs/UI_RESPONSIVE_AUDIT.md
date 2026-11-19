@@ -1,5 +1,7 @@
 # NexaDrive UI — Responsive Behavior Audit
 
+> **Historical record — superseded.** This document is a point-in-time record of NexaDrive's former One UI / Liquid Glass design. It is not current guidance: see [docs/DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) (Material 3 / Material You) and `docs/UI_DESIGN_TOKENS.md`.
+
 > Factual account of how the 1.1.0 UI behaves across widths/heights, with the
 > breakpoints that actually exist in code and the test coverage that guards them.
 

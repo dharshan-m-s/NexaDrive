@@ -1,5 +1,7 @@
 # NexaDrive Production Engineering Report
 
+> **Historical record — superseded.** This document is a point-in-time record of NexaDrive's former One UI / Liquid Glass design. It is not current guidance: see [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) (Material 3 / Material You) and `docs/UI_DESIGN_TOKENS.md`.
+
 ## Executive Summary
 
 This report documents a comprehensive production-readiness pass on the NexaDrive application, covering the Flutter client, Rust server, and associated infrastructure. The pass was performed to identify and fix root causes, improve visual quality, ensure production correctness, and validate the complete build and update pipeline.

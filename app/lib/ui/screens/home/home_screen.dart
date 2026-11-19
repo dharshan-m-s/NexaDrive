@@ -1,11 +1,15 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import '../../../../core/design/app_colors.dart';
-import '../../../../core/design/app_motion.dart';
 import '../../../../core/design/app_dimensions.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/models/file_entry.dart';
+import '../../../../core/utils/file_kind.dart';
 import '../../../../core/utils/format.dart';
 import '../../../services/api.dart';
+import '../../../services/image_pipeline.dart';
 import '../../../services/session.dart';
 import '../../../services/upload_manager.dart';
 import '../../navigation/file_opener.dart';
@@ -41,6 +45,13 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _error;
   int _pendingUploads = 0;
   List<FileEntry> _recent = const [];
+  List<FileEntry> _photos = const [];
+  List<Map<String, dynamic>> _shared = const [];
+  final Set<String> _failedPhotoThumbs = <String>{};
+  final Set<String> _loadingPhotoThumbs = <String>{};
+
+  /// Thumbnail cache for the small photo strip on the dashboard.
+  late final ImageRepository _images;
 
   /// The upload queue this screen shows.
   late final UploadManager _manager;
@@ -49,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _manager = UploadManager.current;
+    _images = ImageRepository(widget.api);
     _manager.addListener(_onQueueChanged);
     load();
   }
@@ -77,14 +89,21 @@ class _HomeScreenState extends State<HomeScreen> {
         widget.api.storage(),
         _readQueue(),
         _readRecent(),
+        _readPhotos(),
+        _readShared(),
       ]);
       if (!mounted) return;
       setState(() {
         _storage = StorageInfo.fromJson(results[0] as Map<String, dynamic>);
         _pendingUploads = results[1] as int;
         _recent = (results[2] as List<FileEntry>);
+        _photos = (results[3] as List<FileEntry>);
+        _shared = (results[4] as List<Map<String, dynamic>>);
         _loading = false;
       });
+      for (final entry in _photos.take(8)) {
+        unawaited(_ensurePhotoThumb(entry));
+      }
     } catch (e) {
       if (!mounted) return;
       // A failed load must say so. Silently clearing the spinner leaves the
@@ -99,6 +118,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<int> _readQueue() async => _manager.pendingCount;
+
+  /// Sharing is optional dashboard context. A failed shared listing must never
+  /// blank the storage and files overview.
+  Future<List<Map<String, dynamic>>> _readShared() async {
+    try {
+      return await widget.api.shared();
+    } catch (_) {
+      return const [];
+    }
+  }
 
   Future<List<FileEntry>> _readRecent() async {
     // The API root is '' — the server rejects '/' as an absolute path.
@@ -125,6 +154,58 @@ class _HomeScreenState extends State<HomeScreen> {
   static int _newestFirst(FileEntry a, FileEntry b) =>
       b.modified!.compareTo(a.modified!);
 
+  Future<List<FileEntry>> _readPhotos() async {
+    try {
+      // Use the same authoritative gallery endpoint as the Photos tab rather
+      // than assuming every server keeps images in a folder named "Photos".
+      final raw = await widget.api.photos();
+      final photos = <FileEntry>[];
+      for (final json in raw) {
+        final entry =
+            FileEntry.fromJson(<String, dynamic>{...json, 'type': 'file'});
+        if (entry.category == Category.image ||
+            entry.category == Category.video) {
+          photos.add(entry);
+        }
+        if (photos.length == 8) break;
+      }
+      return photos;
+    } catch (_) {
+      // The dashboard still works when the photo library is unavailable.
+      return const [];
+    }
+  }
+
+  ImageKey _photoKey(FileEntry entry) => ImageRepository.keyFor(
+        entry.toJson(),
+        namespace: widget.api.session.cacheNamespace,
+        rendition: ImageRendition.thumbnail,
+      );
+
+  Future<void> _ensurePhotoThumb(FileEntry entry) async {
+    if (_failedPhotoThumbs.contains(entry.path) ||
+        _loadingPhotoThumbs.contains(entry.path)) {
+      return;
+    }
+    final key = _photoKey(entry);
+    if (_images.peekThumbnail(key) != null) return;
+    _loadingPhotoThumbs.add(entry.path);
+    try {
+      await _images.thumbnail(key);
+      if (mounted) setState(() {});
+    } on ThumbnailUnavailable {
+      if (mounted) setState(() => _failedPhotoThumbs.add(entry.path));
+    } catch (_) {
+    } finally {
+      _loadingPhotoThumbs.remove(entry.path);
+    }
+  }
+
+  Uint8List? _photoThumb(FileEntry entry) {
+    if (_failedPhotoThumbs.contains(entry.path)) return null;
+    return _images.peekThumbnail(_photoKey(entry));
+  }
+
   /// A stable identity for whichever storage-hero state is showing.
   String get _heroState {
     if (_storage != null) return 'ready';
@@ -138,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final pageTitle =
         MediaQuery.sizeOf(context).width >= 900 ? 'Overview' : 'NexaDrive';
 
-    final brightness = Theme.of(context).brightness;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return NexaPage(
       title: pageTitle,
@@ -148,10 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
       headerAction: IconButton(
         tooltip: 'Refresh overview',
         onPressed: _loading ? null : load,
-        icon: Icon(
-          Icons.refresh_rounded,
-          color: AppColors.accentTextFor(brightness),
-        ),
+        icon: Icon(Icons.refresh_rounded, color: colorScheme.primary),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -160,11 +238,17 @@ class _HomeScreenState extends State<HomeScreen> {
           NexaStateSwitcher(
             stateKey: ValueKey(_heroState),
             child: storage != null
-                ? _StorageHero(
-                    storage: storage,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => StorageInsightsScreen(api: widget.api),
+                ? NexaSurface(
+                    level: NexaSurfaceLevel.grouped,
+                    radius: AppDimens.radiusLarge,
+                    padding: const EdgeInsets.all(AppDimens.space16),
+                    child: _StorageHero(
+                      storage: storage,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              StorageInsightsScreen(api: widget.api),
+                        ),
                       ),
                     ),
                   )
@@ -172,7 +256,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? const Center(
                         child: Padding(
                           padding: EdgeInsets.only(top: AppDimens.space40),
-                          child: NexaCircularProgress(size: 20),
+                          child: NexaCircularProgress(
+                            size: AppDimens.iconMedium,
+                          ),
                         ),
                       )
                     : _HomeConnectionNotice(
@@ -182,6 +268,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
           ),
           // ------------------------------------- quick actions (focus blocks)
+          const SizedBox(height: AppDimens.space24),
           const _SectionHeader('Quick actions'),
           const SizedBox(height: AppDimens.space12),
           _QuickActionsGrid(
@@ -215,6 +302,20 @@ class _HomeScreenState extends State<HomeScreen> {
             recent: _recent,
             onNavigate: widget.onNavigate,
           ),
+          if (_photos.isNotEmpty) ...[
+            const SizedBox(height: AppDimens.space32),
+            _PhotoStrip(
+              photos: _photos,
+              thumbnailFor: _photoThumb,
+              api: widget.api,
+              onOpenLibrary: () => widget.onNavigate(3),
+            ),
+          ],
+          const SizedBox(height: AppDimens.space32),
+          _SharedPreview(
+            shares: _shared,
+            onNavigate: widget.onNavigate,
+          ),
         ],
       ),
     );
@@ -227,11 +328,10 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
     return Text(
-      title,
+      title.toUpperCase(),
       style: AppTextStyle.sectionHeader.copyWith(
-        color: AppColors.labelPrimaryFor(brightness),
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
       ),
     );
   }
@@ -284,8 +384,8 @@ class _StorageHero extends StatelessWidget {
   return (n.toStringAsFixed(digits), units[i]);
 }
 
-/// Quick actions as vertical focus blocks — 2 across on phones, more on wide
-/// screens. Each block is a comfortable interaction target.
+/// Quick actions as a calm 2×2 gallery, matching the visual rhythm of a photo
+/// library rather than a list of settings rows.
 class _QuickActionsGrid extends StatelessWidget {
   final ValueChanged<int> onNavigate;
   final ValueChanged<FilesIntent>? onFilesIntent;
@@ -303,56 +403,43 @@ class _QuickActionsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
     final items = <_QuickActionData>[
       _QuickActionData(
         Icons.cloud_upload_outlined,
         'Upload files',
         'Add to your cloud',
-        AppColors.accentFor(brightness),
         () => _request(FilesIntent.upload),
       ),
       _QuickActionData(
         Icons.drive_folder_upload_outlined,
         'Upload folder',
         'Keep folders together',
-        const Color(0xFF2C9AA0),
         () => _request(FilesIntent.uploadFolder),
       ),
       _QuickActionData(
         Icons.create_new_folder_outlined,
         'New folder',
         'Organise your space',
-        AppColors.successFor(brightness),
         () => _request(FilesIntent.newFolder),
       ),
       _QuickActionData(
         Icons.photo_library_outlined,
         'Photo library',
         'Your memories, together',
-        const Color(0xFFD58B4B),
         () => onNavigate(3),
       ),
     ];
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 720 ? 4 : 2;
-        const spacing = AppDimens.space10;
-        final width =
-            (constraints.maxWidth - spacing * (columns - 1)) / columns;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [
-            for (final item in items)
-              SizedBox(
-                width: width,
-                height: 116,
-                child: _QuickActionTile(data: item),
-              ),
-          ],
-        );
-      },
+
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: AppDimens.space12,
+      crossAxisSpacing: AppDimens.space12,
+      childAspectRatio: 2.4,
+      children: [
+        for (final item in items) _QuickActionTile(data: item),
+      ],
     );
   }
 }
@@ -361,14 +448,12 @@ class _QuickActionData {
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color tint;
   final VoidCallback onTap;
 
   const _QuickActionData(
     this.icon,
     this.title,
     this.subtitle,
-    this.tint,
     this.onTap,
   );
 }
@@ -379,94 +464,54 @@ class _QuickActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final radius = BorderRadius.circular(AppDimens.radiusLarge);
-    final tint = data.tint;
-
-    return NexaPressable(
-      pressedScale: AppMotion.pressScaleMedia,
-      child: Material(
-        color: AppColors.surfaceFor(brightness),
-        borderRadius: radius,
-        child: InkWell(
-          onTap: data.onTap,
-          borderRadius: radius,
-          child: Ink(
+    final scheme = Theme.of(context).colorScheme;
+    return NexaSurface(
+      level: NexaSurfaceLevel.grouped,
+      radius: AppDimens.radiusMedium,
+      padding: const EdgeInsets.all(AppDimens.space12),
+      onTap: data.onTap,
+      child: Row(
+        children: [
+          Container(
+            width: AppDimens.iconTile,
+            height: AppDimens.iconTile,
             decoration: BoxDecoration(
-              borderRadius: radius,
-              border: Border.all(
-                color: tint.withValues(
-                  alpha: brightness == Brightness.dark ? 0.22 : 0.13,
-                ),
-                width: 0.8,
-              ),
-              color: AppColors.surfaceFor(brightness),
+              color: scheme.primaryContainer,
+              borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
             ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppDimens.space12,
-                AppDimens.space12,
-                AppDimens.space12,
-                AppDimens.space10,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: tint.withValues(
-                            alpha: brightness == Brightness.dark ? 0.20 : 0.11,
-                          ),
-                          borderRadius: BorderRadius.circular(
-                            AppDimens.radiusMedium,
-                          ),
-                          border: Border.all(
-                            color: tint.withValues(alpha: 0.18),
-                          ),
-                        ),
-                        child: Icon(
-                          data.icon,
-                          size: 21,
-                          color: tint,
-                        ),
-                      ),
-                      const Spacer(),
-                      Icon(
-                        Icons.arrow_outward_rounded,
-                        size: 15,
-                        color: AppColors.labelTertiaryFor(brightness),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Text(
-                    data.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyle.subheadline.copyWith(
-                      color: AppColors.labelPrimaryFor(brightness),
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.15,
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.space2),
-                  Text(
-                    data.subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyle.caption2.copyWith(
-                      color: AppColors.labelSecondaryFor(brightness),
-                    ),
-                  ),
-                ],
-              ),
+            child: Icon(
+              data.icon,
+              size: AppDimens.iconMedium,
+              color: scheme.onPrimaryContainer,
             ),
           ),
-        ),
+          const SizedBox(width: AppDimens.space12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  data.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyle.rowTitle.copyWith(
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space2),
+                Text(
+                  data.subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyle.bodySmall.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -479,52 +524,225 @@ class _HomeConnectionNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    return Container(
-      padding: const EdgeInsets.all(AppDimens.space16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceFor(brightness),
-        borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-        border: Border.all(color: AppColors.dividerFor(brightness)),
+    final scheme = Theme.of(context).colorScheme;
+    return NexaSurface(
+      level: NexaSurfaceLevel.grouped,
+      child: Padding(
+        padding: const EdgeInsets.all(AppDimens.space16),
+        child: Row(
+          children: [
+            Container(
+              width: AppDimens.iconTileLarge,
+              height: AppDimens.iconTileLarge,
+              decoration: BoxDecoration(
+                color: scheme.errorContainer,
+                borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+              ),
+              child: Icon(
+                Icons.cloud_off_rounded,
+                color: scheme.onErrorContainer,
+              ),
+            ),
+            const SizedBox(width: AppDimens.space12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Server unavailable',
+                    style: AppTextStyle.titleLarge.copyWith(
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space4),
+                  Text(
+                    message,
+                    style: AppTextStyle.bodySmall.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
+        ),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppColors.errorContainerFor(brightness),
-              borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+    );
+  }
+}
+
+/// A quiet, edge-to-edge photo strip on the dashboard.
+class _PhotoStrip extends StatelessWidget {
+  final List<FileEntry> photos;
+  final Uint8List? Function(FileEntry entry) thumbnailFor;
+  final Api api;
+  final VoidCallback onOpenLibrary;
+
+  const _PhotoStrip({
+    required this.photos,
+    required this.thumbnailFor,
+    required this.api,
+    required this.onOpenLibrary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(child: _SectionHeader('Recent photos')),
+            TextButton(
+              onPressed: onOpenLibrary,
+              child: const Text('Open library'),
             ),
-            child: Icon(
-              Icons.cloud_off_rounded,
-              color: AppColors.errorFor(brightness),
-            ),
+          ],
+        ),
+        const SizedBox(height: AppDimens.space12),
+        SizedBox(
+          height: AppDimens.photoStripTile,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: photos.length,
+            separatorBuilder: (_, __) =>
+                const SizedBox(width: AppDimens.space8),
+            itemBuilder: (context, index) {
+              final entry = photos[index];
+              final bytes = thumbnailFor(entry);
+              return SizedBox(
+                width: AppDimens.photoStripTile,
+                child: Material(
+                  color: scheme.surfaceContainerLow,
+                  borderRadius:
+                      BorderRadius.circular(AppDimens.radiusExtraSmall),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => FileOpener.open(
+                      context,
+                      api: api,
+                      entry: entry,
+                      siblings: photos,
+                    ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (bytes != null)
+                          Image.memory(
+                            bytes,
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                            semanticLabel: 'Preview of ${entry.name}',
+                          )
+                        else
+                          Center(
+                            child: NexaFileGlyph(
+                              name: entry.name,
+                              type: entry.type,
+                              size: 36,
+                            ),
+                          ),
+                        if (entry.category == Category.video)
+                          Positioned(
+                            right: AppDimens.space6,
+                            bottom: AppDimens.space6,
+                            child: Icon(
+                              Icons.play_circle_outlined,
+                              color: scheme.onPrimary,
+                              size: AppDimens.iconMedium,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
-          const SizedBox(width: AppDimens.space12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Server unavailable',
-                  style: AppTextStyle.title3.copyWith(
-                    color: AppColors.labelPrimaryFor(brightness),
-                  ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Personal, compact shared-with-me preview for the dashboard.
+class _SharedPreview extends StatelessWidget {
+  final List<Map<String, dynamic>> shares;
+  final ValueChanged<int> onNavigate;
+
+  const _SharedPreview({required this.shares, required this.onNavigate});
+
+  String _name(Map<String, dynamic> share) {
+    final path = share['path']?.toString() ?? '';
+    final name = path.split('/').last;
+    return name.isEmpty ? 'Shared item' : name;
+  }
+
+  String _subtitle(Map<String, dynamic> share) {
+    final owner =
+        (share['owner'] ?? share['owner_username'])?.toString().trim() ?? '';
+    final permission =
+        share['permission']?.toString() == 'write' ? 'Can edit' : 'Can view';
+    final from = owner.isEmpty ? 'Shared with you' : 'Shared by $owner';
+    return '$from · $permission';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final visible = shares.take(3).toList(growable: false);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(child: _SectionHeader('Shared with me')),
+            TextButton(
+              onPressed: () => onNavigate(2),
+              child: const Text('See all'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppDimens.space8),
+        if (visible.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppDimens.space12),
+            child: Text(
+              'Files others share with you will appear here.',
+              style: AppTextStyle.bodySmall.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        else
+          Column(
+            children: [
+              for (var i = 0; i < visible.length; i++) ...[
+                NexaSharedTile(
+                  name: _name(visible[i]),
+                  path: visible[i]['path']?.toString() ?? '',
+                  isFolder: FileEntry.kindOf(visible[i]) == 'folder',
+                  person: (visible[i]['owner'] ?? visible[i]['owner_username'])
+                      ?.toString(),
+                  subtitle: _subtitle(visible[i]),
+                  onTap: () => onNavigate(2),
                 ),
-                const SizedBox(height: AppDimens.space4),
-                Text(
-                  message,
-                  style: AppTextStyle.caption1.copyWith(
-                    color: AppColors.labelSecondaryFor(brightness),
+                if (i < visible.length - 1)
+                  Divider(
+                    height: 1,
+                    color: scheme.outlineVariant,
+                    indent: AppDimens.rowInset +
+                        AppDimens.iconTileLarge +
+                        AppDimens.space16,
+                    endIndent: AppDimens.rowInset,
                   ),
-                ),
               ],
-            ),
+            ],
           ),
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -545,7 +763,7 @@ class _RecentSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -555,18 +773,15 @@ class _RecentSection extends StatelessWidget {
             const Expanded(child: _SectionHeader('Recent')),
             TextButton(
               onPressed: () => onNavigate(1),
-              style: TextButton.styleFrom(
-                minimumSize: const Size(44, 36),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppDimens.space8,
-                ),
-              ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('See all', style: AppTextStyle.subheadline),
+                  Text('See all', style: AppTextStyle.labelLarge),
                   const SizedBox(width: AppDimens.space2),
-                  const Icon(Icons.chevron_right_rounded, size: 17),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: AppDimens.iconSmall,
+                  ),
                 ],
               ),
             ),
@@ -576,27 +791,27 @@ class _RecentSection extends StatelessWidget {
         if (storage != null && storage!.fileCount == 0)
           NexaSurface(
             level: NexaSurfaceLevel.grouped,
-            radius: AppDimens.radiusMedium,
+            radius: AppDimens.radiusCard,
             padding: const EdgeInsets.all(AppDimens.space20),
             child: Column(
               children: [
                 Icon(
                   Icons.cloud_done_outlined,
-                  size: 40,
-                  color: AppColors.accentFor(brightness),
+                  size: AppDimens.iconTile,
+                  color: scheme.primary,
                 ),
                 const SizedBox(height: AppDimens.space12),
                 Text(
                   'Nothing here yet',
-                  style: AppTextStyle.sectionHeader.copyWith(
-                    color: AppColors.labelPrimaryFor(brightness),
+                  style: AppTextStyle.titleMedium.copyWith(
+                    color: scheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: AppDimens.space4),
                 Text(
                   'Upload your first files to get started.',
-                  style: AppTextStyle.caption1.copyWith(
-                    color: AppColors.labelSecondaryFor(brightness),
+                  style: AppTextStyle.bodySmall.copyWith(
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -613,7 +828,7 @@ class _RecentSection extends StatelessWidget {
         else
           NexaSurface(
             level: NexaSurfaceLevel.grouped,
-            radius: AppDimens.radiusMedium,
+            radius: AppDimens.radiusCard,
             child: Column(
               children: [
                 for (var index = 0; index < recent.length; index++) ...[
@@ -622,10 +837,6 @@ class _RecentSection extends StatelessWidget {
                     showChevron: true,
                     subtitle: '${Format.relTime(recent[index].modified)} · '
                         '${Format.bytes(recent[index].size)}',
-                    trailing: Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppColors.labelTertiaryFor(brightness),
-                    ),
                     // Open the actual file from Home without making users
                     // navigate back through the folder hierarchy.
                     onTap: (entry) => FileOpener.open(
@@ -637,11 +848,9 @@ class _RecentSection extends StatelessWidget {
                   ),
                   if (index < recent.length - 1)
                     Divider(
-                      height: 1,
-                      thickness: 0.5,
                       indent: AppDimens.iconTileLarge + AppDimens.space24,
                       endIndent: AppDimens.space16,
-                      color: AppColors.dividerFor(brightness),
+                      color: scheme.outlineVariant,
                     ),
                 ],
               ],

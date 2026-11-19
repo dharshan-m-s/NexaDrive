@@ -199,6 +199,8 @@ Back up `data/` and `storage/`; the two are enough to rebuild everything.
 - The server sets strict headers (`nosniff`, `DENY` frame, no-referrer,
   `no-store` Cache-Control) on every response except opt-in thumbnail caching.
 - Thumbnails (`GET /api/files/thumbnail`) are generated on the server from
-  full images; uploaded originals are never rewritten.
+  images, first video frames (`ffmpeg`) and first PDF pages (`pdftoppm`);
+  uploaded originals are never rewritten. The tools are optional: without
+  them, video/PDF requests return `415` and clients show a type glyph.
 
 See `docs/SECURITY_AUDIT.md` and `docs/APP_QA_CHECKLIST.md` for the full audit.

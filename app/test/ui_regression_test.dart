@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:nexadrive/core/design/app_colors.dart';
 import 'package:nexadrive/core/design/app_theme.dart';
 import 'package:nexadrive/core/models/file_entry.dart';
 import 'package:nexadrive/main.dart';
@@ -11,7 +12,6 @@ import 'package:nexadrive/services/session.dart';
 import 'package:nexadrive/ui/screens/files/file_share_sheet.dart';
 import 'package:nexadrive/ui/screens/files/files_screen.dart';
 import 'package:nexadrive/ui/screens/trash/trash_screen.dart';
-import 'package:nexadrive/ui/widgets/nexa_liquid_glass.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Layout and state regression tests for the redesigned screens.
@@ -88,7 +88,11 @@ void main() {
     testWidgets('upload offers a gallery choice and a file browser',
         (tester) async {
       await pump(tester, FilesScreen(api: listingApi(const [])));
-      await tester.tap(find.byTooltip('Upload files'));
+      await tester.tap(find.byTooltip('More actions'));
+      await tester.pumpAndSettle();
+      // An empty folder also offers a primary Upload action, so the overflow
+      // menu entry is the last of the two labels in the widget tree.
+      await tester.tap(find.text('Upload files').last);
       await tester.pumpAndSettle();
 
       expect(find.text('Choose from gallery'), findsOneWidget);
@@ -113,15 +117,19 @@ void main() {
         size: const Size(320, 640),
       );
       expect(tester.takeException(), isNull);
-      // Three compact controls replaced the previous seven-icon row.
-      expect(find.byTooltip('Upload files'), findsOneWidget);
+      // The Files header keeps only Search and a single overflow control;
+      // upload, sort and view switching live inside the overflow menu.
       expect(find.byTooltip('Search files'), findsOneWidget);
       expect(find.byTooltip('More actions'), findsOneWidget);
-      expect(find.byTooltip('Sort files'), findsOneWidget);
-      expect(find.byTooltip('Switch to grid view'), findsOneWidget);
-      await tester.tap(find.byTooltip('Switch to grid view'));
+      expect(find.byTooltip('Upload files'), findsNothing);
+      expect(find.byTooltip('Sort files'), findsNothing);
+      await tester.tap(find.byTooltip('More actions'));
       await tester.pumpAndSettle();
-      expect(find.byTooltip('Switch to list view'), findsOneWidget);
+      expect(find.text('Upload files'), findsOneWidget);
+      expect(find.text('Sort by…'), findsOneWidget);
+      expect(find.text('Grid view'), findsOneWidget);
+      await tester.tap(find.text('Grid view'));
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     });
 
@@ -255,8 +263,15 @@ void main() {
       expect(find.text('Sync'), findsOneWidget);
       expect(find.text('Alerts'), findsOneWidget);
       expect(find.text('Settings'), findsOneWidget);
-      // The compact popup and the dock both use the same bounded glass material.
-      expect(find.byType(NexaLiquidGlass), findsWidgets);
+      // The compact popup and the pill share the same tonal M3 surface role.
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Material &&
+              widget.color == AppColors.lightScheme.surfaceContainerHigh,
+        ),
+        findsWidgets,
+      );
       // The floating navigation remains mounted beneath the menu.
       expect(find.text('Home'), findsOneWidget);
       expect(find.text('Files'), findsOneWidget);

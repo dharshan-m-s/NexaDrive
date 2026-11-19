@@ -13,7 +13,7 @@ import '../../../services/api.dart';
 import '../../../services/download_service.dart';
 import '../../widgets/nexa_components.dart';
 
-/// One UI video player.
+/// Immersive video player with floating, tonal controls.
 ///
 /// Streams the clip from the server with the session's auth headers, so
 /// seeking works through the server's byte-range support (no full download
@@ -147,16 +147,31 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
-  Future<void> _seekRelative(
-    VideoPlayerController controller,
-    Duration position,
-    Duration offset,
-  ) async {
-    final target = position + offset;
-    final milliseconds = target.inMilliseconds
-        .clamp(0, controller.value.duration.inMilliseconds)
-        .toInt();
-    await controller.seekTo(Duration(milliseconds: milliseconds));
+  Future<void> _setMuted(bool mute) async {
+    final controller = _controller;
+    if (controller == null) return;
+    final volume = mute ? 0.0 : 1.0;
+    setState(() => _volume = volume);
+    await controller.setVolume(volume);
+    _scheduleHide(restart: true);
+  }
+
+  Future<void> _setSpeed(double speed) async {
+    final controller = _controller;
+    if (controller == null) return;
+    setState(() => _speed = speed);
+    await controller.setPlaybackSpeed(speed);
+    _scheduleHide(restart: true);
+  }
+
+  /// Google Photos-style 10-second nudges, clamped to the real duration.
+  Future<void> _seekBy(Duration delta) async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    var target = controller.value.position + delta;
+    if (target < Duration.zero) target = Duration.zero;
+    if (target > controller.value.duration) target = controller.value.duration;
+    await controller.seekTo(target);
     _scheduleHide(restart: true);
   }
 
@@ -208,6 +223,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     final controller = _controller;
     final value = controller?.value;
     final initialized = value?.isInitialized == true;
+    // Video runs on a black canvas: use a complete dark ColorScheme so the
+    // page header, empty states and tonal control surfaces resolve together.
+    final darkTheme = Theme.of(context).copyWith(
+      brightness: Brightness.dark,
+      colorScheme: AppColors.scheme(Brightness.dark),
+    );
 
     final body = _initializing
         ? const Center(
@@ -234,39 +255,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         if (!didPop && _fullscreen) _toggleFullscreen();
       },
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.canvasDark,
         body: SafeArea(
-          top: _fullscreen,
-          child: _fullscreen
-              // In fullscreen the video owns the whole surface: no header.
-              ? NexaImmersivePage(
-                  backgroundColor: Colors.black,
-                  body: body,
-                )
-              : NexaPage(
-                  headerIcon: Icons.movie_rounded,
-                  title: widget.file.name,
-                  // This page paints its own black canvas, so the header has to
-                  // force light chrome rather than inherit the theme's dark text.
-                  headerForeground: Colors.white,
-                  leading: IconButton(
-                    tooltip:
-                        MaterialLocalizations.of(context).backButtonTooltip,
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const Icon(
-                      Icons.arrow_back_rounded,
-                      color: Colors.white,
-                    ),
-                  ),
-                  headerAction: IconButton(
-                    tooltip: 'Save to device',
-                    onPressed: _saveToDevice,
-                    icon: const Icon(Icons.download_outlined,
-                        color: Colors.white),
-                  ),
-                  padding: EdgeInsets.zero,
-                  body: body,
-                ),
+          top: !_fullscreen,
+          bottom: false,
+          child: Theme(
+            data: darkTheme,
+            child: Stack(
+              children: [
+                Positioned.fill(child: body),
+                _videoTopChrome(context),
+                if (initialized) _videoControls(context, controller!, value!),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -277,18 +279,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     VideoPlayerValue value,
   ) {
     final aspect = value.aspectRatio > 0 ? value.aspectRatio : 16 / 9;
-    final duration = value.duration;
-    final fraction = _dragging
-        ? _dragFraction
-        : duration.inMilliseconds > 0
-            ? (value.position.inMilliseconds / duration.inMilliseconds)
-                .clamp(0.0, 1.0)
-                .toDouble()
-            : 0.0;
-    final shownPosition = _dragging
-        ? Duration(milliseconds: (fraction * duration.inMilliseconds).round())
-        : value.position;
-
     final video = Center(
       child: AspectRatio(
         aspectRatio: aspect,
@@ -299,7 +289,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             if (value.isBuffering && value.isPlaying)
               const Center(
                 child: CircularProgressIndicator(
-                    color: Colors.white70, strokeWidth: 2),
+                  color: Colors.white70,
+                  strokeWidth: 2,
+                ),
               ),
             if (!value.isPlaying && !value.isBuffering)
               _PlayOverlay(onTap: _togglePlay),
@@ -311,260 +303,326 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _toggleControls,
-      child: Stack(
-        children: [
-          Positioned.fill(child: video),
-          if (_fullscreen)
-            Positioned(
-              left: AppDimens.space12,
-              right: AppDimens.space12,
-              top: AppDimens.space12,
-              child: AnimatedSlide(
-                offset: _controlsVisible ? Offset.zero : const Offset(0, -0.12),
-                duration: AppMotion.resolve(context, AppMotion.fast),
-                curve: AppMotion.standard,
-                child: AnimatedOpacity(
-                  opacity: _controlsVisible ? 1 : 0,
-                  duration: AppMotion.resolve(context, AppMotion.fast),
-                  child: IgnorePointer(
-                    ignoring: !_controlsVisible,
-                    child: Theme(
-                      data: Theme.of(context).copyWith(
-                        brightness: Brightness.dark,
-                        colorScheme: Theme.of(context).colorScheme.copyWith(
-                              brightness: Brightness.dark,
-                            ),
-                      ),
-                      child: NexaLiquidGlass(
-                        borderRadius:
-                            BorderRadius.circular(AppDimens.radiusPill),
-                        blurSigma: 18,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimens.space4,
-                          vertical: AppDimens.space2,
-                        ),
-                        child: Row(
-                          children: [
-                            const SizedBox(width: AppDimens.space12),
-                            Expanded(
-                              child: Text(
-                                widget.file.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyle.rowTitle.copyWith(
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: 'Save to device',
-                              onPressed: _saveToDevice,
-                              color: Colors.white,
-                              icon: const Icon(Icons.download_outlined),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+      child: Stack(children: [Positioned.fill(child: video)]),
+    );
+  }
+
+  /// Google Photos-style metadata overlay: no header slab, just a floating
+  /// back control, the clip's date/title, and the advanced controls menu.
+  Widget _videoTopChrome(BuildContext context) {
+    final modified = widget.file.modified?.toLocal();
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: 0,
+      child: SafeArea(
+        bottom: false,
+        child: IgnorePointer(
+          ignoring: !_controlsVisible,
+          child: AnimatedOpacity(
+            opacity: _controlsVisible ? 1 : 0,
+            duration: AppMotion.resolve(context, AppMotion.fast),
+            curve: AppMotion.standard,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.space8,
+                vertical: AppDimens.space8,
               ),
-            ),
-          Positioned(
-            left: AppDimens.space12,
-            right: AppDimens.space12,
-            bottom: AppDimens.space12,
-            child: AnimatedOpacity(
-              opacity: _controlsVisible ? 1 : 0,
-              duration: AppMotion.resolve(context, AppMotion.fast),
-              curve: AppMotion.standard,
-              child: IgnorePointer(
-                ignoring: !_controlsVisible,
-                child: Theme(
-                  data: Theme.of(context).copyWith(
-                    brightness: Brightness.dark,
-                    colorScheme: Theme.of(context).colorScheme.copyWith(
-                          brightness: Brightness.dark,
-                        ),
+              child: Row(
+                children: [
+                  _FloatingIcon(
+                    icon: Icons.arrow_back_rounded,
+                    tooltip:
+                        MaterialLocalizations.of(context).backButtonTooltip,
+                    onTap: () => Navigator.of(context).maybePop(),
                   ),
-                  child: NexaLiquidGlass(
-                    borderRadius: BorderRadius.circular(AppDimens.radiusCard),
-                    blurSigma: 22,
-                    padding: const EdgeInsets.fromLTRB(
-                      AppDimens.space8,
-                      AppDimens.space8,
-                      AppDimens.space8,
-                      AppDimens.space4,
-                    ),
+                  const SizedBox(width: AppDimens.space8),
+                  Expanded(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
-                          children: [
-                            IconButton(
-                              tooltip: value.isPlaying ? 'Pause' : 'Play',
-                              onPressed: _togglePlay,
-                              color: Colors.white,
-                              iconSize: 34,
-                              icon: Icon(
-                                value.isPlaying
-                                    ? Icons.pause_rounded
-                                    : Icons.play_arrow_rounded,
+                        Text(
+                          widget.file.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: AppTextStyle.labelMedium.copyWith(
+                            color: Colors.white,
+                            shadows: const [
+                              Shadow(
+                                color: AppColors.scrim,
+                                blurRadius: AppDimens.space6,
                               ),
-                            ),
-                            IconButton(
-                              tooltip: 'Back 10 seconds',
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints.tightFor(
-                                width: 36,
-                                height: 36,
-                              ),
-                              onPressed: () => _seekRelative(
-                                controller,
-                                value.position,
-                                const Duration(seconds: -10),
-                              ),
-                              color: Colors.white70,
-                              icon: const Icon(
-                                Icons.replay_10_rounded,
-                                size: 22,
-                              ),
-                            ),
-                            Text(
-                              Format.duration(shownPosition),
-                              style: AppTextStyle.micro
-                                  .copyWith(color: Colors.white70),
-                            ),
-                            IconButton(
-                              tooltip: 'Forward 10 seconds',
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints.tightFor(
-                                width: 36,
-                                height: 36,
-                              ),
-                              onPressed: () => _seekRelative(
-                                controller,
-                                value.position,
-                                const Duration(seconds: 10),
-                              ),
-                              color: Colors.white70,
-                              icon: const Icon(
-                                Icons.forward_10_rounded,
-                                size: 22,
-                              ),
-                            ),
-                            Expanded(
-                              child: SliderTheme(
-                                data: const SliderThemeData(
-                                  activeTrackColor: AppColors.accentDark,
-                                  inactiveTrackColor: Colors.white24,
-                                  thumbColor: AppColors.accentDark,
-                                  trackHeight: 3,
-                                  thumbShape: RoundSliderThumbShape(
-                                    enabledThumbRadius: 6,
-                                  ),
-                                ),
-                                child: Slider(
-                                  value: fraction,
-                                  onChangeStart: (_) =>
-                                      setState(() => _dragging = true),
-                                  onChanged: (v) =>
-                                      setState(() => _dragFraction = v),
-                                  onChangeEnd: (v) async {
-                                    setState(() => _dragging = false);
-                                    final target = Duration(
-                                      milliseconds:
-                                          (v * duration.inMilliseconds).round(),
-                                    );
-                                    await controller.seekTo(target);
-                                    _scheduleHide(restart: true);
-                                  },
-                                ),
-                              ),
-                            ),
-                            Text(
-                              duration == Duration.zero
-                                  ? '--:--'
-                                  : Format.duration(duration),
-                              style: AppTextStyle.micro
-                                  .copyWith(color: Colors.white70),
-                            ),
-                            IconButton(
-                              tooltip: _fullscreen
-                                  ? 'Exit full screen'
-                                  : 'Full screen',
-                              onPressed: _toggleFullscreen,
-                              color: Colors.white,
-                              icon: Icon(
-                                _fullscreen
-                                    ? Icons.fullscreen_exit_rounded
-                                    : Icons.fullscreen_rounded,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                        Row(
-                          children: [
-                            Icon(
-                              _volume == 0
-                                  ? Icons.volume_off_rounded
-                                  : Icons.volume_up_rounded,
-                              color: Colors.white70,
-                              size: AppDimens.iconSmall,
-                            ),
-                            Expanded(
-                              child: SliderTheme(
-                                data: SliderTheme.of(context).copyWith(
-                                  trackHeight: 2,
-                                  thumbShape: const RoundSliderThumbShape(
-                                    enabledThumbRadius: 5,
-                                  ),
-                                  activeTrackColor: Colors.white70,
-                                  inactiveTrackColor: Colors.white24,
-                                  thumbColor: Colors.white,
-                                ),
-                                child: Slider(
-                                  value: _volume,
-                                  onChanged: (v) async {
-                                    setState(() => _volume = v);
-                                    await controller.setVolume(v);
-                                  },
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: AppDimens.space12),
-                            for (final option in _speeds)
-                              if (option == 1.0 ||
-                                  option == 1.5 ||
-                                  option == 2.0)
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    right: AppDimens.space4,
-                                  ),
-                                  child: ChoiceChip(
-                                    label: Text(
-                                      option == 1.0 ? '1Ã' : '$optionÃ',
-                                    ),
-                                    selected: (_speed - option).abs() < 0.001,
-                                    onSelected: (_) async {
-                                      setState(() => _speed = option);
-                                      await controller.setPlaybackSpeed(option);
-                                    },
-                                  ),
-                                ),
-                          ],
-                        ),
-                        const SizedBox(height: AppDimens.space4),
+                        if (modified != null) ...[
+                          const SizedBox(height: AppDimens.space2),
+                          Text(
+                            Format.shortDateTime(modified),
+                            style: AppTextStyle.caption
+                                .copyWith(color: Colors.white70),
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                ),
+                  Material(
+                    color: AppColors.scrim,
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: PopupMenuButton<_VideoTopAction>(
+                      tooltip: 'More controls',
+                      color: AppColors.canvasDark,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: AppDimens.touchTarget * 4,
+                      ),
+                      icon: const SizedBox(
+                        width: AppDimens.touchTarget,
+                        height: AppDimens.touchTarget,
+                        child: Icon(
+                          Icons.more_vert_rounded,
+                          color: Colors.white,
+                          size: AppDimens.iconMedium,
+                        ),
+                      ),
+                      onSelected: (action) {
+                        switch (action) {
+                          case _VideoTopAction.save:
+                            _saveToDevice();
+                          case _VideoTopAction.mute:
+                            _setMuted(_volume > 0);
+                          case _VideoTopAction.speed1:
+                            _setSpeed(1.0);
+                          case _VideoTopAction.speed1_5:
+                            _setSpeed(1.5);
+                          case _VideoTopAction.speed2:
+                            _setSpeed(2.0);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        PopupMenuItem(
+                          value: _VideoTopAction.save,
+                          child: const Text('Save to device'),
+                        ),
+                        PopupMenuItem(
+                          value: _VideoTopAction.mute,
+                          child: Text(_volume > 0 ? 'Mute' : 'Unmute'),
+                        ),
+                        const PopupMenuDivider(),
+                        for (final speed in _speeds)
+                          if (speed == 1.0 || speed == 1.5 || speed == 2.0)
+                            PopupMenuItem(
+                              value: switch (speed) {
+                                1.0 => _VideoTopAction.speed1,
+                                1.5 => _VideoTopAction.speed1_5,
+                                _ => _VideoTopAction.speed2,
+                              },
+                              child: Row(
+                                children: [
+                                  Text('${speed}x speed'),
+                                  if ((_speed - speed).abs() < 0.001)
+                                    const Padding(
+                                      padding: EdgeInsets.only(
+                                        left: AppDimens.space8,
+                                      ),
+                                      child: Icon(
+                                        Icons.check_rounded,
+                                        size: AppDimens.iconSmall,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  /// A minimal transport surface: progress and controls float directly over
+  /// the video. Volume and speed live in the top overflow, never in a panel.
+  Widget _videoControls(
+    BuildContext context,
+    VideoPlayerController controller,
+    VideoPlayerValue value,
+  ) {
+    final duration = value.duration;
+    final fraction = _dragging
+        ? _dragFraction
+        : duration.inMilliseconds > 0
+            ? (value.position.inMilliseconds / duration.inMilliseconds)
+                .clamp(0.0, 1.0)
+                .toDouble()
+            : 0.0;
+    final shownPosition = _dragging
+        ? Duration(milliseconds: (fraction * duration.inMilliseconds).round())
+        : value.position;
+    final remaining = duration - shownPosition;
+
+    return Positioned(
+      left: AppDimens.space16,
+      right: AppDimens.space16,
+      bottom: MediaQuery.paddingOf(context).bottom + AppDimens.space16,
+      child: AnimatedSlide(
+        offset: _controlsVisible ? Offset.zero : const Offset(0, 0.08),
+        duration: AppMotion.resolve(context, AppMotion.fast),
+        curve: AppMotion.standard,
+        child: AnimatedOpacity(
+          opacity: _controlsVisible ? 1 : 0,
+          duration: AppMotion.resolve(context, AppMotion.fast),
+          curve: AppMotion.standard,
+          child: IgnorePointer(
+            ignoring: !_controlsVisible,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      Format.duration(shownPosition),
+                      style: AppTextStyle.labelMedium.copyWith(
+                        color: Colors.white,
+                        shadows: const [
+                          Shadow(
+                            color: AppColors.scrim,
+                            blurRadius: AppDimens.space6,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      duration == Duration.zero
+                          ? '--:--'
+                          : '−${Format.duration(remaining.isNegative ? Duration.zero : remaining)}',
+                      style: AppTextStyle.labelSmall
+                          .copyWith(color: Colors.white70),
+                    ),
+                  ],
+                ),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: Colors.white,
+                    inactiveTrackColor: Colors.white30,
+                    thumbColor: Colors.white,
+                    overlayColor: Colors.white24,
+                    trackHeight: AppDimens.space2,
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: AppDimens.space4,
+                    ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: AppDimens.space12,
+                    ),
+                  ),
+                  child: Semantics(
+                    label: 'Seek video',
+                    child: Slider(
+                      value: fraction,
+                      onChangeStart: (_) => setState(() => _dragging = true),
+                      onChanged: (v) => setState(() => _dragFraction = v),
+                      onChangeEnd: (v) async {
+                        setState(() => _dragging = false);
+                        final target = Duration(
+                          milliseconds: (v * duration.inMilliseconds).round(),
+                        );
+                        await controller.seekTo(target);
+                        _scheduleHide(restart: true);
+                      },
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    _FloatingIcon(
+                      icon: Icons.replay_10_rounded,
+                      tooltip: 'Back 10 seconds',
+                      onTap: () => _seekBy(const Duration(seconds: -10)),
+                    ),
+                    const SizedBox(width: AppDimens.space12),
+                    _FloatingIcon(
+                      icon: value.isPlaying
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                      tooltip: value.isPlaying ? 'Pause' : 'Play',
+                      onTap: _togglePlay,
+                      large: true,
+                    ),
+                    const SizedBox(width: AppDimens.space12),
+                    _FloatingIcon(
+                      icon: Icons.forward_10_rounded,
+                      tooltip: 'Forward 10 seconds',
+                      onTap: () => _seekBy(const Duration(seconds: 10)),
+                    ),
+                    const Spacer(),
+                    _FloatingIcon(
+                      icon: _fullscreen
+                          ? Icons.fullscreen_exit_rounded
+                          : Icons.fullscreen_rounded,
+                      tooltip: _fullscreen ? 'Exit full screen' : 'Full screen',
+                      onTap: _toggleFullscreen,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _VideoTopAction { save, mute, speed1, speed1_5, speed2 }
+
+/// Floating, scrim-backed control used by the transparent video chrome.
+class _FloatingIcon extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final Future<void> Function()? onTap;
+  final bool large;
+
+  const _FloatingIcon({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.large = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final size = large ? AppDimens.touchTargetLarge : AppDimens.touchTarget;
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: AppColors.scrim,
+          shape: BoxShape.circle,
+        ),
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: InkWell(
+            onTap: onTap,
+            customBorder: const CircleBorder(),
+            child: Tooltip(
+              message: tooltip,
+              child: Icon(
+                icon,
+                color: Colors.white,
+                size: large ? AppDimens.iconTile : AppDimens.iconMedium,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -583,14 +641,18 @@ class _PlayOverlay extends StatelessWidget {
         onTap: onTap,
         customBorder: const CircleBorder(),
         child: Container(
-          width: 72,
-          height: 72,
+          width: AppDimens.iconHero,
+          height: AppDimens.iconHero,
           decoration: const BoxDecoration(
             shape: BoxShape.circle,
-            color: Color(0x99000000),
+            // Semantic scrim: this control sits directly over user media.
+            color: AppColors.scrim,
           ),
-          child: const Icon(Icons.play_arrow_rounded,
-              color: Colors.white, size: 44),
+          child: const Icon(
+            Icons.play_arrow_rounded,
+            color: Colors.white,
+            size: AppDimens.iconTileLarge,
+          ),
         ),
       ),
     );

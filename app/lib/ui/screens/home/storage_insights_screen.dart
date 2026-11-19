@@ -60,7 +60,6 @@ class _StorageInsightsScreenState extends State<StorageInsightsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
     return NexaPage(
       title: 'Storage insights',
       subtitle: 'A live statistical view of your private cloud',
@@ -74,7 +73,7 @@ class _StorageInsightsScreenState extends State<StorageInsightsScreen> {
         onPressed: _loading ? null : load,
         icon: Icon(
           Icons.refresh_rounded,
-          color: AppColors.accentTextFor(brightness),
+          color: Theme.of(context).colorScheme.primary,
         ),
       ),
       scrollable: true,
@@ -96,6 +95,7 @@ class _StorageInsightsScreenState extends State<StorageInsightsScreen> {
   }
 
   Widget _content(StorageInfo storage) {
+    final scheme = Theme.of(context).colorScheme;
     final hasQuota = storage.quotaBytes != null;
     final average =
         storage.fileCount == 0 ? 0 : storage.usedBytes ~/ storage.fileCount;
@@ -110,18 +110,18 @@ class _StorageInsightsScreenState extends State<StorageInsightsScreen> {
             Expanded(
               child: _MetricPanel(
                 icon: Icons.folder_copy_outlined,
-                label: 'FILES',
+                label: 'Files',
                 value: Format.count(storage.fileCount, 'file'),
-                tint: AppColors.accentFor(Theme.of(context).brightness),
+                tint: scheme.primary,
               ),
             ),
             const SizedBox(width: AppDimens.space10),
             Expanded(
               child: _MetricPanel(
                 icon: Icons.data_usage_rounded,
-                label: 'AVERAGE FILE',
+                label: 'Average file',
                 value: Format.bytes(average),
-                tint: AppColors.infoFor(Theme.of(context).brightness),
+                tint: scheme.secondary,
               ),
             ),
           ],
@@ -172,8 +172,8 @@ class _StorageInsightsScreenState extends State<StorageInsightsScreen> {
                   'Activity uses file modification dates; it is not an upload-history chart.'
               : 'This account has unlimited storage. Statistics are calculated from '
                   'files currently stored on the server. Activity uses file modification dates.',
-          style: AppTextStyle.caption1.copyWith(
-            color: AppColors.labelSecondaryFor(Theme.of(context).brightness),
+          style: AppTextStyle.bodySmall.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             height: 1.4,
           ),
         ),
@@ -190,13 +190,13 @@ class _CapacityPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final hasQuota = storage.quotaBytes != null;
     final percent = (storage.usageFraction * 100).round();
 
     return NexaSurface(
-      level: NexaSurfaceLevel.floating,
-      radius: AppDimens.radiusXLarge,
+      level: NexaSurfaceLevel.grouped,
+      radius: AppDimens.radiusCard,
       padding: const EdgeInsets.all(AppDimens.space20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -208,29 +208,24 @@ class _CapacityPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'YOUR STORAGE',
-                      style: AppTextStyle.caption2.copyWith(
-                        color: AppColors.labelSecondaryFor(brightness),
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.1,
+                      'Your storage',
+                      style: AppTextStyle.labelMedium.copyWith(
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                     const SizedBox(height: AppDimens.space6),
                     Text(
                       Format.bytes(storage.usedBytes),
-                      style: AppTextStyle.heroTitle.copyWith(
-                        color: AppColors.labelPrimaryFor(brightness),
-                        fontSize: 34,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -1.1,
+                      style: AppTextStyle.metricValue.copyWith(
+                        color: scheme.onSurface,
                       ),
                     ),
                     Text(
                       hasQuota
                           ? 'of ${Format.bytes(storage.quotaBytes!)}'
                           : 'Unlimited capacity',
-                      style: AppTextStyle.subheadline.copyWith(
-                        color: AppColors.labelSecondaryFor(brightness),
+                      style: AppTextStyle.bodyMedium.copyWith(
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -246,9 +241,9 @@ class _CapacityPanel extends StatelessWidget {
                       size: const Size.square(112),
                       painter: _CapacityRingPainter(
                         fraction: hasQuota ? storage.usageFraction : 0,
-                        track: AppColors.fillTertiaryFor(brightness),
-                        progress: AppColors.accentFor(brightness),
-                        secondary: AppColors.infoFor(brightness),
+                        track: scheme.surfaceContainerHighest,
+                        // Chart series are encoded in M3 roles, not raw hex.
+                        progress: scheme.primary,
                       ),
                     ),
                     Column(
@@ -256,16 +251,14 @@ class _CapacityPanel extends StatelessWidget {
                       children: [
                         Text(
                           hasQuota ? '$percent%' : '∞',
-                          style: AppTextStyle.headline.copyWith(
-                            color: AppColors.labelPrimaryFor(brightness),
-                            fontSize: 23,
-                            fontWeight: FontWeight.w700,
+                          style: AppTextStyle.titleLarge.copyWith(
+                            color: scheme.onSurface,
                           ),
                         ),
                         Text(
                           hasQuota ? 'used' : 'no limit',
-                          style: AppTextStyle.caption2.copyWith(
-                            color: AppColors.labelSecondaryFor(brightness),
+                          style: AppTextStyle.labelSmall.copyWith(
+                            color: scheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -278,26 +271,12 @@ class _CapacityPanel extends StatelessWidget {
           const SizedBox(height: AppDimens.space20),
           ClipRRect(
             borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            child: SizedBox(
-              height: 10,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ColoredBox(color: AppColors.fillFor(brightness)),
-                  if (hasQuota)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: storage.usageFraction,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: AppColors.accentFor(brightness),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+            child: LinearProgressIndicator(
+              value: hasQuota ? storage.usageFraction : 0.0,
+              minHeight: AppDimens.space8,
+              color: scheme.primary,
+              backgroundColor: scheme.primaryContainer,
+              semanticsLabel: 'Storage capacity used',
             ),
           ),
           const SizedBox(height: AppDimens.space12),
@@ -305,17 +284,17 @@ class _CapacityPanel extends StatelessWidget {
             children: [
               Expanded(
                 child: _CapacityValue(
-                  label: 'USED',
+                  label: 'Used',
                   value: Format.bytes(storage.usedBytes),
-                  color: AppColors.accentFor(brightness),
+                  color: scheme.primary,
                 ),
               ),
               Expanded(
                 child: _CapacityValue(
-                  label: 'AVAILABLE',
+                  label: 'Available',
                   value:
                       hasQuota ? Format.bytes(storage.freeBytes) : 'No limit',
-                  color: AppColors.infoFor(brightness),
+                  color: scheme.secondary,
                 ),
               ),
             ],
@@ -330,13 +309,11 @@ class _CapacityRingPainter extends CustomPainter {
   final double fraction;
   final Color track;
   final Color progress;
-  final Color secondary;
 
   const _CapacityRingPainter({
     required this.fraction,
     required this.track,
     required this.progress,
-    required this.secondary,
   });
 
   @override
@@ -358,11 +335,7 @@ class _CapacityRingPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke
       ..strokeCap = StrokeCap.round
-      ..shader = SweepGradient(
-        startAngle: -math.pi / 2,
-        endAngle: math.pi * 1.5,
-        colors: [progress, secondary],
-      ).createShader(bounds);
+      ..color = progress;
     canvas.drawArc(bounds, -math.pi / 2, sweep, false, progressPaint);
   }
 
@@ -370,8 +343,7 @@ class _CapacityRingPainter extends CustomPainter {
   bool shouldRepaint(covariant _CapacityRingPainter oldDelegate) =>
       oldDelegate.fraction != fraction ||
       oldDelegate.track != track ||
-      oldDelegate.progress != progress ||
-      oldDelegate.secondary != secondary;
+      oldDelegate.progress != progress;
 }
 
 class _CapacityValue extends StatelessWidget {
@@ -387,12 +359,12 @@ class _CapacityValue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
         Container(
-          width: 8,
-          height: 8,
+          width: AppDimens.space8,
+          height: AppDimens.space8,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: AppDimens.space8),
@@ -402,20 +374,17 @@ class _CapacityValue extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: AppTextStyle.caption2.copyWith(
-                  color: AppColors.labelSecondaryFor(brightness),
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.7,
+                style: AppTextStyle.labelMedium.copyWith(
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: AppDimens.space2),
               Text(
                 value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppTextStyle.subheadline.copyWith(
-                  color: AppColors.labelPrimaryFor(brightness),
-                  fontWeight: FontWeight.w700,
+                style: AppTextStyle.titleMedium.copyWith(
+                  color: scheme.onSurface,
                 ),
               ),
             ],
@@ -441,22 +410,28 @@ class _MetricPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return NexaSurface(
       level: NexaSurfaceLevel.grouped,
-      radius: AppDimens.radiusLarge,
-      padding: const EdgeInsets.all(AppDimens.space12),
+      radius: AppDimens.radiusCard,
+      padding: const EdgeInsets.all(AppDimens.space16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: tint, size: 21),
+          Container(
+            width: AppDimens.iconTile,
+            height: AppDimens.iconTile,
+            decoration: BoxDecoration(
+              color: tint.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+            ),
+            child: Icon(icon, color: tint, size: AppDimens.iconMedium),
+          ),
           const SizedBox(height: AppDimens.space12),
           Text(
             label,
-            style: AppTextStyle.caption2.copyWith(
-              color: AppColors.labelSecondaryFor(brightness),
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.7,
+            style: AppTextStyle.labelMedium.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: AppDimens.space4),
@@ -464,9 +439,7 @@ class _MetricPanel extends StatelessWidget {
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyle.headline.copyWith(
-              color: AppColors.labelPrimaryFor(brightness),
-            ),
+            style: AppTextStyle.titleLarge.copyWith(color: scheme.onSurface),
           ),
         ],
       ),
@@ -487,7 +460,7 @@ class _SectionHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -497,15 +470,15 @@ class _SectionHeading extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: AppTextStyle.sectionHeader.copyWith(
-                  color: AppColors.labelPrimaryFor(brightness),
+                style: AppTextStyle.titleMedium.copyWith(
+                  color: scheme.onSurface,
                 ),
               ),
               const SizedBox(height: AppDimens.space2),
               Text(
                 subtitle,
-                style: AppTextStyle.caption1.copyWith(
-                  color: AppColors.labelSecondaryFor(brightness),
+                style: AppTextStyle.bodySmall.copyWith(
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -515,9 +488,8 @@ class _SectionHeading extends StatelessWidget {
           const SizedBox(width: AppDimens.space8),
           Text(
             trailing!,
-            style: AppTextStyle.caption1.copyWith(
-              color: AppColors.labelSecondaryFor(brightness),
-              fontWeight: FontWeight.w700,
+            style: AppTextStyle.labelMedium.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -531,18 +503,19 @@ class _CompositionPanel extends StatelessWidget {
 
   const _CompositionPanel({required this.storage});
 
-  static const _icons = <String, IconData>{
-    'images': Icons.image_outlined,
-    'videos': Icons.movie_outlined,
-    'audio': Icons.audio_file_outlined,
-    'documents': Icons.description_outlined,
-    'archives': Icons.archive_outlined,
-    'other': Icons.insert_drive_file_outlined,
+  static const _glyphNames = <String, String>{
+    'images': 'photo.jpg',
+    'videos': 'clip.mp4',
+    'audio': 'track.mp3',
+    'documents': 'notes.docx',
+    'archives': 'bundle.zip',
+    'other': 'file',
   };
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
+    final brightness = scheme.brightness;
     final colors = AppColors.analyticsPaletteFor(brightness);
     final entries = storage.typeBreakdown;
     final visible = entries.where((entry) => entry.bytes > 0).toList();
@@ -562,7 +535,7 @@ class _CompositionPanel extends StatelessWidget {
 
     return NexaSurface(
       level: NexaSurfaceLevel.grouped,
-      radius: AppDimens.radiusLarge,
+      radius: AppDimens.radiusCard,
       padding: const EdgeInsets.all(AppDimens.space16),
       child: Column(
         children: [
@@ -584,7 +557,7 @@ class _CompositionPanel extends StatelessWidget {
                           for (final entry in visible)
                             colors[entries.indexOf(entry) % colors.length],
                         ],
-                        track: AppColors.fillFor(brightness),
+                        track: scheme.surfaceContainerHighest,
                       ),
                     ),
                     Column(
@@ -592,16 +565,14 @@ class _CompositionPanel extends StatelessWidget {
                       children: [
                         Text(
                           Format.bytes(total),
-                          style: AppTextStyle.headline.copyWith(
-                            color: AppColors.labelPrimaryFor(brightness),
-                            fontSize: compact ? 15 : 18,
-                            fontWeight: FontWeight.w700,
+                          style: AppTextStyle.titleLarge.copyWith(
+                            color: scheme.onSurface,
                           ),
                         ),
                         Text(
                           'classified',
-                          style: AppTextStyle.caption2.copyWith(
-                            color: AppColors.labelSecondaryFor(brightness),
+                          style: AppTextStyle.labelSmall.copyWith(
+                            color: scheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -620,8 +591,8 @@ class _CompositionPanel extends StatelessWidget {
                       child: Row(
                         children: [
                           Container(
-                            width: 8,
-                            height: 8,
+                            width: AppDimens.space8,
+                            height: AppDimens.space8,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: colors[
@@ -634,8 +605,8 @@ class _CompositionPanel extends StatelessWidget {
                               entry.label,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTextStyle.caption1.copyWith(
-                                color: AppColors.labelSecondaryFor(brightness),
+                              style: AppTextStyle.bodySmall.copyWith(
+                                color: scheme.onSurfaceVariant,
                               ),
                             ),
                           ),
@@ -643,9 +614,8 @@ class _CompositionPanel extends StatelessWidget {
                             total == 0
                                 ? '0%'
                                 : '${(entry.bytes / total * 100).round()}%',
-                            style: AppTextStyle.caption1.copyWith(
-                              color: AppColors.labelPrimaryFor(brightness),
-                              fontWeight: FontWeight.w700,
+                            style: AppTextStyle.labelMedium.copyWith(
+                              color: scheme.onSurface,
                             ),
                           ),
                         ],
@@ -675,7 +645,7 @@ class _CompositionPanel extends StatelessWidget {
             },
           ),
           const SizedBox(height: AppDimens.space12),
-          const Divider(height: 1),
+          const Divider(),
           const SizedBox(height: AppDimens.space10),
           for (var i = 0; i < entries.length; i++)
             if (entries[i].count > 0)
@@ -685,21 +655,14 @@ class _CompositionPanel extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: colors[i % colors.length].withValues(
-                          alpha: brightness == Brightness.dark ? 0.20 : 0.12,
+                    SizedBox(
+                      width: AppDimens.iconTile,
+                      height: AppDimens.iconTile,
+                      child: Center(
+                        child: NexaFileGlyph(
+                          name: _glyphNames[entries[i].key] ?? 'file',
+                          size: AppDimens.iconTile,
                         ),
-                        borderRadius:
-                            BorderRadius.circular(AppDimens.radiusSmall),
-                      ),
-                      child: Icon(
-                        _icons[entries[i].key] ??
-                            Icons.insert_drive_file_outlined,
-                        color: colors[i % colors.length],
-                        size: 18,
                       ),
                     ),
                     const SizedBox(width: AppDimens.space10),
@@ -709,14 +672,14 @@ class _CompositionPanel extends StatelessWidget {
                         children: [
                           Text(
                             entries[i].label,
-                            style: AppTextStyle.bodyEmphasized.copyWith(
-                              color: AppColors.labelPrimaryFor(brightness),
+                            style: AppTextStyle.titleMedium.copyWith(
+                              color: scheme.onSurface,
                             ),
                           ),
                           Text(
                             Format.count(entries[i].count, 'file'),
-                            style: AppTextStyle.caption2.copyWith(
-                              color: AppColors.labelSecondaryFor(brightness),
+                            style: AppTextStyle.labelSmall.copyWith(
+                              color: scheme.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -724,9 +687,8 @@ class _CompositionPanel extends StatelessWidget {
                     ),
                     Text(
                       Format.bytes(entries[i].bytes),
-                      style: AppTextStyle.subheadline.copyWith(
-                        color: AppColors.labelPrimaryFor(brightness),
-                        fontWeight: FontWeight.w600,
+                      style: AppTextStyle.bodyMedium.copyWith(
+                        color: scheme.onSurface,
                       ),
                     ),
                   ],
@@ -792,7 +754,7 @@ class _ActivityPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final total = days.fold<int>(0, (sum, day) => sum + day.count);
     if (days.isEmpty) {
       return const _EmptyStatsPanel(
@@ -800,7 +762,7 @@ class _ActivityPanel extends StatelessWidget {
     }
     return NexaSurface(
       level: NexaSurfaceLevel.grouped,
-      radius: AppDimens.radiusLarge,
+      radius: AppDimens.radiusCard,
       padding: const EdgeInsets.all(AppDimens.space16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -813,18 +775,16 @@ class _ActivityPanel extends StatelessWidget {
                   '$total changes',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyle.headline.copyWith(
-                    color: AppColors.labelPrimaryFor(brightness),
+                  style: AppTextStyle.titleLarge.copyWith(
+                    color: scheme.onSurface,
                   ),
                 ),
               ),
               const SizedBox(width: AppDimens.space8),
               Text(
-                '7 DAYS',
-                style: AppTextStyle.caption2.copyWith(
-                  color: AppColors.labelSecondaryFor(brightness),
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
+                'Last 7 days',
+                style: AppTextStyle.labelMedium.copyWith(
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -836,18 +796,19 @@ class _ActivityPanel extends StatelessWidget {
             child: CustomPaint(
               painter: _ActivityPainter(
                 days: days,
-                bar: AppColors.accentFor(brightness),
-                empty: AppColors.fillTertiaryFor(brightness),
-                text: AppColors.labelSecondaryFor(brightness),
-                grid: AppColors.separatorFor(brightness),
+                // Data series resolved from M3 roles via the active scheme.
+                bar: scheme.primary,
+                empty: scheme.surfaceContainerHighest,
+                text: scheme.onSurfaceVariant,
+                grid: scheme.outlineVariant,
               ),
             ),
           ),
           const SizedBox(height: AppDimens.space8),
           Text(
             'A daily count based on each file’s last-modified timestamp.',
-            style: AppTextStyle.caption2.copyWith(
-              color: AppColors.labelSecondaryFor(brightness),
+            style: AppTextStyle.labelSmall.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -897,7 +858,7 @@ class _ActivityPainter extends CustomPainter {
       final x = left + slot * i + (slot - barWidth) / 2;
       final rect = RRect.fromRectAndRadius(
         Rect.fromLTWH(x, baseline - height, barWidth, math.max(height, 2)),
-        const Radius.circular(7),
+        Radius.circular(AppDimens.radiusSmall),
       );
       final paint = Paint()..color = day.count > 0 ? bar : empty;
       canvas.drawRRect(rect, paint);
@@ -905,11 +866,7 @@ class _ActivityPainter extends CustomPainter {
       final labelPainter = TextPainter(
         text: TextSpan(
           text: day.label,
-          style: TextStyle(
-            color: text,
-            fontSize: 10,
-            fontWeight: FontWeight.w500,
-          ),
+          style: AppTextStyle.labelSmall.copyWith(color: text),
         ),
         textDirection: TextDirection.ltr,
         maxLines: 1,
@@ -948,7 +905,7 @@ class _SizeDistributionPanel extends StatelessWidget {
 
     return NexaSurface(
       level: NexaSurfaceLevel.grouped,
-      radius: AppDimens.radiusLarge,
+      radius: AppDimens.radiusCard,
       padding: const EdgeInsets.all(AppDimens.space16),
       child: Column(
         children: [
@@ -987,7 +944,7 @@ class _SizeBandRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final fraction = totalFiles == 0
         ? 0.0
         : (band.count / totalFiles).clamp(0.0, 1.0).toDouble();
@@ -999,16 +956,15 @@ class _SizeBandRow extends StatelessWidget {
             Expanded(
               child: Text(
                 band.label,
-                style: AppTextStyle.bodyEmphasized.copyWith(
-                  color: AppColors.labelPrimaryFor(brightness),
+                style: AppTextStyle.titleMedium.copyWith(
+                  color: scheme.onSurface,
                 ),
               ),
             ),
             Text(
               '${band.count} files · ${Format.bytes(band.bytes)}',
-              style: AppTextStyle.caption1.copyWith(
-                color: AppColors.labelSecondaryFor(brightness),
-                fontWeight: FontWeight.w600,
+              style: AppTextStyle.labelMedium.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -1016,23 +972,13 @@ class _SizeBandRow extends StatelessWidget {
         const SizedBox(height: AppDimens.space8),
         ClipRRect(
           borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-          child: SizedBox(
-            height: 8,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ColoredBox(color: AppColors.fillFor(brightness)),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: FractionallySizedBox(
-                    widthFactor: fraction,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(color: color),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          child: LinearProgressIndicator(
+            value: fraction,
+            minHeight: AppDimens.space8,
+            // The band colour is a data series from the M3 analytics palette.
+            color: color,
+            backgroundColor: scheme.surfaceContainerHighest,
+            semanticsLabel: '${band.label}: ${band.count} files',
           ),
         ),
       ],
@@ -1047,92 +993,57 @@ class _LargestFilesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     if (files.isEmpty) {
       return const _EmptyStatsPanel(message: 'No files have been stored yet.');
     }
     return NexaSurface(
       level: NexaSurfaceLevel.grouped,
-      radius: AppDimens.radiusLarge,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space12,
-        vertical: AppDimens.space4,
-      ),
+      radius: AppDimens.radiusCard,
       child: Column(
         children: [
-          for (var i = 0; i < files.length; i++)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppDimens.space10),
-              child: Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: AppColors.accentContainerFor(brightness),
-                      borderRadius:
-                          BorderRadius.circular(AppDimens.radiusSmall),
-                    ),
-                    child: Icon(
-                      _fileIcon(files[i].name),
-                      color: AppColors.accentTextFor(brightness),
-                      size: 19,
-                    ),
+          for (var i = 0; i < files.length; i++) ...[
+            ListTile(
+              leading: SizedBox(
+                width: AppDimens.iconTile,
+                height: AppDimens.iconTile,
+                child: Center(
+                  child: NexaFileGlyph(
+                    name: files[i].name,
+                    size: AppDimens.iconTile,
                   ),
-                  const SizedBox(width: AppDimens.space10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          files[i].name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyle.bodyEmphasized.copyWith(
-                            color: AppColors.labelPrimaryFor(brightness),
-                          ),
-                        ),
-                        Text(
-                          files[i].path,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyle.caption2.copyWith(
-                            color: AppColors.labelSecondaryFor(brightness),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: AppDimens.space8),
-                  Text(
-                    Format.bytes(files[i].sizeBytes),
-                    style: AppTextStyle.subheadline.copyWith(
-                      color: AppColors.labelPrimaryFor(brightness),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+                ),
+              ),
+              title: Text(
+                files[i].name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyle.titleMedium.copyWith(
+                  color: scheme.onSurface,
+                ),
+              ),
+              subtitle: Text(
+                files[i].path,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyle.labelSmall.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              trailing: Text(
+                Format.bytes(files[i].sizeBytes),
+                style: AppTextStyle.titleMedium.copyWith(
+                  color: scheme.onSurface,
+                ),
               ),
             ),
+            if (i < files.length - 1)
+              Divider(
+                  indent: AppDimens.rowInset, endIndent: AppDimens.rowInset),
+          ],
         ],
       ),
     );
-  }
-
-  IconData _fileIcon(String name) {
-    final extension = name.split('.').last.toLowerCase();
-    if (const {'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'avif'}
-        .contains(extension)) {
-      return Icons.image_outlined;
-    }
-    if (const {'mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v'}.contains(extension)) {
-      return Icons.movie_outlined;
-    }
-    if (const {'mp3', 'm4a', 'wav', 'flac', 'ogg'}.contains(extension)) {
-      return Icons.audio_file_outlined;
-    }
-    if (extension == 'pdf') return Icons.picture_as_pdf_outlined;
-    return Icons.insert_drive_file_outlined;
   }
 }
 
@@ -1143,23 +1054,20 @@ class _EmptyStatsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return NexaSurface(
       level: NexaSurfaceLevel.grouped,
-      radius: AppDimens.radiusLarge,
+      radius: AppDimens.radiusCard,
       padding: const EdgeInsets.all(AppDimens.space20),
       child: Row(
         children: [
-          Icon(
-            Icons.insights_outlined,
-            color: AppColors.labelTertiaryFor(brightness),
-          ),
+          Icon(Icons.insights_outlined, color: scheme.onSurfaceVariant),
           const SizedBox(width: AppDimens.space10),
           Expanded(
             child: Text(
               message,
-              style: AppTextStyle.caption1.copyWith(
-                color: AppColors.labelSecondaryFor(brightness),
+              style: AppTextStyle.bodyMedium.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ),

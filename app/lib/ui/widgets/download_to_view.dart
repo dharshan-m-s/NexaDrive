@@ -7,8 +7,8 @@ import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import '../../core/models/file_entry.dart';
 import '../../core/utils/format.dart';
+import 'nexa_file_glyph.dart';
 import 'nexa_page.dart';
-import 'nexa_surface.dart';
 
 /// Responsive save/open fallback used when a platform viewer cannot render a
 /// particular file. In-app PDF, audio and video viewers remain the primary path
@@ -62,16 +62,15 @@ class _DownloadToViewScreenState extends State<DownloadToViewScreen> {
       setState(() {
         _busy = false;
       });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = AppColors.accentFor(brightness);
-    final secondary = AppColors.labelSecondaryFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
 
     return NexaPage(
       title: 'Download to open',
@@ -82,99 +81,80 @@ class _DownloadToViewScreenState extends State<DownloadToViewScreen> {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
-          child: NexaSurface(
-            level: NexaSurfaceLevel.surface,
-            radius: AppDimens.radiusXLarge,
-            padding: const EdgeInsets.all(AppDimens.space24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 92,
-                    height: 92,
-                    decoration: BoxDecoration(
-                      color: AppColors.accentContainerFor(brightness),
-                      borderRadius:
-                          BorderRadius.circular(AppDimens.radiusXLarge),
-                      border: Border.all(color: accent.withValues(alpha: 0.18)),
-                    ),
-                    child: Icon(widget.icon,
-                        size: 42, color: AppColors.accentTextFor(brightness)),
-                  ),
-                ),
-                const SizedBox(height: AppDimens.space20),
-                Text(
-                  widget.file.name,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyle.title2.copyWith(
-                    color: AppColors.labelPrimaryFor(brightness),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: AppDimens.space8),
-                Text(
-                  widget.subtitle,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyle.body.copyWith(color: secondary),
-                ),
-                if (widget.file.size != null) ...[
-                  const SizedBox(height: AppDimens.space16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimens.space12,
-                      vertical: AppDimens.space10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.fillFor(brightness),
-                      borderRadius:
-                          BorderRadius.circular(AppDimens.radiusMedium),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  NexaFileGlyph(name: widget.file.name, size: 40),
+                  const SizedBox(width: AppDimens.space12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.insert_drive_file_outlined,
-                            size: 16, color: secondary),
-                        const SizedBox(width: AppDimens.space8),
                         Text(
-                          Format.bytes(widget.file.size),
-                          style:
-                              AppTextStyle.caption1.copyWith(color: secondary),
+                          widget.file.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyle.title3.copyWith(
+                            color: scheme.onSurface,
+                          ),
                         ),
+                        if (widget.file.size != null) ...[
+                          const SizedBox(height: AppDimens.space4),
+                          Text(
+                            Format.bytes(widget.file.size),
+                            style: AppTextStyle.caption.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 ],
-                const SizedBox(height: AppDimens.space24),
-                SizedBox(
-                  height: 52,
-                  child: FilledButton.icon(
-                    onPressed: _busy ? null : _save,
-                    icon: _busy
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Icon(Icons.download_outlined),
-                    label: Text(_busy ? 'Downloading…' : 'Download file'),
+              ),
+              const SizedBox(height: AppDimens.space20),
+              Text(
+                widget.subtitle,
+                style: AppTextStyle.body.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppDimens.space20),
+              Divider(height: 1, color: scheme.outlineVariant),
+              const SizedBox(height: AppDimens.space20),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  onPressed: _busy ? null : _save,
+                  icon: _busy
+                      ? SizedBox(
+                          width: AppDimens.iconSmall,
+                          height: AppDimens.iconSmall,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: scheme.onPrimary,
+                          ),
+                        )
+                      : const Icon(Icons.download_outlined),
+                  label: Text(_busy ? 'Downloading…' : 'Download file'),
+                ),
+              ),
+              if (_done != null) ...[
+                const SizedBox(height: AppDimens.space12),
+                Semantics(
+                  label: 'Save result',
+                  child: Text(
+                    _done!,
+                    style: AppTextStyle.bodySmall.copyWith(
+                      color: AppColors.successFor(scheme.brightness),
+                    ),
                   ),
                 ),
-                if (_done != null) ...[
-                  const SizedBox(height: AppDimens.space12),
-                  Text(
-                    _done!,
-                    textAlign: TextAlign.center,
-                    style: AppTextStyle.caption
-                        .copyWith(color: AppColors.successFor(brightness)),
-                  ),
-                ],
               ],
-            ),
+            ],
           ),
         ),
       ),

@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import 'nexa_button.dart';
 
+/// Layered tonal artwork for error states — semantic error container, no shadow.
 class _ErrorIllustration extends StatelessWidget {
   final IconData icon;
   final Color error;
-  final Brightness brightness;
+  final Color surface;
+  final Color container;
 
   const _ErrorIllustration({
     required this.icon,
     required this.error,
-    required this.brightness,
+    required this.surface,
+    required this.container,
   });
 
   @override
@@ -24,25 +26,25 @@ class _ErrorIllustration extends StatelessWidget {
         alignment: Alignment.center,
         children: [
           Positioned(
-            left: 2,
-            top: 7,
+            left: AppDimens.space2,
+            top: AppDimens.space6 + AppDimens.space1,
             child: Container(
               width: 58,
               height: 58,
               decoration: BoxDecoration(
-                color: AppColors.fillFor(brightness),
+                color: surface,
                 borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
               ),
             ),
           ),
           Positioned(
-            right: 1,
-            bottom: 4,
+            right: AppDimens.space1,
+            bottom: AppDimens.space4,
             child: Container(
               width: 58,
               height: 58,
               decoration: BoxDecoration(
-                color: AppColors.errorContainerFor(brightness),
+                color: container,
                 borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
               ),
             ),
@@ -51,19 +53,10 @@ class _ErrorIllustration extends StatelessWidget {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: AppColors.surfaceFor(brightness),
-              borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-              border: Border.all(color: AppColors.separatorFor(brightness)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(
-                      alpha: brightness == Brightness.dark ? 0.14 : 0.04),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              color: surface,
+              borderRadius: BorderRadius.circular(AppDimens.radiusCard),
             ),
-            child: Icon(icon, size: 30, color: error),
+            child: Icon(icon, size: AppDimens.iconLarge, color: error),
           ),
         ],
       ),
@@ -92,8 +85,7 @@ class NexaErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final error = AppColors.errorFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
 
     final content = Padding(
       padding: const EdgeInsets.symmetric(
@@ -103,22 +95,25 @@ class NexaErrorState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _ErrorIllustration(icon: icon, error: error, brightness: brightness),
+          _ErrorIllustration(
+            icon: icon,
+            error: scheme.error,
+            surface: scheme.surfaceContainerLow,
+            container: scheme.errorContainer,
+          ),
           const SizedBox(height: AppDimens.space16),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: AppTextStyle.sectionHeader.copyWith(
-              color: AppColors.labelPrimaryFor(brightness),
-            ),
+            style: AppTextStyle.titleMedium.copyWith(color: scheme.onSurface),
           ),
           if (message != null) ...[
             const SizedBox(height: AppDimens.space8),
             Text(
               message!,
               textAlign: TextAlign.center,
-              style: AppTextStyle.caption1.copyWith(
-                color: AppColors.labelSecondaryFor(brightness),
+              style: AppTextStyle.bodyMedium.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ],

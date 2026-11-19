@@ -252,10 +252,24 @@ class UploadManager extends ChangeNotifier {
 
   Future<void> _loadFromJournal() async {
     final loaded = await _store.load();
+
+    // A completed transfer is a transient status, not queue history. If the
+    // app closed before the prune timer fired, finish the job on restore.
+    final completed = loaded
+        .where((UploadItem item) => item.state == UploadState.completed)
+        .toList(growable: false);
+    for (final item in completed) {
+      await _store.remove(item.id);
+      if (item.temporarySource) _deleteTemporarySource(item);
+    }
+    final restorable = loaded
+        .where((UploadItem item) => item.state != UploadState.completed)
+        .toList(growable: false);
+
     _items
       ..clear()
       ..addEntries(
-        loaded.map((UploadItem item) => MapEntry(item.id, item)),
+        restorable.map((UploadItem item) => MapEntry(item.id, item)),
       );
     _waiting.clear();
     for (final item in _items.values) {
@@ -280,6 +294,9 @@ class UploadManager extends ChangeNotifier {
     notifyListeners();
     _pump();
   }
+
+  /// Short grace period before a completed upload is pruned from the journal.
+  Timer? _completedPrune;
 
   /// Completes once the journal has been loaded.
   final Completer<void> _readyCompleter = Completer<void>();
@@ -994,6 +1011,17 @@ class UploadManager extends ChangeNotifier {
     await _persist(done);
     _notify();
     if (done.temporarySource) _deleteTemporarySource(done);
+    _scheduleCompletedPrune();
+  }
+
+  /// Removes completed uploads after a brief success beat so the UI can show
+  /// the transition without turning the queue into an ever-growing log.
+  void _scheduleCompletedPrune() {
+    if (_completedPrune?.isActive ?? false) return;
+    _completedPrune = Timer(const Duration(milliseconds: 1600), () {
+      _completedPrune = null;
+      unawaited(clearCompleted());
+    });
   }
 
   Stream<List<int>> _chunkStream(
@@ -1257,6 +1285,8 @@ class UploadManager extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _completedPrune?.cancel();
+    _completedPrune = null;
     _notifyTimer?.cancel();
     _notifyTimer = null;
     _ownerTimer?.cancel();

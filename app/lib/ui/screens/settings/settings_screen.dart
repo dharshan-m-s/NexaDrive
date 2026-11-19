@@ -13,8 +13,6 @@ import '../../../update/update_controller.dart';
 import '../../widgets/nexa_grouped_list.dart';
 import '../../widgets/nexa_list_tile.dart';
 import '../../widgets/nexa_page.dart';
-import '../../widgets/nexa_surface.dart';
-import '../../widgets/nexa_chip.dart';
 import '../../widgets/nexa_sheet.dart';
 import '../admin/audit_log_screen.dart';
 import '../admin/users_screen.dart';
@@ -79,20 +77,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Appearance',
               subtitle: 'Choose how NexaDrive looks on this device',
             ),
-            for (final mode in ['system', 'light', 'dark'])
-              NexaSheetAction(
-                icon: mode == 'system'
-                    ? Icons.brightness_auto_rounded
-                    : mode == 'light'
-                        ? Icons.light_mode_rounded
-                        : Icons.dark_mode_rounded,
-                title: mode[0].toUpperCase() + mode.substring(1),
-                subtitle: mode == current ? 'Currently selected' : null,
-                iconColor: mode == current
-                    ? AppColors.accentFor(Theme.of(sheetContext).brightness)
-                    : null,
-                onTap: () => Navigator.pop(sheetContext, mode),
+            const SizedBox(height: AppDimens.space8),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: 'system',
+                  label: Text('System'),
+                  icon: Icon(Icons.brightness_auto_rounded),
+                ),
+                ButtonSegment(
+                  value: 'light',
+                  label: Text('Light'),
+                  icon: Icon(Icons.light_mode_rounded),
+                ),
+                ButtonSegment(
+                  value: 'dark',
+                  label: Text('Dark'),
+                  icon: Icon(Icons.dark_mode_rounded),
+                ),
+              ],
+              selected: <String>{current},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) {
+                if (selection.isEmpty) return;
+                Navigator.pop(sheetContext, selection.first);
+              },
+            ),
+            const SizedBox(height: AppDimens.space4),
+            Text(
+              'Appearance is applied to this device only.',
+              style: AppTextStyle.bodySmall.copyWith(
+                color: Theme.of(sheetContext).colorScheme.onSurfaceVariant,
               ),
+            ),
           ],
         ),
       ),
@@ -109,9 +126,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ..clearSnackBars()
         ..showSnackBar(
           const SnackBar(
-            content: Text(
-              'This device has no screen lock. Set a PIN, pattern or '
-              'biometric in Android settings first.',
+            content: Row(
+              children: [
+                Icon(Icons.lock_outlined, size: AppDimens.iconMedium),
+                SizedBox(width: AppDimens.space12),
+                Expanded(
+                  child: Text(
+                    'This device has no screen lock. Set a PIN, pattern or '
+                    'biometric in Android settings first.',
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -184,10 +209,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final isAdmin = widget.session.role == 'admin';
-    final accent = AppColors.accentFor(brightness);
-    final secondary = AppColors.textSecondaryFor(brightness);
     final session = widget.session;
 
     return NexaPage(
@@ -198,69 +221,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          NexaSurface(
-            level: NexaSurfaceLevel.surface,
-            radius: AppDimens.radiusXLarge,
-            padding: const EdgeInsets.all(AppDimens.space16),
-            child: Row(
-              children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.accentContainerFor(brightness),
-                    borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-                    boxShadow: [
-                      BoxShadow(
-                        color: accent.withValues(alpha: 0.18),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
+          Card(
+            color: scheme.surfaceContainerLow,
+            surfaceTintColor: Colors.transparent,
+            elevation: AppDimens.elevationSubtle,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppDimens.radiusCard),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(AppDimens.space16),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: AppDimens.space28,
+                    backgroundColor: scheme.primaryContainer,
+                    foregroundColor: scheme.onPrimaryContainer,
+                    child: Text(_initial, style: AppTextStyle.titleLarge),
                   ),
-                  child: Text(
-                    _initial,
-                    style: NexaTypography.display.copyWith(
-                      color: AppColors.accentTextFor(brightness),
-                      fontSize: 28,
+                  const SizedBox(width: AppDimens.space16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          session.displayName ?? session.username ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyle.titleMedium.copyWith(
+                            color: scheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: AppDimens.space4),
+                        Text(
+                          session.username ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyle.bodySmall.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: AppDimens.space8),
+                        Chip(
+                          avatar: IconTheme(
+                            data: IconThemeData(
+                              color: scheme.onSecondaryContainer,
+                              size: AppDimens.iconSmall,
+                            ),
+                            child: Icon(
+                              isAdmin
+                                  ? Icons.admin_panel_settings_outlined
+                                  : Icons.verified_user_outlined,
+                            ),
+                          ),
+                          label: Text(isAdmin ? 'Administrator' : 'Member'),
+                          backgroundColor: scheme.secondaryContainer,
+                          labelStyle: AppTextStyle.labelSmall.copyWith(
+                            color: scheme.onSecondaryContainer,
+                          ),
+                          side: BorderSide.none,
+                          shape: const StadiumBorder(),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(width: AppDimens.space16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        session.displayName ?? session.username ?? '',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: NexaTypography.sectionHeader.copyWith(
-                          color: AppColors.textPrimaryFor(brightness),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: AppDimens.space4),
-                      Text(
-                        session.username ?? '',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style:
-                            NexaTypography.caption.copyWith(color: secondary),
-                      ),
-                      const SizedBox(height: AppDimens.space8),
-                      NexaChip.tonal(
-                        label: isAdmin ? 'Administrator' : 'Member',
-                        leadingIcon: isAdmin
-                            ? Icons.admin_panel_settings_outlined
-                            : Icons.verified_user_outlined,
-                        selected: true,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: AppDimens.space24),
@@ -296,9 +322,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ? 'Locked with your device screen lock'
                       : 'Off',
                   showChevron: false,
-                  trailing: Switch(
-                    value: _appLockEnabled == true,
-                    onChanged: _toggleAppLock,
+                  trailing: Semantics(
+                    label: 'App Lock',
+                    child: Switch(
+                      value: _appLockEnabled == true,
+                      onChanged: _toggleAppLock,
+                    ),
                   ),
                 ),
               NexaListTile(
@@ -386,11 +415,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: AppDimens.spaceLg),
           SizedBox(
-            height: 52,
-            child: OutlinedButton.icon(
+            height: AppDimens.touchTargetLarge,
+            child: FilledButton.tonal(
               onPressed: () => _confirmLogout(context),
-              icon: const Icon(Icons.logout_rounded, size: AppDimens.iconSm),
-              label: const Text('Sign out'),
+              style: FilledButton.styleFrom(
+                backgroundColor: scheme.errorContainer,
+                foregroundColor: scheme.onErrorContainer,
+                minimumSize: const Size.fromHeight(AppDimens.touchTargetLarge),
+                shape: const StadiumBorder(),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.logout_rounded, size: AppDimens.iconMedium),
+                  SizedBox(width: AppDimens.space8),
+                  Text('Sign out'),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: AppDimens.space2xs),
@@ -417,11 +458,11 @@ class _UpdateCenterTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
-        final (subtitle, badge) = _statusFor(brightness);
+        final brightness = Theme.of(context).brightness;
+        final (subtitle, badge) = _statusFor(context, brightness);
         return NexaListTile(
           icon: Icons.system_update_alt_rounded,
           title: 'Update center',
@@ -439,10 +480,8 @@ class _UpdateCenterTile extends StatelessWidget {
     );
   }
 
-  (String, Widget?) _statusFor(Brightness brightness) {
-    final accent = AppColors.accentFor(brightness);
-    final onWarning = AppColors.onWarningContainerFor(brightness);
-    final warningBg = AppColors.warningContainerFor(brightness);
+  (String, Widget?) _statusFor(BuildContext context, Brightness brightness) {
+    final primary = Theme.of(context).colorScheme.primary;
 
     switch (controller.status) {
       case UpdateStatus.updateAvailable:
@@ -450,24 +489,24 @@ class _UpdateCenterTile extends StatelessWidget {
           controller.manifestVersionLabel != null
               ? 'Update to ${controller.manifestVersionLabel}'
               : 'A new version is available',
-          _badge(onWarning, warningBg, 'Update'),
+          _badge(brightness, 'Update'),
         );
       case UpdateStatus.mandatory:
         return (
           'Required for continued use',
-          _badge(onWarning, warningBg, 'Required'),
+          _badge(brightness, 'Required'),
         );
       case UpdateStatus.paused:
         return ('Download paused', null);
       case UpdateStatus.downloading:
         final pct = (controller.progress * 100).round();
-        return ('Downloading… $pct%', _dot(accent));
+        return ('Downloading… $pct%', _dot(primary, 'In progress'));
       case UpdateStatus.checking:
-        return ('Checking for updates…', _dot(accent));
+        return ('Checking for updates…', _dot(primary, 'In progress'));
       case UpdateStatus.readyToInstall:
         return ('Update ready to install', null);
       case UpdateStatus.installingHandoff:
-        return ('Installing update…', _dot(accent));
+        return ('Installing update…', _dot(primary, 'In progress'));
       case UpdateStatus.completed:
         return ('New version installed', null);
       case UpdateStatus.failed:
@@ -483,7 +522,7 @@ class _UpdateCenterTile extends StatelessWidget {
           null,
         );
       case UpdateStatus.verifying:
-        return ('Verifying download…', _dot(accent));
+        return ('Verifying download…', _dot(primary, 'In progress'));
       case UpdateStatus.idle:
         return ('Check for app updates', null);
       case UpdateStatus.needsUserAction:
@@ -491,28 +530,26 @@ class _UpdateCenterTile extends StatelessWidget {
     }
   }
 
-  Widget _badge(Color fg, Color bg, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space2xs + 2,
-        vertical: AppDimens.space2xs,
-      ),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-      ),
-      child: Text(
+  Widget _badge(Brightness brightness, String label) {
+    return Badge(
+      backgroundColor: AppColors.warningContainerFor(brightness),
+      label: Text(
         label,
-        style: NexaTypography.chipLabel.copyWith(color: fg),
+        style: AppTextStyle.labelSmall.copyWith(
+          color: AppColors.onWarningContainerFor(brightness),
+        ),
       ),
     );
   }
 
-  Widget _dot(Color color) {
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  Widget _dot(Color color, String label) {
+    return Semantics(
+      label: label,
+      child: Container(
+        width: AppDimens.space8,
+        height: AppDimens.space8,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
     );
   }
 }

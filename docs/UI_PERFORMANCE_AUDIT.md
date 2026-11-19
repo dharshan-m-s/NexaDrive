@@ -1,4 +1,6 @@
-# NexaDrive UI — Performance Audit (current build)
+# NexaDrive UI — Performance Audit (former 1.1.0 build)
+
+> **Historical record — superseded.** This document is a point-in-time record of NexaDrive's former One UI / Liquid Glass design. It is not current guidance: see [docs/DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) (Material 3 / Material You) and `docs/UI_DESIGN_TOKENS.md`.
 
 > Fact-based account of the performance-relevant machinery in 1.1.0 and the
 > measurable risks. Marked **[EST]** where a magnitude is inferred, not measured.

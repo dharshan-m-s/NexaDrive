@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/models/file_entry.dart';
@@ -103,7 +102,13 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          shape: const StadiumBorder(),
+        ),
+      );
   }
 
   void _open(Map<String, dynamic> item) {
@@ -127,29 +132,17 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
         child: NexaPage(
           title: _title,
           subtitle: path.isEmpty ? null : path,
-          leading: NexaLiquidGlass(
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            padding: EdgeInsets.zero,
-            blurSigma: 10,
-            showShadow: false,
-            child: const NexaBackButton(),
-          ),
+          leading: const NexaBackButton(),
           headerAction: path.isEmpty
               ? null
-              : NexaLiquidGlass(
-                  borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                  padding: EdgeInsets.zero,
-                  blurSigma: 10,
-                  showShadow: false,
-                  child: IconButton(
-                    tooltip: 'Up one level',
-                    onPressed: () {
-                      final index = path.lastIndexOf('/');
-                      final parent = index < 0 ? '' : path.substring(0, index);
-                      load(parent);
-                    },
-                    icon: const Icon(Icons.arrow_upward_rounded),
-                  ),
+              : IconButton(
+                  tooltip: 'Up one level',
+                  onPressed: () {
+                    final index = path.lastIndexOf('/');
+                    final parent = index < 0 ? '' : path.substring(0, index);
+                    load(parent);
+                  },
+                  icon: const Icon(Icons.arrow_upward_rounded),
                 ),
           padding: const EdgeInsets.fromLTRB(
             AppDimens.pageMargin,
@@ -194,10 +187,10 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
         if (_loading)
           const Padding(
             padding: EdgeInsets.only(bottom: AppDimens.space8),
-            child: LinearProgressIndicator(minHeight: 2),
+            child: LinearProgressIndicator(minHeight: AppDimens.space2),
           ),
         NexaGroupedList(
-          header: '${items.length} ${items.length == 1 ? 'ITEM' : 'ITEMS'}',
+          header: '${items.length} ${items.length == 1 ? 'item' : 'items'}',
           children: [
             for (final item in items) _sharedItemRow(item),
           ],
@@ -212,7 +205,7 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
   }
 
   Widget _sharedItemRow(Map<String, dynamic> item) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final isFolder = FileEntry.kindOf(item) == 'folder';
     final fullPath = item['path']?.toString() ?? '';
     final name = item['name']?.toString() ??
@@ -221,31 +214,37 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
     final isDownloading = _downloading.contains(fullPath);
 
     return NexaGroupTile(
-      leadingIcon:
-          isFolder ? Icons.folder_rounded : Icons.insert_drive_file_outlined,
-      leadingIconColor: AppColors.accentTextFor(brightness),
-      leadingBackgroundColor: AppColors.accentContainerFor(brightness),
+      leading: SizedBox(
+        width: AppDimens.iconTileLarge,
+        height: AppDimens.iconTileLarge,
+        child: Center(
+          child: isFolder
+              ? const NexaFileGlyph.folder(size: 36)
+              : NexaFileGlyph(
+                  name: name,
+                  type: item['type']?.toString(),
+                  size: 36,
+                ),
+        ),
+      ),
       title: name,
       subtitle: isFolder ? 'Folder' : Format.bytes(size),
       showChevron: isFolder,
       trailing: isFolder
           ? null
-          : NexaLiquidGlass(
-              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-              padding: EdgeInsets.zero,
-              blurSigma: 9,
-              showShadow: false,
-              child: IconButton(
-                tooltip: 'Download',
-                onPressed: isDownloading ? null : () => _download(item),
-                icon: isDownloading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.download_outlined),
-              ),
+          : IconButton(
+              tooltip: isDownloading ? 'Downloading' : 'Download',
+              onPressed: isDownloading ? null : () => _download(item),
+              icon: isDownloading
+                  ? SizedBox(
+                      width: AppDimens.iconSmall,
+                      height: AppDimens.iconSmall,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: scheme.primary,
+                      ),
+                    )
+                  : const Icon(Icons.download_outlined),
             ),
       onTap: () => _open(item),
     );

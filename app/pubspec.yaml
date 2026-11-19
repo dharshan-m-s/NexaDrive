@@ -45,6 +45,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  shaders:
-    - shaders/liquid_glass.frag
-    - shaders/glass_highlight.frag

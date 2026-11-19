@@ -66,12 +66,15 @@ pub(crate) fn sanitize_name(raw: &str) -> Result<String, AppError> {
     Ok(name.to_string())
 }
 
+fn lower_extension(path: &Path) -> Option<String> {
+    path.extension()
+        .and_then(|x| x.to_str())
+        .map(|x| x.to_ascii_lowercase())
+}
+
 pub(crate) fn is_photo(path: &Path) -> bool {
     matches!(
-        path.extension()
-            .and_then(|x| x.to_str())
-            .map(|x| x.to_ascii_lowercase())
-            .as_deref(),
+        lower_extension(path).as_deref(),
         Some(
             "jpg"
                 | "jpeg"
@@ -86,6 +89,17 @@ pub(crate) fn is_photo(path: &Path) -> bool {
                 | "tiff"
         )
     )
+}
+
+pub(crate) fn is_video(path: &Path) -> bool {
+    matches!(
+        lower_extension(path).as_deref(),
+        Some("mp4" | "m4v" | "webm" | "mkv" | "mov" | "avi" | "3gp")
+    )
+}
+
+pub(crate) fn is_pdf(path: &Path) -> bool {
+    matches!(lower_extension(path).as_deref(), Some("pdf"))
 }
 
 /// Content-Type for a stored file. Media types the app renders or streams are
@@ -113,6 +127,8 @@ pub(crate) fn mime_for_file(path: &Path) -> &'static str {
         "webm" => "video/webm",
         "mkv" => "video/x-matroska",
         "mov" => "video/quicktime",
+        "avi" => "video/x-msvideo",
+        "3gp" => "video/3gpp",
         // Audio (streamed by the in-app player)
         "mp3" => "audio/mpeg",
         "m4a" => "audio/mp4",
@@ -337,6 +353,18 @@ mod tests {
     fn reject_null_bytes_in_path() {
         // Null bytes should be rejected since they can't be represented in filesystem paths
         assert!(safe_relative_path("foo\0bar").is_err());
+    }
+
+    #[test]
+    fn preview_kinds_are_classified() {
+        assert!(is_photo(Path::new("photo.JPG")));
+        assert!(!is_photo(Path::new("clip.mp4")));
+        assert!(is_video(Path::new("clip.MP4")));
+        assert!(is_video(Path::new("clip.avi")));
+        assert!(is_video(Path::new("clip.3GP")));
+        assert!(!is_video(Path::new("photo.jpg")));
+        assert!(is_pdf(Path::new("REPORT.PDF")));
+        assert!(!is_pdf(Path::new("notes.txt")));
     }
 
     #[test]

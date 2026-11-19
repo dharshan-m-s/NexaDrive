@@ -32,6 +32,16 @@ android {
 
     defaultConfig {
         applicationId = "io.nexadrive.app"
+        // Local side-by-side installs can pass
+        // `--android-project-arg=nexaApplicationIdSuffix=.preview` (and an
+        // optional `nexaAppLabel`) to Flutter build commands. This leaves the
+        // release identity and existing user data untouched.
+        providers.gradleProperty("nexaApplicationIdSuffix").orNull?.let {
+            if (it.isNotBlank()) applicationIdSuffix = it
+        }
+        manifestPlaceholders["appLabel"] =
+            providers.gradleProperty("nexaAppLabel").orNull?.takeIf { it.isNotBlank() }
+                ?: "NexaDrive"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         // Versions flow through from pubspec.yaml (see flutter.versionCode / versionName).

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
-import 'nexa_pressable.dart';
 
 /// Primary filled button — most prominent action.
+///
+/// Renders Flutter's Material 3 [FilledButton], themed by [AppTheme] with the
+/// seeded primary role, full shape and a 48dp touch target.
 class NexaFilledButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final Widget child;
@@ -25,18 +26,15 @@ class NexaFilledButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = AppColors.accentFor(brightness);
-    final onPrimary =
-        brightness == Brightness.dark ? Colors.black : Colors.white;
+    final scheme = Theme.of(context).colorScheme;
 
     Widget buttonChild = isLoading
         ? SizedBox(
-            width: 22,
-            height: 22,
+            width: AppDimens.iconSmall,
+            height: AppDimens.iconSmall,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: onPrimary,
+              color: scheme.onPrimary,
             ),
           )
         : (icon != null
@@ -53,35 +51,18 @@ class NexaFilledButton extends StatelessWidget {
     final button = FilledButton(
       onPressed: isLoading ? null : onPressed,
       style: FilledButton.styleFrom(
-        backgroundColor: accent,
-        foregroundColor: onPrimary,
-        overlayColor: onPrimary.withValues(alpha: 0.12),
-        disabledBackgroundColor: accent.withValues(alpha: 0.4),
-        disabledForegroundColor: onPrimary.withValues(alpha: 0.6),
         minimumSize:
-            Size(fullWidth ? double.infinity : 64, AppDimens.touchTargetLarge),
+            Size(fullWidth ? double.infinity : 64, AppDimens.touchTarget),
         padding: padding ??
-            const EdgeInsets.symmetric(
-              horizontal: AppDimens.space24,
-              vertical: AppDimens.space12,
-            ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        ),
-        textStyle: AppTextStyle.button,
+            const EdgeInsets.symmetric(horizontal: AppDimens.space24),
+        shape: const StadiumBorder(),
+        textStyle: AppTextStyle.labelLarge,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       child: buttonChild,
     );
 
-    final pressable = NexaPressable(
-      enabled: !isLoading && onPressed != null,
-      child: button,
-    );
-
-    return fullWidth
-        ? SizedBox(width: double.infinity, child: pressable)
-        : pressable;
+    return fullWidth ? SizedBox(width: double.infinity, child: button) : button;
   }
 }
 
@@ -108,9 +89,7 @@ class NexaOutlinedButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = AppColors.accentFor(brightness);
-    final fg = foregroundColor ?? accent;
+    final scheme = Theme.of(context).colorScheme;
 
     Widget buttonChild = icon != null
         ? Row(
@@ -126,33 +105,20 @@ class NexaOutlinedButton extends StatelessWidget {
     final button = OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        foregroundColor: fg,
-        overlayColor: fg.withValues(alpha: 0.08),
-        side: BorderSide(color: borderColor ?? accent, width: 1.5),
+        foregroundColor: foregroundColor ?? scheme.primary,
+        side: BorderSide(color: borderColor ?? scheme.outline, width: 1),
         minimumSize:
-            Size(fullWidth ? double.infinity : 64, AppDimens.touchTargetLarge),
+            Size(fullWidth ? double.infinity : 64, AppDimens.touchTarget),
         padding: padding ??
-            const EdgeInsets.symmetric(
-              horizontal: AppDimens.space24,
-              vertical: AppDimens.space12,
-            ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        ),
-        textStyle: AppTextStyle.button,
+            const EdgeInsets.symmetric(horizontal: AppDimens.space24),
+        shape: const StadiumBorder(),
+        textStyle: AppTextStyle.labelLarge,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       child: buttonChild,
     );
 
-    final pressable = NexaPressable(
-      enabled: onPressed != null,
-      child: button,
-    );
-
-    return fullWidth
-        ? SizedBox(width: double.infinity, child: pressable)
-        : pressable;
+    return fullWidth ? SizedBox(width: double.infinity, child: button) : button;
   }
 }
 
@@ -175,8 +141,7 @@ class NexaTextButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final fg = foregroundColor ?? AppColors.accentFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
 
     Widget buttonChild = icon != null
         ? Row(
@@ -189,31 +154,25 @@ class NexaTextButton extends StatelessWidget {
           )
         : child;
 
-    return NexaPressable(
-      enabled: onPressed != null,
-      child: TextButton(
-        onPressed: onPressed,
-        style: TextButton.styleFrom(
-          foregroundColor: fg,
-          overlayColor: fg.withValues(alpha: 0.08),
-          padding: padding ??
-              const EdgeInsets.symmetric(
-                horizontal: AppDimens.space16,
-                vertical: AppDimens.space8,
-              ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-          ),
-          textStyle: AppTextStyle.buttonSmall,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-        child: buttonChild,
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: foregroundColor ?? scheme.primary,
+        padding: padding ??
+            const EdgeInsets.symmetric(
+              horizontal: AppDimens.space16,
+              vertical: AppDimens.space8,
+            ),
+        shape: const StadiumBorder(),
+        textStyle: AppTextStyle.labelLarge,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
+      child: buttonChild,
     );
   }
 }
 
-/// Destructive filled button (red).
+/// Destructive filled button (Material error role).
 class NexaDestructiveButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final Widget child;
@@ -230,41 +189,35 @@ class NexaDestructiveButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final error = AppColors.errorFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
 
-    return NexaPressable(
-      enabled: !isLoading && onPressed != null,
-      child: FilledButton(
-        onPressed: isLoading ? null : onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: error,
-          foregroundColor: Colors.white,
-          overlayColor: Colors.white.withValues(alpha: 0.12),
-          disabledBackgroundColor: error.withValues(alpha: 0.4),
-          disabledForegroundColor: Colors.white.withValues(alpha: 0.6),
-          minimumSize: Size(
-              fullWidth ? double.infinity : 64, AppDimens.touchTargetLarge),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space24,
-            vertical: AppDimens.space12,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-          ),
-          textStyle: AppTextStyle.button,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    final button = FilledButton(
+      onPressed: isLoading ? null : onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: scheme.error,
+        foregroundColor: scheme.onError,
+        minimumSize: Size(
+          fullWidth ? double.infinity : 64,
+          AppDimens.touchTarget,
         ),
-        child: isLoading
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white),
-              )
-            : child,
+        padding: const EdgeInsets.symmetric(horizontal: AppDimens.space24),
+        shape: const StadiumBorder(),
+        textStyle: AppTextStyle.labelLarge,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
+      child: isLoading
+          ? SizedBox(
+              width: AppDimens.iconSmall,
+              height: AppDimens.iconSmall,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: scheme.onError,
+              ),
+            )
+          : child,
     );
+
+    return fullWidth ? SizedBox(width: double.infinity, child: button) : button;
   }
 }
 
@@ -291,29 +244,21 @@ class NexaIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final fg = color ?? AppColors.labelPrimaryFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
+    final fg = color ?? scheme.onSurfaceVariant;
     final bg = backgroundColor ??
-        (isSelected
-            ? AppColors.accentContainerFor(brightness)
-            : Colors.transparent);
+        (isSelected ? scheme.secondaryContainer : Colors.transparent);
 
-    return NexaPressable(
-      enabled: onPressed != null,
-      child: IconButton(
-        onPressed: onPressed,
-        tooltip: tooltip,
-        icon: Icon(icon, size: size, color: fg),
-        style: IconButton.styleFrom(
-          backgroundColor: bg,
-          foregroundColor: fg,
-          overlayColor: fg.withValues(alpha: 0.10),
-          minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
-          padding: const EdgeInsets.all(AppDimens.space8),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-          ),
-        ),
+    return IconButton(
+      onPressed: onPressed,
+      tooltip: tooltip,
+      icon: Icon(icon, size: size, color: fg),
+      style: IconButton.styleFrom(
+        backgroundColor: bg,
+        foregroundColor: fg,
+        minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+        padding: const EdgeInsets.all(AppDimens.space8),
+        shape: const StadiumBorder(),
       ),
     );
   }
@@ -335,18 +280,16 @@ class NexaBackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
 
-    return NexaPressable(
-      child: IconButton(
-        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-        onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
-        icon: Icon(icon, color: AppColors.labelPrimaryFor(brightness)),
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(
-          minWidth: AppDimens.touchTarget,
-          minHeight: AppDimens.touchTarget,
-        ),
+    return IconButton(
+      tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+      onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
+      icon: Icon(icon, color: scheme.onSurface),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(
+        minWidth: AppDimens.touchTarget,
+        minHeight: AppDimens.touchTarget,
       ),
     );
   }
@@ -371,33 +314,26 @@ class NexaFilledIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final bg = backgroundColor ?? AppColors.accentFor(brightness);
-    final fg = foregroundColor ??
-        (brightness == Brightness.dark ? Colors.black : Colors.white);
+    final scheme = Theme.of(context).colorScheme;
+    final bg = backgroundColor ?? scheme.primary;
+    final fg = foregroundColor ?? scheme.onPrimary;
 
-    return NexaPressable(
-      enabled: onPressed != null,
-      child: IconButton.filled(
-        onPressed: onPressed,
-        tooltip: tooltip,
-        icon: Icon(icon, size: AppDimens.iconMedium, color: fg),
-        style: IconButton.styleFrom(
-          backgroundColor: bg,
-          foregroundColor: fg,
-          overlayColor: fg.withValues(alpha: 0.10),
-          minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
-          padding: const EdgeInsets.all(AppDimens.space10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-          ),
-        ),
+    return IconButton.filled(
+      onPressed: onPressed,
+      tooltip: tooltip,
+      icon: Icon(icon, size: AppDimens.iconMedium, color: fg),
+      style: IconButton.styleFrom(
+        backgroundColor: bg,
+        foregroundColor: fg,
+        minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+        padding: const EdgeInsets.all(AppDimens.space8),
+        shape: const StadiumBorder(),
       ),
     );
   }
 }
 
-/// Segmented control (iOS-style).
+/// Material 3 segmented button, themed with the seeded secondary container.
 class NexaSegmentedControl<T> extends StatelessWidget {
   final Map<T, Widget> children;
   final T selected;
@@ -416,9 +352,7 @@ class NexaSegmentedControl<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final onAccent = AppColors.onAccentContainerFor(brightness);
-    final secondary = AppColors.labelSecondaryFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
 
     return SegmentedButton<T>(
       segments: children.entries.map((entry) {
@@ -435,28 +369,28 @@ class NexaSegmentedControl<T> extends StatelessWidget {
       style: ButtonStyle(
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return selectedColor ?? AppColors.accentContainerFor(brightness);
+            return selectedColor ?? scheme.secondaryContainer;
           }
           return Colors.transparent;
         }),
         foregroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return onAccent;
+            return scheme.onSecondaryContainer;
           }
-          return unselectedColor ?? secondary;
+          return unselectedColor ?? scheme.onSurfaceVariant;
         }),
-        side: WidgetStatePropertyAll(
-          BorderSide(color: AppColors.separatorOpaqueFor(brightness)),
+        side:
+            WidgetStatePropertyAll(BorderSide(color: scheme.outline, width: 1)),
+        shape: const WidgetStatePropertyAll(StadiumBorder()),
+        minimumSize: const WidgetStatePropertyAll(
+          Size(64, AppDimens.touchTarget),
         ),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-          ),
-        ),
-        textStyle: const WidgetStatePropertyAll(AppTextStyle.caption1),
+        textStyle: const WidgetStatePropertyAll(AppTextStyle.labelLarge),
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(
-              horizontal: AppDimens.space16, vertical: AppDimens.space8),
+            horizontal: AppDimens.space16,
+            vertical: AppDimens.space8,
+          ),
         ),
       ),
       showSelectedIcon: false,

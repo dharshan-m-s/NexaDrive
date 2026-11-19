@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../services/api.dart';
@@ -184,17 +183,11 @@ class _SecurityScreenState extends State<SecurityScreen> {
     return NexaPage(
       title: 'Security',
       subtitle: 'Sessions and sign-in devices',
-      headerAction: NexaLiquidGlass(
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        padding: EdgeInsets.zero,
-        blurSigma: 12,
-        showShadow: false,
-        child: IconButton(
-          tooltip: 'Refresh sessions',
-          onPressed:
-              _busy || loadState == SessionsLoadState.loading ? null : load,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
+      headerAction: IconButton(
+        tooltip: 'Refresh sessions',
+        onPressed:
+            _busy || loadState == SessionsLoadState.loading ? null : load,
+        icon: const Icon(Icons.refresh_rounded),
       ),
       body: switch (loadState) {
         SessionsLoadState.loading => const NexaLoadingBlock(),
@@ -220,7 +213,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
   }
 
   Widget _buildList() {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     SessionInfo? current;
     final others = <SessionInfo>[];
     for (final s in sessions) {
@@ -251,17 +244,31 @@ class _SecurityScreenState extends State<SecurityScreen> {
                 ? null
                 : Text(
                     '${others.length}',
-                    style: AppTextStyle.caption1.copyWith(
-                      color: AppColors.labelSecondaryFor(brightness),
+                    style: AppTextStyle.labelMedium.copyWith(
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
           ),
           if (others.isEmpty)
-            NexaStatusPod(
-              icon: Icons.check_circle_outline_rounded,
-              tint: AppColors.successFor(brightness),
-              title: 'No other sessions',
-              subtitle: 'This account is signed in only on this device.',
+            Card(
+              color: scheme.surfaceContainerLow,
+              surfaceTintColor: Colors.transparent,
+              elevation: AppDimens.elevationSubtle,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDimens.radiusCard),
+              ),
+              child: ListTile(
+                minTileHeight: AppDimens.listHeightLarge,
+                leading: CircleAvatar(
+                  backgroundColor: scheme.primaryContainer,
+                  foregroundColor: scheme.onPrimaryContainer,
+                  child: const Icon(Icons.check_circle_outline_rounded),
+                ),
+                title: const Text('No other sessions'),
+                subtitle: const Text(
+                  'This account is signed in only on this device.',
+                ),
+              ),
             )
           else
             NexaGroupedList(
@@ -293,7 +300,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
               const NexaDivider.inset(),
               NexaListTile(
                 leadingIcon: Icons.logout_rounded,
-                leadingIconColor: AppColors.errorFor(brightness),
+                leadingIconColor: scheme.error,
                 enabled: !_busy,
                 showChevron: false,
                 title: 'Sign out everywhere',
@@ -384,108 +391,98 @@ class _CurrentDeviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = AppColors.accentFor(brightness);
-    final secondary = AppColors.labelSecondaryFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
     final subtitle = _currentDeviceSubtitle(session);
 
-    return NexaSurface(
-      level: NexaSurfaceLevel.grouped,
-      radius: AppDimens.radiusCard,
-      color: AppColors.accentSubtleFor(brightness),
-      padding: const EdgeInsets.all(AppDimens.space16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: AppDimens.iconTileLarge,
-                height: AppDimens.iconTileLarge,
-                decoration: BoxDecoration(
-                  color: AppColors.accentContainerFor(brightness),
-                  borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-                ),
+    return Card(
+      color: scheme.primaryContainer,
+      surfaceTintColor: Colors.transparent,
+      elevation: AppDimens.elevationSubtle,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDimens.radiusCard),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppDimens.space16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              minTileHeight: AppDimens.listHeight,
+              leading: CircleAvatar(
+                backgroundColor: scheme.onPrimaryContainer,
+                foregroundColor: scheme.primaryContainer,
                 child: Icon(
                   _platformIcon(session.platform),
                   size: AppDimens.iconMedium,
-                  color: accent,
                 ),
               ),
-              const SizedBox(width: AppDimens.space12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            'This device',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyle.title3.copyWith(
-                              color: AppColors.labelPrimaryFor(brightness),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: AppDimens.space8),
-                        NexaBadge(label: 'Current', color: accent),
-                      ],
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: AppDimens.space2),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyle.caption.copyWith(color: secondary),
+              title: Text(
+                'This device',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyle.titleMedium.copyWith(
+                  color: scheme.onPrimaryContainer,
+                ),
+              ),
+              subtitle: subtitle == null
+                  ? null
+                  : Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyle.bodySmall.copyWith(
+                        color: scheme.onPrimaryContainer,
                       ),
-                    ],
-                  ],
+                    ),
+              trailing: Chip(
+                label: const Text('Current'),
+                backgroundColor: scheme.primary,
+                labelStyle: AppTextStyle.labelSmall.copyWith(
+                  color: scheme.onPrimary,
                 ),
+                side: BorderSide.none,
+                shape: const StadiumBorder(),
+                visualDensity: VisualDensity.compact,
               ),
-            ],
-          ),
-          const SizedBox(height: AppDimens.space16),
-          const NexaDivider(),
-          const SizedBox(height: AppDimens.space12),
-          _MetaRow(
-            label: 'Last active',
-            value: _sessionRelativeTime(session.lastActivity),
-          ),
-          const SizedBox(height: AppDimens.space8),
-          _MetaRow(
-            label: 'Signed in',
-            value: _sessionShortDate(session.createdAt),
-          ),
-          const SizedBox(height: AppDimens.space8),
-          _MetaRow(
-            label: 'Expires',
-            value: _sessionShortDate(session.expiresAt),
-          ),
-          const SizedBox(height: AppDimens.space8),
-          Tooltip(
-            message: 'Sign out of this device',
-            child: SizedBox(
-              width: double.infinity,
-              child: TextButton.icon(
-                onPressed: busy ? null : onRevoke,
-                icon: const Icon(
-                  Icons.logout_rounded,
-                  size: AppDimens.iconSmall,
-                ),
-                label: const Text('Sign out of this device'),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.errorFor(brightness),
-                  padding: const EdgeInsets.symmetric(
-                    vertical: AppDimens.space12,
+            ),
+            const Divider(),
+            const SizedBox(height: AppDimens.space8),
+            _MetaRow(
+              label: 'Last active',
+              value: _sessionRelativeTime(session.lastActivity),
+            ),
+            const SizedBox(height: AppDimens.space8),
+            _MetaRow(
+              label: 'Signed in',
+              value: _sessionShortDate(session.createdAt),
+            ),
+            const SizedBox(height: AppDimens.space8),
+            _MetaRow(
+              label: 'Expires',
+              value: _sessionShortDate(session.expiresAt),
+            ),
+            const SizedBox(height: AppDimens.space8),
+            Tooltip(
+              message: 'Sign out of this device',
+              child: SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  onPressed: busy ? null : onRevoke,
+                  icon: const Icon(
+                    Icons.logout_rounded,
+                    size: AppDimens.iconMedium,
+                  ),
+                  label: const Text('Sign out of this device'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: scheme.error,
+                    minimumSize: const Size.fromHeight(AppDimens.touchTarget),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -505,7 +502,7 @@ class _SessionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final label = _deviceLabel(session);
     final meta = _sessionRelativeTime(session.lastActivity);
     final platform = _platformLabel(session.platform);
@@ -523,7 +520,8 @@ class _SessionTile extends StatelessWidget {
         icon: const Icon(Icons.logout_rounded, size: AppDimens.iconSmall),
         label: const Text('Sign out'),
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.errorFor(brightness),
+          foregroundColor: scheme.error,
+          minimumSize: const Size(84, AppDimens.touchTarget),
           padding: const EdgeInsets.symmetric(horizontal: AppDimens.space8),
         ),
       ),
@@ -541,14 +539,14 @@ class _MetaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: AppTextStyle.footnote.copyWith(
-            color: AppColors.labelSecondaryFor(brightness),
+          style: AppTextStyle.bodySmall.copyWith(
+            color: scheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(width: AppDimens.space16),
@@ -556,9 +554,8 @@ class _MetaRow extends StatelessWidget {
           child: Text(
             value,
             textAlign: TextAlign.right,
-            style: AppTextStyle.footnote.copyWith(
-              color: AppColors.labelPrimaryFor(brightness),
-              fontWeight: FontWeight.w500,
+            style: AppTextStyle.labelMedium.copyWith(
+              color: scheme.onSurface,
             ),
           ),
         ),

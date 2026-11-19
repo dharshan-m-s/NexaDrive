@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import '../../core/design/app_motion.dart';
 
-/// Linear progress indicator with label.
+/// Material 3 linear progress indicator with labels.
 class NexaProgressIndicator extends StatelessWidget {
   final double? value;
   final String? label;
@@ -27,47 +26,51 @@ class NexaProgressIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = color ?? AppColors.accentFor(brightness);
-    final bg = backgroundColor ?? accent.withValues(alpha: 0.12);
+    final scheme = Theme.of(context).colorScheme;
+    final accent = color ?? scheme.primary;
+    final track = backgroundColor ?? scheme.primaryContainer;
+    final percentage = value == null ? null : '${(value! * 100).round()}%';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (label != null || (showPercentage && value != null)) ...[
+        if (label != null || (showPercentage && percentage != null)) ...[
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               if (label != null)
                 Text(
                   label!,
-                  style: AppTextStyle.caption1.copyWith(
-                    color: AppColors.labelSecondaryFor(brightness),
+                  style: AppTextStyle.bodySmall.copyWith(
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
-              if (showPercentage && value != null)
+              if (showPercentage && percentage != null)
                 Text(
-                  '${(value! * 100).round()}%',
-                  style: AppTextStyle.caption2.copyWith(
-                    color: AppColors.labelPrimaryFor(brightness),
-                    fontWeight: FontWeight.w600,
+                  percentage,
+                  style: AppTextStyle.labelMedium.copyWith(
+                    color: scheme.onSurface,
                   ),
                 ),
             ],
           ),
           const SizedBox(height: AppDimens.space6),
         ],
-        ClipRRect(
-          borderRadius: BorderRadius.circular(height / 2),
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: (value ?? 0).clamp(0.0, 1.0)),
-            duration: AppMotion.resolve(context, AppMotion.normal),
-            curve: AppMotion.standardCurve,
-            builder: (context, v, _) => LinearProgressIndicator(
-              value: value != null ? v : null,
-              minHeight: height,
-              color: accent,
-              backgroundColor: bg,
+        Semantics(
+          label: label ?? 'Progress',
+          value: valueLabel ?? percentage,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: (value ?? 0).clamp(0.0, 1.0)),
+              duration: AppMotion.resolve(context, AppMotion.normal),
+              curve: AppMotion.standardCurve,
+              builder: (context, v, _) => LinearProgressIndicator(
+                value: value != null ? v : null,
+                minHeight: height,
+                color: accent,
+                backgroundColor: track,
+              ),
             ),
           ),
         ),
@@ -75,8 +78,8 @@ class NexaProgressIndicator extends StatelessWidget {
           const SizedBox(height: AppDimens.space6),
           Text(
             valueLabel!,
-            style: AppTextStyle.caption2.copyWith(
-              color: AppColors.labelTertiaryFor(brightness),
+            style: AppTextStyle.bodySmall.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -85,7 +88,7 @@ class NexaProgressIndicator extends StatelessWidget {
   }
 }
 
-/// Circular progress indicator.
+/// Material 3 circular progress indicator.
 class NexaCircularProgress extends StatelessWidget {
   final double? value;
   final double size;
@@ -104,9 +107,7 @@ class NexaCircularProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = color ?? AppColors.accentFor(brightness);
-    final bg = backgroundColor ?? accent.withValues(alpha: 0.12);
+    final scheme = Theme.of(context).colorScheme;
 
     return SizedBox(
       width: size,
@@ -115,8 +116,8 @@ class NexaCircularProgress extends StatelessWidget {
         value: value,
         strokeWidth: strokeWidth,
         strokeCap: StrokeCap.round,
-        color: accent,
-        backgroundColor: bg,
+        color: color ?? scheme.primary,
+        backgroundColor: backgroundColor ?? scheme.primaryContainer,
       ),
     );
   }
@@ -137,14 +138,18 @@ class NexaSpinner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CircularProgressIndicator(
-        strokeWidth: strokeWidth,
-        strokeCap: StrokeCap.round,
-        color: color ?? AppColors.accentFor(brightness),
+    final scheme = Theme.of(context).colorScheme;
+
+    return Semantics(
+      label: 'Loading',
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: CircularProgressIndicator(
+          strokeWidth: strokeWidth,
+          strokeCap: StrokeCap.round,
+          color: color ?? scheme.primary,
+        ),
       ),
     );
   }

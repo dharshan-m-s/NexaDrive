@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_motion.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
 import '../../../services/api.dart';
-import '../../widgets/nexa_liquid_glass.dart';
 
 /// One created share link.
 class _ShareLink {
@@ -26,7 +24,7 @@ class _ShareLink {
   final bool isLink;
 }
 
-/// One UI "Share" sheet.
+/// Material 3 "Share" sheet.
 ///
 /// ## Honesty contract
 ///
@@ -178,9 +176,9 @@ class _FileShareSheetState extends State<FileShareSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = AppColors.accentFor(brightness);
-    final secondary = AppColors.textSecondaryFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
+    final accent = scheme.primary;
+    final secondary = scheme.onSurfaceVariant;
     final single = widget.files.length == 1;
     final anyLink = _links.any((l) => l.isLink);
 
@@ -215,9 +213,8 @@ class _FileShareSheetState extends State<FileShareSheet> {
                               : 'Share ${widget.files.length} items',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTextStyle.rowTitle.copyWith(
-                            color: AppColors.textPrimaryFor(brightness),
-                            fontWeight: FontWeight.w600,
+                          style: AppTextStyle.titleMedium.copyWith(
+                            color: scheme.onSurface,
                           ),
                         ),
                         if (!single)
@@ -225,8 +222,9 @@ class _FileShareSheetState extends State<FileShareSheet> {
                             _mode == 'person'
                                 ? 'Each file is shared with the same person'
                                 : 'Each file gets its own link',
-                            style:
-                                AppTextStyle.caption.copyWith(color: secondary),
+                            style: AppTextStyle.bodySmall.copyWith(
+                              color: secondary,
+                            ),
                           ),
                       ],
                     ),
@@ -245,11 +243,8 @@ class _FileShareSheetState extends State<FileShareSheet> {
                 )
               else ...[
                 if (!_hasFolder) ...[
-                  NexaLiquidGlass(
-                    borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                    blurSigma: 12,
-                    padding: const EdgeInsets.all(AppDimens.space4),
-                    showShadow: false,
+                  SizedBox(
+                    width: double.infinity,
                     child: SegmentedButton<String>(
                       segments: const [
                         ButtonSegment(
@@ -277,7 +272,7 @@ class _FileShareSheetState extends State<FileShareSheet> {
                           '${single ? 'this file' : 'these files'} until you revoke it.'
                       : 'Folders and files shared this way stay private to that '
                           'NexaDrive account.',
-                  style: AppTextStyle.caption.copyWith(color: secondary),
+                  style: AppTextStyle.bodySmall.copyWith(color: secondary),
                 ),
                 const SizedBox(height: AppDimens.space12),
                 if (_mode == 'person') ...[
@@ -293,11 +288,8 @@ class _FileShareSheetState extends State<FileShareSheet> {
                   ),
                   const SizedBox(height: AppDimens.space12),
                 ],
-                NexaLiquidGlass(
-                  borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                  blurSigma: 12,
-                  padding: const EdgeInsets.all(AppDimens.space4),
-                  showShadow: false,
+                SizedBox(
+                  width: double.infinity,
                   child: SegmentedButton<String>(
                     segments: const [
                       ButtonSegment(
@@ -328,7 +320,7 @@ class _FileShareSheetState extends State<FileShareSheet> {
                 const SizedBox(height: AppDimens.space8),
                 Text(
                   'Creating links… ($_createdCount of ${widget.files.length})',
-                  style: AppTextStyle.caption.copyWith(color: secondary),
+                  style: AppTextStyle.bodySmall.copyWith(color: secondary),
                 ),
               ],
               if (_failures.isNotEmpty && !_busy) ...[
@@ -342,14 +334,14 @@ class _FileShareSheetState extends State<FileShareSheet> {
                         Icon(
                           Icons.error_outline_rounded,
                           size: AppDimens.iconSmall,
-                          color: AppColors.errorFor(brightness),
+                          color: scheme.error,
                         ),
                         const SizedBox(width: AppDimens.space8),
                         Expanded(
                           child: Text(
                             '${entry.key}: ${entry.value}',
-                            style: AppTextStyle.caption.copyWith(
-                              color: AppColors.errorFor(brightness),
+                            style: AppTextStyle.bodySmall.copyWith(
+                              color: scheme.error,
                             ),
                           ),
                         ),
@@ -361,8 +353,7 @@ class _FileShareSheetState extends State<FileShareSheet> {
                 const SizedBox(height: AppDimens.space12),
                 Text(
                   _error!,
-                  style: AppTextStyle.caption
-                      .copyWith(color: AppColors.errorFor(brightness)),
+                  style: AppTextStyle.bodySmall.copyWith(color: scheme.error),
                 ),
               ],
               const SizedBox(height: AppDimens.space20),
@@ -388,12 +379,12 @@ class _FileShareSheetState extends State<FileShareSheet> {
                       child: FilledButton.icon(
                         onPressed: _busy ? null : _create,
                         icon: _busy
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
+                            ? SizedBox(
+                                width: AppDimens.iconSmall,
+                                height: AppDimens.iconSmall,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Colors.white,
+                                  color: scheme.onPrimary,
                                 ),
                               )
                             : Icon(
@@ -442,9 +433,11 @@ class _CreatedLinks extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final secondary = AppColors.textSecondaryFor(brightness);
-    final success = AppColors.successFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
+    final secondary = scheme.onSurfaceVariant;
+    // The check icon and the text both convey success, so colour is not the
+    // only status signal.
+    final success = scheme.primary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -452,8 +445,11 @@ class _CreatedLinks extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(Icons.check_circle_rounded,
-                color: success, size: AppDimens.iconSmall),
+            Icon(
+              Icons.check_circle_rounded,
+              color: success,
+              size: AppDimens.iconSmall,
+            ),
             const SizedBox(width: AppDimens.space8),
             Expanded(
               child: Text(
@@ -462,26 +458,18 @@ class _CreatedLinks extends StatelessWidget {
                     : links.length == 1
                         ? 'Link ready to share'
                         : '${links.length} links ready to share',
-                style: AppTextStyle.rowSubtitle.copyWith(
-                  color: AppColors.textPrimaryFor(brightness),
-                  fontWeight: FontWeight.w600,
-                ),
+                style:
+                    AppTextStyle.titleSmall.copyWith(color: scheme.onSurface),
               ),
             ),
             if (links.where((l) => l.isLink).length > 1)
-              NexaLiquidGlass(
-                borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                padding: EdgeInsets.zero,
-                blurSigma: 10,
-                showShadow: false,
-                child: TextButton.icon(
-                  onPressed: onCopyAll,
-                  icon: const Icon(
-                    Icons.copy_all_rounded,
-                    size: AppDimens.iconSmall,
-                  ),
-                  label: const Text('Copy all'),
+              TextButton.icon(
+                onPressed: onCopyAll,
+                icon: const Icon(
+                  Icons.copy_all_rounded,
+                  size: AppDimens.iconSmall,
                 ),
+                label: const Text('Copy all'),
               ),
           ],
         ),
@@ -489,11 +477,11 @@ class _CreatedLinks extends StatelessWidget {
         TweenAnimationBuilder<double>(
           tween: Tween(begin: 0, end: 1),
           duration: AppMotion.resolve(context, AppMotion.fast),
-          curve: AppMotion.enter,
+          curve: AppMotion.curveFor(context, AppMotion.enter),
           builder: (context, t, child) => Opacity(
             opacity: t,
             child: Transform.translate(
-              offset: Offset(0, (1 - t) * 8),
+              offset: Offset(0, (1 - t) * AppDimens.space8),
               child: child,
             ),
           ),
@@ -508,69 +496,70 @@ class _CreatedLinks extends StatelessWidget {
                   const SizedBox(height: AppDimens.space8),
               itemBuilder: (context, i) {
                 final link = links[i];
-                return Container(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppDimens.space12,
-                    AppDimens.space8,
-                    AppDimens.space4,
-                    AppDimens.space8,
+                return Card(
+                  color: scheme.surfaceContainerLow,
+                  surfaceTintColor: Colors.transparent,
+                  elevation: AppDimens.elevationSubtle,
+                  shadowColor: scheme.shadow,
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(AppDimens.radiusStandard),
                   ),
-                  decoration: BoxDecoration(
-                    color: brightness == Brightness.dark
-                        ? AppColors.surfaceAltDark
-                        : AppColors.surfaceAltLight,
-                    borderRadius: BorderRadius.circular(AppDimens.radiusInner),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              link.fileName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyle.rowSubtitle.copyWith(
-                                color: AppColors.textPrimaryFor(brightness),
-                                fontWeight: FontWeight.w600,
+                  margin: EdgeInsets.zero,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppDimens.space12,
+                      AppDimens.space8,
+                      AppDimens.space4,
+                      AppDimens.space8,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                link.fileName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyle.titleSmall.copyWith(
+                                  color: scheme.onSurface,
+                                ),
                               ),
-                            ),
-                            Text(
-                              link.url,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style:
-                                  AppTextStyle.micro.copyWith(color: secondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (link.isLink)
-                        NexaLiquidGlass(
-                          borderRadius: BorderRadius.circular(
-                            AppDimens.radiusPill,
+                              Text(
+                                link.url,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyle.bodySmall.copyWith(
+                                  color: secondary,
+                                ),
+                              ),
+                            ],
                           ),
-                          padding: EdgeInsets.zero,
-                          blurSigma: 10,
-                          showShadow: false,
-                          child: IconButton(
+                        ),
+                        if (link.isLink)
+                          IconButton(
                             tooltip: 'Copy link for ${link.fileName}',
                             onPressed: () => onCopy(link),
                             icon: const Icon(
                               Icons.copy_rounded,
                               size: AppDimens.iconSmall,
                             ),
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppDimens.space8,
+                            ),
+                            child: Icon(
+                              Icons.lock_outline_rounded,
+                              size: AppDimens.iconSmall,
+                              color: secondary,
+                            ),
                           ),
-                        )
-                      else
-                        const Padding(
-                          padding: EdgeInsets.symmetric(
-                              horizontal: AppDimens.space8),
-                          child: Icon(Icons.lock_outline_rounded,
-                              size: AppDimens.iconSmall),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 );
               },

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import '../../widgets/nexa_components.dart';
 import 'dart:typed_data';
@@ -5,10 +6,12 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_motion.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
+import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../../services/download_service.dart';
 import '../../../services/image_decode_policy.dart';
@@ -94,6 +97,20 @@ class _PhotoViewerState extends State<PhotoViewer> {
 
   late final DownloadService _downloads = DownloadService(widget.api);
 
+  /// Mirrors Google Photos' tap-to-reveal chrome: one tap hides both bars, one
+  /// tap anywhere brings them back.
+  bool _chromeVisible = true;
+  Timer? _chromeHideTimer;
+  bool _zoomed = false;
+
+  /// Google Photos keeps the photo itself unobstructed. The filmstrip is an
+  /// optional browse layer, opened from the overflow instead of a permanent
+  /// band of thumbnails at the bottom of every photo.
+  bool _filmstripVisible = false;
+
+  /// Bumped when the zoom button is pressed; the active page listens for it.
+  final ValueNotifier<int> _zoomSignal = ValueNotifier<int>(0);
+
   @override
   void initState() {
     super.initState();
@@ -101,12 +118,17 @@ class _PhotoViewerState extends State<PhotoViewer> {
     _current = widget.initialIndex.clamp(0, math.max(0, _photos.length - 1));
     _controller = PageController(initialPage: _current);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _prefetchAround(_current);
+      if (mounted) {
+        _prefetchAround(_current);
+        _scheduleChromeHide();
+      }
     });
   }
 
   @override
   void dispose() {
+    _chromeHideTimer?.cancel();
+    _zoomSignal.dispose();
     _controller.dispose();
     for (final image in _decoded.values) {
       image.dispose();
@@ -281,17 +303,36 @@ class _PhotoViewerState extends State<PhotoViewer> {
   }
 
   void _onPageChanged(int index) {
-    setState(() => _current = index);
+    setState(() {
+      _current = index;
+      _zoomed = false;
+    });
+    _showChrome();
     _prefetchAround(index);
   }
 
-  Future<void> _goTo(int index) async {
-    if (index < 0 || index >= _photos.length) return;
-    await _controller.animateToPage(
-      index,
-      duration: AppMotion.resolve(context, AppMotion.fast),
-      curve: AppMotion.curveFor(context, AppMotion.enter),
-    );
+  void _toggleChrome() {
+    setState(() => _chromeVisible = !_chromeVisible);
+    if (_chromeVisible) _scheduleChromeHide();
+  }
+
+  void _showChrome() {
+    if (!mounted) return;
+    setState(() => _chromeVisible = true);
+    _scheduleChromeHide();
+  }
+
+  void _scheduleChromeHide() {
+    _chromeHideTimer?.cancel();
+    _chromeHideTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted || _zoomed) return;
+      setState(() => _chromeVisible = false);
+    });
+  }
+
+  void _toggleZoom() {
+    _zoomSignal.value++;
+    _showChrome();
   }
 
   Future<void> _downloadCurrent() async {
@@ -378,6 +419,75 @@ class _PhotoViewerState extends State<PhotoViewer> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Map<String, dynamic> get _currentEntry => _photos[_current];
+
+  /// Google Photos shows time and place above the image, not a filename. This
+  /// library has no location field, so the server's modified time is the
+  /// glanceable metadata and the full name stays in the details sheet.
+  String _dateLabel(BuildContext context) {
+    final modified = DateTime.tryParse(
+      _currentEntry['modified_at']?.toString() ?? '',
+    );
+    if (modified == null) return 'Photo';
+    final local = modified.toLocal();
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final time = MaterialLocalizations.of(context).formatTimeOfDay(
+      TimeOfDay.fromDateTime(local),
+      alwaysUse24HourFormat: true,
+    );
+    return '${local.day} ${months[local.month - 1]} ${local.year} · $time';
+  }
+
+  /// Swipe-up details mirror Google Photos: metadata lives in a sheet, while
+  /// the photo itself stays unobstructed.
+  void _showDetails() {
+    final entry = _currentEntry;
+    final modified = DateTime.tryParse(entry['modified_at']?.toString() ?? '');
+    showNexaSheet<void>(
+      context,
+      builder: (sheetContext) => NexaSheetBody(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const NexaSheetHeader(title: 'Details'),
+            _DetailRow(
+              label: 'Name',
+              value: _pathAt(_current).split('/').last,
+            ),
+            if (modified != null)
+              _DetailRow(
+                label: 'Modified',
+                value: Format.shortDateTime(modified.toLocal()),
+              ),
+            if (entry['size'] != null)
+              _DetailRow(
+                label: 'Size',
+                value: Format.bytes(entry['size']),
+              ),
+            _DetailRow(
+              label: 'Position',
+              value: '${_current + 1} of ${_photos.length}',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showActions() {
     showNexaSheet<void>(
       context,
@@ -387,9 +497,37 @@ class _PhotoViewerState extends State<PhotoViewer> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             NexaSheetHeader(
-              title: _photos[_current]['name']?.toString() ?? 'Photo',
+              title: _pathAt(_current).split('/').last,
               subtitle: '${_current + 1} of ${_photos.length}',
             ),
+            NexaSheetAction(
+              icon: Icons.info_outline_rounded,
+              title: 'Details',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _showDetails();
+              },
+            ),
+            NexaSheetAction(
+              icon: _zoomed ? Icons.zoom_out_rounded : Icons.zoom_in_rounded,
+              title: _zoomed ? 'Zoom out' : 'Zoom in',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _toggleZoom();
+              },
+            ),
+            if (_photos.length > 1)
+              NexaSheetAction(
+                icon: _filmstripVisible
+                    ? Icons.view_stream_outlined
+                    : Icons.view_module_outlined,
+                title: _filmstripVisible ? 'Hide filmstrip' : 'Show filmstrip',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  setState(() => _filmstripVisible = !_filmstripVisible);
+                  _showChrome();
+                },
+              ),
             NexaSheetAction(
               icon: Icons.download_outlined,
               title: 'Save to device',
@@ -423,9 +561,11 @@ class _PhotoViewerState extends State<PhotoViewer> {
 
   @override
   Widget build(BuildContext context) {
-    final currentName = _pathAt(_current).split('/').last;
+    // Immersive media chrome: a full dark ColorScheme so tonal controls and
+    // metadata resolve together over the user's photo.
     final darkChrome = Theme.of(context).copyWith(
       brightness: Brightness.dark,
+      colorScheme: AppColors.scheme(Brightness.dark),
     );
 
     return Scaffold(
@@ -440,97 +580,134 @@ class _PhotoViewerState extends State<PhotoViewer> {
               itemBuilder: (context, i) {
                 final path = _pathAt(i);
                 final error = _errors[path];
-                if (error != null) {
-                  return _ViewerError(message: error, onRetry: () => _retry(i));
-                }
                 final image = _decoded[path];
-                if (image == null) {
-                  return _LoadingPage(
+                final Widget page;
+                if (error != null) {
+                  page = _ViewerError(message: error, onRetry: () => _retry(i));
+                } else if (image == null) {
+                  page = _LoadingPage(
                     thumbnail: widget.thumbnailLookup?.call(path),
                   );
+                } else {
+                  page = _ZoomablePhoto(
+                    key: ValueKey('original:$path'),
+                    image: image,
+                    heroTag: 'photo:$path',
+                    active: i == _current,
+                    zoomSignal: _zoomSignal,
+                    onTap: _toggleChrome,
+                    onZoomedChanged: (zoomed) {
+                      if (i == _current && _zoomed != zoomed) {
+                        setState(() {
+                          _zoomed = zoomed;
+                          if (!zoomed) _chromeVisible = true;
+                        });
+                      }
+                    },
+                  );
                 }
-                return _ZoomablePhoto(
-                  key: ValueKey('original:$path'),
-                  image: image,
-                  heroTag: 'photo:$path',
+                return GestureDetector(
+                  // Google Photos reveals metadata with an upward swipe. Keep
+                  // it out of the zoomed state so panning a zoomed photo wins.
+                  onVerticalDragEnd: (details) {
+                    if (!_zoomed &&
+                        i == _current &&
+                        (details.primaryVelocity ?? 0) < -500) {
+                      _showDetails();
+                    }
+                  },
+                  child: page,
                 );
               },
             ),
           ),
           Positioned(
-            left: AppDimens.space16,
-            right: AppDimens.space16,
+            left: 0,
+            right: 0,
             top: 0,
             child: SafeArea(
               bottom: false,
-              child: Theme(
-                data: darkChrome,
-                child: NexaLiquidGlass(
-                  borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-                  blurSigma: 18,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimens.space4,
-                    vertical: AppDimens.space2,
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        tooltip:
-                            MaterialLocalizations.of(context).backButtonTooltip,
-                        onPressed: () => Navigator.of(context).maybePop(),
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          color: Colors.white,
-                        ),
+              child: IgnorePointer(
+                ignoring: !_chromeVisible,
+                child: AnimatedOpacity(
+                  opacity: _chromeVisible ? 1 : 0,
+                  duration: AppMotion.resolve(context, AppMotion.fast),
+                  curve: AppMotion.standard,
+                  child: Theme(
+                    data: darkChrome,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppDimens.space8,
+                        vertical: AppDimens.space8,
                       ),
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              currentName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: AppTextStyle.rowTitle.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
+                      child: Row(
+                        children: [
+                          _ChromeIcon(
+                            icon: Icons.arrow_back_rounded,
+                            tooltip: MaterialLocalizations.of(context)
+                                .backButtonTooltip,
+                            onTap: () => Navigator.of(context).maybePop(),
+                          ),
+                          const SizedBox(width: AppDimens.space8),
+                          Expanded(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _dateLabel(context),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: AppTextStyle.labelMedium.copyWith(
+                                    color: Colors.white,
+                                    shadows: const [
+                                      Shadow(
+                                        color: AppColors.scrim,
+                                        blurRadius: AppDimens.space6,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: AppDimens.space2),
+                                Text(
+                                  '${_current + 1} of ${_photos.length}',
+                                  style: AppTextStyle.caption.copyWith(
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: AppDimens.space2),
-                            Text(
-                              '${_current + 1} of ${_photos.length}',
-                              style: AppTextStyle.caption2.copyWith(
-                                color: Colors.white.withValues(alpha: 0.70),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                          _ChromeIcon(
+                            icon: Icons.more_vert_rounded,
+                            tooltip: 'Photo options',
+                            onTap: _showActions,
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        tooltip: 'Photo options',
-                        onPressed: _showActions,
-                        icon: const Icon(
-                          Icons.more_vert_rounded,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
+          if (_photos.length > 1 && _filmstripVisible)
+            _Filmstrip(
+              visible: _chromeVisible,
+              count: _photos.length,
+              current: _current,
+              pathFor: _pathAt,
+              thumbnailFor: widget.thumbnailLookup,
+              onJump: (index) {
+                _controller.jumpToPage(index);
+                _showChrome();
+              },
+            ),
           _BottomBar(
-            index: _current,
-            total: _photos.length,
-            onPrevious: _current > 0 ? () => _goTo(_current - 1) : null,
-            onNext: _current < _photos.length - 1
-                ? () => _goTo(_current + 1)
-                : null,
+            visible: _chromeVisible,
             onDownload: _downloadCurrent,
             onShare: _shareCurrent,
+            onDetails: _showDetails,
             onDelete: _deleteCurrent,
           ),
         ],
@@ -570,10 +747,15 @@ class _LoadingPage extends StatelessWidget {
               ),
             ),
           ),
-        Container(color: Colors.black.withValues(alpha: 0.35)),
-        const Center(
-          child:
-              CircularProgressIndicator(color: Colors.white70, strokeWidth: 2),
+        Container(color: AppColors.scrim),
+        Semantics(
+          label: 'Loading photo',
+          child: Center(
+            child: CircularProgressIndicator(
+              color: Colors.white,
+              strokeWidth: 2,
+            ),
+          ),
         ),
       ],
     );
@@ -588,111 +770,48 @@ class _ViewerError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.space32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.broken_image_outlined,
-              color: Colors.white54,
-              size: 44,
-            ),
-            const SizedBox(height: AppDimens.space16),
-            Text(
-              'Can\u2019t open this photo',
-              textAlign: TextAlign.center,
-              style: AppTextStyle.sectionHeader.copyWith(color: Colors.white),
-            ),
-            const SizedBox(height: AppDimens.space8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: AppTextStyle.rowSubtitle.copyWith(color: Colors.white70),
-            ),
-            const SizedBox(height: AppDimens.space20),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon:
-                  const Icon(Icons.refresh_rounded, size: AppDimens.iconSmall),
-              label: const Text('Retry'),
-            ),
-          ],
-        ),
-      ),
+    final dark = Theme.of(context).copyWith(
+      brightness: Brightness.dark,
+      colorScheme: AppColors.scheme(Brightness.dark),
     );
-  }
-}
-
-class _BottomBar extends StatelessWidget {
-  final int index;
-  final int total;
-  final VoidCallback? onPrevious;
-  final VoidCallback? onNext;
-  final VoidCallback onDownload;
-  final VoidCallback onShare;
-  final VoidCallback onDelete;
-
-  const _BottomBar({
-    required this.index,
-    required this.total,
-    required this.onPrevious,
-    required this.onNext,
-    required this.onDownload,
-    required this.onShare,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      left: AppDimens.space16,
-      right: AppDimens.space16,
-      bottom: MediaQuery.paddingOf(context).bottom + AppDimens.space12,
-      child: Theme(
-        data: Theme.of(context).copyWith(brightness: Brightness.dark),
-        child: NexaLiquidGlass(
-          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-          blurSigma: 18,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space4,
-            vertical: AppDimens.space2,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    final scheme = dark.colorScheme;
+    return Theme(
+      data: dark,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimens.space32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              IconButton(
-                tooltip: 'Previous photo',
-                onPressed: onPrevious,
-                color: Colors.white,
-                disabledColor: Colors.white38,
-                icon: const Icon(Icons.chevron_left_rounded),
+              Icon(
+                Icons.broken_image_outlined,
+                color: scheme.onSurfaceVariant,
+                size: AppDimens.iconTileLarge,
               ),
-              IconButton(
-                tooltip: 'Save to device',
-                onPressed: onDownload,
-                color: Colors.white,
-                icon: const Icon(Icons.download_outlined),
+              const SizedBox(height: AppDimens.space16),
+              Text(
+                'Can\u2019t open this photo',
+                textAlign: TextAlign.center,
+                style: AppTextStyle.sectionHeader.copyWith(
+                  color: scheme.onSurface,
+                ),
               ),
-              IconButton(
-                tooltip: 'Share',
-                onPressed: onShare,
-                color: Colors.white,
-                icon: const Icon(Icons.share_outlined),
+              const SizedBox(height: AppDimens.space8),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: AppTextStyle.rowSubtitle.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
-              IconButton(
-                tooltip: 'Move to Trash',
-                onPressed: onDelete,
-                color: Colors.white,
-                icon: const Icon(Icons.delete_outline_rounded),
-              ),
-              IconButton(
-                tooltip: 'Next photo',
-                onPressed: onNext,
-                color: Colors.white,
-                disabledColor: Colors.white38,
-                icon: const Icon(Icons.chevron_right_rounded),
+              const SizedBox(height: AppDimens.space20),
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(
+                  Icons.refresh_rounded,
+                  size: AppDimens.iconSmall,
+                ),
+                label: const Text('Retry'),
               ),
             ],
           ),
@@ -702,20 +821,340 @@ class _BottomBar extends StatelessWidget {
   }
 }
 
-/// Pans/zooms the decoded preview while keeping its pixels sharp.
-///
-/// The [RawImage] lays out at *native* resolution and the
-/// [InteractiveViewer]'s transform provides the scale, so the only resampling
-/// is the GPU present â and the sampler is chosen from the live scale
-/// (mipmapped while minifying, bicubic at 1:1 and beyond).
+/// A small neighbourhood of nearby photos. It gives the immersive viewer a
+/// Google Photos sense of place without adding permanent prev/next arrows.
+class _Filmstrip extends StatelessWidget {
+  final bool visible;
+  final int count;
+  final int current;
+  final String Function(int index) pathFor;
+  final Uint8List? Function(String path)? thumbnailFor;
+  final ValueChanged<int> onJump;
+
+  const _Filmstrip({
+    required this.visible,
+    required this.count,
+    required this.current,
+    required this.pathFor,
+    required this.thumbnailFor,
+    required this.onJump,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final start = math.max(0, current - 2);
+    final end = math.min(count - 1, current + 2);
+    final indices = List<int>.generate(end - start + 1, (i) => start + i);
+    final duration = AppMotion.resolve(context, AppMotion.fast);
+
+    return Positioned(
+      left: 0,
+      right: 0,
+      // Sits directly above the action row; no enclosing card or bar.
+      bottom: MediaQuery.paddingOf(context).bottom +
+          AppDimens.space56 +
+          AppDimens.space56,
+      child: IgnorePointer(
+        ignoring: !visible,
+        child: AnimatedOpacity(
+          opacity: visible ? 1 : 0,
+          duration: duration,
+          curve: AppMotion.standard,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: SizedBox(
+                height: 72,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space16,
+                  ),
+                  itemCount: indices.length,
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(width: AppDimens.space8),
+                  itemBuilder: (context, position) {
+                    final index = indices[position];
+                    final bytes = thumbnailFor?.call(pathFor(index));
+                    final selected = index == current;
+                    return AnimatedScale(
+                      scale: selected ? 1 : 0.86,
+                      duration: duration,
+                      curve: AppMotion.standard,
+                      child: AnimatedOpacity(
+                        opacity: selected ? 1 : 0.7,
+                        duration: duration,
+                        child: SizedBox(
+                          width: 64,
+                          height: 64,
+                          child: Material(
+                            color: AppColors.canvasDark,
+                            clipBehavior: Clip.antiAlias,
+                            borderRadius:
+                                BorderRadius.circular(AppDimens.radiusSmall),
+                            child: InkWell(
+                              onTap: () => onJump(index),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  if (bytes != null)
+                                    Image.memory(
+                                      bytes,
+                                      fit: BoxFit.cover,
+                                      gaplessPlayback: true,
+                                    )
+                                  else
+                                    const Icon(
+                                      Icons.image_outlined,
+                                      color: Colors.white70,
+                                      size: AppDimens.iconMedium,
+                                    ),
+                                  Positioned.fill(
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(
+                                          AppDimens.radiusSmall,
+                                        ),
+                                        border: Border.all(
+                                          color: selected
+                                              ? Colors.white
+                                              : Colors.transparent,
+                                          width: AppDimens.space2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A circular, scrim-backed control that floats over media instead of adding
+/// another bar. The scrim exists only for legibility on bright images.
+class _ChromeIcon extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _ChromeIcon({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.scrim,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: onTap,
+        color: Colors.white,
+        icon: Icon(icon, size: AppDimens.iconMedium),
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DetailRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppDimens.space8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: AppDimens.space48 + AppDimens.space32,
+            child: Text(
+              label,
+              style: AppTextStyle.caption.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppDimens.space8),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: AppTextStyle.bodySmall.copyWith(color: scheme.onSurface),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Google Photos-style bottom row: floating, labelled controls with no panel
+/// behind them. The rounded backing belongs to the icon only, so the image is
+/// never framed by another rectangle.
+class _BottomBar extends StatelessWidget {
+  final bool visible;
+  final VoidCallback onDownload;
+  final VoidCallback onShare;
+  final VoidCallback onDetails;
+  final VoidCallback onDelete;
+
+  const _BottomBar({
+    required this.visible,
+    required this.onDownload,
+    required this.onShare,
+    required this.onDetails,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: AppDimens.space8,
+      right: AppDimens.space8,
+      bottom: MediaQuery.paddingOf(context).bottom + AppDimens.space12,
+      child: IgnorePointer(
+        ignoring: !visible,
+        child: AnimatedOpacity(
+          opacity: visible ? 1 : 0,
+          duration: AppMotion.resolve(context, AppMotion.fast),
+          curve: AppMotion.standard,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _MediaAction(
+                icon: Icons.share_outlined,
+                label: 'Share',
+                tooltip: 'Share',
+                onTap: onShare,
+              ),
+              _MediaAction(
+                icon: Icons.download_outlined,
+                label: 'Save',
+                tooltip: 'Save to device',
+                onTap: onDownload,
+              ),
+              _MediaAction(
+                icon: Icons.info_outline_rounded,
+                label: 'Info',
+                tooltip: 'Details',
+                onTap: onDetails,
+              ),
+              _MediaAction(
+                icon: Icons.delete_outline_rounded,
+                label: 'Trash',
+                tooltip: 'Move to Trash',
+                onTap: onDelete,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MediaAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _MediaAction({
+    required this.icon,
+    required this.label,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space8,
+            vertical: AppDimens.space4,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: AppColors.scrim,
+                  shape: BoxShape.circle,
+                ),
+                child: SizedBox(
+                  width: AppDimens.touchTarget,
+                  height: AppDimens.touchTarget,
+                  child: Icon(
+                    icon,
+                    color: Colors.white,
+                    size: AppDimens.iconMedium,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppDimens.space6),
+              Text(
+                label,
+                style: AppTextStyle.caption.copyWith(
+                  color: Colors.white,
+                  shadows: const [
+                    Shadow(
+                      color: AppColors.scrim,
+                      blurRadius: AppDimens.space6,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ZoomablePhoto extends StatefulWidget {
   final ui.Image image;
   final String heroTag;
+  final bool active;
+  final ValueNotifier<int> zoomSignal;
+  final VoidCallback onTap;
+  final ValueChanged<bool> onZoomedChanged;
 
   const _ZoomablePhoto({
     super.key,
     required this.image,
     required this.heroTag,
+    required this.active,
+    required this.zoomSignal,
+    required this.onTap,
+    required this.onZoomedChanged,
   });
 
   @override
@@ -734,12 +1173,21 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
 
   late final AnimationController _zoomAnim;
   Matrix4Tween? _zoomTween;
+  bool _zoomed = false;
+  late final VoidCallback _zoomListener;
 
   @override
   void initState() {
     super.initState();
     _transform.addListener(_onTransformChanged);
-    _zoomAnim = AnimationController(vsync: this, duration: AppMotion.fast);
+    _zoomListener = () {
+      if (widget.active && mounted) _toggleZoom();
+    };
+    widget.zoomSignal.addListener(_zoomListener);
+    _zoomAnim = AnimationController(
+      vsync: this,
+      duration: AppMotion.fast,
+    );
     _zoomAnim.addListener(() {
       final tween = _zoomTween;
       if (tween != null) _transform.value = tween.transform(_zoomAnim.value);
@@ -760,6 +1208,7 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
 
   @override
   void dispose() {
+    widget.zoomSignal.removeListener(_zoomListener);
     _transform.removeListener(_onTransformChanged);
     _zoomAnim.dispose();
     _transform.dispose();
@@ -767,10 +1216,14 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
   }
 
   void _onTransformChanged() {
-    final next = ImageDecodePolicy.filterQualityForScale(
-      _transform.value.getMaxScaleOnAxis(),
-    );
+    final scale = _transform.value.getMaxScaleOnAxis();
+    final next = ImageDecodePolicy.filterQualityForScale(scale);
+    final zoomed = scale > _fit * 1.25;
     if (next != _quality && mounted) setState(() => _quality = next);
+    if (zoomed != _zoomed) {
+      _zoomed = zoomed;
+      if (mounted) widget.onZoomedChanged.call(zoomed);
+    }
   }
 
   Size get _photo =>
@@ -804,6 +1257,11 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
     final nowScale = _transform.value.getMaxScaleOnAxis();
     final target = nowScale > _fit * 1.25 ? _fit : _fit * 3.0;
     final end = _matrixFor(target, vp, _photo);
+    if (AppMotion.reducedMotion(context)) {
+      _transform.value = end;
+      _zoomTween = null;
+      return;
+    }
     _zoomTween = Matrix4Tween(begin: _transform.value.clone(), end: end);
     _zoomAnim.forward(from: 0);
   }
@@ -828,6 +1286,7 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
           onDoubleTap: _toggleZoom,
           child: Hero(
             tag: widget.heroTag,

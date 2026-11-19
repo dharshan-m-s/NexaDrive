@@ -1,19 +1,16 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
-import 'nexa_liquid_glass.dart';
+import 'nexa_surface.dart';
 
 /// Reveals a bar by sliding it in and fading it, so entering and leaving a mode
 /// (selection, breadcrumb, a pinned action) reads as a settle instead of the
 /// element slamming in and jumping the content around it.
 ///
 /// Its height animates too, so neighbouring content grows and shrinks smoothly
-/// to make room. [alignment] anchors the reveal: [Alignment.bottomLeft] rises
-/// from the bottom (the default, for a bottom action bar); [Alignment.topLeft]
-/// descends from the top (for a breadcrumb or top bar). Reduced motion shows
-/// and hides it instantly.
+/// to make room. [alignment] anchors the reveal. Reduced motion shows and hides
+/// it instantly.
 class NexaRevealBar extends StatelessWidget {
   const NexaRevealBar({
     super.key,
@@ -45,12 +42,24 @@ class NexaRevealBar extends StatelessWidget {
   }
 }
 
-/// Contextual action bar (appears during selection).
+/// Space between a contextual bar and the floating pill.
+///
+/// The shell reports the pill's full footprint through `MediaQuery.padding.bottom`.
+/// The bar itself only needs to clear the pill's top edge; keeping the whole
+/// footprint as internal padding would leave a large empty strip in the bar.
+double nexaContextualBarBottomPadding(BuildContext context) =>
+    (MediaQuery.paddingOf(context).bottom - AppDimens.space24)
+        .clamp(0.0, double.infinity);
+
+/// Material 3 contextual action bar (appears during selection).
 class NexaActionBar extends StatelessWidget {
   final Widget? leading;
   final String title;
   final List<NexaActionItem> actions;
   final Color? backgroundColor;
+
+  /// Lifts the bar just above the floating pill on mobile destinations.
+  final bool aboveFloatingNav;
 
   const NexaActionBar({
     super.key,
@@ -58,78 +67,78 @@ class NexaActionBar extends StatelessWidget {
     required this.title,
     required this.actions,
     this.backgroundColor,
+    this.aboveFloatingNav = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
+
+    final bottom =
+        aboveFloatingNav ? nexaContextualBarBottomPadding(context) : 0.0;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
         AppDimens.space6,
         AppDimens.pageMargin,
-        AppDimens.space8,
+        AppDimens.space8 + bottom,
       ),
-      child: NexaLiquidGlass(
-        borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-        blurSigma: 2,
+      child: NexaSurface(
+        level: NexaSurfaceLevel.floating,
+        color: backgroundColor,
+        radius: AppDimens.radiusMedium,
         padding: const EdgeInsets.fromLTRB(
           AppDimens.space8,
           AppDimens.space6,
           AppDimens.space8,
           AppDimens.space6,
         ),
-        showShadow: true,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  if (leading != null) ...[
-                    leading!,
-                    const SizedBox(width: AppDimens.space8),
-                  ],
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyle.body.copyWith(
-                        color: AppColors.labelPrimaryFor(brightness),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                if (leading != null) ...[
+                  leading!,
+                  const SizedBox(width: AppDimens.space8),
                 ],
-              ),
-              if (actions.isNotEmpty) ...[
-                const SizedBox(height: AppDimens.space4),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (final action in actions)
-                        Padding(
-                          padding:
-                              const EdgeInsets.only(right: AppDimens.space6),
-                          child: action,
-                        ),
-                    ],
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyle.titleMedium.copyWith(
+                      color: scheme.onSurface,
+                    ),
                   ),
                 ),
               ],
+            ),
+            if (actions.isNotEmpty) ...[
+              const SizedBox(height: AppDimens.space4),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final action in actions)
+                      Padding(
+                        padding: const EdgeInsets.only(right: AppDimens.space6),
+                        child: action,
+                      ),
+                  ],
+                ),
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
+/// Material 3 action chip used inside a contextual action bar.
 class NexaActionItem extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -150,48 +159,31 @@ class NexaActionItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final fg = isDestructive
-        ? AppColors.errorFor(brightness)
-        : (color ?? AppColors.accentFor(brightness));
-    final bg = isDestructive
-        ? AppColors.errorContainerFor(brightness)
-        : AppColors.fillFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
+    final fg = isDestructive ? scheme.error : (color ?? scheme.primary);
+    final bg =
+        isDestructive ? scheme.errorContainer : scheme.surfaceContainerHighest;
+    final effectiveFg = enabled ? fg : scheme.onSurface.withValues(alpha: 0.38);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space10,
-            vertical: AppDimens.space6,
+    final chipTheme = Theme.of(context).chipTheme.copyWith(
+          backgroundColor: bg,
+          disabledColor: scheme.surfaceContainer.withValues(alpha: 0.5),
+          side: BorderSide.none,
+          shape: const StadiumBorder(),
+          labelStyle: AppTextStyle.labelMedium.copyWith(color: effectiveFg),
+        );
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+      child: ChipTheme(
+        data: chipTheme,
+        child: ActionChip(
+          avatar: Icon(icon, size: AppDimens.iconSmall, color: effectiveFg),
+          label: Text(
+            label,
+            style: AppTextStyle.labelMedium.copyWith(color: effectiveFg),
           ),
-          decoration: BoxDecoration(
-            color: enabled ? bg : bg.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            border: Border.all(
-              color: fg.withValues(alpha: enabled ? 0.16 : 0.08),
-              width: 0.7,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon,
-                  size: AppDimens.iconSmall,
-                  color: enabled ? fg : fg.withValues(alpha: 0.5)),
-              const SizedBox(width: AppDimens.space6),
-              Text(
-                label,
-                style: AppTextStyle.micro.copyWith(
-                  color: enabled ? fg : fg.withValues(alpha: 0.5),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+          onPressed: enabled ? onTap : null,
         ),
       ),
     );
@@ -217,19 +209,22 @@ class NexaIconActionItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final fg = color ?? AppColors.labelSecondaryFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
+    final fg = color ?? scheme.onSurfaceVariant;
 
     return IconButton(
       onPressed: enabled ? onTap : null,
-      icon: Icon(icon,
-          size: AppDimens.iconMedium,
-          color: enabled ? fg : fg.withValues(alpha: 0.5)),
+      icon: Icon(
+        icon,
+        size: AppDimens.iconMedium,
+        color: enabled ? fg : fg.withValues(alpha: 0.38),
+      ),
       tooltip: tooltip,
       style: IconButton.styleFrom(
         backgroundColor: Colors.transparent,
         minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
         padding: const EdgeInsets.all(AppDimens.space8),
+        shape: const StadiumBorder(),
       ),
     );
   }

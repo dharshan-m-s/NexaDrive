@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
-import '../../../core/design/app_motion.dart';
-import '../../../core/design/app_typography.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../widgets/nexa_components.dart';
@@ -104,7 +101,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          shape: const StadiumBorder(),
+        ),
+      );
   }
 
   void _setScope(bool unreadOnly) {
@@ -118,7 +121,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
     final unread = _items.where((item) => item['read'] != true).length;
 
     return Scaffold(
@@ -132,16 +134,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ? 'Inbox unavailable'
                   : Format.count(_items.length, 'notification'),
           leading: const NexaBackButton(),
-          headerAction: NexaLiquidGlass(
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            padding: EdgeInsets.zero,
-            blurSigma: 12,
-            showShadow: false,
-            child: IconButton(
-              tooltip: 'Mark all as read',
-              onPressed: unread == 0 || _loading ? null : _markAllRead,
-              icon: const Icon(Icons.done_all_rounded),
-            ),
+          headerAction: IconButton(
+            tooltip: 'Mark all as read',
+            onPressed: unread == 0 || _loading ? null : _markAllRead,
+            icon: const Icon(Icons.done_all_rounded),
           ),
           padding: const EdgeInsets.fromLTRB(
             AppDimens.pageMargin,
@@ -195,7 +191,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                           for (final item in _items)
                                             _NotificationRow(
                                               item: item,
-                                              brightness: brightness,
                                               onMarkRead: () => _markRead(
                                                 item['id']?.toString() ?? '',
                                               ),
@@ -221,6 +216,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 }
 
+/// Material 3 segmented button replaces the former glass pill control.
 class _NotificationScope extends StatelessWidget {
   final bool unreadOnly;
   final ValueChanged<bool> onChanged;
@@ -232,104 +228,32 @@ class _NotificationScope extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NexaLiquidGlass(
-      borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-      padding: const EdgeInsets.all(AppDimens.space4),
-      blurSigma: 14,
-      showShadow: false,
-      child: Row(
-        children: [
-          _ScopeOption(
-            label: 'All activity',
-            selected: !unreadOnly,
-            onTap: () => onChanged(false),
-          ),
-          _ScopeOption(
-            label: 'Unread',
-            selected: unreadOnly,
-            onTap: () => onChanged(true),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ScopeOption extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ScopeOption({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-
-    return Expanded(
-      child: Semantics(
-        button: true,
-        selected: selected,
-        label: label,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            child: AnimatedContainer(
-              duration: AppMotion.resolve(context, AppMotion.fast),
-              curve: AppMotion.standardCurve,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimens.space12,
-                vertical: AppDimens.space10,
-              ),
-              decoration: BoxDecoration(
-                color: selected
-                    ? AppColors.glassSelectionFor(brightness)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                border: selected
-                    ? Border.all(
-                        color: AppColors.glassBorderFor(brightness),
-                        width: 0.7,
-                      )
-                    : null,
-              ),
-              child: Text(
-                label,
-                style: AppTextStyle.caption1.copyWith(
-                  color: selected
-                      ? AppColors.labelPrimaryFor(brightness)
-                      : AppColors.labelSecondaryFor(brightness),
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+    return SegmentedButton<bool>(
+      showSelectedIcon: false,
+      segments: const [
+        ButtonSegment<bool>(value: false, label: Text('All activity')),
+        ButtonSegment<bool>(value: true, label: Text('Unread')),
+      ],
+      selected: <bool>{unreadOnly},
+      onSelectionChanged: (selection) {
+        if (selection.isNotEmpty) onChanged(selection.first);
+      },
     );
   }
 }
 
 class _NotificationRow extends StatelessWidget {
   final Map<String, dynamic> item;
-  final Brightness brightness;
   final VoidCallback onMarkRead;
 
   const _NotificationRow({
     required this.item,
-    required this.brightness,
     required this.onMarkRead,
   });
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final read = item['read'] == true;
     final kind = item['kind']?.toString();
     final created = DateTime.tryParse(item['created_at']?.toString() ?? '');
@@ -339,24 +263,32 @@ class _NotificationRow extends StatelessWidget {
 
     return NexaGroupTile(
       leadingIcon: _icon(kind),
-      leadingIconColor: read
-          ? AppColors.labelSecondaryFor(brightness)
-          : AppColors.accentTextFor(brightness),
-      leadingBackgroundColor: read
-          ? AppColors.fillFor(brightness)
-          : AppColors.accentContainerFor(brightness),
+      leadingIconColor:
+          read ? scheme.onSurfaceVariant : scheme.onPrimaryContainer,
+      leadingBackgroundColor:
+          read ? scheme.surfaceContainerHigh : scheme.primaryContainer,
       title: item['title']?.toString() ?? 'Notification',
-      subtitle: subtitle,
+      // Pair the tonal emphasis with explicit state text, never color alone.
+      subtitle: read ? subtitle : 'Unread · $subtitle',
       showChevron: false,
       trailing: read
-          ? null
+          ? Tooltip(
+              message: 'Read',
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimens.space12,
+                ),
+                child: Icon(
+                  Icons.check_circle_outline_rounded,
+                  size: AppDimens.iconSmall,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            )
           : IconButton(
               tooltip: 'Mark as read',
               onPressed: onMarkRead,
-              icon: Icon(
-                Icons.mark_email_read_outlined,
-                color: AppColors.accentTextFor(brightness),
-              ),
+              icon: const Icon(Icons.mark_email_read_outlined),
             ),
     );
   }

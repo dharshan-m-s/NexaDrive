@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
@@ -14,7 +15,7 @@ import '../../../services/download_service.dart';
 import '../../../services/media_proxy.dart';
 import '../../widgets/nexa_components.dart';
 
-/// One UI music player.
+/// Immersive music player with floating, tonal controls.
 ///
 /// ## Large-file behaviour
 ///
@@ -26,9 +27,9 @@ import '../../widgets/nexa_components.dart';
 /// ## Metadata
 ///
 /// NexaDrive does not parse embedded ID3/Vorbis tags (no decoder dependency),
-/// so title/artist are derived from the filename and folder, and the artwork
-/// block is an intentional NexaDrive tile rather than a claim about the
-/// track's real cover.
+/// so title/artist are derived from the filename and folder. The circular
+/// artwork is an intentional abstract anchor, not a claim about embedded cover
+/// art.
 class AudioPlayerScreen extends StatefulWidget {
   final FileEntry file;
   final Api api;
@@ -66,6 +67,8 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
   bool _dragging = false;
 
   CancelToken? _cancel;
+
+  static const _speeds = <double>[0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
   @override
   void initState() {
@@ -259,173 +262,292 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    // A player is a focused media surface, not a settings page. Keep the same
+    // dark, token-backed treatment as the photo and video viewers so controls
+    // float over the music instead of sitting in cards and divided rows.
+    final darkTheme = Theme.of(context).copyWith(
+      brightness: Brightness.dark,
+      colorScheme: AppColors.scheme(Brightness.dark),
+    );
+    final scheme = darkTheme.colorScheme;
     final entry = _current;
     final (artist, title) = describe(entry);
 
     return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: NexaPage(
-          headerIcon: Icons.graphic_eq_rounded,
-          title: 'Now playing',
-          subtitle: [artist, title].where((s) => s.isNotEmpty).join(' · '),
-          leading: const NexaBackButton(),
-          headerAction: NexaLiquidGlass(
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            padding: EdgeInsets.zero,
-            blurSigma: 12,
-            showShadow: false,
-            child: IconButton(
-              tooltip: 'Save to device',
-              onPressed: _saveToDevice,
-              icon: const Icon(Icons.download_outlined),
+      backgroundColor: AppColors.canvasDark,
+      body: Theme(
+        data: darkTheme,
+        child: Stack(
+          children: [
+            Positioned.fill(child: _AmbientArt(seed: entry.name)),
+            SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimens.space8,
+                      vertical: AppDimens.space8,
+                    ),
+                    child: Row(
+                      children: [
+                        _FloatingIcon(
+                          icon: Icons.arrow_back_rounded,
+                          tooltip: MaterialLocalizations.of(context)
+                              .backButtonTooltip,
+                          onTap: () => Navigator.of(context).maybePop(),
+                        ),
+                        const SizedBox(width: AppDimens.space8),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Now playing',
+                                textAlign: TextAlign.center,
+                                style: AppTextStyle.labelMedium.copyWith(
+                                  color: scheme.onSurface,
+                                ),
+                              ),
+                              if (_queue.length > 1)
+                                Text(
+                                  'Track ${_index + 1} of ${_queue.length}',
+                                  style: AppTextStyle.caption.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        Material(
+                          color: scheme.surfaceContainerHigh,
+                          shape: const CircleBorder(),
+                          clipBehavior: Clip.antiAlias,
+                          child: PopupMenuButton<_AudioTopAction>(
+                            tooltip: 'More actions',
+                            color: scheme.surfaceContainerHigh,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: AppDimens.touchTarget * 4,
+                            ),
+                            icon: const SizedBox(
+                              width: AppDimens.touchTarget,
+                              height: AppDimens.touchTarget,
+                              child: Icon(
+                                Icons.more_vert_rounded,
+                                color: Colors.white,
+                                size: AppDimens.iconMedium,
+                              ),
+                            ),
+                            onSelected: (action) {
+                              switch (action) {
+                                case _AudioTopAction.save:
+                                  _saveToDevice();
+                                case _AudioTopAction.speed05:
+                                  _setSpeed(0.5);
+                                case _AudioTopAction.speed075:
+                                  _setSpeed(0.75);
+                                case _AudioTopAction.speed1:
+                                  _setSpeed(1.0);
+                                case _AudioTopAction.speed125:
+                                  _setSpeed(1.25);
+                                case _AudioTopAction.speed15:
+                                  _setSpeed(1.5);
+                                case _AudioTopAction.speed2:
+                                  _setSpeed(2.0);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: _AudioTopAction.save,
+                                child: Text('Save to device'),
+                              ),
+                              const PopupMenuDivider(),
+                              for (final option in _speeds)
+                                PopupMenuItem<_AudioTopAction>(
+                                  value: switch (option) {
+                                    0.5 => _AudioTopAction.speed05,
+                                    0.75 => _AudioTopAction.speed075,
+                                    1.0 => _AudioTopAction.speed1,
+                                    1.25 => _AudioTopAction.speed125,
+                                    1.5 => _AudioTopAction.speed15,
+                                    _ => _AudioTopAction.speed2,
+                                  },
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        option == 1.0
+                                            ? '1× speed'
+                                            : '$option× speed',
+                                      ),
+                                      if ((_speed - option).abs() < 0.001)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            left: AppDimens.space8,
+                                          ),
+                                          child: Icon(
+                                            Icons.check_rounded,
+                                            size: AppDimens.iconSmall,
+                                            color: scheme.primary,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: _error != null
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppDimens.pageMargin,
+                              ),
+                              child: NexaEmptyState(
+                                icon: Icons.music_off_rounded,
+                                title: 'Can\u2019t play this track',
+                                hint: _error,
+                                actionLabel: 'Retry',
+                                onAction: () => _prepare(),
+                              ),
+                            )
+                          : _preparing
+                              ? _Buffering(title: title)
+                              : Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _Artwork(
+                                      seed: entry.name,
+                                      size: MediaQuery.sizeOf(context)
+                                          .width
+                                          .clamp(220.0, 340.0),
+                                    ),
+                                    const SizedBox(height: AppDimens.space32),
+                                    Text(
+                                      title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style: AppTextStyle.title1.copyWith(
+                                        color: scheme.onSurface,
+                                      ),
+                                    ),
+                                    const SizedBox(height: AppDimens.space4),
+                                    Text(
+                                      artist,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTextStyle.rowSubtitle.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                    ),
+                  ),
+                  if (_queue.length > 1)
+                    _QueueStrip(
+                      queue: _queue,
+                      current: _index,
+                      onTap: _openTrack,
+                    ),
+                  if (!_preparing && _error == null)
+                    _Controls(
+                      playing: _playing,
+                      position: _position,
+                      duration: _duration,
+                      canPrevious: _index > 0,
+                      canNext: _index + 1 < _queue.length,
+                      onToggle: _togglePlay,
+                      onPrevious: () => _openTrack(_index - 1),
+                      onNext: () => _openTrack(_index + 1),
+                      onDragStart: () => setState(() => _dragging = true),
+                      onDragChanged: (v) =>
+                          setState(() => _position = _positionFor(v)),
+                      onDragEnd: (v) async {
+                        setState(() => _dragging = false);
+                        setState(() => _position = _positionFor(v));
+                        await _player.seek(_positionFor(v));
+                      },
+                    )
+                  else
+                    const SizedBox(height: AppDimens.space24),
+                ],
+              ),
             ),
-          ),
-          scrollable: true,
-          padding: const EdgeInsets.fromLTRB(
-            AppDimens.pageMargin,
-            AppDimens.space8,
-            AppDimens.pageMargin,
-            AppDimens.space24,
-          ),
-          body: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Artwork(
-                seed: entry.name,
-                size: MediaQuery.sizeOf(context).width.clamp(200.0, 420.0) - 48,
-              ),
-              const SizedBox(height: AppDimens.space24),
-              Text(
-                title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: AppTextStyle.sectionHeader.copyWith(
-                  color: AppColors.textPrimaryFor(brightness),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: AppDimens.space4),
-              Text(
-                artist,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: AppTextStyle.rowSubtitle
-                    .copyWith(color: AppColors.textSecondaryFor(brightness)),
-              ),
-              if (_queue.length > 1) ...[
-                const SizedBox(height: AppDimens.space4),
-                Text(
-                  'Track ${_index + 1} of ${_queue.length}',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyle.micro
-                      .copyWith(color: AppColors.textTertiaryFor(brightness)),
-                ),
-              ],
-              const SizedBox(height: AppDimens.space20),
-              if (_error != null)
-                NexaEmptyState(
-                  icon: Icons.music_off_rounded,
-                  title: 'Can\u2019t play this track',
-                  hint: _error,
-                  actionLabel: 'Retry',
-                  onAction: () => _prepare(),
-                )
-              else if (_preparing)
-                _Buffering(title: title)
-              else
-                NexaSurface(
-                  level: NexaSurfaceLevel.grouped,
-                  radius: AppDimens.radiusXLarge,
-                  padding: const EdgeInsets.fromLTRB(
-                    AppDimens.space12,
-                    AppDimens.space12,
-                    AppDimens.space12,
-                    AppDimens.space16,
-                  ),
-                  child: _Controls(
-                    playing: _playing,
-                    position: _position,
-                    duration: _duration,
-                    speed: _speed,
-                    canPrevious: _index > 0,
-                    canNext: _index + 1 < _queue.length,
-                    onToggle: _togglePlay,
-                    onPrevious: () => _openTrack(_index - 1),
-                    onNext: () => _openTrack(_index + 1),
-                    onSpeed: _setSpeed,
-                    onDragStart: () => setState(() => _dragging = true),
-                    // Track the thumb live: the elapsed-time label is driven by
-                    // `_position`, so ignoring this leaves the label frozen while
-                    // the user scrubs.
-                    onDragChanged: (v) => setState(
-                      () => _position = _positionFor(v),
-                    ),
-                    onDragEnd: (v) async {
-                      setState(() => _dragging = false);
-                      setState(() => _position = _positionFor(v));
-                      await _player.seek(_positionFor(v));
-                    },
-                  ),
-                ),
-              if (_queue.length > 1) ...[
-                const SizedBox(height: AppDimens.space24),
-                Row(
-                  children: [
-                    const Icon(Icons.queue_music_rounded,
-                        size: AppDimens.iconSmall),
-                    const SizedBox(width: AppDimens.space8),
-                    Text(
-                      'Queue in this folder',
-                      style: AppTextStyle.sectionHeader.copyWith(
-                        color: AppColors.textPrimaryFor(brightness),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppDimens.space8),
-                NexaGroupedList(
-                  header: 'Up next',
-                  children: [
-                    for (var i = 0; i < _queue.length; i++)
-                      NexaGroupTile(
-                        leadingIcon: i == _index && _playing
-                            ? Icons.graphic_eq_rounded
-                            : Icons.music_note_rounded,
-                        leadingIconColor: i == _index
-                            ? AppColors.accentTextFor(brightness)
-                            : AppColors.labelSecondaryFor(brightness),
-                        leadingBackgroundColor: i == _index
-                            ? AppColors.accentContainerFor(brightness)
-                            : AppColors.fillFor(brightness),
-                        title: describe(_queue[i]).$2,
-                        subtitle: Format.bytes(_queue[i].size),
-                        selected: i == _index,
-                        showChevron: false,
-                        trailing: i == _index
-                            ? Icon(
-                                Icons.equalizer_rounded,
-                                color: AppColors.accentTextFor(brightness),
-                              )
-                            : null,
-                        onTap: () => _openTrack(i),
-                      ),
-                  ],
-                ),
-              ],
-            ],
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Decorative, deterministic artwork tile. Deliberately not presented as the
-/// track's real cover art.
+enum _AudioTopAction {
+  save,
+  speed05,
+  speed075,
+  speed1,
+  speed125,
+  speed15,
+  speed2
+}
+
+/// Faint, out-of-focus tonal shapes. They give the player depth without a
+/// banner, card, or a glass material that would compete with the track.
+class _AmbientArt extends StatelessWidget {
+  final String seed;
+  const _AmbientArt({required this.seed});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final tone = [
+      scheme.primary,
+      scheme.secondary,
+      scheme.tertiary,
+    ][seed.hashCode.abs() % 3];
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          Positioned(
+            left: -(AppDimens.space56 + AppDimens.space40),
+            top: MediaQuery.sizeOf(context).height * 0.12,
+            child: _softCircle(
+              AppDimens.space56 * 5 + AppDimens.space8,
+              tone.withValues(alpha: 0.10),
+            ),
+          ),
+          Positioned(
+            right: -(AppDimens.space56 + AppDimens.space8),
+            bottom: MediaQuery.sizeOf(context).height * 0.22,
+            child: _softCircle(
+              AppDimens.space56 * 4,
+              tone.withValues(alpha: 0.07),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _softCircle(double size, Color color) {
+    return ImageFiltered(
+      imageFilter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+    );
+  }
+}
+
+/// Deterministic circular artwork. There is no outer tile or badge: this is a
+/// visual anchor, not a claim about embedded cover art.
 class _Artwork extends StatelessWidget {
   final String seed;
   final double size;
@@ -433,81 +555,43 @@ class _Artwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final hue = (seed.hashCode.abs() % 360).toDouble();
-    final base = HSLColor.fromAHSL(
-      1,
-      hue,
-      0.34,
-      brightness == Brightness.dark ? 0.24 : 0.86,
-    ).toColor();
-    final accent = HSLColor.fromAHSL(
-      1,
-      (hue + 28) % 360,
-      0.52,
-      brightness == Brightness.dark ? 0.68 : 0.42,
-    ).toColor();
+    final scheme = Theme.of(context).colorScheme;
+    final accent = [
+      scheme.primary,
+      scheme.secondary,
+      scheme.tertiary,
+    ][seed.hashCode.abs() % 3];
 
     return Center(
-      child: Container(
+      child: SizedBox(
         width: size,
         height: size,
-        decoration: BoxDecoration(
-          color: base,
-          borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-          border: Border.all(
-            color: accent.withValues(alpha: 0.32),
-            width: 1,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLowest.withValues(alpha: 0.55),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: accent.withValues(alpha: 0.38),
+              width: AppDimens.space2,
+            ),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(
-                alpha: brightness == Brightness.dark ? 0.24 : 0.08,
-              ),
-              blurRadius: 24,
-              offset: const Offset(0, 12),
-            ),
-          ],
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: size * 0.76,
-              height: size * 0.76,
+          child: Center(
+            child: DecoratedBox(
               decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.12),
+                color: accent.withValues(alpha: 0.14),
                 shape: BoxShape.circle,
-                border: Border.all(color: accent.withValues(alpha: 0.26)),
               ),
-            ),
-            Container(
-              width: size * 0.60,
-              height: size * 0.60,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceFor(brightness),
-                shape: BoxShape.circle,
-                border: Border.all(color: accent.withValues(alpha: 0.34)),
-              ),
-            ),
-            Icon(
-              Icons.graphic_eq_rounded,
-              size: size * 0.30,
-              color: accent,
-            ),
-            Positioned(
-              right: size * 0.16,
-              top: size * 0.16,
-              child: Container(
-                width: size * 0.075,
-                height: size * 0.075,
-                decoration: BoxDecoration(
+              child: SizedBox(
+                width: size * 0.58,
+                height: size * 0.58,
+                child: Icon(
+                  Icons.graphic_eq_rounded,
+                  size: AppDimens.iconHero,
                   color: accent,
-                  shape: BoxShape.circle,
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -521,27 +605,126 @@ class _Buffering extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       children: [
-        const SizedBox(
-          height: 52,
+        SizedBox(
+          height: AppDimens.touchTargetLarge,
           child: Center(
             child: SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              width: AppDimens.iconSmall,
+              height: AppDimens.iconSmall,
+              child: CircularProgressIndicator(strokeWidth: AppDimens.space2),
             ),
           ),
         ),
         const SizedBox(height: AppDimens.space12),
         Text(
-          'Connecting to “$title”…',
+          'Connecting to \u201c$title\u201d\u2026',
           textAlign: TextAlign.center,
-          style: AppTextStyle.caption
-              .copyWith(color: AppColors.textSecondaryFor(brightness)),
+          style:
+              AppTextStyle.bodySmall.copyWith(color: scheme.onSurfaceVariant),
         ),
       ],
+    );
+  }
+}
+
+/// A quiet queue strip: labels float on the canvas instead of a grouped card.
+class _QueueStrip extends StatelessWidget {
+  final List<FileEntry> queue;
+  final int current;
+  final ValueChanged<int> onTap;
+
+  const _QueueStrip({
+    required this.queue,
+    required this.current,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppDimens.space8),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.pageMargin,
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Queue in this folder',
+                style: AppTextStyle.labelSmall.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppDimens.space6),
+          SizedBox(
+            height: AppDimens.space48,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.pageMargin,
+              ),
+              itemCount: queue.length,
+              separatorBuilder: (_, __) =>
+                  const SizedBox(width: AppDimens.space16),
+              itemBuilder: (context, index) {
+                final selected = index == current;
+                final label = _AudioPlayerScreenState.describe(queue[index]).$2;
+                return Semantics(
+                  button: true,
+                  selected: selected,
+                  label: label,
+                  child: InkWell(
+                    onTap: () => onTap(index),
+                    borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppDimens.space4,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: AppDimens.space6,
+                            height: AppDimens.space6,
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? scheme.primary
+                                  : Colors.transparent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(height: AppDimens.space6),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 132),
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyle.caption.copyWith(
+                                color: selected
+                                    ? scheme.onSurface
+                                    : scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -550,13 +733,11 @@ class _Controls extends StatelessWidget {
   final bool playing;
   final Duration position;
   final Duration duration;
-  final double speed;
   final bool canPrevious;
   final bool canNext;
   final Future<void> Function() onToggle;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
-  final ValueChanged<double> onSpeed;
   final VoidCallback onDragStart;
   final ValueChanged<double> onDragChanged;
   final ValueChanged<double> onDragEnd;
@@ -565,101 +746,126 @@ class _Controls extends StatelessWidget {
     required this.playing,
     required this.position,
     required this.duration,
-    required this.speed,
     required this.canPrevious,
     required this.canNext,
     required this.onToggle,
     required this.onPrevious,
     required this.onNext,
-    required this.onSpeed,
     required this.onDragStart,
     required this.onDragChanged,
     required this.onDragEnd,
   });
 
-  static const _speeds = <double>[0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
-
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final total = duration.inMilliseconds;
     final value = total > 0
         ? (position.inMilliseconds / total).clamp(0.0, 1.0).toDouble()
         : 0.0;
 
-    return Column(
-      children: [
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            trackHeight: 3,
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-          ),
-          child: Slider(
-            value: value,
-            onChangeStart: (_) => onDragStart(),
-            onChanged: onDragChanged,
-            onChangeEnd: onDragEnd,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                Format.duration(position),
-                style: AppTextStyle.micro
-                    .copyWith(color: AppColors.textSecondaryFor(brightness)),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppDimens.space16,
+        AppDimens.space8,
+        AppDimens.space16,
+        AppDimens.space24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: scheme.onSurface,
+              inactiveTrackColor: scheme.onSurface.withValues(alpha: 0.24),
+              thumbColor: scheme.onSurface,
+              overlayColor: scheme.onSurface.withValues(alpha: 0.16),
+              trackHeight: AppDimens.space2,
+              thumbShape: const RoundSliderThumbShape(
+                enabledThumbRadius: AppDimens.space4,
               ),
-              Text(
-                total > 0 ? Format.duration(duration) : '--:--',
-                style: AppTextStyle.micro
-                    .copyWith(color: AppColors.textSecondaryFor(brightness)),
+              overlayShape: const RoundSliderOverlayShape(
+                overlayRadius: AppDimens.space12,
               ),
-            ],
+            ),
+            child: Semantics(
+              label: 'Playback position',
+              child: Slider(
+                value: value,
+                onChangeStart: (_) => onDragStart(),
+                onChanged: onDragChanged,
+                onChangeEnd: onDragEnd,
+              ),
+            ),
           ),
-        ),
-        const SizedBox(height: AppDimens.space12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            IconButton(
-              tooltip: 'Previous track',
-              onPressed: canPrevious ? onPrevious : null,
-              iconSize: 34,
-              icon: const Icon(Icons.skip_previous_rounded),
-            ),
-            const SizedBox(width: AppDimens.space8),
-            _PlayButton(playing: playing, onPressed: onToggle),
-            const SizedBox(width: AppDimens.space8),
-            IconButton(
-              tooltip: 'Next track',
-              onPressed: canNext ? onNext : null,
-              iconSize: 34,
-              icon: const Icon(Icons.skip_next_rounded),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppDimens.space16),
-        NexaLiquidGlass(
-          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-          padding: const EdgeInsets.all(AppDimens.space4),
-          blurSigma: 12,
-          showShadow: false,
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            spacing: AppDimens.space6,
-            children: [
-              for (final option in _speeds)
-                ChoiceChip(
-                  label: Text(option == 1.0 ? '1×' : '$option×'),
-                  selected: (speed - option).abs() < 0.001,
-                  onSelected: (_) => onSpeed(option),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppDimens.space4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  Format.duration(position),
+                  style:
+                      AppTextStyle.labelSmall.copyWith(color: scheme.onSurface),
                 ),
+                Text(
+                  total > 0 ? Format.duration(duration) : '--:--',
+                  style: AppTextStyle.labelSmall
+                      .copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppDimens.space12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _FloatingIcon(
+                icon: Icons.skip_previous_rounded,
+                tooltip: 'Previous track',
+                onTap: canPrevious ? onPrevious : null,
+              ),
+              const SizedBox(width: AppDimens.space32),
+              _PlayButton(playing: playing, onPressed: onToggle),
+              const SizedBox(width: AppDimens.space32),
+              _FloatingIcon(
+                icon: Icons.skip_next_rounded,
+                tooltip: 'Next track',
+                onTap: canNext ? onNext : null,
+              ),
             ],
           ),
-        ),
-      ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FloatingIcon extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  const _FloatingIcon({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: tooltip,
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: onTap,
+        color: scheme.onSurface,
+        iconSize: AppDimens.iconLarge,
+        icon: Icon(icon),
+      ),
     );
   }
 }
@@ -671,28 +877,30 @@ class _PlayButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
     return Semantics(
       button: true,
       label: playing ? 'Pause' : 'Play',
       child: SizedBox(
-        width: 72,
-        height: 72,
+        width: AppDimens.iconHero,
+        height: AppDimens.iconHero,
         child: FilledButton(
           style: FilledButton.styleFrom(
             shape: const CircleBorder(),
             padding: EdgeInsets.zero,
-            backgroundColor: AppColors.accentFor(brightness),
+            minimumSize: const Size(
+              AppDimens.iconHero,
+              AppDimens.iconHero,
+            ),
           ),
           onPressed: onPressed,
           child: AnimatedSwitcher(
             duration: AppMotion.resolve(context, AppMotion.fast),
-            switchInCurve: AppMotion.enter,
-            switchOutCurve: AppMotion.exit,
+            switchInCurve: AppMotion.curveFor(context, AppMotion.enter),
+            switchOutCurve: AppMotion.curveFor(context, AppMotion.exit),
             child: Icon(
               playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
               key: ValueKey(playing),
-              size: 38,
+              size: AppDimens.iconTile,
             ),
           ),
         ),

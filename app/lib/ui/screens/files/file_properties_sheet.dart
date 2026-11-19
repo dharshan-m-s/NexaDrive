@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
@@ -34,7 +33,7 @@ class _FilePropertiesSheetState extends State<FilePropertiesSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final entry = widget.entry;
     final category = entry.category;
     final kind = FileKind.label(category);
@@ -55,16 +54,21 @@ class _FilePropertiesSheetState extends State<FilePropertiesSheet> {
             Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: AppDimens.iconTileLarge,
+                  height: AppDimens.iconTileLarge,
                   decoration: BoxDecoration(
-                    color: FileKind.tileFill(category, brightness),
-                    borderRadius: BorderRadius.circular(AppDimens.radiusInner),
+                    color: scheme.secondaryContainer,
+                    borderRadius:
+                        BorderRadius.circular(AppDimens.radiusStandard),
                   ),
-                  child: Icon(
-                    FileKind.icon(category),
-                    color: FileKind.tint(category, brightness),
-                    size: AppDimens.iconLarge,
+                  child: Center(
+                    child: entry.isFolder
+                        ? const NexaFileGlyph.folder(size: 32)
+                        : NexaFileGlyph(
+                            name: entry.name,
+                            type: entry.type,
+                            size: 32,
+                          ),
                   ),
                 ),
                 const SizedBox(width: AppDimens.space12),
@@ -76,61 +80,57 @@ class _FilePropertiesSheetState extends State<FilePropertiesSheet> {
                         entry.name,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyle.rowTitle.copyWith(
-                          color: AppColors.textPrimaryFor(brightness),
-                          fontWeight: FontWeight.w600,
+                        style: AppTextStyle.titleMedium.copyWith(
+                          color: scheme.onSurface,
                         ),
                       ),
                       const SizedBox(height: AppDimens.space2),
                       Text(
                         kind,
-                        style: AppTextStyle.caption.copyWith(
-                          color: AppColors.textSecondaryFor(brightness),
+                        style: AppTextStyle.labelSmall.copyWith(
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: AppDimens.space8),
-                NexaLiquidGlass(
-                  borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                  padding: EdgeInsets.zero,
-                  blurSigma: 10,
-                  showShadow: false,
-                  child: IconButton(
-                    tooltip: 'Copy path',
-                    onPressed: _copyPath,
-                    icon: const Icon(Icons.content_copy_rounded),
+                IconButton.filledTonal(
+                  tooltip: 'Copy path',
+                  onPressed: _copyPath,
+                  style: IconButton.styleFrom(
+                    backgroundColor: scheme.secondaryContainer,
+                    foregroundColor: scheme.onSecondaryContainer,
                   ),
+                  icon: const Icon(Icons.content_copy_rounded),
                 ),
                 IconButton(
                   tooltip: 'Close',
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded),
+                  icon:
+                      Icon(Icons.close_rounded, color: scheme.onSurfaceVariant),
                 ),
               ],
             ),
             const SizedBox(height: AppDimens.space12),
             NexaSurface(
               level: NexaSurfaceLevel.grouped,
-              radius: AppDimens.radiusMedium,
+              radius: AppDimens.radiusCard,
               padding: const EdgeInsets.all(AppDimens.space16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'LOCATION',
-                    style: AppTextStyle.caption.copyWith(
-                      color: AppColors.textSecondaryFor(brightness),
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.8,
+                    'Location',
+                    style: AppTextStyle.labelMedium.copyWith(
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: AppDimens.space8),
                   SelectableText(
                     entry.path,
-                    style: AppTextStyle.rowTitle.copyWith(
-                      color: AppColors.textPrimaryFor(brightness),
+                    style: AppTextStyle.bodyMedium.copyWith(
+                      color: scheme.onSurface,
                     ),
                   ),
                 ],
@@ -170,7 +170,7 @@ class _Section extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -180,17 +180,15 @@ class _Section extends StatelessWidget {
             bottom: AppDimens.space8,
           ),
           child: Text(
-            header.toUpperCase(),
-            style: AppTextStyle.caption.copyWith(
-              color: AppColors.textSecondaryFor(brightness),
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.8,
+            header,
+            style: AppTextStyle.labelMedium.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
           ),
         ),
         NexaSurface(
           level: NexaSurfaceLevel.grouped,
-          radius: AppDimens.radiusMedium,
+          radius: AppDimens.radiusCard,
           padding: const EdgeInsets.symmetric(
             horizontal: AppDimens.space16,
             vertical: AppDimens.space8,
@@ -198,12 +196,7 @@ class _Section extends StatelessWidget {
           child: Column(
             children: [
               for (var i = 0; i < children.length; i++) ...[
-                if (i > 0)
-                  Divider(
-                    height: AppDimens.space12,
-                    thickness: 0.5,
-                    color: AppColors.separatorFor(brightness),
-                  ),
+                if (i > 0) Divider(color: scheme.outlineVariant),
                 children[i],
               ],
             ],
@@ -221,26 +214,25 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final secondary = AppColors.textSecondaryFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppDimens.space6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 96,
+            width: AppDimens.touchTarget * 2,
             child: Text(
               label,
-              style: AppTextStyle.caption.copyWith(color: secondary),
+              style: AppTextStyle.labelMedium.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: AppTextStyle.rowTitle.copyWith(
-                color: AppColors.textPrimaryFor(brightness),
-              ),
+              style: AppTextStyle.bodyMedium.copyWith(color: scheme.onSurface),
             ),
           ),
         ],

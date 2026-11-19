@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 
 /// Compact, theme-aware search control for inline discovery.
+///
+/// A Material 3 filled [TextField] with the theme's search-bar pill shape and
+/// surface container tone. The clear action is an [IconButton] with a tooltip.
 class NexaSearchField extends StatelessWidget {
   final TextEditingController? controller;
   final String? hint;
@@ -32,8 +34,7 @@ class NexaSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final fillColor = AppColors.fillFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
 
     return Row(
       children: [
@@ -44,23 +45,24 @@ class NexaSearchField extends StatelessWidget {
             readOnly: readOnly,
             onChanged: onChanged,
             onTap: onTap,
-            style: AppTextStyle.body.copyWith(
-              color: AppColors.labelPrimaryFor(brightness),
-            ),
+            style: AppTextStyle.bodyLarge.copyWith(color: scheme.onSurface),
             decoration: InputDecoration(
               hintText: hint ?? 'Search',
-              hintStyle: AppTextStyle.body.copyWith(
-                color: AppColors.labelTertiaryFor(brightness),
+              hintStyle: AppTextStyle.bodyLarge.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
               filled: filled,
-              fillColor: filled ? fillColor : Colors.transparent,
+              fillColor:
+                  filled ? scheme.surfaceContainerHigh : Colors.transparent,
               prefixIcon: Padding(
                 padding: const EdgeInsets.only(
-                    left: AppDimens.space12, right: AppDimens.space8),
+                  left: AppDimens.space12,
+                  right: AppDimens.space8,
+                ),
                 child: Icon(
                   Icons.search_rounded,
                   size: AppDimens.iconMedium,
-                  color: AppColors.labelTertiaryFor(brightness),
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
               suffixIcon: controller != null &&
@@ -70,30 +72,20 @@ class NexaSearchField extends StatelessWidget {
                       icon: Icon(
                         Icons.clear_rounded,
                         size: AppDimens.iconSmall,
-                        color: AppColors.labelTertiaryFor(brightness),
+                        color: scheme.onSurfaceVariant,
                       ),
                       onPressed: onClear,
                       tooltip: 'Clear',
                     )
                   : null,
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: AppDimens.space12,
-                vertical: AppDimens.space10,
+                horizontal: AppDimens.space16,
+                vertical: AppDimens.space12,
               ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                borderSide: BorderSide(
-                  color: AppColors.accentFor(brightness),
-                  width: 2,
-                ),
+              border: _pillBorder(BorderSide.none),
+              enabledBorder: _pillBorder(BorderSide.none),
+              focusedBorder: _pillBorder(
+                BorderSide(color: scheme.primary, width: 2),
               ),
             ),
           ),
@@ -104,13 +96,16 @@ class NexaSearchField extends StatelessWidget {
             onPressed: onClear ?? () => controller?.clear(),
             child: Text(
               cancelText,
-              style: AppTextStyle.buttonSmall.copyWith(
-                color: AppColors.accentFor(brightness),
-              ),
+              style: AppTextStyle.labelLarge.copyWith(color: scheme.primary),
             ),
           ),
         ],
       ],
     );
   }
+
+  OutlineInputBorder _pillBorder(BorderSide side) => OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+        borderSide: side,
+      );
 }

@@ -1,5 +1,7 @@
 # Phase 10 audit / hardening pass
 
+> **Historical record — superseded.** This document is a point-in-time record of NexaDrive's former One UI / Liquid Glass design. It is not current guidance: see [docs/DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) (Material 3 / Material You) and `docs/UI_DESIGN_TOKENS.md`.
+
 This pass validates the Phase 9 source tree and fixes defects discovered during static review.
 
 ## Correctness fixes

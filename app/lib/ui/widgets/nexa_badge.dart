@@ -3,7 +3,7 @@ import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 
-/// Small status badge (dot, count, label).
+/// Small Material 3 status badge (dot, count, label).
 class NexaBadge extends StatelessWidget {
   final String? label;
   final int? count;
@@ -26,7 +26,7 @@ class NexaBadge extends StatelessWidget {
   const NexaBadge.dot({
     super.key,
     required this.color,
-    this.size = 8,
+    this.size = AppDimens.space8,
   })  : label = null,
         count = null,
         backgroundColor = null,
@@ -44,19 +44,20 @@ class NexaBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final bg = backgroundColor ?? color ?? AppColors.accentFor(brightness);
-    final fg = color != null
-        ? Colors.white
-        : AppColors.onAccentContainerFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
+    final bg = backgroundColor ?? color ?? scheme.primary;
+    final fg = scheme.onPrimary;
 
     if (isDot) {
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: bg,
-          shape: BoxShape.circle,
+      return Semantics(
+        label: 'New activity',
+        child: Container(
+          width: size,
+          height: size,
+          decoration: ShapeDecoration(
+            color: bg,
+            shape: const CircleBorder(),
+          ),
         ),
       );
     }
@@ -65,31 +66,26 @@ class NexaBadge extends StatelessWidget {
     const maxCount = 99;
     final displayText = count != null && count! > maxCount ? '99+' : text;
 
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal:
-            displayText.length == 1 ? AppDimens.space6 : AppDimens.space4,
-        vertical: AppDimens.space1,
-      ),
-      constraints: BoxConstraints(
-        minWidth: size,
-        minHeight: size,
-      ),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        border: Border.all(
-          color: fg.withValues(alpha: 0.18),
-          width: 0.7,
+    return Semantics(
+      label: displayText,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal:
+              displayText.length == 1 ? AppDimens.space6 : AppDimens.space4,
+          vertical: AppDimens.space1,
         ),
-      ),
-      child: Center(
-        child: Text(
-          displayText,
-          style: AppTextStyle.caption2.copyWith(
-            color: fg,
-            fontWeight: FontWeight.w700,
-            fontSize: size * 0.7,
+        constraints: BoxConstraints(
+          minWidth: size,
+          minHeight: size,
+        ),
+        decoration: ShapeDecoration(
+          color: bg,
+          shape: const StadiumBorder(),
+        ),
+        child: Center(
+          child: Text(
+            displayText,
+            style: AppTextStyle.labelSmall.copyWith(color: fg),
           ),
         ),
       ),
@@ -103,40 +99,52 @@ class NexaStatusIndicator extends StatelessWidget {
   final double size;
   final bool showBorder;
 
+  /// Optional explicit border. When omitted, [showBorder] derives a tonal
+  /// surface-coloured border from the current [ColorScheme].
+  final BorderSide? side;
+
   const NexaStatusIndicator({
     super.key,
     required this.status,
     this.size = 12,
     this.showBorder = true,
+    this.side,
   });
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final surface = AppColors.surfaceFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
+    final brightness = scheme.brightness;
 
     Color color;
     switch (status) {
       case NexaStatus.online:
         color = AppColors.successFor(brightness);
       case NexaStatus.busy:
-        color = AppColors.errorFor(brightness);
+        color = scheme.error;
       case NexaStatus.away:
         color = AppColors.warningFor(brightness);
       case NexaStatus.offline:
-        color = AppColors.labelTertiaryFor(brightness);
+        color = scheme.onSurfaceVariant;
       case NexaStatus.syncing:
-        color = AppColors.accentFor(brightness);
+        color = scheme.primary;
     }
 
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border:
-            showBorder ? Border.all(color: surface, width: size * 0.25) : null,
+    final borderSide = side ??
+        (showBorder
+            ? BorderSide(color: scheme.surfaceContainer, width: 2)
+            : BorderSide.none);
+
+    return Semantics(
+      label: status.name,
+      container: true,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: ShapeDecoration(
+          color: color,
+          shape: CircleBorder(side: borderSide),
+        ),
       ),
     );
   }

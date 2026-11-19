@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 
-/// The single NexaDrive page shell — iOS-style with large title support.
+/// The single NexaDrive page shell — Material 3 tonal scaffold with a
+/// large-title header and optional bottom action bar.
 class NexaPage extends StatelessWidget {
   final String title;
   final String? subtitle;
@@ -51,9 +51,9 @@ class NexaPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final bg = backgroundColor ?? AppColors.backgroundFor(brightness);
-    final fg = headerForeground ?? AppColors.labelPrimaryFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
+    final bg = backgroundColor ?? scheme.surface;
+    final fg = headerForeground ?? scheme.onSurface;
     final pagePadding = padding.resolve(Directionality.of(context));
     final bottomClearance = MediaQuery.paddingOf(context).bottom;
     final scrollPadding = bottomSafeArea
@@ -193,133 +193,75 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-
-    if (largeTitle) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppDimens.pageMargin,
-          AppDimens.space8,
-          AppDimens.pageMargin,
-          AppDimens.space8,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (leading != null) ...[
-              leading!,
-              const SizedBox(height: AppDimens.space8),
-            ],
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: AppColors.accentContainerFor(brightness),
-                          borderRadius:
-                              BorderRadius.circular(AppDimens.radiusMedium),
-                          border: Border.all(
-                            color: AppColors.separatorFor(brightness)
-                                .withValues(alpha: 0.72),
-                            width: 0.7,
-                          ),
-                        ),
-                        child: Icon(
-                          icon ?? _iconForTitle(title),
-                          color: AppColors.accentTextFor(brightness),
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: AppDimens.space12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyle.largeTitle.copyWith(
-                                color: foreground,
-                                letterSpacing: -0.55,
-                                height: 1.04,
-                              ),
-                            ),
-                            if (subtitle != null) ...[
-                              const SizedBox(height: AppDimens.space2),
-                              Text(
-                                subtitle!,
-                                style: AppTextStyle.caption1.copyWith(
-                                  color: AppColors.labelSecondaryFor(
-                                    brightness,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (action != null) ...[
-                  const SizedBox(width: AppDimens.space8),
-                  action!,
-                ],
-                if (actions != null) ...[
-                  const SizedBox(width: AppDimens.space8),
-                  ...actions!,
-                ],
-              ],
-            ),
-          ],
-        ),
-      );
-    }
+    final scheme = Theme.of(context).colorScheme;
+    final titleStyle =
+        (largeTitle ? AppTextStyle.headlineSmall : AppTextStyle.title2)
+            .copyWith(color: foreground);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
-        AppDimens.space8,
+        AppDimens.space16,
         AppDimens.pageMargin,
-        AppDimens.space4,
+        AppDimens.space16,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (leading != null) ...[
             leading!,
-            const SizedBox(width: AppDimens.space8),
+            const SizedBox(height: AppDimens.space8),
           ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: AppTextStyle.pageTitle.copyWith(color: foreground),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: scheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
                 ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: AppDimens.space2),
-                  Text(
-                    subtitle!,
-                    style: AppTextStyle.caption1.copyWith(
-                      color: AppColors.labelSecondaryFor(brightness),
+                child: Icon(
+                  icon ?? _iconForTitle(title),
+                  color: scheme.onSecondaryContainer,
+                  size: AppDimens.iconMedium,
+                ),
+              ),
+              const SizedBox(width: AppDimens.space16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: titleStyle,
                     ),
-                  ),
-                ],
+                    if (subtitle != null) ...[
+                      const SizedBox(height: AppDimens.space2),
+                      Text(
+                        subtitle!,
+                        style: AppTextStyle.bodySmall.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (action != null) ...[
+                const SizedBox(width: AppDimens.space8),
+                action!,
               ],
-            ),
+              if (actions != null) ...[
+                const SizedBox(width: AppDimens.space8),
+                ...actions!,
+              ],
+            ],
           ),
-          if (action != null) action!,
-          if (actions != null) ...actions!,
         ],
       ),
     );
@@ -390,8 +332,7 @@ class NexaImmersivePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final bg = backgroundColor ?? AppColors.backgroundFor(brightness);
+    final bg = backgroundColor ?? Theme.of(context).colorScheme.surface;
 
     return Material(
       color: bg,

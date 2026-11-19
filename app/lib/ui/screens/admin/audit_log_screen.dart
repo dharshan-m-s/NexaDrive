@@ -108,7 +108,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
           : 'content';
 }
 
-/// A single audit entry rendered as a standard One UI grouped row.
+/// A single audit entry rendered as a standard Material 3 list row.
 class _AuditRow extends StatelessWidget {
   final String action;
   final String path;

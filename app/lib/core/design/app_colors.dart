@@ -1,138 +1,240 @@
 import 'package:flutter/material.dart';
 
-/// NexaDrive semantic color system.
+/// NexaDrive colour system — warm editorial Material 3.
 ///
-/// THE REFERENCE: Apple's platform color language (iOS/macOS semantic colors).
-/// The visual hierarchy is built the way UIKit builds it:
-///
-///  * **Layered backgrounds** — a grouped page background sits *behind* white
-///    content surfaces, so a list reads as a raised plane rather than as flat
-///    Material canvas.
-///  * **Label opacities** — primary/secondary/tertiary text are one ink at
-///    decreasing opacity, which keeps hierarchy legible in both appearances
-///    instead of introducing unrelated grays.
-///  * **One deliberate accent** — a vivid iris indigo, lifted in dark mode.
-///
-/// Every color in NexaDrive must come from this file. No hardcoded
-/// `Color(...)` literals in widgets.
+/// The app keeps Material's role vocabulary (`primary`, `surfaceContainer*`,
+/// `onSurfaceVariant`, `outlineVariant`, and so on) but the seed and every
+/// canvas role are tuned to the NexaDrive palette. Screens never own raw
+/// colours: they resolve roles here or through [Theme.of].
 abstract final class AppColors {
-  // --------------------------------------------------------------- accent
-  /// Iris indigo — distinctive without overpowering content.
-  static const Color accent = Color(0xFF007AFF);
+  /// The brand seed. Forest green, used sparingly for emphasis.
+  static const Color seed = Color(0xFF355C46);
 
-  /// Luminous lavender-indigo for dark surfaces.
-  static const Color accentDark = Color(0xFF0A84FF);
+  // ------------------------------------------------------- brand foundation
+  static const Color canvasLight = Color(0xFFF7F6F0);
+  static const Color canvasSecondaryLight = Color(0xFFEFEEE6);
+  static const Color inkLight = Color(0xFF242820);
+  static const Color inkMutedLight = Color(0xFF85877D);
+  static const Color separatorLight = Color(0xFFE5E3D9);
+  static const Color selectionLight = Color(0xFFE3EBE1);
+  static const Color forestLight = Color(0xFF355C46);
+  static const Color forestDeepLight = Color(0xFF2A4836);
+  static const Color forestSoftLight = Color(0xFF9CC4A9);
 
-  /// Soft iris fill behind the accent (selection, toggle-on, badge).
-  static const Color accentContainerLight = Color(0x1F007AFF);
-  static const Color accentContainerDark = Color(0x330A84FF);
+  /// Dark counterparts keep the same warmth and hierarchy.
+  static const Color canvasDark = Color(0xFF1D201A);
+  static const Color canvasSecondaryDark = Color(0xFF282C24);
+  static const Color inkDark = Color(0xFFF2F1E8);
+  static const Color inkMutedDark = Color(0xFFA8AB9F);
+  static const Color separatorDark = Color(0xFF353A31);
+  static const Color selectionDark = Color(0xFF31483A);
+  static const Color forestDark = Color(0xFF9CC4A9);
+  static const Color forestDeepDark = Color(0xFFD6E8D9);
+  static const Color forestSoftDark = Color(0xFF6F9A7E);
 
-  /// Contrast-safe iris text/icons on the container fill.
-  static const Color onAccentContainerLight = Color(0xFF0040DD);
-  static const Color onAccentContainerDark = Color(0xFF7AB8FF);
+  static final ColorScheme lightScheme = ColorScheme.fromSeed(
+    seedColor: seed,
+    brightness: Brightness.light,
+  ).copyWith(
+    primary: forestLight,
+    onPrimary: Colors.white,
+    primaryContainer: selectionLight,
+    onPrimaryContainer: forestDeepLight,
+    secondary: const Color(0xFF6F7467),
+    onSecondary: Colors.white,
+    secondaryContainer: canvasSecondaryLight,
+    onSecondaryContainer: inkLight,
+    tertiary: const Color(0xFFA4654B),
+    onTertiary: Colors.white,
+    tertiaryContainer: const Color(0xFFF2E1D7),
+    onTertiaryContainer: const Color(0xFF5E3222),
+    surface: canvasLight,
+    surfaceTint: Colors.transparent,
+    onSurface: inkLight,
+    onSurfaceVariant: inkMutedLight,
+    surfaceContainerLowest: canvasLight,
+    surfaceContainerLow: canvasSecondaryLight,
+    surfaceContainer: canvasSecondaryLight,
+    surfaceContainerHigh: const Color(0xFFFAF9F4),
+    surfaceContainerHighest: separatorLight,
+    outline: const Color(0xFFBFC2B6),
+    outlineVariant: separatorLight,
+    error: const Color(0xFF9C4F40),
+    onError: Colors.white,
+    errorContainer: const Color(0xFFF4DED7),
+    onErrorContainer: const Color(0xFF5B241A),
+    inverseSurface: inkLight,
+    onInverseSurface: canvasLight,
+    inversePrimary: forestSoftLight,
+    shadow: const Color(0x2A242820),
+    scrim: const Color(0x66201F1A),
+  );
 
-  /// Deep iris shade for pressed/active accents.
-  static const Color accentPressedLight = Color(0xFF0062CC);
-  static const Color accentPressedDark = Color(0xFF409CFF);
+  static final ColorScheme darkScheme = ColorScheme.fromSeed(
+    seedColor: seed,
+    brightness: Brightness.dark,
+  ).copyWith(
+    primary: forestDark,
+    onPrimary: const Color(0xFF142219),
+    primaryContainer: selectionDark,
+    onPrimaryContainer: forestDeepDark,
+    secondary: const Color(0xFFB7BBAE),
+    onSecondary: canvasDark,
+    secondaryContainer: canvasSecondaryDark,
+    onSecondaryContainer: inkDark,
+    tertiary: const Color(0xFFD5A28C),
+    onTertiary: canvasDark,
+    tertiaryContainer: const Color(0xFF5A3A2E),
+    onTertiaryContainer: const Color(0xFFF4DED7),
+    surface: canvasDark,
+    surfaceTint: Colors.transparent,
+    onSurface: inkDark,
+    onSurfaceVariant: inkMutedDark,
+    surfaceContainerLowest: const Color(0xFF181B16),
+    surfaceContainerLow: const Color(0xFF22261F),
+    surfaceContainer: canvasSecondaryDark,
+    surfaceContainerHigh: const Color(0xFF30352B),
+    surfaceContainerHighest: separatorDark,
+    outline: const Color(0xFF777C70),
+    outlineVariant: separatorDark,
+    error: const Color(0xFFE09283),
+    onError: const Color(0xFF4A1D15),
+    errorContainer: const Color(0xFF5B3028),
+    onErrorContainer: const Color(0xFFF4DED7),
+    inverseSurface: const Color(0xFFECEBE2),
+    onInverseSurface: canvasDark,
+    inversePrimary: forestLight,
+    shadow: const Color(0x52000000),
+    scrim: const Color(0x660D0E0B),
+  );
 
-  /// Accent safe for *text and icons on plain surfaces* (meets contrast).
-  static const Color accentHighEmphasisLight = Color(0xFF0062CC);
-  static const Color accentHighEmphasisDark = Color(0xFF409CFF);
+  static ColorScheme scheme(Brightness brightness) =>
+      brightness == Brightness.dark ? darkScheme : lightScheme;
 
-  /// The softest accent tint — behind icon tiles and quiet highlights.
-  static const Color accentSubtleLight = Color(0x14007AFF);
-  static const Color accentSubtleDark = Color(0x260A84FF);
+  // --------------------------------------------------------------- primary
+  /// Compatibility aliases. [scheme] remains authoritative at runtime.
+  static const Color accent = forestLight;
+  static const Color accentDark = forestSoftLight;
+  static const Color primary = forestLight;
+  static const Color primaryDark = forestSoftLight;
+
+  static const Color accentContainerLight = selectionLight;
+  static const Color accentContainerDark = selectionDark;
+  static const Color onAccentContainerLight = forestDeepLight;
+  static const Color onAccentContainerDark = forestDeepDark;
+
+  static const Color accentPressedLight = forestDeepLight;
+  static const Color accentPressedDark = forestSoftLight;
+
+  /// Contrast-safe accent for text and icons on plain surfaces.
+  static const Color accentHighEmphasisLight = forestDeepLight;
+  static const Color accentHighEmphasisDark = forestSoftLight;
+
+  static const Color accentSubtleLight = selectionLight;
+  static const Color accentSubtleDark = selectionDark;
+
+  // ------------------------------------------------------------- secondary
+  static const Color secondaryLight = Color(0xFF6F7467);
+  static const Color secondaryDark = Color(0xFFB7BBAE);
+  static const Color secondaryContainerLight = canvasSecondaryLight;
+  static const Color secondaryContainerDark = canvasSecondaryDark;
+  static const Color onSecondaryContainerLight = inkLight;
+  static const Color onSecondaryContainerDark = inkDark;
+
+  // -------------------------------------------------------------- tertiary
+  /// A restrained terracotta used only for warm semantic emphasis.
+  static const Color tertiaryLight = Color(0xFFA4654B);
+  static const Color tertiaryDark = Color(0xFFD5A28C);
+  static const Color tertiaryContainerLight = Color(0xFFF2E1D7);
+  static const Color tertiaryContainerDark = Color(0xFF5A3A2E);
+  static const Color onTertiaryContainerLight = Color(0xFF5E3222);
+  static const Color onTertiaryContainerDark = Color(0xFFF4DED7);
 
   // ------------------------------------------------------------ surfaces
-  /// Page background (light) — iOS `systemGroupedBackground`.
-  static const Color backgroundLight = Color(0xFFF2F2F7);
+  static const Color backgroundLight = canvasLight;
+  static const Color backgroundDark = canvasDark;
 
-  /// Page background (dark) — true black, the iOS grouped canvas.
-  static const Color backgroundDark = Color(0xFF000000);
+  static const Color surfaceLight = canvasLight;
+  static const Color surfaceDark = canvasDark;
 
-  /// Primary content surface (cards, sheets, tiles) — LEVEL 1.
-  static const Color surfaceLight = Color(0xFFFFFFFF);
-  static const Color surfaceDark = Color(0xFF1C1C1E);
+  static const Color surfaceAltLight = canvasSecondaryLight;
+  static const Color surfaceAltDark = canvasSecondaryDark;
 
-  /// Grouped/alt surface used inside panels to separate rows or hover fills
-  /// — LEVEL 2 (`secondarySystemGroupedBackground`).
-  static const Color surfaceAltLight = Color(0xFFF2F2F7);
-  static const Color surfaceAltDark = Color(0xFF2C2C2E);
+  static const Color surfaceElevatedLight = Color(0xFFFAF9F4);
+  static const Color surfaceElevatedDark = Color(0xFF30352B);
 
-  /// Slightly deeper surface for headers/toolbars over content — LEVEL 3.
-  static const Color surfaceElevatedLight = Color(0xFFFFFFFF);
-  static const Color surfaceElevatedDark = Color(0xFF2C2C2E);
+  static const Color surfacePressedLight = Color(0xFFE6E7DC);
+  static const Color surfacePressedDark = Color(0xFF383D33);
 
-  /// Deepest inset surface — pressed rows, selection bar over content.
-  static const Color surfacePressedLight = Color(0xFFE5E5EA);
-  static const Color surfacePressedDark = Color(0xFF3A3A3C);
+  /// Grouped content uses the warm secondary canvas, never purple tinting.
+  static Color get surfaceGroupedLight => lightScheme.surfaceContainerLow;
+  static Color get surfaceGroupedDark => darkScheme.surfaceContainerLow;
+  static Color get surfaceGroupedAltLight => lightScheme.surfaceContainer;
+  static Color get surfaceGroupedAltDark => darkScheme.surfaceContainer;
 
-  // --------------------------------------------------------------- text
-  /// `label` — the one ink, at full strength.
-  static const Color textPrimaryLight = Color(0xFF000000);
-  static const Color textPrimaryDark = Color(0xFFFFFFFF);
+  // ----------------------------------------------------------------- ink
+  static const Color textPrimaryLight = inkLight;
+  static const Color textPrimaryDark = inkDark;
 
-  /// `secondaryLabel` — 60% of the ink.
-  static const Color textSecondaryLight = Color(0x993C3C43);
-  static const Color textSecondaryDark = Color(0x99EBEBF5);
+  static const Color textSecondaryLight = inkMutedLight;
+  static const Color textSecondaryDark = inkMutedDark;
 
-  /// `tertiaryLabel` — 30% of the ink.
-  static const Color textTertiaryLight = Color(0x4D3C3C43);
-  static const Color textTertiaryDark = Color(0x66EBEBF5);
+  static const Color textTertiaryLight = Color(0xFF9A9C92);
+  static const Color textTertiaryDark = Color(0xFF8F9388);
 
-  static const Color textOnPrimaryLight = Color(0xFFFFFFFF);
-  static const Color textOnPrimaryDark = Color(0xFFFFFFFF);
+  static const Color textOnPrimaryLight = Colors.white;
+  static const Color textOnPrimaryDark = Color(0xFF142219);
 
-  static const Color textLink = accent;
-  static const Color textLinkDark = accentDark;
+  static const Color textLink = forestLight;
+  static const Color textLinkDark = forestSoftLight;
 
   // ------------------------------------------------------------ dividers
-  /// `separator` — a hairline that reads as a rule, not a border.
-  static const Color dividerLight = Color(0x1F3C3C43);
-  static const Color dividerDark = Color(0x2E545456);
+  static const Color dividerLight = separatorLight;
+  static const Color dividerDark = separatorDark;
 
   // ------------------------------------------------------------ status
-  static const Color successLight = Color(0xFF34C759);
-  static const Color successDark = Color(0xFF30D158);
-  static const Color warningLight = Color(0xFFFF9F0A);
-  static const Color warningDark = Color(0xFFFF9F0A);
-  static const Color errorLight = Color(0xFFFF3B30);
-  static const Color errorDark = Color(0xFFFF453A);
-  static const Color infoLight = accent;
-  static const Color infoDark = accentDark;
+  /// Status colours stay in the warm family so they never read as a second
+  /// brand. Success shares the forest accent; error uses muted terracotta.
+  static const Color successLight = Color(0xFF3F6B4F);
+  static const Color successDark = Color(0xFF9CC4A9);
+  static const Color warningLight = Color(0xFF9A6B32);
+  static const Color warningDark = Color(0xFFD8B27E);
+  static const Color errorLight = Color(0xFF9C4F40);
+  static const Color errorDark = Color(0xFFE09283);
+  static const Color infoLight = forestLight;
+  static const Color infoDark = forestSoftLight;
 
-  // ------------------------------------------------- status containers
-  /// Tonal status backgrounds + their on-colors (status chips/rows).
-  static const Color successContainerLight = Color(0xFFE3F8E7);
-  static const Color onSuccessContainerLight = Color(0xFF1B7A32);
-  static const Color successContainerDark = Color(0xFF1E3B24);
-  static const Color onSuccessContainerDark = Color(0xFF9DE8AC);
+  static const Color successContainerLight = Color(0xFFE1EBE1);
+  static const Color onSuccessContainerLight = Color(0xFF294735);
+  static const Color successContainerDark = Color(0xFF2E4937);
+  static const Color onSuccessContainerDark = Color(0xFFD6E8D9);
 
-  static const Color warningContainerLight = Color(0xFFFFF0DC);
-  static const Color onWarningContainerLight = Color(0xFF9A5B00);
-  static const Color warningContainerDark = Color(0xFF4A3320);
-  static const Color onWarningContainerDark = Color(0xFFFFD08A);
+  static const Color warningContainerLight = Color(0xFFF2E7D5);
+  static const Color onWarningContainerLight = Color(0xFF5E4423);
+  static const Color warningContainerDark = Color(0xFF55432B);
+  static const Color onWarningContainerDark = Color(0xFFF2E7D5);
 
-  static const Color errorContainerLight = Color(0xFFFFE3E1);
-  static const Color onErrorContainerLight = Color(0xFFC7261D);
-  static const Color errorContainerDark = Color(0xFF472126);
-  static const Color onErrorContainerDark = Color(0xFFFFB3AB);
+  static const Color errorContainerLight = Color(0xFFF4DED7);
+  static const Color onErrorContainerLight = Color(0xFF5B241A);
+  static const Color errorContainerDark = Color(0xFF5B3028);
+  static const Color onErrorContainerDark = Color(0xFFF4DED7);
 
-  static const Color infoContainerLight = accentContainerLight;
-  static const Color onInfoContainerLight = onAccentContainerLight;
-  static const Color infoContainerDark = accentContainerDark;
-  static const Color onInfoContainerDark = onAccentContainerDark;
+  static const Color infoContainerLight = selectionLight;
+  static const Color onInfoContainerLight = forestDeepLight;
+  static const Color infoContainerDark = selectionDark;
+  static const Color onInfoContainerDark = forestDeepDark;
 
-  // --------------------------------------------------------- glass material
-  /// Neutral theme-aware tint for translucent app chrome.
-  static const Color glassSurfaceLight = Color(0xFFF8F7FF);
-  static const Color glassSurfaceDark = Color(0xFF1A1D30);
-  static const Color glassHighlightLight = Color(0x66FFFFFF);
-  static const Color glassHighlightDark = Color(0x1FFFFFFF);
-  static const Color glassBorderLight = Color(0xBFFFFFFF);
-  static const Color glassBorderDark = Color(0x2AFFFFFF);
-  static const Color glassSelectionLight = Color(0xDDE0F8F4);
-  static const Color glassSelectionDark = Color(0x24FFFFFF);
+  // ------------------------------------------- elevated chrome / selection
+  /// Compatibility surface wrapper paints a solid warm surface. No optical
+  /// glass material is used by the NexaDrive design system.
+  static const Color glassSurfaceLight = Color(0xFFFAF9F4);
+  static const Color glassSurfaceDark = Color(0xFF30352B);
+  static const Color glassHighlightLight = Color(0x00000000);
+  static const Color glassHighlightDark = Color(0x00000000);
+  static const Color glassBorderLight = Color(0x40E5E3D9);
+  static const Color glassBorderDark = Color(0x40353A31);
+  static const Color glassSelectionLight = selectionLight;
+  static const Color glassSelectionDark = selectionDark;
 
   static Color glassSurfaceFor(Brightness b) =>
       b == Brightness.dark ? glassSurfaceDark : glassSurfaceLight;
@@ -144,23 +246,23 @@ abstract final class AppColors {
       b == Brightness.dark ? glassSelectionDark : glassSelectionLight;
 
   // ---------------------------------------------------------- analytics
-  /// Consistent chart hues for file composition and storage distribution.
+  /// Muted, warm qualitative hues. No blue/purple family, no rainbow.
   static const List<Color> analyticsPaletteLight = [
-    Color(0xFF6658E8),
-    Color(0xFF229DBD),
-    Color(0xFF26986B),
-    Color(0xFFD9912F),
-    Color(0xFFD96C8A),
-    Color(0xFF78809B),
+    Color(0xFF355C46),
+    Color(0xFFA4654B),
+    Color(0xFFB4874B),
+    Color(0xFF738D6E),
+    Color(0xFF8A7A52),
+    Color(0xFFA97678),
   ];
 
   static const List<Color> analyticsPaletteDark = [
-    Color(0xFFA79BFF),
-    Color(0xFF67C9E2),
-    Color(0xFF65D6A0),
-    Color(0xFFFFC36F),
-    Color(0xFFFF9BB3),
-    Color(0xFFABB4D0),
+    Color(0xFF9CC4A9),
+    Color(0xFFD5A28C),
+    Color(0xFFD8B27E),
+    Color(0xFFA8C2A1),
+    Color(0xFFC1B38B),
+    Color(0xFFD3A0A1),
   ];
 
   static List<Color> analyticsPaletteFor(Brightness brightness) =>
@@ -168,49 +270,66 @@ abstract final class AppColors {
           ? analyticsPaletteDark
           : analyticsPaletteLight;
 
+  // ------------------------------------------------------------ file icons
+  /// Restrained format identities shared by list, grid, search, shared and
+  /// dashboard presentation. Dark variants stay legible on warm dark surfaces.
+  static const Color filePdfLight = Color(0xFF9B5B4C);
+  static const Color filePdfDark = Color(0xFFD9A092);
+  static const Color fileArchiveLight = Color(0xFFB4874B);
+  static const Color fileArchiveDark = Color(0xFFD8B27E);
+  static const Color fileWordLight = Color(0xFF315B45);
+  static const Color fileWordDark = Color(0xFF9CC4A9);
+  static const Color fileSheetLight = Color(0xFF6F8B6B);
+  static const Color fileSheetDark = Color(0xFFA8C2A1);
+  static const Color fileSlidesLight = Color(0xFFB5714F);
+  static const Color fileSlidesDark = Color(0xFFDCA988);
+  static const Color fileTextLight = Color(0xFF777A70);
+  static const Color fileTextDark = Color(0xFFB7BBAE);
+  static const Color fileCodeLight = Color(0xFF343A34);
+  static const Color fileCodeDark = Color(0xFFD7D9CF);
+  static const Color fileAudioLight = Color(0xFFA97678);
+  static const Color fileAudioDark = Color(0xFFD3A0A1);
+  static const Color fileVideoLight = Color(0xFF767F55);
+  static const Color fileVideoDark = Color(0xFFB3BC8E);
+  static const Color fileImageLight = Color(0xFF738D6E);
+  static const Color fileImageDark = Color(0xFFA8C2A1);
+  static const Color folderOchreLight = Color(0xFFB08A5A);
+  static const Color folderOchreDark = Color(0xFFD4B284);
+  static const Color folderSageLight = Color(0xFF8BA48A);
+  static const Color folderSageDark = Color(0xFFAFC9AC);
+
   // ------------------------------------------------------------ shadows
-  /// iOS keeps depth subtle: a single soft ambient shadow for floating
-  /// surfaces, plus a slightly stronger one for modals.
-  static const Color shadowColorStrong = Color(0x26000000);
-  static const Color shadowColorSoft = Color(0x1A000000);
+  static const Color shadowColorStrong = Color(0x4A1B1F18);
+  static const Color shadowColorSoft = Color(0x241B1F18);
 
   // ------------------------------------------------------------ scrims
-  /// Dim behind modal sheets (iOS darkens ~40%).
-  static const Color scrim = Color(0x66000000);
+  static const Color scrim = Color(0x66201F1A);
 
   // ----------------------------------------------------------------- api
-  /// Returns the accent color for the given brightness.
   static Color accentFor(Brightness b) =>
       b == Brightness.dark ? accentDark : accent;
 
-  /// Returns a contrast-safe accent for text/icons on plain surfaces.
   static Color accentTextFor(Brightness b) =>
       b == Brightness.dark ? accentHighEmphasisDark : accentHighEmphasisLight;
 
-  /// Returns the soft accent tint (behind icon tiles).
   static Color accentSubtleFor(Brightness b) =>
       b == Brightness.dark ? accentSubtleDark : accentSubtleLight;
 
-  /// Page background for the given brightness.
   static Color backgroundFor(Brightness b) =>
       b == Brightness.dark ? backgroundDark : backgroundLight;
 
-  /// Foreground that sits on an accent fill (system blue). On iOS this is
-  /// always white, including dark appearance.
-  static Color onAccentFor(Brightness b) => Colors.white;
+  static Color onAccentFor(Brightness b) =>
+      b == Brightness.dark ? textOnPrimaryDark : textOnPrimaryLight;
 
-  /// Returns the accent container color for the given brightness.
   static Color accentContainerFor(Brightness b) =>
       b == Brightness.dark ? accentContainerDark : accentContainerLight;
 
-  /// Returns the on-accent-container color for the given brightness.
   static Color onAccentContainerFor(Brightness b) =>
       b == Brightness.dark ? onAccentContainerDark : onAccentContainerLight;
 
   static Color textPrimaryFor(Brightness b) =>
       b == Brightness.dark ? textPrimaryDark : textPrimaryLight;
 
-  /// Primary interactive surface (cards, panels) for the given brightness.
   static Color surfaceFor(Brightness b) =>
       b == Brightness.dark ? surfaceDark : surfaceLight;
 
@@ -262,73 +381,67 @@ abstract final class AppColors {
   static Color surfacePressedFor(Brightness b) =>
       b == Brightness.dark ? surfacePressedDark : surfacePressedLight;
 
-  /// Elevated surface (bars, toolbars) for the given brightness.
   static Color surfaceElevatedFor(Brightness b) =>
       b == Brightness.dark ? surfaceElevatedDark : surfaceElevatedLight;
 
-  // --------------------------------------------- grouped / semantic aliases
-  // These mirror Apple's grouped-surface and label vocabulary and are the
-  // canonical names for the surface stack. The older names above remain for
-  // source compatibility.
-
-  /// `systemBackground` — the primary content plane.
+  // ------------------------------------------------------ surface aliases
   static Color systemBackgroundFor(Brightness b) => surfaceFor(b);
-
-  /// `secondarySystemBackground`.
   static Color secondaryBackgroundFor(Brightness b) => surfaceAltFor(b);
-
-  /// Grouped content plane (`secondarySystemGroupedBackground`).
   static Color surfaceGroupedFor(Brightness b) =>
       b == Brightness.dark ? surfaceGroupedDark : surfaceGroupedLight;
-
-  static const Color surfaceGroupedLight = Color(0xFFFFFFFF);
-  static const Color surfaceGroupedDark = Color(0xFF1C1C1E);
-
-  /// Tertiary grouped plane.
   static Color surfaceGroupedAltFor(Brightness b) =>
       b == Brightness.dark ? surfaceGroupedAltDark : surfaceGroupedAltLight;
-
-  static const Color surfaceGroupedAltLight = Color(0xFFF2F2F7);
-  static const Color surfaceGroupedAltDark = Color(0xFF2C2C2E);
-
-  /// Alternate surface alias used by panel internals.
   static Color surfaceAltFor(Brightness b) =>
       b == Brightness.dark ? surfaceAltDark : surfaceAltLight;
 
   static Color labelPrimaryFor(Brightness b) => textPrimaryFor(b);
   static Color labelSecondaryFor(Brightness b) => textSecondaryFor(b);
   static Color labelTertiaryFor(Brightness b) => textTertiaryFor(b);
-  static Color labelQuaternaryFor(Brightness b) =>
-      b == Brightness.dark ? const Color(0x33EBEBF5) : const Color(0x333C3C43);
+  static Color labelQuaternaryFor(Brightness b) => textTertiaryFor(b);
 
-  /// `separator` (translucent hairline).
   static Color separatorFor(Brightness b) => dividerFor(b);
-
-  /// `opaqueSeparator`.
   static Color separatorOpaqueFor(Brightness b) =>
-      b == Brightness.dark ? const Color(0xFF38383A) : const Color(0xFFC6C6C8);
+      b == Brightness.dark ? separatorDark : separatorLight;
 
-  /// System fill — input backgrounds and quiet chips.
-  static Color fillFor(Brightness b) =>
-      b == Brightness.dark ? const Color(0x1FFFFFFF) : const Color(0x1F000000);
-
-  static Color fillSecondaryFor(Brightness b) =>
-      b == Brightness.dark ? const Color(0x1AFFFFFF) : const Color(0x1A000000);
-
-  static Color fillTertiaryFor(Brightness b) =>
-      b == Brightness.dark ? const Color(0x33FFFFFF) : const Color(0x33000000);
+  static Color fillFor(Brightness b) => surfaceAltFor(b);
+  static Color fillSecondaryFor(Brightness b) => surfaceAltFor(b);
+  static Color fillTertiaryFor(Brightness b) => surfacePressedFor(b);
 
   static Color shadowColorFor(Brightness b) =>
       b == Brightness.dark ? shadowColorStrong : shadowColorSoft;
-
   static Color scrimFor(Brightness b) => scrim;
 
-  // ------------------------------------------------------- on-gradient text
-  /// Text/icons placed on a vivid gradient hero. Light mode uses deep navy on
-  /// the calm sky→ocean face (high contrast); dark mode reads near-white.
-  static const Color onGradientLight = Color(0xFF06283D);
-  static const Color onGradientDark = Color(0xFFF2FAFF);
+  // ------------------------------------------------------- flat hero text
+  /// Kept for compatibility with legacy hero code. Storage now uses a flat
+  /// editorial summary, so these resolve to ordinary ink rather than gradient
+  /// contrast.
+  static const Color onGradientLight = inkLight;
+  static const Color onGradientDark = inkDark;
 
   static Color heroTextOnGradient(Brightness b) =>
       b == Brightness.dark ? onGradientDark : onGradientLight;
+
+  // ------------------------------------------------------ M3 role helpers
+  static Color primaryFor(Brightness b) => accentFor(b);
+  static Color onPrimaryFor(Brightness b) => onAccentFor(b);
+  static Color primaryContainerFor(Brightness b) => accentContainerFor(b);
+  static Color onPrimaryContainerFor(Brightness b) => onAccentContainerFor(b);
+  static Color secondaryFor(Brightness b) =>
+      b == Brightness.dark ? secondaryDark : secondaryLight;
+  static Color secondaryContainerFor(Brightness b) =>
+      b == Brightness.dark ? secondaryContainerDark : secondaryContainerLight;
+  static Color onSecondaryContainerFor(Brightness b) => b == Brightness.dark
+      ? onSecondaryContainerDark
+      : onSecondaryContainerLight;
+  static Color tertiaryFor(Brightness b) =>
+      b == Brightness.dark ? tertiaryDark : tertiaryLight;
+  static Color tertiaryContainerFor(Brightness b) =>
+      b == Brightness.dark ? tertiaryContainerDark : tertiaryContainerLight;
+  static Color onTertiaryContainerFor(Brightness b) =>
+      b == Brightness.dark ? onTertiaryContainerDark : onTertiaryContainerLight;
+  static Color surfaceVariantFor(Brightness b) =>
+      b == Brightness.dark ? surfaceAltDark : surfaceAltLight;
+  static Color outlineFor(Brightness b) => separatorOpaqueFor(b);
+  static Color inversePrimaryFor(Brightness b) =>
+      b == Brightness.dark ? forestSoftDark : forestSoftLight;
 }

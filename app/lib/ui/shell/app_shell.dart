@@ -37,8 +37,8 @@ import 'navigation.dart';
 
 /// Application shell: brand, navigation context, and the active screen.
 ///
-/// Mobile uses a floating Liquid Glass dock; desktop uses a persistent sidebar
-/// rail. On wide screens a transfer status strip surfaces the offline queue.
+/// Mobile uses the signature floating Material 3 pill; desktop uses a
+/// navigation rail. On wide screens a transfer status strip surfaces the queue.
 class AppShell extends StatefulWidget {
   final Session session;
   final SharedPreferences prefs;
@@ -66,7 +66,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   bool _handlingExpiredSession = false;
   bool _moreSheetOpen = false;
   bool _shareSheetShowing = false;
-  bool _photosSelecting = false;
   bool _deferShareProcessing = false;
   final Set<String> _activeSharedUris = <String>{};
   final List<AndroidSharedFile> _queuedSharedFiles = [];
@@ -297,43 +296,30 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     required String title,
     required VoidCallback onTap,
   }) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () => _openMoreAction(onTap),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
         child: SizedBox(
-          height: 82,
+          height: 84,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.accentContainerFor(brightness),
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(
-                    color: AppColors.accentTextFor(brightness)
-                        .withValues(alpha: 0.11),
-                  ),
-                ),
-                child: Icon(
-                  icon,
-                  size: 22,
-                  color: AppColors.accentTextFor(brightness),
-                ),
+              Icon(
+                icon,
+                size: AppDimens.iconLarge,
+                color: scheme.onSurfaceVariant,
               ),
-              const SizedBox(height: 7),
+              const SizedBox(height: AppDimens.space8),
               Text(
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: AppTextStyle.caption1.copyWith(
-                  color: AppColors.labelPrimaryFor(brightness),
-                  fontWeight: FontWeight.w600,
+                style: AppTextStyle.labelLarge.copyWith(
+                  color: scheme.onSurface,
                 ),
               ),
             ],
@@ -344,14 +330,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   Widget _buildMoreMenu() {
-    final brightness = Theme.of(context).brightness;
-    final dark = brightness == Brightness.dark;
-    final accent = AppColors.accentFor(brightness);
-    final radius = BorderRadius.circular(28);
+    final scheme = Theme.of(context).colorScheme;
+    final radius = BorderRadius.circular(AppDimens.radiusSheet);
 
-    // This card is bottom-positioned by the shell, so it must shrink-wrap its
-    // natural content height. The reflection is painted inside the card bounds
-    // before the optical surface, never in an unbounded full-screen Stack.
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
@@ -359,145 +340,117 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           padding: const EdgeInsets.symmetric(
             horizontal: AppDimens.pageMargin,
           ),
-          child: ClipRRect(
+          child: Material(
+            color: scheme.surfaceContainerHigh,
+            surfaceTintColor: Colors.transparent,
+            elevation: AppDimens.elevationLevel3,
+            shadowColor: scheme.shadow,
             borderRadius: radius,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: radius,
-                gradient: RadialGradient(
-                  center: const Alignment(0.1, 0.55),
-                  radius: 0.82,
-                  colors: [
-                    accent.withValues(alpha: dark ? 0.10 : 0.075),
-                    Colors.transparent,
-                  ],
-                  stops: const [0, 1],
-                ),
+            clipBehavior: Clip.antiAlias,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppDimens.space16,
+                AppDimens.space12,
+                AppDimens.space16,
+                AppDimens.space16,
               ),
-              child: NexaLiquidGlass(
-                borderRadius: radius,
-                blurSigma: 2.4,
-                tintOpacity: dark ? 0.15 : 0.115,
-                refractionHeight: 22,
-                refractionAmount: -44,
-                depthEffect: 1.0,
-                chromaticDispersion: 2.0,
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-                showShadow: true,
-                showHighlight: true,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'More',
-                                style: AppTextStyle.title3.copyWith(
-                                  color: AppColors.labelPrimaryFor(brightness),
-                                  fontWeight: FontWeight.w700,
-                                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'More',
+                              style: AppTextStyle.titleLarge.copyWith(
+                                color: scheme.onSurface,
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Tools and settings',
-                                style: AppTextStyle.caption1.copyWith(
-                                  color:
-                                      AppColors.labelSecondaryFor(brightness),
-                                ),
+                            ),
+                            const SizedBox(height: AppDimens.space2),
+                            Text(
+                              'Tools and settings',
+                              style: AppTextStyle.bodySmall.copyWith(
+                                color: scheme.onSurfaceVariant,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          tooltip: 'Close',
-                          visualDensity: VisualDensity.compact,
-                          onPressed: _closeMoreMenu,
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _moreMenuTile(
-                            icon: Icons.document_scanner_outlined,
-                            title: 'Scan',
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => ScannerScreen(api: api),
-                              ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _closeMoreMenu,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppDimens.space8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _moreMenuTile(
+                          icon: Icons.document_scanner_outlined,
+                          title: 'Scan',
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ScannerScreen(api: api),
                             ),
                           ),
                         ),
-                        Expanded(
-                          child: _moreMenuTile(
-                            icon: Icons.cloud_upload_outlined,
-                            title: 'Transfers',
-                            onTap: _openTransfers,
-                          ),
+                      ),
+                      Expanded(
+                        child: _moreMenuTile(
+                          icon: Icons.cloud_upload_outlined,
+                          title: 'Transfers',
+                          onTap: _openTransfers,
                         ),
-                        Expanded(
-                          child: _moreMenuTile(
-                            icon: Icons.delete_outline_rounded,
-                            title: 'Trash',
-                            onTap: () => _goTo(4),
-                          ),
+                      ),
+                      Expanded(
+                        child: _moreMenuTile(
+                          icon: Icons.delete_outline_rounded,
+                          title: 'Trash',
+                          onTap: () => _goTo(4),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _moreMenuTile(
-                            icon: Icons.sync_rounded,
-                            title: 'Sync',
-                            onTap: _openSyncCenter,
-                          ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppDimens.space4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _moreMenuTile(
+                          icon: Icons.sync_rounded,
+                          title: 'Sync',
+                          onTap: _openSyncCenter,
                         ),
-                        Expanded(
-                          child: _moreMenuTile(
-                            icon: Icons.notifications_outlined,
-                            title: 'Alerts',
-                            onTap: _openNotifications,
-                          ),
+                      ),
+                      Expanded(
+                        child: _moreMenuTile(
+                          icon: Icons.notifications_outlined,
+                          title: 'Alerts',
+                          onTap: _openNotifications,
                         ),
-                        Expanded(
-                          child: _moreMenuTile(
-                            icon: Icons.settings_outlined,
-                            title: 'Settings',
-                            onTap: () => _goTo(5),
-                          ),
+                      ),
+                      Expanded(
+                        child: _moreMenuTile(
+                          icon: Icons.settings_outlined,
+                          title: 'Settings',
+                          onTap: () => _goTo(5),
                         ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
         ),
       ),
     );
-  }
-
-  IconData _sharedFileIcon(AndroidSharedFile file) {
-    final mime = file.mimeType.toLowerCase();
-    final name = file.name.toLowerCase();
-    if (mime.startsWith('image/')) return Icons.image_outlined;
-    if (mime.startsWith('video/')) return Icons.videocam_outlined;
-    if (mime.startsWith('audio/')) return Icons.audio_file_outlined;
-    if (mime == 'application/pdf' || name.endsWith('.pdf')) {
-      return Icons.picture_as_pdf_outlined;
-    }
-    if (mime.startsWith('text/')) return Icons.description_outlined;
-    return Icons.insert_drive_file_outlined;
   }
 
   String _sharedFileType(AndroidSharedFile file) {
@@ -599,7 +552,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   ),
                   child: Row(
                     children: [
-                      Icon(_sharedFileIcon(file), size: 19),
+                      NexaFileGlyph(name: file.name, size: 22),
                       const SizedBox(width: AppDimens.space10),
                       Expanded(
                         child: Column(
@@ -851,11 +804,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         PhotosScreen(
           api: api,
           session: widget.session,
-          onSelectionChanged: (selecting) {
-            if (_photosSelecting != selecting) {
-              setState(() => _photosSelecting = selecting);
-            }
-          },
         ),
         TrashScreen(api: api),
         SettingsScreen(
@@ -910,7 +858,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
 
     // Mobile: the page fills the screen behind an independently positioned,
-    // floating glass dock. The shell exposes bottom clearance through MediaQuery
+    // floating tonal pill. The shell exposes bottom clearance through MediaQuery
     // so scrollable content can reach a position above the pill without painting
     // a full-width navigation sheet.
     final bottomInset = MediaQuery.paddingOf(context).bottom;
@@ -923,9 +871,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         child: Scaffold(
           // This is the app canvas, not a navigation bar: the page fills the
           // screen and paints behind the independently positioned pill.
-          backgroundColor: AppColors.backgroundFor(
-            Theme.of(context).brightness,
-          ),
+          backgroundColor: Theme.of(context).colorScheme.surface,
           body: Stack(
             fit: StackFit.expand,
             children: [
@@ -950,7 +896,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     behavior: HitTestBehavior.opaque,
                     onTap: _closeMoreMenu,
                     child: ColoredBox(
-                      color: Colors.black.withValues(alpha: 0.055),
+                      color: Theme.of(context).colorScheme.scrim.withValues(
+                            alpha: 0.32,
+                          ),
                     ),
                   ),
                 ),
@@ -964,7 +912,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   child: _buildMoreMenu(),
                 ),
               ],
-              if (!_shareSheetShowing && !(index == 3 && _photosSelecting))
+              if (!_shareSheetShowing)
                 Positioned(
                   left: 0,
                   right: 0,
@@ -976,10 +924,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     bottom: false,
                     child: Center(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 420),
+                        constraints: const BoxConstraints(
+                          maxWidth: AppDimens.bottomNavMaxWidth,
+                        ),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: AppDimens.pageMargin,
+                            horizontal: AppDimens.space12,
                           ),
                           child: NexaBottomNav(
                             currentIndex: index >= 4 ? 4 : index,

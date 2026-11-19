@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
@@ -24,7 +23,7 @@ class SearchScreen extends StatefulWidget {
 }
 
 class _SearchScreenState extends State<SearchScreen> {
-  final TextEditingController _controller = TextEditingController();
+  final SearchController _controller = SearchController();
   Timer? _debounce;
   List<FileEntry> _results = const [];
   bool _loading = false;
@@ -153,23 +152,27 @@ class _SearchScreenState extends State<SearchScreen> {
                 AppDimens.pageMargin,
                 AppDimens.space8,
               ),
-              child: NexaLiquidGlass(
-                padding: const EdgeInsets.all(AppDimens.space6),
-                borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-                child: Row(
-                  children: [
-                    const NexaBackButton(),
-                    Expanded(
-                      child: NexaSearchField(
-                        controller: _controller,
-                        hint: 'Search your files',
-                        filled: false,
-                        onChanged: _onChanged,
-                        onClear: _clear,
+              child: Builder(
+                builder: (context) {
+                  final scheme = Theme.of(context).colorScheme;
+                  return SearchBar(
+                    controller: _controller,
+                    hintText: 'Search your files',
+                    leading: const NexaBackButton(),
+                    trailing: [
+                      IconButton(
+                        tooltip: 'Clear search',
+                        onPressed: _clear,
+                        icon: Icon(
+                          Icons.close_rounded,
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                    onChanged: _onChanged,
+                    onSubmitted: _onChanged,
+                  );
+                },
               ),
             ),
             Expanded(
@@ -193,7 +196,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildResults(Widget Function(FileEntry) row) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
 
     if (!_searched) {
       return const NexaEmptyState(
@@ -201,7 +204,7 @@ class _SearchScreenState extends State<SearchScreen> {
         icon: Icons.search_rounded,
         title: 'Search your private cloud',
         hint: 'Find files and folders by name. Results stay on your server.',
-        iconSize: 64,
+        iconSize: AppDimens.iconHero,
       );
     }
 
@@ -223,8 +226,8 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_loading && _results.isEmpty) {
       return const Center(
         child: SizedBox(
-          width: 22,
-          height: 22,
+          width: AppDimens.iconMedium,
+          height: AppDimens.iconMedium,
           child: CircularProgressIndicator(strokeWidth: 2),
         ),
       );
@@ -271,24 +274,37 @@ class _SearchScreenState extends State<SearchScreen> {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              NexaChip.tonal(
-                label: 'All ${_results.length}',
-                selected: _filter == _SearchFilter.all,
-                onTap: () => setState(() => _filter = _SearchFilter.all),
+              SizedBox(
+                height: AppDimens.touchTarget,
+                child: FilterChip(
+                  label: Text('All ${_results.length}'),
+                  selected: _filter == _SearchFilter.all,
+                  onSelected: (_) =>
+                      setState(() => _filter = _SearchFilter.all),
+                  showCheckmark: false,
+                ),
               ),
               const SizedBox(width: AppDimens.space8),
-              NexaChip.tonal(
-                label: 'Folders $_folderCount',
-                leadingIcon: Icons.folder_outlined,
-                selected: _filter == _SearchFilter.folders,
-                onTap: () => setState(() => _filter = _SearchFilter.folders),
+              SizedBox(
+                height: AppDimens.touchTarget,
+                child: FilterChip(
+                  label: Text('Folders $_folderCount'),
+                  selected: _filter == _SearchFilter.folders,
+                  onSelected: (_) =>
+                      setState(() => _filter = _SearchFilter.folders),
+                  showCheckmark: false,
+                ),
               ),
               const SizedBox(width: AppDimens.space8),
-              NexaChip.tonal(
-                label: 'Files $_fileCount',
-                leadingIcon: Icons.insert_drive_file_outlined,
-                selected: _filter == _SearchFilter.files,
-                onTap: () => setState(() => _filter = _SearchFilter.files),
+              SizedBox(
+                height: AppDimens.touchTarget,
+                child: FilterChip(
+                  label: Text('Files $_fileCount'),
+                  selected: _filter == _SearchFilter.files,
+                  onSelected: (_) =>
+                      setState(() => _filter = _SearchFilter.files),
+                  showCheckmark: false,
+                ),
               ),
             ],
           ),
@@ -302,8 +318,8 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
           child: Text(
             '${visible.length} matching ${visible.length == 1 ? 'item' : 'items'}',
-            style: AppTextStyle.caption1.copyWith(
-              color: AppColors.textSecondaryFor(brightness),
+            style: AppTextStyle.bodySmall.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
           ),
         ),
@@ -327,7 +343,6 @@ class _SearchHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.space4,
@@ -337,9 +352,8 @@ class _SearchHeader extends StatelessWidget {
       ),
       child: Text(
         title,
-        style: AppTextStyle.sectionHeader.copyWith(
-          color: AppColors.textSecondaryFor(brightness),
-          fontSize: AppTextStyle.sectionHeader.fontSize! * 0.82,
+        style: AppTextStyle.labelMedium.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
       ),
     );

@@ -190,9 +190,12 @@ is served with `Content-Disposition: inline`. HTML, SVG and JavaScript are alway
 
 ### GET `/api/files/thumbnail?path=&max=`
 
-Server-generated JPEG preview. Returns `415` when no thumbnail can be produced
-for that format, so the client can fall back to a full download. Thumbnails are
-the one response allowed private browser caching.
+Server-generated JPEG preview for images, videos and PDFs. Images are decoded
+in-process; video and PDF previews require optional `ffmpeg` / `pdftoppm` on the
+server and render the first frame/page. Returns `415` when no preview can be
+produced (unsupported format, missing tool or decode failure), so the client can
+fall back to a type glyph. Thumbnails are the one response allowed private
+browser caching.
 
 ### DELETE `/api/files?path=Documents/report.pdf`
 

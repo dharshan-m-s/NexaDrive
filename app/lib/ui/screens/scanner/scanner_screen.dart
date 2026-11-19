@@ -230,16 +230,26 @@ class _ScannerScreenState extends State<ScannerScreen>
 
   @override
   Widget build(BuildContext context) {
+    final Widget screen;
     if (_initializing) {
-      return const Scaffold(
+      screen = const Scaffold(
         backgroundColor: Colors.black,
-        body: Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        ),
+        body: Center(child: CircularProgressIndicator()),
       );
+    } else if (_controller == null) {
+      screen = _pickerFallback();
+    } else {
+      screen = _cameraView();
     }
-    if (_controller == null) return _pickerFallback();
-    return _cameraView();
+    // The camera canvas and its controls are immersive: one complete dark
+    // ColorScheme keeps tonal surfaces, icons and text readable over it.
+    return Theme(
+      data: Theme.of(context).copyWith(
+        brightness: Brightness.dark,
+        colorScheme: AppColors.scheme(Brightness.dark),
+      ),
+      child: screen,
+    );
   }
 
   // ── Camera view ────────────────────────────────────────────────────────
@@ -280,9 +290,7 @@ class _ScannerScreenState extends State<ScannerScreen>
                   ),
                 ],
               )
-            : const Center(
-                child: CircularProgressIndicator(color: Colors.white),
-              ),
+            : const Center(child: CircularProgressIndicator()),
       ),
     );
   }
@@ -297,57 +305,70 @@ class _ScannerScreenState extends State<ScannerScreen>
         child: Theme(
           data: Theme.of(context).copyWith(
             brightness: Brightness.dark,
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-                  brightness: Brightness.dark,
-                ),
+            colorScheme: AppColors.scheme(Brightness.dark),
           ),
-          child: NexaLiquidGlass(
-            borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            blurSigma: 18,
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.space4,
-              vertical: AppDimens.space2,
-            ),
-            showShadow: true,
-            child: Row(
-              children: [
-                _iconBtn(Icons.close_rounded, 'Close',
-                    () => Navigator.of(context).pop()),
-                const Spacer(),
-                if (_pages.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(right: AppDimens.space8),
-                    child: NexaChip.tonal(
-                      label: '${_pages.length} pages',
-                      leadingIcon: Icons.description_outlined,
-                      selected: true,
-                    ),
-                  ),
-                _iconBtn(
-                  _flashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-                  'Toggle torch',
-                  _toggleFlash,
+          child: Builder(
+            builder: (chromeContext) {
+              final chrome = Theme.of(chromeContext).colorScheme;
+              return NexaSurface(
+                level: NexaSurfaceLevel.floating,
+                radius: AppDimens.radiusPill,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimens.space4,
+                  vertical: AppDimens.space2,
                 ),
-              ],
-            ),
+                child: Row(
+                  children: [
+                    _iconBtn(Icons.close_rounded, 'Close',
+                        () => Navigator.of(context).pop()),
+                    const Spacer(),
+                    if (_pages.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(right: AppDimens.space8),
+                        child: NexaChip.tonal(
+                          label: '${_pages.length} pages',
+                          leadingIcon: Icons.description_outlined,
+                          selected: true,
+                        ),
+                      ),
+                    _iconBtn(
+                      _flashOn
+                          ? Icons.flash_on_rounded
+                          : Icons.flash_off_rounded,
+                      'Toggle torch',
+                      _toggleFlash,
+                      color: _flashOn ? chrome.primary : chrome.onSurface,
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  Widget _iconBtn(IconData icon, String label, VoidCallback? onTap) {
+  Widget _iconBtn(
+    IconData icon,
+    String label,
+    VoidCallback? onTap, {
+    Color? color,
+  }) {
     return Semantics(
       button: true,
       label: label,
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
-        child: Container(
-          width: 44,
-          height: 44,
-          alignment: Alignment.center,
-          child: Icon(icon, color: Colors.white, size: 26),
+        child: SizedBox(
+          width: AppDimens.touchTarget,
+          height: AppDimens.touchTarget,
+          child: Icon(
+            icon,
+            color: color ?? Theme.of(context).colorScheme.onSurface,
+            size: AppDimens.iconMedium,
+          ),
         ),
       ),
     );
@@ -364,44 +385,49 @@ class _ScannerScreenState extends State<ScannerScreen>
           final page = _pages[i];
           return GestureDetector(
             onTap: () => _editPage(i),
-            child: Container(
-              width: 60,
-              margin: const EdgeInsets.symmetric(horizontal: AppDimens.space4),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius:
-                          BorderRadius.circular(AppDimens.radiusMedium),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.memory(
-                            ScanProcessor.renderThumb(page),
-                            fit: BoxFit.cover,
-                          ),
-                          Positioned(
-                            top: 2,
-                            right: 2,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 5, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: Colors.black54,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                '${page.number}',
-                                style: AppTextStyle.caption.copyWith(
-                                    color: Colors.white, fontSize: 10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppDimens.space4),
+              child: SizedBox(
+                width: AppDimens.space56 + AppDimens.space4,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius:
+                            BorderRadius.circular(AppDimens.radiusMedium),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.memory(
+                              ScanProcessor.renderThumb(page),
+                              fit: BoxFit.cover,
+                            ),
+                            Positioned(
+                              top: 2,
+                              right: 2,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: AppColors.scrim,
+                                  borderRadius: BorderRadius.circular(
+                                    AppDimens.radiusSmall,
+                                  ),
+                                ),
+                                child: Text(
+                                  '${page.number}',
+                                  style: AppTextStyle.labelSmall.copyWith(
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -421,41 +447,37 @@ class _ScannerScreenState extends State<ScannerScreen>
           child: InkWell(
             onTap: _busy ? null : _capture,
             customBorder: const CircleBorder(),
-            child: AnimatedScale(
-              scale: _busy ? 0.94 : 1,
-              duration: AppMotion.resolve(context, AppMotion.micro),
-              curve: AppMotion.standardCurve,
-              child: AnimatedContainer(
-                duration: AppMotion.resolve(context, AppMotion.fast),
-                width: 84,
-                height: 84,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.black.withValues(alpha: 0.12),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.88),
-                    width: 3,
-                  ),
+            child: AnimatedContainer(
+              duration: AppMotion.resolve(context, AppMotion.fast),
+              curve: AppMotion.curveFor(context, AppMotion.standard),
+              width: AppDimens.iconHero + AppDimens.space12,
+              height: AppDimens.iconHero + AppDimens.space12,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.scrim,
+                border: Border.all(
+                  color: Colors.white,
+                  width: AppDimens.space4 - AppDimens.space1,
                 ),
-                child: Center(
-                  child: _busy
-                      ? const SizedBox(
-                          width: 30,
-                          height: 30,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Container(
-                          width: 64,
-                          height: 64,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                          ),
+              ),
+              child: Center(
+                child: _busy
+                    ? SizedBox(
+                        width: AppDimens.iconLarge,
+                        height: AppDimens.iconLarge,
+                        child: CircularProgressIndicator(
+                          strokeWidth: AppDimens.space4 - AppDimens.space1,
+                          color: Colors.white,
                         ),
-                ),
+                      )
+                    : Container(
+                        width: AppDimens.iconHero - AppDimens.space8,
+                        height: AppDimens.iconHero - AppDimens.space8,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
               ),
             ),
           ),
@@ -472,16 +494,18 @@ class _ScannerScreenState extends State<ScannerScreen>
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
-        child: NexaLiquidGlass(
-          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-          blurSigma: 14,
-          tintOpacity: 0.10,
+        child: NexaSurface(
+          level: NexaSurfaceLevel.floating,
+          radius: AppDimens.radiusPill,
           padding: EdgeInsets.zero,
-          showShadow: false,
           child: SizedBox(
-            width: 52,
-            height: 52,
-            child: Icon(icon, color: Colors.white),
+            width: AppDimens.touchTargetLarge,
+            height: AppDimens.touchTargetLarge,
+            child: Icon(
+              icon,
+              color: Theme.of(context).colorScheme.onSurface,
+              size: AppDimens.iconMedium,
+            ),
           ),
         ),
       ),
@@ -498,21 +522,23 @@ class _ScannerScreenState extends State<ScannerScreen>
         onTap: enabled ? _openPages : null,
         customBorder: const CircleBorder(),
         child: Container(
-          width: 52,
-          height: 52,
+          width: AppDimens.touchTargetLarge,
+          height: AppDimens.touchTargetLarge,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: enabled
-                ? AppColors.accent
-                : Colors.white.withValues(alpha: 0.12),
+                ? Theme.of(context).colorScheme.primary
+                : AppColors.scrim,
           ),
           child: Stack(
             alignment: Alignment.center,
             children: [
               Icon(
                 Icons.check_rounded,
-                color: Colors.white,
-                size: enabled ? 28 : 22,
+                color: enabled
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : Colors.white,
+                size: AppDimens.iconMedium,
               ),
               if (count > 0)
                 Positioned(
@@ -528,9 +554,8 @@ class _ScannerScreenState extends State<ScannerScreen>
                     ),
                     child: Text(
                       '$count',
-                      style: AppTextStyle.micro.copyWith(
-                        color: AppColors.accent,
-                        fontWeight: FontWeight.w700,
+                      style: AppTextStyle.labelSmall.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -557,19 +582,24 @@ class _ScannerScreenState extends State<ScannerScreen>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.no_photography_outlined,
-                        color: Colors.white24, size: 48),
+                    Icon(
+                      Icons.no_photography_outlined,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      size: AppDimens.iconHero,
+                    ),
                     const SizedBox(height: AppDimens.space12),
                     Text(
                       'Camera not available here',
-                      style:
-                          AppTextStyle.rowTitle.copyWith(color: Colors.white),
+                      style: AppTextStyle.titleMedium.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
                     const SizedBox(height: AppDimens.space6),
                     Text(
                       _error ?? 'Pick images from disk instead.',
-                      style:
-                          AppTextStyle.caption.copyWith(color: Colors.white54),
+                      style: AppTextStyle.bodySmall.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                     const SizedBox(height: AppDimens.space24),
                     FilledButton.tonal(

@@ -1,19 +1,22 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter/material.dart';
 
-import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_haptics.dart';
+import '../../../core/design/app_motion.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
+import '../../../core/utils/file_kind.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../../services/image_pipeline.dart';
 import '../../../services/session.dart';
 import '../../../services/thumbnail_cache.dart';
+import '../../navigation/file_opener.dart';
 import '../../widgets/nexa_components.dart';
 import '../files/file_share_sheet.dart';
 import 'photo_viewer.dart';
@@ -21,6 +24,8 @@ import 'photo_viewer.dart';
 /// How many thumbnails are fetched eagerly after listing loads. The grid
 /// fetches the rest lazily as tiles scroll into view.
 const int _eagerThumbCount = 24;
+
+enum _PhotosMenuAction { layout, refresh }
 
 class PhotosScreen extends StatefulWidget {
   final Api api;
@@ -58,15 +63,30 @@ class _PhotosScreenState extends State<PhotosScreen> {
   /// O(n log n) per thumbnail. Cached here instead.
   List<(String, List<int>)> _groups = const [];
 
+  /// The month-grouped order actually painted on screen. Range selection
+  /// follows this list, not storage order, so a drag matches the visible run.
+  List<int> _visualOrder = const [];
+
+  /// Storage index -> visible index. Pointer moves happen many times per drag,
+  /// so resolving the visual position must not scan the library each frame.
+  Map<int, int> _visualIndexByPhotoIndex = const {};
+
   /// `path -> index`, so the viewer's placeholder lookup is O(1) per build
   /// instead of a linear scan of the whole library.
   Map<String, int> _indexByPath = const {};
+
+  /// Cached media category per path so the grid never re-parses filenames on
+  /// every thumbnail rebuild.
+  Map<String, Category> _categoryByPath = const {};
 
   bool _selecting = false;
   final Set<String> _selected = <String>{};
   int _gridColumns = 3;
   int? _activePointer;
   bool _dragSelecting = false;
+  int? _dragAnchorIndex;
+  Set<String> _dragBaseSelection = const <String>{};
+  double? _pinchBaseColumns;
   final Map<String, GlobalKey> _cellKeys = <String, GlobalKey>{};
 
   @override
@@ -84,7 +104,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
       final prefs = await SharedPreferences.getInstance();
       final saved = prefs.getInt(_gridColumnsPreference);
       if (saved != null && mounted) {
-        setState(() => _gridColumns = saved.clamp(1, 8).toInt());
+        setState(() => _gridColumns = NexaGridLayout.clamp(saved));
       }
     } catch (_) {
       // A missing preference store does not prevent browsing.
@@ -101,61 +121,11 @@ class _PhotosScreenState extends State<PhotosScreen> {
   }
 
   Future<void> _showGridDensityPicker() async {
-    var draft = _gridColumns;
-    final selected = await showDialog<int>(
+    final selected = await showNexaGridLayoutPicker(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Gallery layout'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                '$draft columns',
-                style: AppTextStyle.headline.copyWith(
-                  color: AppColors.labelPrimaryFor(
-                    Theme.of(context).brightness,
-                  ),
-                ),
-              ),
-              Slider(
-                value: draft.toDouble(),
-                min: 1,
-                max: 8,
-                divisions: 7,
-                label: '$draft',
-                onChanged: (value) =>
-                    setDialogState(() => draft = value.round()),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Larger photos'),
-                  Text(
-                    'More columns',
-                    style: AppTextStyle.caption1.copyWith(
-                      color: AppColors.labelSecondaryFor(
-                        Theme.of(context).brightness,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, draft),
-              child: const Text('Apply'),
-            ),
-          ],
-        ),
-      ),
+      columns: _gridColumns,
+      title: 'Gallery layout',
+      subtitle: 'Choose how many photos fit across the grid.',
     );
     if (selected == null || !mounted || selected == _gridColumns) return;
     setState(() => _gridColumns = selected);
@@ -175,32 +145,97 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   void _onPointerMove(PointerMoveEvent event) {
     if (!_dragSelecting || event.pointer != _activePointer) return;
-    _selectCellAt(event.position);
+    final path = _pathAtPosition(event.position);
+    if (path == null) return;
+    final index = _indexByPath[path];
+    if (index != null) _selectRangeTo(_visualIndexOf(index));
   }
 
   void _onPointerUp(PointerEvent event) {
     if (event.pointer != _activePointer) return;
     _activePointer = null;
     _dragSelecting = false;
+    _dragAnchorIndex = null;
+    _dragBaseSelection = const <String>{};
+  }
+
+  void _onScaleStart(ScaleStartDetails details) {
+    if (details.pointerCount == 2) {
+      _pinchBaseColumns = _gridColumns.toDouble();
+    }
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails details) {
+    final base = _pinchBaseColumns;
+    if (base == null || details.pointerCount < 2) return;
+    // Spreading two fingers shows more columns; pinching shows fewer.
+    final columns = NexaGridLayout.clamp((base * details.scale).round());
+    if (columns != _gridColumns) setState(() => _gridColumns = columns);
+  }
+
+  void _onScaleEnd(ScaleEndDetails details) {
+    final base = _pinchBaseColumns;
+    _pinchBaseColumns = null;
+    if (base == null) return;
+    unawaited(_saveGridColumns(_gridColumns));
   }
 
   void _beginDragSelection(int index, Offset globalPosition) {
+    final visualAnchor = _visualIndexOf(index);
+    if (visualAnchor < 0) return;
     if (!_selecting) {
       // Entering multi-select: one light impact confirms the gesture. Cells
       // touched during the continuing drag stay silent on purpose — repeated
       // feedback mid-drag reads as noise, not signal.
       AppHaptics.impact();
+      _dragBaseSelection = <String>{_pathAtVisual(visualAnchor)};
       setState(() {
         _selecting = true;
-        _selected.add(_pathAt(index));
+        _selected
+          ..clear()
+          ..addAll(_dragBaseSelection);
       });
       widget.onSelectionChanged?.call(true);
+    } else {
+      _dragBaseSelection = Set<String>.from(_selected);
     }
+    _dragAnchorIndex = visualAnchor;
     _dragSelecting = true;
-    _selectCellAt(globalPosition);
+    final hit = _pathAtPosition(globalPosition);
+    final hitIndex = hit == null ? null : _indexByPath[hit];
+    _selectRangeTo(
+      hitIndex == null ? visualAnchor : _visualIndexOf(hitIndex),
+    );
   }
 
-  void _selectCellAt(Offset globalPosition) {
+  int _visualIndexOf(int photoIndex) =>
+      _visualIndexByPhotoIndex[photoIndex] ?? -1;
+
+  String _pathAtVisual(int visualIndex) => _pathAt(_visualOrder[visualIndex]);
+
+  /// Selects the whole run between the long-press anchor and [index], the way
+  /// a phone gallery turns one drag into a range selection. Indices here are
+  /// visual positions in the month-grouped grid.
+  void _selectRangeTo(int index) {
+    final anchor = _dragAnchorIndex;
+    if (anchor == null || index < 0 || index >= _visualOrder.length) return;
+    final start = index < anchor ? index : anchor;
+    final end = index < anchor ? anchor : index;
+    final next = <String>{..._dragBaseSelection};
+    for (var i = start; i <= end; i++) {
+      next.add(_pathAtVisual(i));
+    }
+    if (next.length == _selected.length && next.every(_selected.contains)) {
+      return;
+    }
+    setState(() {
+      _selected
+        ..clear()
+        ..addAll(next);
+    });
+  }
+
+  String? _pathAtPosition(Offset globalPosition) {
     String? hitPath;
     final stale = <String>[];
     for (final entry in _cellKeys.entries) {
@@ -219,8 +254,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
     for (final path in stale) {
       _cellKeys.remove(path);
     }
-    if (hitPath == null || _selected.contains(hitPath)) return;
-    setState(() => _selected.add(hitPath!));
+    return hitPath;
   }
 
   /// The disk cache lets previews survive a restart. It is keyed by server +
@@ -243,10 +277,18 @@ class _PhotosScreenState extends State<PhotosScreen> {
       _noThumbnail.clear();
     });
     try {
+      // `/api/photos` stays authoritative for images. Videos and PDFs are
+      // discovered with the existing file browser API so this works against
+      // current servers without changing their contract.
       final photos = await widget.api.photos();
       if (!mounted) return;
+      final images = photos.map(_asFileRow).toList(growable: false);
+      final extra = await _discoverMedia(
+        knownPaths: images.map(_pathOf).toSet(),
+      );
+      if (!mounted) return;
       setState(() {
-        _photos = photos;
+        _photos = [...images, ...extra];
         _reindex();
         _loading = false;
       });
@@ -260,13 +302,85 @@ class _PhotosScreenState extends State<PhotosScreen> {
     }
   }
 
-  /// Rebuilds the derived month buckets and the path index.
+  /// Rebuilds the derived month buckets, the path index and media categories.
   void _reindex() {
     _indexByPath = {
       for (var i = 0; i < _photos.length; i++) _pathAt(i): i,
     };
+    _categoryByPath = {
+      for (final row in _photos) _pathOf(row): FileEntry.fromJson(row).category,
+    };
     _groups = _computeGroups();
+    _visualOrder = _groups.expand((group) => group.$2).toList(growable: false);
+    _visualIndexByPhotoIndex = {
+      for (var i = 0; i < _visualOrder.length; i++) _visualOrder[i]: i,
+    };
   }
+
+  String _pathOf(Map<String, dynamic> row) => (row['path'] ?? '').toString();
+
+  /// Normalizes legacy photo rows into file-shaped JSON so one media picker
+  /// can drive thumbnails, sharing and the existing file viewers.
+  Map<String, dynamic> _asFileRow(Map<String, dynamic> row) =>
+      <String, dynamic>{...row, 'type': 'file'};
+
+  /// Best-effort scan for video and PDF files using the existing browse API.
+  ///
+  /// A failed directory is skipped rather than failing the whole gallery; a
+  /// bounded breadth-first walk keeps very large accounts responsive.
+  Future<List<Map<String, dynamic>>> _discoverMedia({
+    required Set<String> knownPaths,
+  }) async {
+    const maxDirectories = 80;
+    const maxDepth = 6;
+    const maxResults = 600;
+
+    final queue = <_BrowseTarget>[const _BrowseTarget('', 0)];
+    final visited = <String>{};
+    final found = <Map<String, dynamic>>[];
+
+    while (queue.isNotEmpty &&
+        visited.length < maxDirectories &&
+        found.length < maxResults) {
+      final target = queue.removeAt(0);
+      if (!visited.add(target.path)) continue;
+
+      try {
+        final entries = await widget.api.listFiles(target.path);
+        for (final json in entries) {
+          final entry = FileEntry.fromJson(json);
+          if (entry.isFolder) {
+            if (target.depth < maxDepth) {
+              queue.add(_BrowseTarget(entry.path, target.depth + 1));
+            }
+            continue;
+          }
+          if (entry.category != Category.video &&
+              entry.category != Category.pdf) {
+            continue;
+          }
+          if (!knownPaths.add(entry.path)) continue;
+          found.add(_asFileRow(json));
+          if (found.length >= maxResults) break;
+        }
+      } catch (_) {
+        // One unreadable folder must not hide the rest of the library.
+      }
+    }
+    return found;
+  }
+
+  bool _isImageAt(int index) =>
+      _categoryByPath[_pathAt(index)] == Category.image;
+
+  Category _categoryAt(int index) =>
+      _categoryByPath[_pathAt(index)] ?? Category.unknown;
+
+  String _mediaLabel(Category category) => switch (category) {
+        Category.video => 'Video',
+        Category.pdf => 'PDF',
+        _ => 'Photo',
+      };
 
   void _prefetch() {
     for (var i = 0; i < _photos.length && i < _eagerThumbCount; i++) {
@@ -311,12 +425,31 @@ class _PhotosScreenState extends State<PhotosScreen> {
     return 'Check your connection and try again.';
   }
 
-  void _open(int index) {
-    Navigator.of(context).push(
+  Future<void> _open(int index) async {
+    final row = _photos[index];
+    final entry = FileEntry.fromJson(row);
+
+    // Video and PDF share the exact viewers used everywhere else in the app.
+    if (entry.category != Category.image) {
+      await FileOpener.open(context, api: widget.api, entry: entry);
+      return;
+    }
+
+    // The image viewer only receives images, so swiping never lands on a PDF
+    // or video tile that cannot be rendered by PhotoViewer.
+    final images = <Map<String, dynamic>>[];
+    var initialIndex = 0;
+    for (var i = 0; i < _photos.length; i++) {
+      if (!_isImageAt(i)) continue;
+      if (_pathAt(i) == entry.path) initialIndex = images.length;
+      images.add(_photos[i]);
+    }
+
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PhotoViewer(
-          photos: _photos,
-          initialIndex: index,
+          photos: images,
+          initialIndex: initialIndex,
           api: widget.api,
           images: _images,
           // The grid's own thumbnail is offered as the blurred loading
@@ -382,26 +515,13 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   Future<void> _deleteSelected() async {
     final count = _selected.length;
-    final confirm = await showDialog<bool>(
+    final confirm = await showNexaConfirmation(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Move to Trash'),
-        content: Text(
-          count == 1
-              ? 'Move 1 photo to trash?'
-              : 'Move $count photos to trash?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Trash'),
-          ),
-        ],
-      ),
+      title: 'Move to Trash',
+      message:
+          count == 1 ? 'Move 1 item to trash?' : 'Move $count items to trash?',
+      confirmText: 'Trash',
+      isDestructive: true,
     );
     if (confirm != true) return;
     final removed = _selected.toList();
@@ -413,7 +533,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
         _photos.removeWhere((p) => removed.contains(p['path']));
         _reindex();
       });
-      _toast('${Format.count(removed.length, 'photo')} moved to Trash');
+      _toast('${Format.count(removed.length, 'item')} moved to Trash');
     } catch (e) {
       if (mounted) _toast(e.toString());
     }
@@ -492,41 +612,47 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
     final photoCount = _photos.length;
 
-    return NexaPage(
-      title: _selecting ? Format.count(_selected.length, 'photo') : 'Photos',
-      bottomSafeArea: false,
-      subtitle: _selecting
-          ? 'Drag across photos to select · Tap to refine'
-          : photoCount == 0
-              ? 'All your photos in one place'
-              : Format.count(photoCount, 'photo'),
-      headerAction: _selecting
-          ? null
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: 'Change grid density',
-                  onPressed: _showGridDensityPicker,
-                  icon: Icon(
-                    Icons.grid_4x4_rounded,
-                    color: AppColors.accentTextFor(brightness),
+    return PopScope(
+      canPop: !_selecting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _selecting) _exitSelection();
+      },
+      child: NexaPage(
+        title: _selecting ? Format.count(_selected.length, 'item') : 'Photos',
+        bottomSafeArea: false,
+        subtitle: _selecting
+            ? 'Drag across photos to select · Tap to refine'
+            : photoCount == 0
+                ? 'Photos, videos and PDFs in one place'
+                : Format.count(photoCount, 'item'),
+        headerAction: _selecting
+            ? null
+            : PopupMenuButton<_PhotosMenuAction>(
+                tooltip: 'Gallery options',
+                icon: const Icon(Icons.more_vert_rounded),
+                onSelected: (action) {
+                  switch (action) {
+                    case _PhotosMenuAction.layout:
+                      _showGridDensityPicker();
+                    case _PhotosMenuAction.refresh:
+                      load();
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: _PhotosMenuAction.layout,
+                    child: Text('Gallery layout'),
                   ),
-                ),
-                IconButton(
-                  tooltip: 'Refresh photos',
-                  onPressed: _loading ? null : load,
-                  icon: Icon(
-                    Icons.refresh_rounded,
-                    color: AppColors.accentTextFor(brightness),
+                  PopupMenuItem(
+                    value: _PhotosMenuAction.refresh,
+                    child: Text('Refresh library'),
                   ),
-                ),
-              ],
-            ),
-      body: _body(),
+                ],
+              ),
+        body: _body(),
+      ),
     );
   }
 
@@ -560,8 +686,9 @@ class _PhotosScreenState extends State<PhotosScreen> {
     if (_photos.isEmpty) {
       return NexaEmptyState(
         icon: Icons.photo_library_outlined,
-        title: 'No photos yet',
-        hint: 'Upload photos from My files and they’ll appear here.',
+        title: 'No media yet',
+        hint:
+            'Upload photos, videos or PDFs from My files and they’ll appear here.',
         actionLabel: 'Refresh',
         onAction: load,
       );
@@ -574,7 +701,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
     final contentWidth = (viewportWidth - AppDimens.pageMargin * 2)
         .clamp(80.0, AppDimens.contentMaxWidth);
     final tileWidth =
-        (contentWidth - AppDimens.space4 * (_gridColumns - 1)) / _gridColumns;
+        (contentWidth - AppDimens.space2 * (_gridColumns - 1)) / _gridColumns;
     final decodeWidth =
         (tileWidth * MediaQuery.devicePixelRatioOf(context)).round();
 
@@ -584,68 +711,78 @@ class _PhotosScreenState extends State<PhotosScreen> {
         Expanded(
           child: RefreshIndicator(
             onRefresh: load,
-            child: Listener(
-              onPointerDown: _onPointerDown,
-              onPointerMove: _onPointerMove,
-              onPointerUp: _onPointerUp,
-              onPointerCancel: _onPointerUp,
-              child: NotificationListener<ScrollNotification>(
-                onNotification: (_) {
-                  _pruneCellKeys();
-                  return false;
-                },
-                child: CustomScrollView(
-                  slivers: [
-                    for (final (label, indices) in groups) ...[
-                      SliverToBoxAdapter(
-                        child:
-                            _MonthHeader(label: label, count: indices.length),
-                      ),
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimens.space4,
+            child: GestureDetector(
+              onScaleStart: _onScaleStart,
+              onScaleUpdate: _onScaleUpdate,
+              onScaleEnd: _onScaleEnd,
+              child: Listener(
+                onPointerDown: _onPointerDown,
+                onPointerMove: _onPointerMove,
+                onPointerUp: _onPointerUp,
+                onPointerCancel: _onPointerUp,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (_) {
+                    _pruneCellKeys();
+                    return false;
+                  },
+                  child: CustomScrollView(
+                    slivers: [
+                      for (final (label, indices) in groups) ...[
+                        SliverToBoxAdapter(
+                          child:
+                              _MonthHeader(label: label, count: indices.length),
                         ),
-                        sliver: SliverGrid.builder(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: _gridColumns,
-                            mainAxisSpacing: AppDimens.space4,
-                            crossAxisSpacing: AppDimens.space4,
-                            childAspectRatio: 1,
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.space2,
                           ),
-                          itemCount: indices.length,
-                          itemBuilder: (context, i) {
-                            final index = indices[i];
-                            final path = _pathAt(index);
-                            return _PhotoCell(
-                              key: _keyForCell(path),
-                              bytes: _thumbBytes(index),
-                              decodeWidth: decodeWidth,
-                              unavailable: _noThumbnail.contains(path),
-                              semanticLabel: _photos[index]['name']?.toString(),
-                              heroTag: 'photo:$path',
-                              selected: _selected.contains(path),
-                              selecting: _selecting,
-                              onTap: () => _onCellTap(index),
-                              onLongPressStart: (position) =>
-                                  _onCellLongPress(index, position),
-                              onVisible: () => _ensureThumb(_images, index),
-                            );
-                          },
+                          sliver: SliverGrid.builder(
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: _gridColumns,
+                              mainAxisSpacing: AppDimens.space2,
+                              crossAxisSpacing: AppDimens.space2,
+                              childAspectRatio: 1,
+                            ),
+                            itemCount: indices.length,
+                            itemBuilder: (context, i) {
+                              final index = indices[i];
+                              final path = _pathAt(index);
+                              return _PhotoCell(
+                                key: _keyForCell(path),
+                                bytes: _thumbBytes(index),
+                                decodeWidth: decodeWidth,
+                                category: _categoryAt(index),
+                                unavailable: _noThumbnail.contains(path),
+                                name:
+                                    _photos[index]['name']?.toString() ?? path,
+                                semanticLabel:
+                                    '${_mediaLabel(_categoryAt(index))}: '
+                                    '${_photos[index]['name'] ?? path}',
+                                heroTag: 'photo:$path',
+                                selected: _selected.contains(path),
+                                selecting: _selecting,
+                                onTap: () => _onCellTap(index),
+                                onLongPressStart: (position) =>
+                                    _onCellLongPress(index, position),
+                                onVisible: () => _ensureThumb(_images, index),
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                      const SliverToBoxAdapter(
-                        child: SizedBox(height: AppDimens.space16),
+                        const SliverToBoxAdapter(
+                          child: SizedBox(height: AppDimens.space16),
+                        ),
+                      ],
+                      SliverToBoxAdapter(
+                        child: SizedBox(
+                          height: bottomClearance > AppDimens.space24
+                              ? bottomClearance
+                              : AppDimens.space24,
+                        ),
                       ),
                     ],
-                    SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: bottomClearance > AppDimens.space24
-                            ? bottomClearance
-                            : AppDimens.space24,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -659,14 +796,14 @@ class _PhotosScreenState extends State<PhotosScreen> {
               AppDimens.pageMargin,
               AppDimens.space4,
               AppDimens.pageMargin,
-              MediaQuery.viewPaddingOf(context).bottom + AppDimens.space10,
+              nexaContextualBarBottomPadding(context) + AppDimens.space4,
             ),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 420),
-                child: NexaLiquidGlass(
-                  borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                  blurSigma: 2,
+                child: NexaSurface(
+                  level: NexaSurfaceLevel.floating,
+                  radius: AppDimens.radiusPill,
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppDimens.space6,
                     vertical: AppDimens.space4,
@@ -680,13 +817,11 @@ class _PhotosScreenState extends State<PhotosScreen> {
                       ),
                       Expanded(
                         child: Text(
-                          Format.count(_selected.length, 'photo'),
+                          Format.count(_selected.length, 'item'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyle.bodyEmphasized.copyWith(
-                            color: AppColors.labelPrimaryFor(
-                              Theme.of(context).brightness,
-                            ),
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                       ),
@@ -702,18 +837,16 @@ class _PhotosScreenState extends State<PhotosScreen> {
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Share selected photos',
+                        tooltip: 'Share selected items',
                         onPressed: _selected.isEmpty ? null : _shareSelected,
                         icon: const Icon(Icons.share_outlined),
                       ),
                       IconButton(
-                        tooltip: 'Move selected photos to Trash',
+                        tooltip: 'Move selected items to Trash',
                         onPressed: _selected.isEmpty ? null : _deleteSelected,
                         icon: Icon(
                           Icons.delete_outline_rounded,
-                          color: AppColors.errorFor(
-                            Theme.of(context).brightness,
-                          ),
+                          color: Theme.of(context).colorScheme.error,
                         ),
                       ),
                     ],
@@ -728,7 +861,9 @@ class _PhotosScreenState extends State<PhotosScreen> {
   }
 
   Uint8List? _thumbBytes(int index) {
-    if (_noThumbnail.contains(_pathAt(index))) return null;
+    if (_noThumbnail.contains(_pathAt(index))) {
+      return null;
+    }
     return _images.peekThumbnail(_thumbKey(index));
   }
 }
@@ -740,7 +875,7 @@ class _MonthHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.space20,
@@ -752,14 +887,12 @@ class _MonthHeader extends StatelessWidget {
         children: [
           Text(
             label,
-            style: AppTextStyle.sectionHeader.copyWith(
-              color: AppColors.textPrimaryFor(brightness),
-            ),
+            style: AppTextStyle.sectionHeader.copyWith(color: scheme.onSurface),
           ),
           const SizedBox(width: AppDimens.space10),
           DecoratedBox(
             decoration: BoxDecoration(
-              color: AppColors.surfaceAltFor(brightness),
+              color: scheme.secondaryContainer,
               borderRadius: BorderRadius.circular(AppDimens.radiusPill),
             ),
             child: Padding(
@@ -768,10 +901,9 @@ class _MonthHeader extends StatelessWidget {
                 vertical: AppDimens.space4,
               ),
               child: Text(
-                Format.count(count, 'photo'),
-                style: AppTextStyle.caption.copyWith(
-                  color: AppColors.textSecondaryFor(brightness),
-                  fontWeight: FontWeight.w600,
+                Format.count(count, 'item'),
+                style: AppTextStyle.labelSmall.copyWith(
+                  color: scheme.onSecondaryContainer,
                 ),
               ),
             ),
@@ -789,7 +921,9 @@ class _MonthHeader extends StatelessWidget {
 class _PhotoCell extends StatelessWidget {
   final Uint8List? bytes;
   final int decodeWidth;
+  final Category category;
   final bool unavailable;
+  final String name;
   final String? semanticLabel;
   final String heroTag;
   final bool selected;
@@ -802,7 +936,9 @@ class _PhotoCell extends StatelessWidget {
     super.key,
     required this.bytes,
     required this.decodeWidth,
+    required this.category,
     required this.unavailable,
+    required this.name,
     required this.semanticLabel,
     required this.heroTag,
     required this.selected,
@@ -814,9 +950,15 @@ class _PhotoCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final onAccent = AppColors.onAccentContainerFor(brightness);
-
+    final scheme = Theme.of(context).colorScheme;
+    final duration = AppMotion.resolve(context, AppMotion.fast);
+    final curve = AppMotion.curveFor(context, AppMotion.standard);
+    // The glyph already prints PDF on the document mark; a second badge would
+    // only duplicate that label inside the same tile.
+    final badge = switch (category) {
+      Category.video => 'VIDEO',
+      _ => null,
+    };
     Widget content;
     if (bytes != null) {
       content = Image.memory(
@@ -825,15 +967,12 @@ class _PhotoCell extends StatelessWidget {
         filterQuality: FilterQuality.medium,
         gaplessPlayback: true,
         cacheWidth: decodeWidth.clamp(1, 4096).toInt(),
-        errorBuilder: (context, _, __) => _placeholder(brightness),
+        errorBuilder: (context, _, __) => _placeholder(context),
       );
     } else if (unavailable) {
-      content = _placeholder(
-        brightness,
-        icon: Icons.image_not_supported_outlined,
-      );
+      content = _placeholder(context);
     } else {
-      content = _placeholder(brightness);
+      content = _placeholder(context);
       WidgetsBinding.instance.addPostFrameCallback((_) => onVisible());
     }
 
@@ -844,40 +983,69 @@ class _PhotoCell extends StatelessWidget {
       hint: selecting
           ? 'Activates selection for this photo'
           : 'Opens the photo. Long press and drag to select several.',
-      child: GestureDetector(
-        onTap: onTap,
-        onLongPressStart: (details) => onLongPressStart(details.globalPosition),
-        child: AnimatedScale(
-          scale: selected ? 0.965 : 1,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppDimens.radiusInner),
-              border: Border.all(
-                color: selected
-                    ? AppColors.accentFor(brightness)
-                    : Colors.transparent,
-                width: 2.5,
+      child: Material(
+        color: Colors.transparent,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onLongPressStart: (details) =>
+              onLongPressStart(details.globalPosition),
+          child: InkWell(
+            onTap: onTap,
+            customBorder: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(
+                Radius.circular(AppDimens.radiusExtraSmall),
               ),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppDimens.radiusInner),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Hero(tag: heroTag, child: content),
-                  AnimatedOpacity(
-                    opacity: selected ? 1 : 0,
-                    duration: const Duration(milliseconds: 160),
-                    curve: Curves.easeOut,
-                    child: IgnorePointer(
-                      child: _SelectedOverlay(onAccent: onAccent),
+            child: AnimatedContainer(
+              duration: duration,
+              curve: curve,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppDimens.radiusExtraSmall),
+                border: Border.all(
+                  color: selected ? scheme.primary : Colors.transparent,
+                  width: AppDimens.space1,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppDimens.radiusExtraSmall),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Hero(tag: heroTag, child: content),
+                    if (badge != null)
+                      Positioned(
+                        left: AppDimens.space6,
+                        bottom: AppDimens.space6,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerHigh
+                                .withValues(alpha: 0.92),
+                            borderRadius: BorderRadius.circular(
+                              AppDimens.radiusSmall,
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppDimens.space6,
+                              vertical: AppDimens.space2,
+                            ),
+                            child: Text(
+                              badge,
+                              style: AppTextStyle.labelSmall.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    AnimatedOpacity(
+                      opacity: selected ? 1 : 0,
+                      duration: duration,
+                      curve: curve,
+                      child: const IgnorePointer(child: _SelectedOverlay()),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -886,41 +1054,54 @@ class _PhotoCell extends StatelessWidget {
     );
   }
 
-  Widget _placeholder(Brightness brightness,
-      {IconData icon = Icons.photo_outlined}) {
-    return Container(
-      color: brightness == Brightness.dark
-          ? AppColors.surfaceAltDark
-          : AppColors.surfaceAltLight,
+  Widget _placeholder(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final type = switch (category) {
+      Category.video => 'video/mp4',
+      Category.pdf => 'application/pdf',
+      _ => 'image/jpeg',
+    };
+    return ColoredBox(
+      color: scheme.surfaceContainerHigh,
       child: Center(
-        child: Icon(
-          icon,
-          color: AppColors.textTertiaryFor(brightness),
-          size: AppDimens.iconMedium,
+        child: NexaFileGlyph(
+          name: name,
+          type: type,
+          size: AppDimens.iconTile,
         ),
       ),
     );
   }
 }
 
+class _BrowseTarget {
+  final String path;
+  final int depth;
+
+  const _BrowseTarget(this.path, this.depth);
+}
+
 class _SelectedOverlay extends StatelessWidget {
-  final Color onAccent;
-  const _SelectedOverlay({required this.onAccent});
+  const _SelectedOverlay();
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppDimens.radiusInner),
-        border: Border.all(color: AppColors.accentFor(brightness), width: 2.5),
-        color: AppColors.accentFor(brightness).withValues(alpha: 0.28),
-      ),
-      child: Align(
-        alignment: Alignment.topRight,
-        child: Padding(
-          padding: const EdgeInsets.all(AppDimens.space6),
-          child: Icon(Icons.check_circle_rounded, color: onAccent, size: 22),
+    final scheme = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.topRight,
+      child: Padding(
+        padding: const EdgeInsets.all(AppDimens.space6),
+        child: Container(
+          padding: const EdgeInsets.all(AppDimens.space2),
+          decoration: BoxDecoration(
+            color: scheme.primaryContainer,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.check_rounded,
+            color: scheme.onPrimaryContainer,
+            size: AppDimens.iconSmall,
+          ),
         ),
       ),
     );

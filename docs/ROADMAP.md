@@ -5,7 +5,7 @@
 - SQLite metadata
 - Argon2id authentication
 - Secure client token storage
-- One UI-inspired responsive Flutter shell
+- Material 3 (Material You) responsive Flutter shell
 - Files: list/upload/download/create folder
 - Streaming server transfers
 - Trash: restore and permanent delete

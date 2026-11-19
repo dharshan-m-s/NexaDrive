@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../services/api.dart';
 import '../../../services/background_transfer_service.dart';
 import '../../../services/session.dart';
 import '../../shell/app_shell.dart';
-import '../../widgets/nexa_components.dart';
+import '../../widgets/nexa_text_field.dart';
 
 class LoginScreen extends StatefulWidget {
   final Session session;
@@ -155,56 +154,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // --------------------------------------------------------------- fragments
 
-  /// The app mark: a rounded-square "app icon" carrying the cloud glyph, with
-  /// a soft accent glow so it reads as a brand object rather than a flat shape.
-  Widget _brandTile(Brightness brightness) {
-    final accent = AppColors.accentFor(brightness);
-    return Container(
-      width: 76,
-      height: 76,
-      decoration: BoxDecoration(
-        color: AppColors.accentContainerFor(brightness),
-        borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-        border: Border.all(
-          color: accent.withValues(alpha: 0.18),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withValues(
-                alpha: brightness == Brightness.dark ? 0.16 : 0.10),
-            blurRadius: 22,
-            offset: const Offset(0, 8),
-          ),
-        ],
+  /// The app mark: a tonal Material card carrying the cloud glyph. Its
+  /// separation comes from the `primaryContainer` role, not a custom shadow.
+  Widget _brandTile() {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      color: scheme.primaryContainer,
+      surfaceTintColor: Colors.transparent,
+      elevation: AppDimens.elevationSubtle,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
       ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.surfaceFor(brightness),
-              shape: BoxShape.circle,
-              border: Border.all(color: accent.withValues(alpha: 0.14)),
-            ),
-          ),
-          Icon(
+      child: SizedBox(
+        width: AppDimens.iconHero,
+        height: AppDimens.iconHero,
+        child: Center(
+          child: Icon(
             Icons.cloud_rounded,
-            color: AppColors.accentTextFor(brightness),
-            size: 30,
+            size: AppDimens.iconTileLarge,
+            color: scheme.onPrimaryContainer,
           ),
-          Positioned(
-            top: 12,
-            right: 12,
-            child: Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -212,17 +182,16 @@ class _LoginScreenState extends State<LoginScreen> {
   /// The greeting. The subtitle is kept in the tree but taken out of layout on
   /// short viewports (Offstage) so shrinking the viewport never reshuffles —
   /// and therefore never unmounts — the fields below it.
-  Widget _heading({required Brightness brightness, required bool short}) {
+  Widget _heading({required bool short}) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           'Sign in to your cloud',
           textAlign: TextAlign.center,
-          style: AppTextStyle.heroTitle.copyWith(
-            fontSize: short ? 22 : 32,
-            color: AppColors.labelPrimaryFor(brightness),
-          ),
+          style: (short ? AppTextStyle.headlineSmall : AppTextStyle.display)
+              .copyWith(color: scheme.onSurface),
         ),
         Offstage(
           offstage: short,
@@ -231,8 +200,8 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Text(
               'Connect to your private cloud.',
               textAlign: TextAlign.center,
-              style: AppTextStyle.callout.copyWith(
-                color: AppColors.labelSecondaryFor(brightness),
+              style: AppTextStyle.bodyMedium.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -241,7 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _fields({required bool dense, required Brightness brightness}) {
+  Widget _fields({required bool dense}) {
     // AutofillGroup lets a password manager populate all three fields as one
     // credential set instead of filling only whichever field has focus.
     return AutofillGroup(
@@ -254,11 +223,10 @@ class _LoginScreenState extends State<LoginScreen> {
             hint: 'https://server.example.com',
             keyboardType: TextInputType.url,
             autofillHints: const [AutofillHints.url],
-            prefixIcon:
-                const Icon(Icons.dns_outlined, size: AppDimens.iconMedium),
+            prefixIcon: const Icon(Icons.dns_outlined),
             textInputAction: TextInputAction.next,
             dense: dense,
-            onSubmitted: (_) =>
+            onFieldSubmitted: (_) =>
                 FocusScope.of(context).requestFocus(_usernameFocus),
           ),
           SizedBox(height: dense ? AppDimens.space8 : AppDimens.space12),
@@ -267,24 +235,21 @@ class _LoginScreenState extends State<LoginScreen> {
             label: 'Username',
             hint: 'Enter your username',
             autofillHints: const [AutofillHints.username],
-            prefixIcon: const Icon(Icons.person_outline_rounded,
-                size: AppDimens.iconMedium),
+            prefixIcon: const Icon(Icons.person_outline_rounded),
             textInputAction: TextInputAction.next,
             focusNode: _usernameFocus,
             dense: dense,
-            onSubmitted: (_) =>
+            onFieldSubmitted: (_) =>
                 FocusScope.of(context).requestFocus(_passwordFocus),
           ),
           SizedBox(height: dense ? AppDimens.space8 : AppDimens.space12),
           NexaTextField(
             controller: password,
-            dense: dense,
             label: 'Password',
             hint: 'Enter your password',
             obscureText: _obscure,
             autofillHints: const [AutofillHints.password],
-            prefixIcon: const Icon(Icons.lock_outline_rounded,
-                size: AppDimens.iconMedium),
+            prefixIcon: const Icon(Icons.lock_outline_rounded),
             suffixIcon: IconButton(
               tooltip: _obscure ? 'Show password' : 'Hide password',
               onPressed: () => setState(() => _obscure = !_obscure),
@@ -297,7 +262,8 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             textInputAction: TextInputAction.done,
             focusNode: _passwordFocus,
-            onSubmitted: (_) => submit(),
+            dense: dense,
+            onFieldSubmitted: (_) => submit(),
           ),
         ],
       ),
@@ -308,33 +274,47 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordFocus = FocusNode();
 
   Widget _submitButton() {
+    final scheme = Theme.of(context).colorScheme;
     return SizedBox(
       height: AppDimens.touchTargetLarge,
-      child: NexaFilledButton(
+      child: FilledButton(
         onPressed: loading ? null : submit,
-        isLoading: loading,
-        fullWidth: true,
-        child: const Text('Sign in'),
+        style: FilledButton.styleFrom(
+          minimumSize: const Size.fromHeight(AppDimens.touchTargetLarge),
+          shape: const StadiumBorder(),
+          textStyle: AppTextStyle.labelLarge,
+        ),
+        child: loading
+            ? SizedBox(
+                width: AppDimens.iconMedium,
+                height: AppDimens.iconMedium,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: scheme.onPrimary,
+                ),
+              )
+            : const Text('Sign in'),
       ),
     );
   }
 
-  Widget _caption({required Brightness brightness}) {
+  Widget _caption() {
+    final scheme = Theme.of(context).colorScheme;
     return Text(
       'Your files stay on a server you control.',
       textAlign: TextAlign.center,
-      style: AppTextStyle.footnote.copyWith(
-        color: AppColors.labelTertiaryFor(brightness),
+      style: AppTextStyle.bodySmall.copyWith(
+        color: scheme.onSurfaceVariant,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundFor(brightness),
+      backgroundColor: scheme.surface,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -374,40 +354,48 @@ class _LoginScreenState extends State<LoginScreen> {
                         // Masthead: app mark, kept centred in the column.
                         Offstage(
                           offstage: short,
-                          child: Center(child: _brandTile(brightness)),
+                          child: Center(child: _brandTile()),
                         ),
                         SizedBox(
                           height: short ? 0 : AppDimens.space20,
                         ),
-                        _heading(brightness: brightness, short: short),
+                        _heading(short: short),
                         SizedBox(
                           height: short ? AppDimens.space8 : AppDimens.space24,
                         ),
                         SizedBox(
                           width: double.infinity,
-                          child: NexaSurface(
-                            level: NexaSurfaceLevel.surface,
-                            radius: AppDimens.radiusXLarge,
-                            padding: EdgeInsets.symmetric(
-                              horizontal: wide ? AppDimens.space20 : 0,
-                              vertical:
-                                  wide ? AppDimens.space20 : AppDimens.space8,
+                          child: Card(
+                            color: scheme.surfaceContainerLow,
+                            surfaceTintColor: Colors.transparent,
+                            elevation: AppDimens.elevationSubtle,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                AppDimens.radiusCard,
+                              ),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _fields(dense: short, brightness: brightness),
-                                if (error != null) ...[
-                                  const SizedBox(height: AppDimens.space12),
-                                  _ErrorBanner(message: error!),
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: wide ? AppDimens.space20 : 0,
+                                vertical:
+                                    wide ? AppDimens.space20 : AppDimens.space8,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  _fields(dense: short),
+                                  if (error != null) ...[
+                                    const SizedBox(height: AppDimens.space12),
+                                    _ErrorBanner(message: error!),
+                                  ],
+                                  SizedBox(
+                                    height: short
+                                        ? AppDimens.space4
+                                        : AppDimens.space16,
+                                  ),
+                                  _submitButton(),
                                 ],
-                                SizedBox(
-                                  height: short
-                                      ? AppDimens.space4
-                                      : AppDimens.space16,
-                                ),
-                                _submitButton(),
-                              ],
+                              ),
                             ),
                           ),
                         ),
@@ -417,7 +405,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Padding(
                             padding:
                                 const EdgeInsets.only(top: AppDimens.space20),
-                            child: _caption(brightness: brightness),
+                            child: _caption(),
                           ),
                         ),
                       ],
@@ -439,33 +427,39 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final error = AppColors.errorFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
 
-    return Container(
-      padding: const EdgeInsets.all(AppDimens.space12),
-      decoration: BoxDecoration(
-        color: error.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.error_outline_rounded,
-            size: AppDimens.iconSmall,
-            color: error,
-          ),
-          const SizedBox(width: AppDimens.space8),
-          Expanded(
-            child: Text(
-              message,
-              style: AppTextStyle.caption1.copyWith(
-                color: AppColors.labelPrimaryFor(brightness),
+    return Semantics(
+      liveRegion: true,
+      child: Card(
+        color: scheme.errorContainer,
+        surfaceTintColor: Colors.transparent,
+        elevation: AppDimens.elevationSubtle,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimens.space12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.error_outline_rounded,
+                size: AppDimens.iconMedium,
+                color: scheme.onErrorContainer,
               ),
-            ),
+              const SizedBox(width: AppDimens.space12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: AppTextStyle.bodyMedium.copyWith(
+                    color: scheme.onErrorContainer,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

@@ -4,8 +4,8 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_dimensions.dart';
 import '../../../../core/design/app_haptics.dart';
 import '../../../../core/design/app_motion.dart';
@@ -23,10 +23,11 @@ import '../../../services/thumbnail_cache.dart';
 import '../../../services/upload_manager.dart';
 import '../../widgets/folder_picker.dart';
 import '../../widgets/nexa_action_bar.dart';
-import '../../widgets/nexa_chip.dart';
 import '../../widgets/nexa_file_tile.dart';
+import '../../widgets/nexa_layout_picker.dart';
 import '../../widgets/nexa_loading_state.dart';
 import '../../widgets/nexa_sheet.dart';
+import '../../widgets/nexa_surface.dart';
 import '../../widgets/upload_progress_dialog.dart';
 import '../scanner/scanner_screen.dart';
 import '../search/search_screen.dart';
@@ -54,6 +55,9 @@ class FilesScreen extends StatefulWidget {
   final VoidCallback? onIntentHandled;
   final VoidCallback? onBackAtRoot;
 
+  /// Lets the shell hide the floating navigation while a range is selected.
+  final ValueChanged<bool>? onSelectionChanged;
+
   const FilesScreen({
     super.key,
     required this.api,
@@ -61,6 +65,7 @@ class FilesScreen extends StatefulWidget {
     this.intent,
     this.onIntentHandled,
     this.onBackAtRoot,
+    this.onSelectionChanged,
   });
 
   @override
@@ -74,8 +79,16 @@ class _FilesScreenState extends State<FilesScreen> {
   List<FileEntry> _items = [];
   bool _loading = true;
   bool _grid = false;
+  int _gridColumns = 2;
   bool _selecting = false;
   final Set<String> _selected = <String>{};
+  int? _activePointer;
+  Offset? _lastPointerPosition;
+  bool _dragSelecting = false;
+  int? _dragAnchorIndex;
+  Set<String> _dragBaseSelection = const <String>{};
+  double? _pinchBaseColumns;
+  final Map<String, _FileCellRef> _fileCellKeys = <String, _FileCellRef>{};
   String? _error;
   FileSortOrder _sort = FileSortOrder.nameAscending;
   _FileFilter _filter = _FileFilter.all;
@@ -87,6 +100,7 @@ class _FilesScreenState extends State<FilesScreen> {
   @override
   void initState() {
     super.initState();
+    _loadGridColumns();
     _attachDiskCache();
     load();
     final intent = widget.intent;
@@ -147,11 +161,18 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   void _prefetchThumbnails() {
-    final images = _items
-        .where((e) => e.category == Category.image)
+    // Images, videos and PDFs all have bounded server-rendered previews.
+    // Audio, documents and folders keep their glyph treatment.
+    final previewable = _items
+        .where(
+          (e) =>
+              e.category == Category.image ||
+              e.category == Category.video ||
+              e.category == Category.pdf,
+        )
         .take(60)
         .toList(growable: false);
-    for (final entry in images) {
+    for (final entry in previewable) {
       unawaited(_ensureThumb(entry));
     }
   }
@@ -239,7 +260,7 @@ class _FilesScreenState extends State<FilesScreen> {
               icon: Icons.photo_library_rounded,
               title: 'Choose from gallery',
               subtitle: 'Select multiple photos from your device library',
-              iconColor: AppColors.accentFor(Theme.of(sheetContext).brightness),
+              iconColor: Theme.of(sheetContext).colorScheme.primary,
               onTap: () => Navigator.pop(sheetContext, _UploadChoice.gallery),
             ),
             NexaSheetAction(
@@ -360,6 +381,61 @@ class _FilesScreenState extends State<FilesScreen> {
     if (mounted) await load();
   }
 
+  static const _gridColumnsPreference = 'nexadrive.files.grid_columns';
+
+  Future<void> _loadGridColumns() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getInt(_gridColumnsPreference);
+      if (saved != null && mounted) {
+        setState(() => _gridColumns = NexaGridLayout.clamp(saved));
+      }
+    } catch (_) {
+      // The grid still works with the default density.
+    }
+  }
+
+  Future<void> _saveGridColumns(int columns) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_gridColumnsPreference, columns);
+    } catch (_) {
+      // The selected density remains active for this session.
+    }
+  }
+
+  Future<void> _showGridLayoutPicker() async {
+    final selected = await showNexaGridLayoutPicker(
+      context: context,
+      columns: _gridColumns,
+      title: 'Files layout',
+      subtitle: 'Choose how many files fit across the grid.',
+    );
+    if (selected == null || !mounted || selected == _gridColumns) return;
+    setState(() {
+      _gridColumns = selected;
+      _grid = true;
+    });
+    await _saveGridColumns(selected);
+  }
+
+  /// List and grid cells can briefly coexist during the view cross-fade, so
+  /// their hit-test keys must live in separate namespaces. The ref keeps the
+  /// real path alongside the key, which is what range selection needs.
+  GlobalKey _keyForFileCell(String path, {required bool grid}) {
+    final id = '${grid ? 'grid' : 'list'}:$path';
+    return _fileCellKeys
+        .putIfAbsent(
+          id,
+          () => _FileCellRef(path: path, key: GlobalKey()),
+        )
+        .key;
+  }
+
+  void _pruneFileCellKeys() {
+    _fileCellKeys.removeWhere((_, ref) => ref.key.currentContext == null);
+  }
+
   void _toast(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -367,13 +443,116 @@ class _FilesScreenState extends State<FilesScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _enterSelection(String path) {
-    // Entering multi-select is a state change the visuals confirm quietly; the
-    // light impact is what keeps the long press from feeling weightless.
-    AppHaptics.impact();
+  void _onPointerDown(PointerDownEvent event) {
+    _activePointer = event.pointer;
+    _lastPointerPosition = event.position;
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    _lastPointerPosition = event.position;
+    if (!_dragSelecting || event.pointer != _activePointer) return;
+    final path = _pathAtPosition(event.position);
+    if (path == null) return;
+    final visible = _visibleItems;
+    final index = visible.indexWhere((entry) => entry.path == path);
+    if (index >= 0) _selectRangeTo(index);
+  }
+
+  void _onPointerUp(PointerEvent event) {
+    if (event.pointer != _activePointer) return;
+    _activePointer = null;
+    _lastPointerPosition = null;
+    _dragSelecting = false;
+    _dragAnchorIndex = null;
+    _dragBaseSelection = const <String>{};
+  }
+
+  void _onScaleStart(ScaleStartDetails details) {
+    if (details.pointerCount == 2) {
+      // Density is a grid concept; make the pinch visible even when the user
+      // is currently in the compact list.
+      if (!_grid) setState(() => _grid = true);
+      _pinchBaseColumns = _gridColumns.toDouble();
+    }
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails details) {
+    final base = _pinchBaseColumns;
+    if (base == null || details.pointerCount < 2) return;
+    final columns = NexaGridLayout.clamp((base * details.scale).round());
+    if (columns != _gridColumns) setState(() => _gridColumns = columns);
+  }
+
+  void _onScaleEnd(ScaleEndDetails details) {
+    final base = _pinchBaseColumns;
+    _pinchBaseColumns = null;
+    if (base == null) return;
+    unawaited(_saveGridColumns(_gridColumns));
+  }
+
+  String? _pathAtPosition(Offset globalPosition) {
+    String? hitPath;
+    final stale = <String>[];
+    for (final entry in _fileCellKeys.entries) {
+      final renderObject = entry.value.key.currentContext?.findRenderObject();
+      if (renderObject is! RenderBox ||
+          !renderObject.attached ||
+          !renderObject.hasSize) {
+        stale.add(entry.key);
+        continue;
+      }
+      final rect = renderObject.localToGlobal(Offset.zero) & renderObject.size;
+      if (rect.contains(globalPosition)) hitPath = entry.value.path;
+    }
+    for (final path in stale) {
+      _fileCellKeys.remove(path);
+    }
+    return hitPath;
+  }
+
+  void _beginDragSelection(String path) {
+    final visible = _visibleItems;
+    final anchor = visible.indexWhere((entry) => entry.path == path);
+    if (anchor < 0) return;
+    if (!_selecting) {
+      AppHaptics.impact();
+      _dragBaseSelection = <String>{path};
+      setState(() {
+        _selecting = true;
+        _selected
+          ..clear()
+          ..addAll(_dragBaseSelection);
+      });
+      widget.onSelectionChanged?.call(true);
+    } else {
+      _dragBaseSelection = Set<String>.from(_selected);
+    }
+    _dragAnchorIndex = anchor;
+    _dragSelecting = true;
+    final hit = _pathAtPosition(_lastPointerPosition ?? Offset.zero);
+    final target =
+        hit == null ? anchor : visible.indexWhere((entry) => entry.path == hit);
+    _selectRangeTo(target < 0 ? anchor : target);
+  }
+
+  void _selectRangeTo(int index) {
+    final anchor = _dragAnchorIndex;
+    if (anchor == null) return;
+    final visible = _visibleItems;
+    if (index < 0 || index >= visible.length) return;
+    final start = index < anchor ? index : anchor;
+    final end = index < anchor ? anchor : index;
+    final next = <String>{..._dragBaseSelection};
+    for (var i = start; i <= end; i++) {
+      next.add(visible[i].path);
+    }
+    if (next.length == _selected.length && next.every(_selected.contains)) {
+      return;
+    }
     setState(() {
-      _selecting = true;
-      _selected.add(path);
+      _selected
+        ..clear()
+        ..addAll(next);
     });
   }
 
@@ -393,6 +572,7 @@ class _FilesScreenState extends State<FilesScreen> {
       _selecting = false;
       _selected.clear();
     });
+    widget.onSelectionChanged?.call(false);
   }
 
   void _toggleSelectAll() {
@@ -408,6 +588,7 @@ class _FilesScreenState extends State<FilesScreen> {
       }
       _selecting = _selected.isNotEmpty;
     });
+    widget.onSelectionChanged?.call(_selecting);
   }
 
   bool _handleBack() {
@@ -559,38 +740,43 @@ class _FilesScreenState extends State<FilesScreen> {
   Future<void> _pickSort() async {
     final selected = await showDialog<FileSortOrder>(
       context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Sort by'),
-        children: [
-          for (final option in FileSortOrder.values)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, option),
-              child: Row(
-                children: [
-                  Icon(
-                    option == _sort
-                        ? Icons.radio_button_checked_rounded
-                        : Icons.radio_button_unchecked_rounded,
-                    size: AppDimens.iconSm,
-                    color: option == _sort
-                        ? AppColors.accentFor(Theme.of(context).brightness)
-                        : AppColors.textTertiaryFor(
-                            Theme.of(context).brightness,
-                          ),
-                  ),
-                  const SizedBox(width: AppDimens.spaceSm),
-                  Text(
-                    _sortLabel(option),
-                    style: NexaTypography.rowTitle.copyWith(
-                      fontWeight:
-                          option == _sort ? FontWeight.w600 : FontWeight.w400,
+      builder: (context) {
+        final scheme = Theme.of(context).colorScheme;
+        return SimpleDialog(
+          title: Text(
+            'Sort by',
+            style: AppTextStyle.titleLarge.copyWith(color: scheme.onSurface),
+          ),
+          children: [
+            for (final option in FileSortOrder.values)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, option),
+                child: Row(
+                  children: [
+                    Icon(
+                      option == _sort
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      size: AppDimens.iconSm,
+                      color: option == _sort
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: AppDimens.spaceSm),
+                    Text(
+                      _sortLabel(option),
+                      style: AppTextStyle.bodyLarge.copyWith(
+                        color: scheme.onSurface,
+                        fontWeight:
+                            option == _sort ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-        ],
-      ),
+          ],
+        );
+      },
     );
     if (selected != null && selected != _sort) {
       setState(() {
@@ -651,8 +837,7 @@ class _FilesScreenState extends State<FilesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = AppColors.accentFor(brightness);
+    final accent = Theme.of(context).colorScheme.primary;
     final crumb = _path.isEmpty ? 'My files' : _path.split('/').last;
     final subtitle = _path.isEmpty
         ? 'Your private cloud'
@@ -681,6 +866,8 @@ class _FilesScreenState extends State<FilesScreen> {
             onExitSelection: _exitSelection,
             onToggleView: () => setState(() => _grid = !_grid),
             isGrid: _grid,
+            gridColumns: _gridColumns,
+            onLayout: _showGridLayoutPicker,
             onNewFolder: _selecting ? null : _createFolder,
             onUpload: _selecting ? null : _pickAndUpload,
             onUploadFolder: _selecting ? null : _pickAndUploadFolder,
@@ -710,7 +897,9 @@ class _FilesScreenState extends State<FilesScreen> {
                     }),
           ),
           NexaRevealBar(
-            visible: !_selecting && _path.isNotEmpty,
+            // A one-level folder already has its name and a Back action in the
+            // title row; only deeper paths need a separate breadcrumb strip.
+            visible: !_selecting && _path.contains('/'),
             alignment: Alignment.topLeft,
             child: _Breadcrumb(
               path: _path,
@@ -729,16 +918,33 @@ class _FilesScreenState extends State<FilesScreen> {
               selected: _filter,
               folderCount: _folderCount,
               fileCount: _fileCount,
-              isGrid: _grid,
               onChanged: (value) => setState(() => _filter = value),
-              onSort: _pickSort,
-              onToggleView: () => setState(() => _grid = !_grid),
             ),
           ),
-          Expanded(child: _body()),
+          Expanded(
+            child: GestureDetector(
+              onScaleStart: _onScaleStart,
+              onScaleUpdate: _onScaleUpdate,
+              onScaleEnd: _onScaleEnd,
+              child: Listener(
+                onPointerDown: _onPointerDown,
+                onPointerMove: _onPointerMove,
+                onPointerUp: _onPointerUp,
+                onPointerCancel: _onPointerUp,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (_) {
+                    _pruneFileCellKeys();
+                    return false;
+                  },
+                  child: _body(),
+                ),
+              ),
+            ),
+          ),
           NexaRevealBar(
             visible: _selecting,
             child: NexaActionBar(
+              aboveFloatingNav: true,
               leading: IconButton(
                 tooltip: 'Cancel selection',
                 onPressed: _exitSelection,
@@ -764,7 +970,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 NexaActionItem(
                   icon: Icons.delete_outline_rounded,
                   label: 'Trash',
-                  color: AppColors.errorFor(Theme.of(context).brightness),
+                  color: Theme.of(context).colorScheme.error,
                   onTap: () => _deleteItems(),
                 ),
                 NexaActionItem(
@@ -948,6 +1154,10 @@ class _FilesScreenState extends State<FilesScreen> {
 
     final folders = sorted.where((e) => e.isFolder).toList();
     final files = sorted.where((e) => !e.isFolder).toList();
+    final sections = <(String, List<FileEntry>)>[
+      if (folders.isNotEmpty) ('Folders', folders),
+      if (files.isNotEmpty) ('Files', files),
+    ];
 
     return RefreshIndicator(
       onRefresh: load,
@@ -959,22 +1169,23 @@ class _FilesScreenState extends State<FilesScreen> {
                 AppDimens.pageMargin,
                 bottomPadding,
               ),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 176,
-                mainAxisSpacing: AppDimens.space12,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: _gridColumns,
+                mainAxisSpacing: AppDimens.space16,
                 crossAxisSpacing: AppDimens.space12,
-                childAspectRatio: 0.80,
+                childAspectRatio: 0.72,
               ),
               itemCount: sorted.length,
               itemBuilder: (context, index) {
                 final entry = sorted[index];
                 return NexaFileGridTile(
+                  key: _keyForFileCell(entry.path, grid: true),
                   entry: entry,
                   thumbnail: _thumbFor(entry),
                   selected: _selected.contains(entry.path),
                   selecting: _selecting,
                   onTap: _openEntry,
-                  onLongPress: () => _enterSelection(entry.path),
+                  onLongPress: () => _beginDragSelection(entry.path),
                 );
               },
             )
@@ -985,63 +1196,25 @@ class _FilesScreenState extends State<FilesScreen> {
                 AppDimens.pageMargin,
                 bottomPadding,
               ),
-              itemCount: (folders.isEmpty ? 0 : folders.length + 1) +
-                  (files.isEmpty ? 0 : files.length + 1),
+              itemCount: sections.length * 2,
               itemBuilder: (context, index) {
-                if (folders.isNotEmpty && index <= folders.length) {
-                  return index == 0
-                      ? _GroupHeader('Folders', count: folders.length)
-                      : _fileRow(folders[index - 1]);
+                final section = sections[index ~/ 2];
+                if (index.isEven) {
+                  return _GroupHeader(section.$1, count: section.$2.length);
                 }
-
-                final fileIndex =
-                    index - (folders.isEmpty ? 0 : folders.length + 1);
-                if (files.isNotEmpty && fileIndex == 0) {
-                  return _GroupHeader('Files', count: files.length);
-                }
-                final itemIndex = fileIndex - 1;
-                return itemIndex >= 0 && itemIndex < files.length
-                    ? _fileRow(files[itemIndex])
-                    : const SizedBox.shrink();
+                return _FlatFileGroup(
+                  entries: section.$2,
+                  selecting: _selecting,
+                  thumbnailFor: _thumbFor,
+                  isSelected: (path) => _selected.contains(path),
+                  keyFor: (path) => _keyForFileCell(path, grid: false),
+                  onOpen: _openEntry,
+                  onLongPress: (entry) => _beginDragSelection(entry.path),
+                  onToggleSelect: _toggleSelect,
+                  onMore: (entry) => _showFileMenu(context, entry),
+                );
               },
             ),
-    );
-  }
-
-  Widget _fileRow(FileEntry entry) {
-    final brightness = Theme.of(context).brightness;
-    final radius = BorderRadius.circular(AppDimens.radiusMedium);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppDimens.space8),
-      child: Material(
-        color: AppColors.surfaceFor(brightness),
-        shape: RoundedRectangleBorder(
-          borderRadius: radius,
-          side: BorderSide(
-            color: AppColors.separatorFor(brightness).withValues(alpha: 0.72),
-            width: 0.7,
-          ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: NexaFileTile(
-          entry: entry,
-          thumbnail: _thumbFor(entry),
-          selected: _selected.contains(entry.path),
-          selecting: _selecting,
-          onTap: _openEntry,
-          onLongPress: () => _enterSelection(entry.path),
-          trailing: _selecting
-              ? null
-              : IconButton(
-                  tooltip: 'More options',
-                  icon: Icon(
-                    Icons.more_horiz_rounded,
-                    color: AppColors.textSecondaryFor(brightness),
-                  ),
-                  onPressed: () => _showFileMenu(context, entry),
-                ),
-        ),
-      ),
     );
   }
 
@@ -1127,10 +1300,12 @@ class _FilesScreenState extends State<FilesScreen> {
 enum _FileHeaderAction {
   refresh,
   newFolder,
+  uploadFiles,
   uploadFolder,
   scan,
   sort,
   toggleView,
+  layout,
 }
 
 /// The compact file-browser toolbar. Upload, search and overflow actions share
@@ -1148,6 +1323,8 @@ class _ViewArea extends StatefulWidget {
   final VoidCallback onExitSelection;
   final VoidCallback onToggleView;
   final bool isGrid;
+  final int gridColumns;
+  final VoidCallback onLayout;
   final VoidCallback? onNewFolder;
   final VoidCallback? onUpload;
   final VoidCallback? onUploadFolder;
@@ -1166,6 +1343,8 @@ class _ViewArea extends StatefulWidget {
     required this.onExitSelection,
     required this.onToggleView,
     required this.isGrid,
+    required this.gridColumns,
+    required this.onLayout,
     this.onNewFolder,
     this.onUpload,
     this.onUploadFolder,
@@ -1181,7 +1360,7 @@ class _ViewArea extends StatefulWidget {
 
 class _ViewAreaState extends State<_ViewArea> {
   bool _searchExpanded = false;
-  final TextEditingController _searchController = TextEditingController();
+  final SearchController _searchController = SearchController();
 
   @override
   void dispose() {
@@ -1191,7 +1370,7 @@ class _ViewAreaState extends State<_ViewArea> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final widget = this.widget;
     final title = widget.title;
     final subtitle = widget.subtitle;
@@ -1202,6 +1381,8 @@ class _ViewAreaState extends State<_ViewArea> {
     final onExitSelection = widget.onExitSelection;
     final onToggleView = widget.onToggleView;
     final isGrid = widget.isGrid;
+    final gridColumns = widget.gridColumns;
+    final onLayout = widget.onLayout;
     final onNewFolder = widget.onNewFolder;
     final onUpload = widget.onUpload;
     final onUploadFolder = widget.onUploadFolder;
@@ -1237,13 +1418,8 @@ class _ViewAreaState extends State<_ViewArea> {
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: NexaTypography.pageTitle.copyWith(
-                          fontSize: 22,
-                          color: selecting
-                              ? accent
-                              : AppColors.labelPrimaryFor(brightness),
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.45,
+                        style: AppTextStyle.titleLarge.copyWith(
+                          color: selecting ? accent : scheme.onSurface,
                         ),
                       ),
                     ),
@@ -1252,28 +1428,32 @@ class _ViewAreaState extends State<_ViewArea> {
                         subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: NexaTypography.caption.copyWith(
-                          fontSize: 11.5,
-                          color: AppColors.labelSecondaryFor(brightness),
+                        style: AppTextStyle.bodySmall.copyWith(
+                          color: scheme.onSurfaceVariant,
                         ),
                       )
-                    else if (onBackToRoot != null)
+                    else if (onBackToRoot == null)
+                      Text(
+                        'Drag across items to select · Tap to refine',
+                        style: AppTextStyle.bodySmall.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      )
+                    else
                       InkWell(
                         onTap: onBackToRoot,
                         borderRadius: BorderRadius.circular(
                           AppDimens.radiusSmall,
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.only(
-                            top: 2,
-                            right: 6,
-                            bottom: 2,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimens.space6,
+                            vertical: AppDimens.space2,
                           ),
                           child: Text(
                             'Back to My files',
-                            style: NexaTypography.caption.copyWith(
+                            style: AppTextStyle.labelLarge.copyWith(
                               color: accent,
-                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -1282,19 +1462,12 @@ class _ViewAreaState extends State<_ViewArea> {
                 ),
               ),
               if (selecting)
-                IconButton(
+                IconButton.filledTonal(
                   tooltip: 'Cancel selection',
                   onPressed: onExitSelection,
                   style: IconButton.styleFrom(
-                    backgroundColor: AppColors.fillFor(brightness),
-                    minimumSize: const Size(
-                      AppDimens.touchTarget,
-                      AppDimens.touchTarget,
-                    ),
-                    padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
+                    backgroundColor: scheme.surfaceContainerHigh,
+                    foregroundColor: scheme.onSurface,
                   ),
                   icon: const Icon(Icons.close_rounded),
                 )
@@ -1306,49 +1479,33 @@ class _ViewAreaState extends State<_ViewArea> {
                     if (!_searchExpanded) _searchController.clear();
                   }),
                   style: IconButton.styleFrom(
-                    backgroundColor: AppColors.fillFor(brightness),
-                    foregroundColor: AppColors.labelPrimaryFor(brightness),
+                    backgroundColor: scheme.surfaceContainerHigh,
+                    foregroundColor: scheme.onSurface,
                     minimumSize: const Size(
                         AppDimens.touchTarget, AppDimens.touchTarget),
                     padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15)),
+                    shape: const StadiumBorder(),
                   ),
                   icon: Icon(_searchExpanded
                       ? Icons.close_rounded
                       : Icons.search_rounded),
                 ),
-                const SizedBox(width: AppDimens.space6),
-                IconButton(
-                  tooltip: 'Upload files',
-                  onPressed: onUpload,
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.accentContainerFor(brightness),
-                    foregroundColor: AppColors.accentTextFor(brightness),
-                    minimumSize: const Size(
-                        AppDimens.touchTarget, AppDimens.touchTarget),
-                    padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15)),
-                  ),
-                  icon: const Icon(Icons.upload_rounded, size: 19),
-                ),
-                const SizedBox(width: AppDimens.space6),
                 PopupMenuButton<_FileHeaderAction>(
                   tooltip: 'More actions',
-                  icon: const Icon(Icons.more_horiz_rounded, size: 22),
+                  icon: const Icon(
+                    Icons.more_horiz_rounded,
+                    size: AppDimens.iconMedium,
+                  ),
                   padding: EdgeInsets.zero,
                   style: IconButton.styleFrom(
-                    backgroundColor: AppColors.fillFor(brightness),
-                    foregroundColor: AppColors.labelPrimaryFor(brightness),
+                    backgroundColor: scheme.surfaceContainerHigh,
+                    foregroundColor: scheme.onSurface,
                     minimumSize: const Size(
                       AppDimens.touchTarget,
                       AppDimens.touchTarget,
                     ),
                     padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
+                    shape: const StadiumBorder(),
                   ),
                   onSelected: (action) {
                     switch (action) {
@@ -1357,6 +1514,9 @@ class _ViewAreaState extends State<_ViewArea> {
                         break;
                       case _FileHeaderAction.newFolder:
                         onNewFolder?.call();
+                        break;
+                      case _FileHeaderAction.uploadFiles:
+                        onUpload?.call();
                         break;
                       case _FileHeaderAction.uploadFolder:
                         onUploadFolder?.call();
@@ -1369,6 +1529,9 @@ class _ViewAreaState extends State<_ViewArea> {
                         break;
                       case _FileHeaderAction.toggleView:
                         onToggleView();
+                        break;
+                      case _FileHeaderAction.layout:
+                        onLayout();
                         break;
                     }
                   },
@@ -1387,6 +1550,14 @@ class _ViewAreaState extends State<_ViewArea> {
                         child: _FileMenuLabel(
                           icon: Icons.create_new_folder_outlined,
                           label: 'New folder',
+                        ),
+                      ),
+                    if (onUpload != null)
+                      const PopupMenuItem(
+                        value: _FileHeaderAction.uploadFiles,
+                        child: _FileMenuLabel(
+                          icon: Icons.upload_rounded,
+                          label: 'Upload files',
                         ),
                       ),
                     if (onUploadFolder != null)
@@ -1422,6 +1593,13 @@ class _ViewAreaState extends State<_ViewArea> {
                         label: isGrid ? 'List view' : 'Grid view',
                       ),
                     ),
+                    PopupMenuItem(
+                      value: _FileHeaderAction.layout,
+                      child: _FileMenuLabel(
+                        icon: Icons.view_module_rounded,
+                        label: 'Grid layout · $gridColumns',
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -1429,63 +1607,30 @@ class _ViewAreaState extends State<_ViewArea> {
           ),
           if (!selecting && _searchExpanded) ...[
             const SizedBox(height: AppDimens.space8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    autofocus: true,
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (query) {
-                      final value = query.trim();
-                      if (value.isNotEmpty) onSearch?.call(value);
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'Search files',
-                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                      suffixIcon: IconButton(
-                        tooltip: 'Close search',
-                        onPressed: () {
-                          setState(() {
-                            _searchExpanded = false;
-                            _searchController.clear();
-                          });
-                        },
-                        icon: const Icon(Icons.close_rounded, size: 19),
-                      ),
-                      filled: true,
-                      fillColor: AppColors.fillFor(brightness),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 11),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(13),
-                        borderSide:
-                            BorderSide(color: AppColors.dividerFor(brightness)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(13),
-                        borderSide:
-                            BorderSide(color: AppColors.dividerFor(brightness)),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppDimens.space8),
+            SearchBar(
+              controller: _searchController,
+              autoFocus: true,
+              hintText: 'Search files',
+              leading: const Padding(
+                padding: EdgeInsets.only(left: AppDimens.space4),
+                child: Icon(Icons.search_rounded),
+              ),
+              trailing: [
                 IconButton(
-                  tooltip: 'Search',
+                  tooltip: 'Close search',
                   onPressed: () {
-                    final value = _searchController.text.trim();
-                    if (value.isNotEmpty) onSearch?.call(value);
+                    setState(() {
+                      _searchExpanded = false;
+                      _searchController.clear();
+                    });
                   },
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.accentContainerFor(brightness),
-                    foregroundColor: AppColors.accentTextFor(brightness),
-                    minimumSize: const Size(44, 48),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(13)),
-                  ),
-                  icon: const Icon(Icons.arrow_forward_rounded),
+                  icon: const Icon(Icons.close_rounded),
                 ),
               ],
+              onSubmitted: (query) {
+                final value = query.trim();
+                if (value.isNotEmpty) onSearch?.call(value);
+              },
             ),
           ],
         ],
@@ -1519,22 +1664,16 @@ class _FilesStatePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = AppColors.accentFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
     final isConnectionIssue = primaryLabel == 'Retry';
 
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
-        child: Container(
+        child: NexaSurface(
+          level: NexaSurfaceLevel.grouped,
+          radius: AppDimens.radiusCard,
           padding: const EdgeInsets.all(AppDimens.space16),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceFor(brightness),
-            borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-            border: Border.all(
-              color: AppColors.dividerFor(brightness).withValues(alpha: 0.9),
-            ),
-          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1543,22 +1682,22 @@ class _FilesStatePanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 54,
-                    height: 54,
+                    width: AppDimens.touchTargetLarge + AppDimens.space2,
+                    height: AppDimens.touchTargetLarge + AppDimens.space2,
                     decoration: BoxDecoration(
                       color: isConnectionIssue
-                          ? AppColors.errorContainerFor(brightness)
-                          : AppColors.accentContainerFor(brightness),
+                          ? scheme.errorContainer
+                          : scheme.secondaryContainer,
                       borderRadius: BorderRadius.circular(
                         AppDimens.radiusMedium,
                       ),
                     ),
                     child: Icon(
                       icon,
-                      size: 26,
+                      size: AppDimens.iconLarge,
                       color: isConnectionIssue
-                          ? AppColors.errorFor(brightness)
-                          : accent,
+                          ? scheme.onErrorContainer
+                          : scheme.onSecondaryContainer,
                     ),
                   ),
                   const SizedBox(width: AppDimens.space12),
@@ -1569,25 +1708,23 @@ class _FilesStatePanel extends StatelessWidget {
                         if (isConnectionIssue) ...[
                           Text(
                             'CONNECTION ISSUE',
-                            style: AppTextStyle.caption1.copyWith(
-                              color: AppColors.errorFor(brightness),
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8,
+                            style: AppTextStyle.labelMedium.copyWith(
+                              color: scheme.error,
                             ),
                           ),
                           const SizedBox(height: AppDimens.space4),
                         ],
                         Text(
                           title,
-                          style: AppTextStyle.title3.copyWith(
-                            color: AppColors.labelPrimaryFor(brightness),
+                          style: AppTextStyle.titleLarge.copyWith(
+                            color: scheme.onSurface,
                           ),
                         ),
                         const SizedBox(height: AppDimens.space4),
                         Text(
                           message,
-                          style: AppTextStyle.subheadline.copyWith(
-                            color: AppColors.labelSecondaryFor(brightness),
+                          style: AppTextStyle.bodyMedium.copyWith(
+                            color: scheme.onSurfaceVariant,
                             height: 1.35,
                           ),
                         ),
@@ -1604,43 +1741,16 @@ class _FilesStatePanel extends StatelessWidget {
                 children: [
                   FilledButton.tonalIcon(
                     onPressed: onPrimary,
-                    style: FilledButton.styleFrom(
-                      foregroundColor: AppColors.accentTextFor(brightness),
-                      backgroundColor: AppColors.accentContainerFor(brightness),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppDimens.space16,
-                        vertical: AppDimens.space8,
-                      ),
-                      minimumSize: const Size(0, AppDimens.touchTarget),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppDimens.radiusPill,
-                        ),
-                      ),
-                    ),
-                    icon: Icon(primaryIcon, size: 18),
+                    icon: Icon(primaryIcon, size: AppDimens.iconSmall),
                     label: Text(primaryLabel),
                   ),
                   if (secondaryLabel != null && onSecondary != null)
                     OutlinedButton.icon(
                       onPressed: onSecondary,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.labelPrimaryFor(brightness),
-                        side: BorderSide(
-                          color: AppColors.separatorFor(brightness),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimens.space16,
-                          vertical: AppDimens.space8,
-                        ),
-                        minimumSize: const Size(0, AppDimens.touchTarget),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(
-                            AppDimens.radiusPill,
-                          ),
-                        ),
+                      icon: Icon(
+                        secondaryIcon,
+                        size: AppDimens.iconSmall,
                       ),
-                      icon: Icon(secondaryIcon, size: 18),
                       label: Text(secondaryLabel!),
                     ),
                 ],
@@ -1685,7 +1795,7 @@ class _Breadcrumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final parts = path.split('/');
     return SizedBox(
       height: AppDimens.touchTarget,
@@ -1693,26 +1803,18 @@ class _Breadcrumb extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppDimens.pageMargin),
         children: [
-          _crumb(
-            context,
-            brightness,
-            'My files',
-            '',
-            false,
-            icon: Icons.home_outlined,
-          ),
+          _crumb(scheme, 'My files', '', false, icon: Icons.home_outlined),
           for (var i = 0; i < parts.length; i++) ...[
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
+              padding: const EdgeInsets.symmetric(horizontal: AppDimens.space2),
               child: Icon(
                 Icons.chevron_right_rounded,
-                size: 17,
-                color: AppColors.labelTertiaryFor(brightness),
+                size: AppDimens.iconSmall,
+                color: scheme.onSurfaceVariant,
               ),
             ),
             _crumb(
-              context,
-              brightness,
+              scheme,
               parts[i],
               parts.sublist(0, i + 1).join('/'),
               i == parts.length - 1,
@@ -1724,8 +1826,7 @@ class _Breadcrumb extends StatelessWidget {
   }
 
   Widget _crumb(
-    BuildContext context,
-    Brightness brightness,
+    ColorScheme scheme,
     String label,
     String value,
     bool last, {
@@ -1735,9 +1836,7 @@ class _Breadcrumb extends StatelessWidget {
       button: !last,
       label: last ? '$label, current folder' : 'Go to $label',
       child: Material(
-        color: last
-            ? AppColors.accentContainerFor(brightness).withValues(alpha: 0.68)
-            : Colors.transparent,
+        color: last ? scheme.secondaryContainer : Colors.transparent,
         borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
         child: InkWell(
           onTap: last ? null : () => onBreadcrumb(value),
@@ -1750,7 +1849,7 @@ class _Breadcrumb extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (icon != null) ...[
-                    Icon(icon, size: 16, color: accent),
+                    Icon(icon, size: AppDimens.iconSmall, color: accent),
                     const SizedBox(width: AppDimens.space4),
                   ],
                   ConstrainedBox(
@@ -1759,11 +1858,8 @@ class _Breadcrumb extends StatelessWidget {
                       label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: NexaTypography.caption.copyWith(
-                        color: last
-                            ? AppColors.labelPrimaryFor(brightness)
-                            : accent,
-                        fontWeight: last ? FontWeight.w600 : FontWeight.w500,
+                      style: AppTextStyle.labelMedium.copyWith(
+                        color: last ? scheme.onSecondaryContainer : accent,
                       ),
                     ),
                   ),
@@ -1777,6 +1873,85 @@ class _Breadcrumb extends StatelessWidget {
   }
 }
 
+/// A hit-test key plus the file path it belongs to. Keeping them together is
+/// what lets a drag resolve a touched cell back into a contiguous path range.
+class _FileCellRef {
+  final String path;
+  final GlobalKey key;
+
+  const _FileCellRef({required this.path, required this.key});
+}
+
+/// A flat, grouped list of file rows. One tonal surface per section replaces
+/// the old "one elevated card per file" pattern while keeping M3 separators.
+class _FlatFileGroup extends StatelessWidget {
+  final List<FileEntry> entries;
+  final bool selecting;
+  final Uint8List? Function(FileEntry entry) thumbnailFor;
+  final bool Function(String path) isSelected;
+  final GlobalKey Function(String path) keyFor;
+  final ValueChanged<FileEntry> onOpen;
+  final ValueChanged<FileEntry> onLongPress;
+  final ValueChanged<String> onToggleSelect;
+  final ValueChanged<FileEntry> onMore;
+
+  const _FlatFileGroup({
+    required this.entries,
+    required this.selecting,
+    required this.thumbnailFor,
+    required this.isSelected,
+    required this.keyFor,
+    required this.onOpen,
+    required this.onLongPress,
+    required this.onToggleSelect,
+    required this.onMore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < entries.length; index++) ...[
+          NexaFileTile(
+            key: keyFor(entries[index].path),
+            entry: entries[index],
+            thumbnail: thumbnailFor(entries[index]),
+            selected: isSelected(entries[index].path),
+            selecting: selecting,
+            onTap: onOpen,
+            onLongPress: () => onLongPress(entries[index]),
+            onSelectToggle: () => onToggleSelect(entries[index].path),
+            trailing: selecting
+                ? null
+                : IconButton(
+                    tooltip: 'More options',
+                    icon: Icon(
+                      Icons.more_horiz_rounded,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    onPressed: () => onMore(entries[index]),
+                  ),
+          ),
+          if (index < entries.length - 1)
+            Divider(
+              height: 1,
+              indent: AppDimens.rowInset +
+                  (selecting
+                      ? AppDimens.touchTarget + AppDimens.space4
+                      : AppDimens.iconMedium) +
+                  AppDimens.iconTile +
+                  AppDimens.space16,
+              endIndent: AppDimens.rowInset,
+              color: scheme.outlineVariant,
+            ),
+        ],
+      ],
+    );
+  }
+}
+
 class _GroupHeader extends StatelessWidget {
   final String title;
   final int count;
@@ -1785,41 +1960,27 @@ class _GroupHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppDimens.space4,
-        AppDimens.space16,
-        AppDimens.space4,
+        AppDimens.rowInset,
+        AppDimens.space20,
+        AppDimens.rowInset,
         AppDimens.space8,
       ),
       child: Row(
         children: [
           Text(
-            title,
-            style: NexaTypography.sectionHeader.copyWith(
-              color: AppColors.labelPrimaryFor(brightness),
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.2,
+            title.toUpperCase(),
+            style: AppTextStyle.sectionHeader.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(width: AppDimens.space6),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.space6,
-              vertical: AppDimens.space2,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.fillFor(brightness),
-              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            ),
-            child: Text(
-              '$count',
-              style: NexaTypography.caption.copyWith(
-                color: AppColors.labelSecondaryFor(brightness),
-                fontWeight: FontWeight.w600,
-              ),
+          const SizedBox(width: AppDimens.space8),
+          Text(
+            '$count',
+            style: AppTextStyle.labelSmall.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -1874,7 +2035,7 @@ class _BatchDownloadDialogState extends State<_BatchDownloadDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return PopScope(
       canPop: false,
       child: AlertDialog(
@@ -1885,8 +2046,8 @@ class _BatchDownloadDialogState extends State<_BatchDownloadDialog> {
           children: [
             Text(
               '${widget.items.length} files to ${widget.directory}',
-              style: NexaTypography.caption.copyWith(
-                color: AppColors.textSecondaryFor(brightness),
+              style: AppTextStyle.bodySmall.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: AppDimens.spaceMd),
@@ -1900,9 +2061,7 @@ class _BatchDownloadDialogState extends State<_BatchDownloadDialog> {
               _current,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: NexaTypography.rowSubtitle.copyWith(
-                color: AppColors.textPrimaryFor(brightness),
-              ),
+              style: AppTextStyle.bodyMedium.copyWith(color: scheme.onSurface),
             ),
           ],
         ),
@@ -1925,34 +2084,17 @@ class _FileFilterBar extends StatelessWidget {
   final _FileFilter selected;
   final int folderCount;
   final int fileCount;
-  final bool isGrid;
   final ValueChanged<_FileFilter> onChanged;
-  final VoidCallback onSort;
-  final VoidCallback onToggleView;
 
   const _FileFilterBar({
     required this.selected,
     required this.folderCount,
     required this.fileCount,
-    required this.isGrid,
     required this.onChanged,
-    required this.onSort,
-    required this.onToggleView,
   });
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final buttonStyle = IconButton.styleFrom(
-      backgroundColor: AppColors.fillFor(brightness),
-      foregroundColor: AppColors.labelSecondaryFor(brightness),
-      minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
-      padding: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
-      ),
-    );
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimens.pageMargin),
       child: Row(
@@ -1962,44 +2104,37 @@ class _FileFilterBar extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  NexaChip.tonal(
-                    label: 'All ${folderCount + fileCount}',
-                    selected: selected == _FileFilter.all,
-                    onTap: () => onChanged(_FileFilter.all),
+                  SizedBox(
+                    height: AppDimens.touchTarget,
+                    child: FilterChip(
+                      label: Text('All ${folderCount + fileCount}'),
+                      selected: selected == _FileFilter.all,
+                      onSelected: (_) => onChanged(_FileFilter.all),
+                      showCheckmark: false,
+                    ),
                   ),
                   const SizedBox(width: AppDimens.space6),
-                  NexaChip.tonal(
-                    label: 'Folders $folderCount',
-                    leadingIcon: Icons.folder_outlined,
-                    selected: selected == _FileFilter.folders,
-                    onTap: () => onChanged(_FileFilter.folders),
+                  SizedBox(
+                    height: AppDimens.touchTarget,
+                    child: FilterChip(
+                      label: Text('Folders $folderCount'),
+                      selected: selected == _FileFilter.folders,
+                      onSelected: (_) => onChanged(_FileFilter.folders),
+                      showCheckmark: false,
+                    ),
                   ),
                   const SizedBox(width: AppDimens.space6),
-                  NexaChip.tonal(
-                    label: 'Files $fileCount',
-                    leadingIcon: Icons.insert_drive_file_outlined,
-                    selected: selected == _FileFilter.files,
-                    onTap: () => onChanged(_FileFilter.files),
+                  SizedBox(
+                    height: AppDimens.touchTarget,
+                    child: FilterChip(
+                      label: Text('Files $fileCount'),
+                      selected: selected == _FileFilter.files,
+                      onSelected: (_) => onChanged(_FileFilter.files),
+                      showCheckmark: false,
+                    ),
                   ),
                 ],
               ),
-            ),
-          ),
-          const SizedBox(width: AppDimens.space6),
-          IconButton(
-            tooltip: 'Sort files',
-            onPressed: onSort,
-            style: buttonStyle,
-            icon: const Icon(Icons.sort_rounded, size: 20),
-          ),
-          const SizedBox(width: AppDimens.space4),
-          IconButton(
-            tooltip: isGrid ? 'Switch to list view' : 'Switch to grid view',
-            onPressed: onToggleView,
-            style: buttonStyle,
-            icon: Icon(
-              isGrid ? Icons.view_list_rounded : Icons.grid_view_rounded,
-              size: 19,
             ),
           ),
         ],

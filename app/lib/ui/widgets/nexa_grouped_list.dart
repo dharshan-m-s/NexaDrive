@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import 'nexa_surface.dart';
 import 'nexa_chip.dart';
 import 'nexa_list_tile.dart';
 
-/// One UI-inspired grouped section for related settings and actions.
+/// Material 3 grouped section for related settings and actions.
 class NexaGroupedList extends StatelessWidget {
   final String? header;
   final List<Widget> children;
@@ -25,8 +24,7 @@ class NexaGroupedList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final divider = AppColors.separatorOpaqueFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -34,33 +32,27 @@ class NexaGroupedList extends StatelessWidget {
         if (header != null) NexaSectionHeader(header!, padding: padding),
         NexaSurface(
           level: NexaSurfaceLevel.grouped,
-          radius: AppDimens.radiusXLarge,
+          radius: AppDimens.radiusMedium,
           padding:
               padding ?? const EdgeInsets.symmetric(vertical: AppDimens.space4),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-            child: Material(
-              type: MaterialType.transparency,
-              child: Column(
-                children: [
-                  for (var i = 0; i < children.length; i++) ...[
-                    children[i],
-                    if (withDividers && i < children.length - 1)
-                      Padding(
-                        padding: EdgeInsets.only(
-                          left: _insetFor(children[i]),
-                          right: AppDimens.pageMargin,
-                        ),
-                        child: Divider(
-                          color: divider,
-                          height: 0.5,
-                          thickness: 0.5,
-                        ),
-                      ),
-                  ],
-                ],
-              ),
-            ),
+          child: Column(
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                children[i],
+                if (withDividers && i < children.length - 1)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: _insetFor(children[i]),
+                      right: AppDimens.pageMargin,
+                    ),
+                    child: Divider(
+                      color: scheme.outlineVariant,
+                      height: 0,
+                      thickness: 1,
+                    ),
+                  ),
+              ],
+            ],
           ),
         ),
         if (footer != null) ...[
@@ -138,81 +130,75 @@ class NexaPageContainer extends StatelessWidget {
     final edgeInsets = padding.resolve(Directionality.of(context));
     final effectivePadding =
         scrollable ? EdgeInsets.only(bottom: edgeInsets.bottom) : edgeInsets;
-    final brightness = Theme.of(context).brightness;
-    final headerForegroundColor =
-        headerForeground ?? AppColors.labelPrimaryFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
+    final headerForegroundColor = headerForeground ?? scheme.onSurface;
 
-    final header = showHeader &&
-            (title != null || leading != null || headerAction != null)
-        ? Padding(
-            padding: EdgeInsets.fromLTRB(
-              edgeInsets.left,
-              edgeInsets.top,
-              edgeInsets.right,
-              0,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (leading != null) leading!,
-                if (leading != null) const SizedBox(width: AppDimens.space12),
-                if (title != null)
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppColors.accentContainerFor(brightness),
-                      borderRadius:
-                          BorderRadius.circular(AppDimens.radiusMedium),
-                      border: Border.all(
-                        color: AppColors.accentTextFor(brightness)
-                            .withValues(alpha: 0.12),
+    final header =
+        showHeader && (title != null || leading != null || headerAction != null)
+            ? Padding(
+                padding: EdgeInsets.fromLTRB(
+                  edgeInsets.left,
+                  edgeInsets.top,
+                  edgeInsets.right,
+                  0,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (leading != null) leading!,
+                    if (leading != null)
+                      const SizedBox(width: AppDimens.space12),
+                    if (title != null)
+                      Container(
+                        width: AppDimens.touchTarget,
+                        height: AppDimens.touchTarget,
+                        decoration: BoxDecoration(
+                          color: scheme.primaryContainer,
+                          borderRadius:
+                              BorderRadius.circular(AppDimens.radiusMedium),
+                        ),
+                        child: Icon(
+                          _pageIcon(title!),
+                          size: AppDimens.iconMedium,
+                          color: scheme.onPrimaryContainer,
+                        ),
                       ),
-                    ),
-                    child: Icon(
-                      _pageIcon(title!),
-                      size: 21,
-                      color: AppColors.accentTextFor(brightness),
-                    ),
-                  ),
-                if (title != null) const SizedBox(width: AppDimens.space12),
-                if (title != null || subtitle != null)
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (title != null)
-                          Text(
-                            title!,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyle.largeTitle.copyWith(
-                              color: headerForegroundColor,
-                              letterSpacing: -0.45,
-                            ),
-                          ),
-                        if (subtitle != null)
-                          Text(
-                            subtitle!,
-                            style: AppTextStyle.caption1.copyWith(
-                              color:
-                                  headerForegroundColor.withValues(alpha: 0.7),
-                            ),
-                          ),
-                      ],
-                    ),
-                  )
-                else
-                  const SizedBox.shrink(),
-                if (headerAction != null) ...[
-                  const SizedBox(width: AppDimens.space12),
-                  headerAction!,
-                ],
-              ],
-            ),
-          )
-        : const SizedBox.shrink();
+                    if (title != null) const SizedBox(width: AppDimens.space12),
+                    if (title != null || subtitle != null)
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (title != null)
+                              Text(
+                                title!,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyle.headlineSmall.copyWith(
+                                  color: headerForegroundColor,
+                                ),
+                              ),
+                            if (subtitle != null)
+                              Text(
+                                subtitle!,
+                                style: AppTextStyle.bodySmall.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                      )
+                    else
+                      const SizedBox.shrink(),
+                    if (headerAction != null) ...[
+                      const SizedBox(width: AppDimens.space12),
+                      headerAction!,
+                    ],
+                  ],
+                ),
+              )
+            : const SizedBox.shrink();
 
     final bodyWidget = Padding(
       padding: EdgeInsets.only(

@@ -1,8 +1,8 @@
 # NexaDrive client
 
 Flutter app for Android, Windows and Linux. One codebase, responsive
-Samsung One UI-inspired design (bottom navigation on phones, sidebar on
-desktop, light/dark themes).
+Material 3 design (floating pill navigation on phones, navigation rail on
+desktop, seeded light/dark themes).
 
 ## Setup
 
@@ -58,6 +58,21 @@ Android release signing is optional **for local builds**. Without
 (fine for sideloading, not for Play Store or for upgrades over an existing
 install). CI refuses to publish a release without the production
 keystore.
+
+### Side-by-side local preview
+
+To test a local build without touching an installed NexaDrive release or its
+data, build with a different Android application id and a distinct label:
+
+```bash
+flutter build apk --release \
+  --android-project-arg=nexaApplicationIdSuffix=.preview \
+  --android-project-arg='nexaAppLabel=NexaDrive Preview'
+adb install -r build/app/outputs/flutter-apk/app-release.apk
+```
+
+This installs as `io.nexadrive.app.preview`; the normal build remains
+`io.nexadrive.app`. Both apps can stay installed with separate local data.
 
 ## Updating the app
 

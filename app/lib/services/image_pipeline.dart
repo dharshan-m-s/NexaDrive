@@ -95,9 +95,9 @@ class ImageData {
   bool get isOriginal => key.rendition == ImageRendition.original;
 }
 
-/// Raised when the server cannot produce a thumbnail for a format (HEIC/AVIF
-/// without a codec). Callers must handle this explicitly rather than silently
-/// substituting a poor-quality representation.
+/// Raised when the server cannot produce a thumbnail (missing codec, absent
+/// optional video/PDF tool, or unsupported format). Callers must handle this
+/// explicitly rather than silently substituting a poor-quality representation.
 class ThumbnailUnavailable implements Exception {
   const ThumbnailUnavailable(this.path);
   final String path;

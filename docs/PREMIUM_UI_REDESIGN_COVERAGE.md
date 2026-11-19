@@ -1,5 +1,7 @@
 # NexaDrive Premium UI Redesign — Coverage and Scope
 
+> **Historical record — superseded.** This document is a point-in-time record of NexaDrive's former One UI / Liquid Glass design. It is not current guidance: see [docs/DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) (Material 3 / Material You) and `docs/UI_DESIGN_TOKENS.md`.
+
 **Branch:** `beta`  
 **Design direction:** One UI-inspired visual hierarchy and card composition, with native iOS interaction discipline.  
 **Glass rule:** Preserve optical Liquid Glass for the floating navigation dock and selected transient controls. Keep the More action sheet and persistent content surfaces solid, tonal, readable and data-led.

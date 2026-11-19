@@ -24,22 +24,24 @@ Read these first. They describe behaviour that exists today.
 | [`GITHUB_ACTIONS.md`](GITHUB_ACTIONS.md) | What each CI and release workflow job does, and which secrets it needs. |
 | [`FILE_FORMAT_SUPPORT.md`](FILE_FORMAT_SUPPORT.md) | Which file types render, preview or download. |
 | [`APP_QA_CHECKLIST.md`](APP_QA_CHECKLIST.md) | Manual QA pass for the client. |
+| [`UI_INTERACTION_MAP.md`](UI_INTERACTION_MAP.md) | Interaction map across screens (Material navigation terms). |
 | [`../app/doc/diagnostics/`](../app/doc/diagnostics/) | Root-cause write-ups for specific reported bugs. |
 
 ## Design system — current
 
-The One UI-inspired visual language and its tokens. These describe the shared
-widgets under `app/lib/core/design` and `app/lib/ui/widgets`.
+The Material 3 (Material You) visual language and its tokens: a seeded
+ColorScheme, `surfaceContainer` roles, Material type/shape/elevation/motion,
+Material state layers, 48dp touch targets and reduced motion. These describe the
+shared widgets under `app/lib/core/design` and `app/lib/ui/widgets`.
 
 | Document | Covers |
 | --- | --- |
 | [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) | Principles, surfaces, colour roles, typography. |
 | [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md) | The `Nexa*` component library (formerly `OneUi*`, renamed during the 2026-10 design-system consolidation). |
 | [`UI_DESIGN_TOKENS.md`](UI_DESIGN_TOKENS.md) | Exact token values. |
-| [`UI_SCREEN_SPECIFICATION.md`](UI_SCREEN_SPECIFICATION.md) | Screen-by-screen layout specification. |
-| [`SCREEN_SPECIFICATIONS.md`](SCREEN_SPECIFICATIONS.md) | Older, shorter screen notes — superseded by the above where they overlap. |
-| [`RESPONSIVE_LAYOUT.md`](RESPONSIVE_LAYOUT.md) | Breakpoints and adaptive behaviour. |
-| [`INTERACTION_MOTION.md`](INTERACTION_MOTION.md) | Motion and transition rules. |
+| [`SCREEN_SPECIFICATIONS.md`](SCREEN_SPECIFICATIONS.md) | Screen-by-screen layout and behaviour notes. |
+| [`RESPONSIVE_LAYOUT.md`](RESPONSIVE_LAYOUT.md) | Breakpoints and adaptive behaviour (floating Material pill on mobile, Material navigation rail on desktop). |
+| [`INTERACTION_MOTION.md`](INTERACTION_MOTION.md) | Material motion and transition rules. |
 
 ## Historical — point-in-time records
 
@@ -56,9 +58,10 @@ behind past decisions; they should not be read as current specifications.
 - `FINAL_RELEASE.md`, `RELEASES.md`, `ROADMAP.md` — release/roadmap notes.
 - `SECURITY_AUDIT.md` — the long-form security audit behind `SECURITY.md`.
 - `PERFORMANCE_AUDIT.md`, `UI_PERFORMANCE_AUDIT.md`, `UI_ACCESSIBILITY_AUDIT.md`,
-  `UI_RESPONSIVE_AUDIT.md`, `UI_INTERACTION_MAP.md`, `UI_REVERSE_ENGINEERING.md`,
+  `UI_RESPONSIVE_AUDIT.md`, `UI_REVERSE_ENGINEERING.md`,
   `UI_COMPONENT_INVENTORY.md`, `UI_REDESIGN_AUDIT.md`,
-  `NEXADRIVE_CURRENT_UI_COMPLETE_INVENTORY.md`, `ONE_UI_REDESIGN_REPORT.md`,
+  `UI_SCREEN_SPECIFICATION.md`, `NEXADRIVE_CURRENT_UI_COMPLETE_INVENTORY.md`,
+  `ONE_UI_REDESIGN_REPORT.md`,
   `ONE_UI_REFERENCE_NOTES.md`, `VERIFICATION_A11Y.md` — the UI
   reverse-engineering and redesign passes.
 

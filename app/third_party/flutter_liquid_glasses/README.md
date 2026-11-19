@@ -1,3 +1,5 @@
+Historical reference only — NexaDrive no longer uses this renderer; the Material 3 design system supersedes it.
+
 # Liquid glass rendering reference
 
 This directory records the third-party source used by NexaDrive's optical-glass renderer.

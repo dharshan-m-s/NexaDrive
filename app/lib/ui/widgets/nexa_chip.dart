@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
-import 'nexa_pressable.dart';
 
-/// Semantic badge/chip with consistent styling.
+/// Semantic Material 3 chip with a consistent tonal fill.
+///
+/// Interactive chips render a [FilterChip] (checkmark hidden); static status
+/// chips render a plain [Chip]. Both take their label style from the Material
+/// `labelMedium` role and their shape from the theme's stadium chip shape.
 class NexaChip extends StatelessWidget {
   final String label;
   final IconData? leadingIcon;
@@ -13,10 +15,7 @@ class NexaChip extends StatelessWidget {
   final NexaChipVariant variant;
 
   /// Optional semantic tint for status chips (success / warning / error).
-  /// When set, the chip renders with these tonal container colours instead of
-  /// the neutral or accent fill — e.g. a "Blocked" or "You" badge in an
-  /// account list. Still token-driven: pass `AppColors.errorContainerFor(b)` /
-  /// `AppColors.onErrorContainerFor(b)` pairs, never raw colours.
+  /// Pass tonal container/foreground pairs from [AppColors], never raw colours.
   final Color? tintColor;
   final Color? tintForeground;
 
@@ -53,7 +52,7 @@ class NexaChip extends StatelessWidget {
     this.tintForeground,
   }) : variant = NexaChipVariant.outlined;
 
-  /// Tonal chip (status, categories) — uses accent container.
+  /// Tonal chip (status, categories) — uses the secondary container role.
   const NexaChip.tonal({
     super.key,
     required this.label,
@@ -66,83 +65,73 @@ class NexaChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = AppColors.accentFor(brightness);
-    final onAccent = AppColors.onAccentContainerFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
 
-    Color bg;
-    Color fg;
-    BorderSide? border;
+    late final Color fill;
+    late final Color foreground;
+    late final BorderSide edge;
 
     if (tintColor != null) {
       // Semantic status chip: the tint carries the meaning, in both
-      // appearances, through the tonal container tokens.
-      bg = tintColor!;
-      fg = tintForeground ?? AppColors.labelPrimaryFor(brightness);
-      border = BorderSide.none;
+      // appearances, through the supplied tonal container tokens.
+      fill = tintColor!;
+      foreground = tintForeground ?? scheme.onSurface;
+      edge = BorderSide.none;
     } else {
       switch (variant) {
         case NexaChipVariant.filled:
-          bg = selected ? accent : accent.withValues(alpha: 0.12);
-          fg = selected ? onAccent : accent;
-          border = BorderSide.none;
+          fill = selected ? scheme.primary : scheme.primaryContainer;
+          foreground = selected ? scheme.onPrimary : scheme.onPrimaryContainer;
+          edge = BorderSide.none;
         case NexaChipVariant.outlined:
-          bg = Colors.transparent;
-          fg = accent;
-          border = BorderSide(color: accent, width: 1.5);
+          fill = Colors.transparent;
+          foreground = scheme.primary;
+          edge = BorderSide(color: scheme.outline, width: 1);
         case NexaChipVariant.tonal:
-          bg = selected
-              ? AppColors.accentContainerFor(brightness)
-              : AppColors.fillFor(brightness);
-          fg = selected ? onAccent : AppColors.labelSecondaryFor(brightness);
-          border = BorderSide.none;
+          fill = selected
+              ? scheme.secondaryContainer
+              : scheme.surfaceContainerHigh;
+          foreground =
+              selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant;
+          edge = BorderSide.none;
       }
     }
 
-    final widget = Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space12,
-        vertical: AppDimens.space8,
-      ),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        border:
-            border != BorderSide.none ? Border.fromBorderSide(border) : null,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (leadingIcon != null) ...[
-            Icon(leadingIcon, size: AppDimens.iconSmall, color: fg),
-            const SizedBox(width: AppDimens.space6),
-          ],
-          Text(
-            label,
-            style: AppTextStyle.caption1.copyWith(
-              color: fg,
-              fontWeight: FontWeight.w600,
+    final labelStyle = AppTextStyle.labelMedium.copyWith(color: foreground);
+    final avatar = leadingIcon == null
+        ? null
+        : Icon(leadingIcon, size: AppDimens.iconSmall);
+
+    final chipTheme = Theme.of(context).chipTheme.copyWith(
+          backgroundColor: fill,
+          selectedColor: fill,
+          side: edge,
+          shape: const StadiumBorder(),
+          labelStyle: labelStyle,
+          secondaryLabelStyle: labelStyle,
+        );
+
+    return ChipTheme(
+      data: chipTheme,
+      child: onTap == null
+          ? Chip(
+              avatar: avatar,
+              label: Text(label, style: labelStyle),
+            )
+          : FilterChip(
+              avatar: avatar,
+              label: Text(label, style: labelStyle),
+              selected: selected,
+              showCheckmark: false,
+              onSelected: (_) => onTap!(),
             ),
-          ),
-        ],
-      ),
-    );
-
-    if (onTap == null) return widget;
-
-    return NexaPressable(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-        child: widget,
-      ),
     );
   }
 }
 
 enum NexaChipVariant { filled, outlined, tonal }
 
-/// Section header for grouped lists.
+/// Section header for grouped lists — a Material 3 overline label.
 class NexaSectionHeader extends StatelessWidget {
   final String title;
   final TextStyle? style;
@@ -159,7 +148,7 @@ class NexaSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: padding ??
           const EdgeInsets.fromLTRB(
@@ -174,9 +163,8 @@ class NexaSectionHeader extends StatelessWidget {
             child: Text(
               title.toUpperCase(),
               style: style ??
-                  AppTextStyle.listHeader.copyWith(
-                    color: AppColors.labelTertiaryFor(brightness),
-                    letterSpacing: 0.4,
+                  AppTextStyle.labelMedium.copyWith(
+                    color: scheme.onSurfaceVariant,
                   ),
             ),
           ),

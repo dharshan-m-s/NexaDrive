@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 
-/// NexaDrive form field — One UI-inspired shape with native focus feedback.
+/// NexaDrive form field — a Material 3 filled [TextFormField].
+///
+/// Colours, outline, shape and state layers come from the theme's
+/// [InputDecorationTheme]; the field only supplies content and icon theming.
 class NexaTextField extends StatefulWidget {
   final TextEditingController? controller;
   final String? label;
@@ -25,6 +27,9 @@ class NexaTextField extends StatefulWidget {
   final VoidCallback? onTap;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
+
+  /// Compatibility alias for [onSubmitted], used by existing call sites.
+  final ValueChanged<String>? onFieldSubmitted;
   final FormFieldValidator<String>? validator;
   final TextCapitalization textCapitalization;
 
@@ -53,6 +58,7 @@ class NexaTextField extends StatefulWidget {
     this.onTap,
     this.onChanged,
     this.onSubmitted,
+    this.onFieldSubmitted,
     this.validator,
     this.textCapitalization = TextCapitalization.none,
     this.dense = false,
@@ -94,134 +100,77 @@ class _NexaTextFieldState extends State<NexaTextField> {
   }
 
   void _onFocusChange() {
-    setState(() => _hasFocus = _focusNode.hasFocus);
+    setState(() => _hasFocus = _activeFocusNode.hasFocus);
   }
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final hasError = widget.errorText != null;
-    final accent = AppColors.accentFor(brightness);
-    final error = AppColors.errorFor(brightness);
-    final fillColor = AppColors.fillFor(brightness);
-    final borderColor = hasError
-        ? error
-        : _hasFocus
-            ? accent
-            : AppColors.separatorFor(brightness).withValues(alpha: 0.58);
+    final scheme = Theme.of(context).colorScheme;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (widget.label != null) ...[
-          Padding(
-            padding: const EdgeInsets.only(
-                left: AppDimens.space4, bottom: AppDimens.space6),
-            child: Text(
-              widget.label!,
-              style: AppTextStyle.caption1.copyWith(
-                color: AppColors.labelSecondaryFor(brightness),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-        TextFormField(
-          controller: widget.controller,
-          focusNode: _activeFocusNode,
-          keyboardType: widget.keyboardType,
-          textInputAction: widget.textInputAction,
-          obscureText: widget.obscureText,
-          readOnly: widget.readOnly,
-          enabled: widget.enabled,
-          autofocus: widget.autofocus,
-          maxLines: widget.maxLines,
-          maxLength: widget.maxLength,
-          autofillHints: widget.autofillHints,
-          textCapitalization: widget.textCapitalization,
-          onTap: widget.onTap,
-          onChanged: widget.onChanged,
-          onFieldSubmitted: widget.onSubmitted,
-          validator: widget.validator,
-          style: AppTextStyle.body.copyWith(
-            color: AppColors.labelPrimaryFor(brightness),
-          ),
-          decoration: InputDecoration(
-            hintText: widget.hint,
-            helperText: widget.helperText,
-            errorText: widget.errorText,
-            counterText: '',
-            filled: true,
-            fillColor: fillColor,
-            isDense: true,
-            contentPadding: EdgeInsets.symmetric(
-              horizontal: AppDimens.space16,
-              vertical: widget.dense ? AppDimens.space8 : AppDimens.space12,
-            ),
-            hintStyle: AppTextStyle.body.copyWith(
-              color: AppColors.labelTertiaryFor(brightness),
-            ),
-            helperStyle: AppTextStyle.caption2.copyWith(
-              color: AppColors.labelTertiaryFor(brightness),
-            ),
-            errorStyle: AppTextStyle.caption2.copyWith(
-              color: error,
-            ),
-            prefixIcon: widget.prefixIcon != null
-                ? Padding(
-                    padding: const EdgeInsets.only(
-                        left: AppDimens.space12, right: AppDimens.space8),
-                    child: IconTheme(
-                      data: IconThemeData(
-                        size: AppDimens.iconMedium,
-                        color: _hasFocus
-                            ? accent
-                            : AppColors.labelTertiaryFor(brightness),
-                      ),
-                      child: widget.prefixIcon!,
-                    ),
-                  )
-                : null,
-            suffixIcon: widget.suffixIcon != null
-                ? Padding(
-                    padding: const EdgeInsets.only(right: AppDimens.space12),
-                    child: IconTheme(
-                      data: IconThemeData(
-                        size: AppDimens.iconMedium,
-                        color: AppColors.labelTertiaryFor(brightness),
-                      ),
-                      child: widget.suffixIcon!,
-                    ),
-                  )
-                : null,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-              borderSide: BorderSide(
-                  color: borderColor, width: _hasFocus || hasError ? 1.5 : 0.8),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-              borderSide: BorderSide(color: accent, width: 2),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-              borderSide: BorderSide(color: error, width: 2),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-              borderSide: BorderSide(color: error, width: 2),
-            ),
-            disabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-              borderSide: BorderSide.none,
-            ),
-          ),
+    return TextFormField(
+      controller: widget.controller,
+      focusNode: _activeFocusNode,
+      keyboardType: widget.keyboardType,
+      textInputAction: widget.textInputAction,
+      obscureText: widget.obscureText,
+      readOnly: widget.readOnly,
+      enabled: widget.enabled,
+      autofocus: widget.autofocus,
+      maxLines: widget.maxLines,
+      maxLength: widget.maxLength,
+      autofillHints: widget.autofillHints,
+      textCapitalization: widget.textCapitalization,
+      onTap: widget.onTap,
+      onChanged: widget.onChanged,
+      onFieldSubmitted: widget.onFieldSubmitted ?? widget.onSubmitted,
+      validator: widget.validator,
+      style: AppTextStyle.bodyLarge.copyWith(color: scheme.onSurface),
+      decoration: InputDecoration(
+        labelText: widget.label,
+        hintText: widget.hint,
+        helperText: widget.helperText,
+        errorText: widget.errorText,
+        counterText: '',
+        isDense: widget.dense,
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: AppDimens.space16,
+          vertical: widget.dense ? AppDimens.space8 : AppDimens.space16,
         ),
-      ],
+        hintStyle: AppTextStyle.bodyLarge.copyWith(
+          color: scheme.onSurfaceVariant,
+        ),
+        helperStyle: AppTextStyle.bodySmall.copyWith(
+          color: scheme.onSurfaceVariant,
+        ),
+        errorStyle: AppTextStyle.bodySmall.copyWith(color: scheme.error),
+        prefixIcon: widget.prefixIcon != null
+            ? Padding(
+                padding: const EdgeInsets.only(
+                  left: AppDimens.space12,
+                  right: AppDimens.space8,
+                ),
+                child: IconTheme(
+                  data: IconThemeData(
+                    size: AppDimens.iconMedium,
+                    color: _hasFocus ? scheme.primary : scheme.onSurfaceVariant,
+                  ),
+                  child: widget.prefixIcon!,
+                ),
+              )
+            : null,
+        suffixIcon: widget.suffixIcon != null
+            ? Padding(
+                padding: const EdgeInsets.only(right: AppDimens.space12),
+                child: IconTheme(
+                  data: IconThemeData(
+                    size: AppDimens.iconMedium,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  child: widget.suffixIcon!,
+                ),
+              )
+            : null,
+      ),
     );
   }
 }

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 
-/// Tonal divider for grouped content surfaces.
+/// Material 3 divider for grouped content surfaces.
 class NexaDivider extends StatelessWidget {
   final double indent;
   final double endIndent;
@@ -13,7 +12,7 @@ class NexaDivider extends StatelessWidget {
     super.key,
     this.indent = 0,
     this.endIndent = 0,
-    this.thickness = 0.5,
+    this.thickness = 1,
     this.color,
   });
 
@@ -21,20 +20,20 @@ class NexaDivider extends StatelessWidget {
   const NexaDivider.inset({
     super.key,
     this.endIndent = AppDimens.pageMargin,
-    this.thickness = 0.5,
+    this.thickness = 1,
     this.color,
   }) : indent =
             AppDimens.pageMargin + AppDimens.iconTileLarge + AppDimens.space12;
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return Divider(
-      color: color ?? AppColors.separatorFor(brightness),
+      color: color ?? scheme.outlineVariant,
       thickness: thickness,
       indent: indent,
       endIndent: endIndent,
-      height: 1,
+      height: 0,
     );
   }
 }
@@ -47,18 +46,18 @@ class NexaVerticalDivider extends StatelessWidget {
 
   const NexaVerticalDivider({
     super.key,
-    this.height = 24,
-    this.thickness = 0.5,
+    this.height = AppDimens.space24,
+    this.thickness = 1,
     this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return SizedBox(
       height: height,
       child: VerticalDivider(
-        color: color ?? AppColors.separatorFor(brightness),
+        color: color ?? scheme.outlineVariant,
         thickness: thickness,
         indent: 0,
         endIndent: 0,

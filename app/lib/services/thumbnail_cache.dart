@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Small disk-backed cache for generated photo thumbnails.
+/// Small disk-backed cache for generated image, video and PDF previews.
 ///
 /// Thumbnails are cheap to regenerate server-side, so the cache only exists
 /// to avoid re-downloading the same preview bytes on every app launch. It is

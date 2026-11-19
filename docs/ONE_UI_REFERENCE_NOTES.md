@@ -1,5 +1,7 @@
 # Samsung One UI — Reference Notes for the NexaDrive Redesign
 
+> **Historical record — superseded.** This document is a point-in-time record of NexaDrive's former One UI / Liquid Glass design. It is not current guidance: see [docs/DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) (Material 3 / Material You) and `docs/UI_DESIGN_TOKENS.md`.
+
 > Goal of this file: give the future spec author a documented, factually-sourced
 > picture of Samsung's One UI (the visual language NexaDrive already mimics) plus the
 > Apple Design methodology we use ONLY as a review lens (AGENTS.md: interaction quality

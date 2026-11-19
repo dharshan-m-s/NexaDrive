@@ -1,12 +1,12 @@
 # NexaDrive Interaction & Motion Specification
 
-> How the app moves and responds. Derived from Samsung One UI restraint and the
-> Apple design methodology used strictly as a review lens (AGENTS.md), translated
-> to Flutter's animation stack. All motion values live in `core/design/app_motion.dart`.
+> How the app moves and responds: Material 3 (Material You) motion translated to
+> Flutter's animation stack. Values live in `core/design/app_motion.dart`;
+> `DESIGN_SYSTEM.md` and `UI_DESIGN_TOKENS.md` are authoritative for the roles.
 
 ## 1. Motion model
 
-One UI motion is restrained, confident, physical. Defaults:
+Material 3 motion is restrained, confident, physical. Defaults:
 
 | Parameter | Value | Applies to |
 |---|---|---|
@@ -24,10 +24,11 @@ stiffness: 8.1633, damping: 5.7143)` (response 0.35 / damping 1.0) and a faster
 - `fast` 180ms — row highlight, icon swap, counters, switchers.
 - `normal` 300ms — sheet slide, page transitions, expand/collapse.
 - `slow` 380ms — deliberate navigation motion.
-- Curves: `standard` (responsive feel), `enter` / `exit` (mirrored for spatial
-  consistency: things enter and leave along the same path), `fade` (opacity).
+- Curves: `standard` (Material standard curve, responsive feel), `enter` / `exit`
+  (Material entering/exiting curves, mirrored for spatial consistency: things
+  enter and leave along the same path), `fade` (opacity).
 
-## 3. Movement language (mapped from the Apple methodology review lens)
+## 3. Movement language (Material 3, with an accessibility craft review)
 
 | Principle | Flutter implementation |
 |---|---|
@@ -39,7 +40,7 @@ stiffness: 8.1633, damping: 5.7143)` (response 0.35 / damping 1.0) and a faster
 | Spatial consistency | Page transitions: incoming page glides up while outgoing settles; sheet dismiss mirrors entry path |
 | Rubber-band at boundaries | Native scroll physics; sliders clamp at ends |
 | Velocity seam between drag & settle | Springs carry release velocity through `AnimationController.animateWith`/`SpringSimulation` re-targets |
-| Translucent layering | One UI surfaces are tonal (color), not glass; blur reserved for L3+ floating where it earns its place — never stacked light-on-light |
+| Tonal surfaces and state layers | Use seeded ColorScheme `surfaceContainer` roles and Material state layers; the floating Material pill is tonal, not optical glass |
 
 ## 4. Reduced motion
 
@@ -55,7 +56,7 @@ stiffness: 8.1633, damping: 5.7143)` (response 0.35 / damping 1.0) and a faster
 
 ## 5. Feedback taxonomy (feedback kinds)
 
-- **Status** — ongoing: transfer progress bars (accent filled), upload status pod.
+- **Status** — ongoing: transfer progress bars (seeded `primary`), upload status pod.
 - **Completion** — SnackBar ("saved to"), success icon in transfers.
 - **Warning** — amber server-restart toast, sync conflict banner (`warningFor` tint).
 - **Error** — inline error states (`NexaEmptyState`) + SnackBar with server text.

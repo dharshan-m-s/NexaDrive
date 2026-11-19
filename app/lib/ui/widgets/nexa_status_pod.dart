@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import 'nexa_surface.dart';
 
-/// Compact status panel with a clear icon well and semantic tint.
+/// Compact Material 3 status panel with a tonal icon well and semantic tint.
 class NexaStatusPod extends StatelessWidget {
   final IconData icon;
   final Color tint;
@@ -25,7 +24,7 @@ class NexaStatusPod extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
 
     return NexaSurface(
       level: NexaSurfaceLevel.grouped,
@@ -35,18 +34,15 @@ class NexaStatusPod extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 52,
-            height: 52,
+            width: AppDimens.iconTileLarge,
+            height: AppDimens.iconTileLarge,
             decoration: BoxDecoration(
-              color: tint.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-              border: Border.all(
-                color: tint.withValues(
-                  alpha: brightness == Brightness.dark ? 0.28 : 0.16,
-                ),
+              color: tint.withValues(
+                alpha: scheme.brightness == Brightness.dark ? 0.20 : 0.12,
               ),
+              borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
             ),
-            child: Icon(icon, size: 24, color: tint),
+            child: Icon(icon, size: AppDimens.iconMedium, color: tint),
           ),
           const SizedBox(width: AppDimens.space16),
           Expanded(
@@ -55,17 +51,15 @@ class NexaStatusPod extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: AppTextStyle.title2.copyWith(
-                    color: AppColors.labelPrimaryFor(brightness),
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.2,
+                  style: AppTextStyle.titleMedium.copyWith(
+                    color: scheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: AppDimens.space4),
                 Text(
                   subtitle,
-                  style: AppTextStyle.footnote.copyWith(
-                    color: AppColors.labelSecondaryFor(brightness),
+                  style: AppTextStyle.bodySmall.copyWith(
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -75,9 +69,8 @@ class NexaStatusPod extends StatelessWidget {
             const SizedBox(width: AppDimens.space12),
             Text(
               trailing!,
-              style: AppTextStyle.caption1.copyWith(
-                color: AppColors.labelSecondaryFor(brightness),
-                fontWeight: FontWeight.w500,
+              style: AppTextStyle.labelMedium.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -86,7 +79,7 @@ class NexaStatusPod extends StatelessWidget {
             Icon(
               Icons.chevron_right_rounded,
               size: AppDimens.iconMedium,
-              color: AppColors.labelTertiaryFor(brightness),
+              color: scheme.onSurfaceVariant,
             ),
           ],
         ],

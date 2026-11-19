@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
@@ -92,22 +91,30 @@ class _TrashScreenState extends State<TrashScreen> {
   Future<void> _delete(String id) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete forever?'),
-        content: const Text(
-          'This cannot be undone. The file will be permanently removed.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+      builder: (dialogContext) {
+        final scheme = Theme.of(dialogContext).colorScheme;
+        return AlertDialog(
+          icon: Icon(Icons.delete_forever_outlined, color: scheme.error),
+          title: const Text('Delete forever?'),
+          content: const Text(
+            'This cannot be undone. The file will be permanently removed.',
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete forever'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: scheme.error,
+                foregroundColor: scheme.onError,
+              ),
+              child: const Text('Delete forever'),
+            ),
+          ],
+        );
+      },
     );
     if (confirm != true) return;
     try {
@@ -133,23 +140,31 @@ class _TrashScreenState extends State<TrashScreen> {
 
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(all ? 'Empty Trash?' : 'Delete selected items?'),
-        content: Text(
-          'Permanently delete ${targets.length} '
-          '${targets.length == 1 ? 'item' : 'items'}? This cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+      builder: (dialogContext) {
+        final scheme = Theme.of(dialogContext).colorScheme;
+        return AlertDialog(
+          icon: Icon(Icons.delete_forever_outlined, color: scheme.error),
+          title: Text(all ? 'Empty Trash?' : 'Delete selected items?'),
+          content: Text(
+            'Permanently delete ${targets.length} '
+            '${targets.length == 1 ? 'item' : 'items'}? This cannot be undone.',
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(all ? 'Empty trash' : 'Delete selected'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: scheme.error,
+                foregroundColor: scheme.onError,
+              ),
+              child: Text(all ? 'Empty trash' : 'Delete selected'),
+            ),
+          ],
+        );
+      },
     );
     if (confirm != true || !mounted) return;
 
@@ -195,12 +210,18 @@ class _TrashScreenState extends State<TrashScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          shape: const StadiumBorder(),
+        ),
+      );
   }
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final bottomClearance = MediaQuery.paddingOf(context).bottom;
     final allSelected =
         _items.isNotEmpty && _selectedIds.length == _items.length;
@@ -217,8 +238,8 @@ class _TrashScreenState extends State<TrashScreen> {
             Padding(
               padding: const EdgeInsets.only(bottom: AppDimens.space12),
               child: NexaSurface(
-                level: NexaSurfaceLevel.surface,
-                radius: AppDimens.radiusLarge,
+                level: NexaSurfaceLevel.grouped,
+                radius: AppDimens.radiusCard,
                 padding: const EdgeInsets.all(AppDimens.space16),
                 child: Row(
                   children: [
@@ -228,17 +249,16 @@ class _TrashScreenState extends State<TrashScreen> {
                         children: [
                           Text(
                             '${_items.length} ${_items.length == 1 ? 'item' : 'items'}',
-                            style: AppTextStyle.rowTitle.copyWith(
-                              color: AppColors.textPrimaryFor(brightness),
-                              fontWeight: FontWeight.w600,
+                            style: AppTextStyle.titleMedium.copyWith(
+                              color: scheme.onSurface,
                             ),
                           ),
                           Text(
                             _selectedIds.isEmpty
                                 ? 'Select items to restore or remove'
                                 : '${_selectedIds.length} selected',
-                            style: AppTextStyle.caption.copyWith(
-                              color: AppColors.textSecondaryFor(brightness),
+                            style: AppTextStyle.bodySmall.copyWith(
+                              color: scheme.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -250,6 +270,7 @@ class _TrashScreenState extends State<TrashScreen> {
                         allSelected
                             ? Icons.deselect_rounded
                             : Icons.select_all_rounded,
+                        size: AppDimens.iconSmall,
                       ),
                       label: Text(allSelected ? 'Clear' : 'Select'),
                     ),
@@ -258,20 +279,17 @@ class _TrashScreenState extends State<TrashScreen> {
                       onPressed:
                           _emptying ? null : () => _deleteMany(all: deleteAll),
                       style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.errorFor(brightness),
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(48, 44),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimens.space12,
-                        ),
+                        backgroundColor: scheme.error,
+                        foregroundColor: scheme.onError,
+                        shape: const StadiumBorder(),
                       ),
                       child: _emptying
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
+                          ? SizedBox(
+                              width: AppDimens.iconSmall,
+                              height: AppDimens.iconSmall,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.white,
+                                color: scheme.onError,
                               ),
                             )
                           : Row(
@@ -281,9 +299,9 @@ class _TrashScreenState extends State<TrashScreen> {
                                   deleteAll
                                       ? Icons.delete_sweep_outlined
                                       : Icons.delete_outline_rounded,
-                                  size: 19,
+                                  size: AppDimens.iconSmall,
                                 ),
-                                const SizedBox(width: AppDimens.space6),
+                                const SizedBox(width: AppDimens.space8),
                                 Text(deleteAll ? 'Empty' : 'Delete'),
                               ],
                             ),
@@ -327,7 +345,6 @@ class _TrashScreenState extends State<TrashScreen> {
                                       for (final item in _items)
                                         _TrashRow(
                                           item: item,
-                                          brightness: brightness,
                                           selected: _selectedIds.contains(
                                             item['id']?.toString() ?? '',
                                           ),
@@ -363,10 +380,9 @@ class _TrashScreenState extends State<TrashScreen> {
               : 'content';
 }
 
-/// One trashed entry as a standard One UI surface row.
+/// One trashed entry as a Material 3 tonal surface row.
 class _TrashRow extends StatelessWidget {
   final Map<String, dynamic> item;
-  final Brightness brightness;
   final bool selected;
   final ValueChanged<bool> onSelected;
   final VoidCallback onRestore;
@@ -374,7 +390,6 @@ class _TrashRow extends StatelessWidget {
 
   const _TrashRow({
     required this.item,
-    required this.brightness,
     required this.selected,
     required this.onSelected,
     required this.onRestore,
@@ -383,23 +398,38 @@ class _TrashRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final isFolder = FileEntry.kindOf(item) == 'folder';
+    final name = item['name']?.toString() ?? 'deleted item';
     final deletedAt = Format.relTime(
       DateTime.tryParse(item['deleted_at']?.toString() ?? ''),
     );
 
     return NexaGroupTile(
-      leading: Checkbox.adaptive(
-        value: selected,
-        onChanged: (value) => onSelected(value ?? false),
-        visualDensity: VisualDensity.compact,
-        semanticLabel: 'Select ${item['name'] ?? 'deleted item'}',
+      leading: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Checkbox.adaptive(
+            value: selected,
+            onChanged: (value) => onSelected(value ?? false),
+            semanticLabel: 'Select $name',
+          ),
+          const SizedBox(width: AppDimens.space4),
+          SizedBox(
+            width: AppDimens.iconTile,
+            height: AppDimens.iconTile,
+            child: Center(
+              child: isFolder
+                  ? const NexaFileGlyph.folder(size: 36)
+                  : NexaFileGlyph(
+                      name: name,
+                      type: item['type']?.toString(),
+                      size: 36,
+                    ),
+            ),
+          ),
+        ],
       ),
-      leadingIcon:
-          isFolder ? Icons.folder_rounded : Icons.insert_drive_file_rounded,
-      leadingIconColor: isFolder ? AppColors.accentTextFor(brightness) : null,
-      leadingBackgroundColor:
-          isFolder ? AppColors.accentContainerFor(brightness) : null,
       title: item['name'] as String? ?? '',
       subtitle: 'Deleted $deletedAt',
       showChevron: false,
@@ -408,16 +438,13 @@ class _TrashRow extends StatelessWidget {
         children: [
           IconButton(
             tooltip: 'Restore',
-            icon: Icon(
-              Icons.restore_rounded,
-              color: AppColors.accentTextFor(brightness),
-            ),
+            icon: Icon(Icons.restore_rounded, color: scheme.primary),
             onPressed: onRestore,
           ),
           IconButton(
             tooltip: 'Delete forever',
             icon: const Icon(Icons.delete_forever_outlined),
-            color: AppColors.errorFor(brightness),
+            color: scheme.error,
             onPressed: onDelete,
           ),
         ],

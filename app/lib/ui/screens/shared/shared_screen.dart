@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
-import '../../../core/design/app_motion.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
 import '../../../services/api.dart';
@@ -105,23 +103,27 @@ class _SharedScreenState extends State<SharedScreen> {
     if (id.isEmpty) return;
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Stop sharing?'),
-        content: Text(
-          'This revokes the recipient’s access to “${_displayName(share)}”. '
-          'The file or folder itself will not be deleted.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+      builder: (dialogContext) {
+        final scheme = Theme.of(dialogContext).colorScheme;
+        return AlertDialog(
+          icon: Icon(Icons.link_off_rounded, color: scheme.error),
+          title: const Text('Stop sharing?'),
+          content: Text(
+            'This revokes the recipient’s access to “${_displayName(share)}”. '
+            'The file or folder itself will not be deleted.',
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Remove'),
+            ),
+          ],
+        );
+      },
     );
     if (confirm != true) return;
     try {
@@ -137,23 +139,27 @@ class _SharedScreenState extends State<SharedScreen> {
     if (id.isEmpty) return;
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Remove from Shared with me?'),
-        content: Text(
-          'You will lose access to “${_displayName(share)}”. '
-          'The owner’s original file will not be changed.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Keep'),
+      builder: (dialogContext) {
+        final scheme = Theme.of(dialogContext).colorScheme;
+        return AlertDialog(
+          icon: Icon(Icons.link_off_rounded, color: scheme.error),
+          title: const Text('Remove from Shared with me?'),
+          content: Text(
+            'You will lose access to “${_displayName(share)}”. '
+            'The owner’s original file will not be changed.',
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Remove access'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Keep'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Remove access'),
+            ),
+          ],
+        );
+      },
     );
     if (confirm != true) return;
     try {
@@ -167,7 +173,13 @@ class _SharedScreenState extends State<SharedScreen> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          shape: const StadiumBorder(),
+        ),
+      );
   }
 
   String _shareSubtitle(Map<String, dynamic> item) {
@@ -231,8 +243,8 @@ class _SharedScreenState extends State<SharedScreen> {
             value: _SharedPageAction.refresh,
             child: Row(
               children: [
-                Icon(Icons.refresh_rounded, size: 18),
-                SizedBox(width: AppDimens.space10),
+                Icon(Icons.refresh_rounded, size: AppDimens.iconSmall),
+                SizedBox(width: AppDimens.space12),
                 Text('Refresh shares'),
               ],
             ),
@@ -241,8 +253,9 @@ class _SharedScreenState extends State<SharedScreen> {
             value: _SharedPageAction.toggleSort,
             child: Row(
               children: [
-                const Icon(Icons.sort_by_alpha_rounded, size: 18),
-                const SizedBox(width: AppDimens.space10),
+                const Icon(Icons.sort_by_alpha_rounded,
+                    size: AppDimens.iconSmall),
+                const SizedBox(width: AppDimens.space12),
                 Text(_descending ? 'Sort A–Z' : 'Sort Z–A'),
               ],
             ),
@@ -279,7 +292,7 @@ class _SharedScreenState extends State<SharedScreen> {
   }
 
   Widget _buildBody() {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final items = _visibleItems;
     final bottomClearance = MediaQuery.paddingOf(context).bottom;
 
@@ -309,51 +322,50 @@ class _SharedScreenState extends State<SharedScreen> {
               : AppDimens.space24,
         ),
         children: [
-          NexaGroupedList(
-            header: _mine ? 'SHARED BY YOU' : 'SHARED WITH YOU',
-            children: [
-              for (final item in items)
-                NexaGroupTile(
-                  leadingIcon: _mine
-                      ? Icons.link_rounded
-                      : FileEntry.kindOf(item) == 'folder'
-                          ? Icons.folder_shared_rounded
-                          : Icons.insert_drive_file_outlined,
-                  leadingIconColor: AppColors.accentTextFor(brightness),
-                  leadingBackgroundColor:
-                      AppColors.accentContainerFor(brightness),
-                  title: _displayName(item),
-                  subtitle: _shareSubtitle(item),
-                  showChevron: !_mine,
-                  trailing: _openingShareId == item['id']?.toString() && !_mine
-                      ? const SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: Center(
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                        )
-                      : IconButton(
-                          tooltip: _mine
-                              ? 'Stop sharing'
-                              : 'Remove from Shared with me',
-                          onPressed: _mine
-                              ? () => _deleteShare(item)
-                              : () => _leaveShare(item),
-                          icon: Icon(
-                            Icons.link_off_rounded,
-                            color: AppColors.errorFor(brightness),
-                            size: 20,
-                          ),
-                        ),
-                  onTap: _mine ? null : () => _openShare(item),
-                ),
-            ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppDimens.rowInset,
+              AppDimens.space8,
+              AppDimens.rowInset,
+              AppDimens.space12,
+            ),
+            child: Text(
+              (_mine ? 'Shared by you' : 'Shared with you').toUpperCase(),
+              style: AppTextStyle.sectionHeader.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
           ),
+          for (var i = 0; i < items.length; i++) ...[
+            NexaSharedTile(
+              name: _displayName(items[i]),
+              path: items[i]['path']?.toString() ?? '',
+              isFolder: FileEntry.kindOf(items[i]) == 'folder',
+              person: _mine
+                  ? items[i]['recipient']?.toString()
+                  : (items[i]['owner'] ?? items[i]['owner_username'])
+                      ?.toString(),
+              subtitle: _shareSubtitle(items[i]),
+              loading: _openingShareId == items[i]['id']?.toString() && !_mine,
+              trailing: IconButton(
+                tooltip: _mine ? 'Stop sharing' : 'Remove from Shared with me',
+                onPressed: _mine
+                    ? () => _deleteShare(items[i])
+                    : () => _leaveShare(items[i]),
+                icon: Icon(Icons.link_off_rounded, color: scheme.error),
+              ),
+              onTap: _mine ? null : () => _openShare(items[i]),
+            ),
+            if (i < items.length - 1)
+              Divider(
+                height: 1,
+                indent: AppDimens.rowInset +
+                    AppDimens.iconTileLarge +
+                    AppDimens.space16,
+                endIndent: AppDimens.rowInset,
+                color: scheme.outlineVariant,
+              ),
+          ],
         ],
       ),
     );
@@ -366,16 +378,13 @@ class _SharedConnectionNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(top: AppDimens.space16),
-      child: Container(
+      child: NexaSurface(
+        level: NexaSurfaceLevel.grouped,
+        radius: AppDimens.radiusCard,
         padding: const EdgeInsets.all(AppDimens.space16),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceFor(brightness),
-          borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-          border: Border.all(color: AppColors.dividerFor(brightness)),
-        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -383,31 +392,31 @@ class _SharedConnectionNotice extends StatelessWidget {
             Row(
               children: [
                 Icon(Icons.cloud_off_rounded,
-                    color: AppColors.errorFor(brightness), size: 20),
-                const SizedBox(width: AppDimens.space8),
-                Text('Connection problem',
-                    style: TextStyle(
-                      color: AppColors.labelPrimaryFor(brightness),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    )),
+                    color: scheme.error, size: AppDimens.iconMedium),
+                const SizedBox(width: AppDimens.space12),
+                Text(
+                  'Connection problem',
+                  style: AppTextStyle.titleMedium.copyWith(
+                    color: scheme.onSurface,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: AppDimens.space8),
             Text(
-              'NexaDrive could not contact your server. Check that the server is online and your device is connected.',
-              style: TextStyle(
-                color: AppColors.labelSecondaryFor(brightness),
-                fontSize: 13,
-                height: 1.4,
+              'NexaDrive could not contact your server. Check that the server '
+              'is online and your device is connected.',
+              style: AppTextStyle.bodyMedium.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: AppDimens.space12),
             Align(
               alignment: Alignment.centerLeft,
-              child: TextButton.icon(
+              child: FilledButton.tonalIcon(
                 onPressed: onRetry,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
+                icon: const Icon(Icons.refresh_rounded,
+                    size: AppDimens.iconSmall),
                 label: const Text('Try again'),
               ),
             ),
@@ -433,120 +442,22 @@ class _ShareScopeSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    return Column(
-      children: [
-        Row(
-          children: [
-            _ShareScopeOption(
-              label: 'With me',
-              count: receivedCount,
-              selected: !mine,
-              onTap: () => onChanged(false),
-            ),
-            const SizedBox(width: AppDimens.space24),
-            _ShareScopeOption(
-              label: 'Shared by me',
-              count: sentCount,
-              selected: mine,
-              onTap: () => onChanged(true),
-            ),
-          ],
+    return SegmentedButton<bool>(
+      showSelectedIcon: false,
+      segments: [
+        ButtonSegment<bool>(
+          value: false,
+          label: Text('With me ($receivedCount)'),
         ),
-        const SizedBox(height: AppDimens.space8),
-        Stack(
-          children: [
-            Container(height: 1, color: AppColors.dividerFor(brightness)),
-            AnimatedAlign(
-              alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-              duration: AppMotion.resolve(context, AppMotion.normal),
-              curve: AppMotion.standardCurve,
-              child: FractionallySizedBox(
-                widthFactor: 0.5,
-                child: Container(
-                  height: 2,
-                  decoration: BoxDecoration(
-                    color: AppColors.accentFor(brightness),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-            ),
-          ],
+        ButtonSegment<bool>(
+          value: true,
+          label: Text('Shared by me ($sentCount)'),
         ),
       ],
-    );
-  }
-}
-
-class _ShareScopeOption extends StatelessWidget {
-  final String label;
-  final int count;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ShareScopeOption({
-    required this.label,
-    required this.count,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    return Expanded(
-      child: Semantics(
-        button: true,
-        selected: selected,
-        label: '$label, $count',
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppDimens.space10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  label,
-                  style: AppTextStyle.subheadline.copyWith(
-                    color: selected
-                        ? AppColors.labelPrimaryFor(brightness)
-                        : AppColors.labelSecondaryFor(brightness),
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(width: AppDimens.space8),
-                AnimatedContainer(
-                  duration: AppMotion.resolve(context, AppMotion.fast),
-                  constraints: const BoxConstraints(minWidth: 22),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimens.space6,
-                    vertical: AppDimens.space2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? AppColors.accentContainerFor(brightness)
-                        : AppColors.fillFor(brightness),
-                    borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                  ),
-                  child: Text(
-                    '$count',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyle.caption2.copyWith(
-                      color: selected
-                          ? AppColors.accentTextFor(brightness)
-                          : AppColors.labelSecondaryFor(brightness),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      selected: <bool>{mine},
+      onSelectionChanged: (selection) {
+        if (selection.isNotEmpty) onChanged(selection.first);
+      },
     );
   }
 }

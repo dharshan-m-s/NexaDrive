@@ -1,5 +1,7 @@
 # NexaDrive Final Production QA Report
 
+> **Historical record — superseded.** This document is a point-in-time record of NexaDrive's former One UI / Liquid Glass design. It is not current guidance: see [docs/DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) (Material 3 / Material You) and `docs/UI_DESIGN_TOKENS.md`.
+
 **Date:** 2026-09-11
 **Server:** `http://127.0.0.1:8080` (Tailscale Serve in front, bind 127.0.0.1)
 **Server binary:** `<install-path>/server/target/release/nexadrive-server`

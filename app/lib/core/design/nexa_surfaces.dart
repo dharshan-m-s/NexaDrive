@@ -1,31 +1,22 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'app_dimensions.dart';
 import 'app_motion.dart';
 import 'app_shadows.dart';
-// NexaSurface is a member of the Nexa* component library even though it lives
-// beside the design tokens, so it reuses the library's press primitive.
-import '../../ui/widgets/nexa_pressable.dart';
 
-/// Surface hierarchy levels:
-///   L0: Porcelain/graphite page canvas.
-///   L1: Primary content plane.
-///   L2: Grouped secondary plane.
-///   L3: Floating/elevated transient surface.
-///   L4: Modal overlay.
-///
-/// One UI-inspired tonal separation and corner language, with native iOS-style
-/// press feedback and motion. Content planes stay clear; optical glass belongs
-/// to the dedicated navigation and transient-control primitives.
+/// Material 3 surface levels.
+///   L0: canvas (`surface`)
+///   L1: content cards (`surfaceContainerLow`)
+///   L2: grouped panels (`surfaceContainer`)
+///   L3: floating controls (`surfaceContainerHigh`)
+///   L4: modal surfaces (`surfaceContainerHigh`, higher elevation)
 enum NexaSurfaceLevel { background, surface, grouped, floating, modal }
 
 /// The single NexaDrive surface primitive.
 ///
-/// Every surface in NexaDrive is one of these five levels rendered from the
-/// semantic tokens — tonal separation first, a restrained shadow second, and
-/// optional blur only for floating/modal contexts. This is the base the
-/// grouped lists, panels, sheets and control clusters are built from.
+/// Material 3 separates surfaces with tonal roles, not translucency. Only
+/// floating and modal levels carry elevation; interactive surfaces use the
+/// Material state layer through [InkWell].
 class NexaSurface extends StatelessWidget {
   final NexaSurfaceLevel level;
   final Widget child;
@@ -35,6 +26,8 @@ class NexaSurface extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final EdgeInsetsGeometry margin;
+
+  /// Retained for source compatibility; tonal surfaces ignore it.
   final bool useBlur;
 
   const NexaSurface({
@@ -52,137 +45,101 @@ class NexaSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final fill = color ?? _resolveColor(level, brightness);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final fill = color ?? _resolveColor(level, scheme);
     final edge = radius ?? _radiusFor(level);
     final interactive = onTap != null || onLongPress != null;
 
-    final decoration = BoxDecoration(
-      color: fill,
+    final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(edge),
-      boxShadow: _shadowFor(level, brightness),
-      border: _borderFor(level, brightness),
     );
 
-    Widget content = AnimatedContainer(
-      duration: AppMotion.resolve(context, AppMotion.fast),
-      curve: AppMotion.curveFor(context, AppMotion.standardCurve),
-      margin: margin,
-      padding: padding,
-      decoration: decoration,
-      child: child,
-    );
-
-    if (useBlur &&
-        (level == NexaSurfaceLevel.floating ||
-            level == NexaSurfaceLevel.modal)) {
-      content = ClipRRect(
-        borderRadius: BorderRadius.circular(edge),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: AppDimens.blurStandard,
-            sigmaY: AppDimens.blurStandard,
-          ),
-          child: content,
+    Widget content = Material(
+      color: fill,
+      surfaceTintColor: Colors.transparent,
+      elevation: _elevationFor(level),
+      shadowColor: scheme.shadow,
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
+      child: AnimatedContainer(
+        duration: AppMotion.resolve(context, AppMotion.fast),
+        curve: AppMotion.curveFor(context, AppMotion.standard),
+        padding: padding,
+        decoration: BoxDecoration(
+          border: _borderFor(level, scheme),
         ),
-      );
-    }
+        child: child,
+      ),
+    );
 
     if (interactive) {
-      // Spring-scaled press with a tonal wash instead of the (globally
-      // disabled) Material ripple.
-      content = NexaPressable(
-        tintColor:
-            AppColors.labelPrimaryFor(brightness).withValues(alpha: 0.035),
+      content = InkWell(
         borderRadius: BorderRadius.circular(edge),
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(edge),
-            onTap: onTap,
-            onLongPress: onLongPress,
-            child: content,
-          ),
-        ),
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: content,
       );
     }
 
-    return content;
+    return Padding(padding: margin, child: content);
   }
 
-  static Color _resolveColor(NexaSurfaceLevel level, Brightness brightness) {
-    switch (level) {
-      case NexaSurfaceLevel.background:
-        return AppColors.backgroundFor(brightness);
-      case NexaSurfaceLevel.surface:
-        return AppColors.surfaceFor(brightness);
-      case NexaSurfaceLevel.grouped:
-        return AppColors.surfaceGroupedFor(brightness);
-      case NexaSurfaceLevel.floating:
-        return AppColors.surfaceFor(brightness).withValues(
-          alpha: brightness == Brightness.dark ? 0.94 : 0.96,
-        );
-      case NexaSurfaceLevel.modal:
-        return AppColors.surfaceFor(brightness);
-    }
-  }
+  static Color _resolveColor(NexaSurfaceLevel level, ColorScheme scheme) =>
+      switch (level) {
+        NexaSurfaceLevel.background => scheme.surface,
+        NexaSurfaceLevel.surface => scheme.surfaceContainerLow,
+        NexaSurfaceLevel.grouped => scheme.surfaceContainer,
+        NexaSurfaceLevel.floating => scheme.surfaceContainerHigh,
+        NexaSurfaceLevel.modal => scheme.surfaceContainerHigh,
+      };
 
   static double _radiusFor(NexaSurfaceLevel level) => switch (level) {
         NexaSurfaceLevel.background => 0,
-        NexaSurfaceLevel.surface => AppDimens.radiusMedium,
-        NexaSurfaceLevel.grouped => AppDimens.radiusLarge,
-        NexaSurfaceLevel.floating => AppDimens.radiusLarge,
-        NexaSurfaceLevel.modal => AppDimens.radiusXLarge,
+        NexaSurfaceLevel.surface => AppDimens.radiusCard,
+        NexaSurfaceLevel.grouped => AppDimens.radiusMedium,
+        NexaSurfaceLevel.floating => AppDimens.radiusMedium,
+        NexaSurfaceLevel.modal => AppDimens.radiusSheet,
       };
 
-  static List<BoxShadow> _shadowFor(
-      NexaSurfaceLevel level, Brightness brightness) {
-    switch (level) {
-      case NexaSurfaceLevel.background:
-      case NexaSurfaceLevel.surface:
-      case NexaSurfaceLevel.grouped:
-        return AppShadows.none;
-      case NexaSurfaceLevel.floating:
-        return AppShadows.level3(brightness);
-      case NexaSurfaceLevel.modal:
-        return AppShadows.level4(brightness);
-    }
-  }
+  static double _elevationFor(NexaSurfaceLevel level) => switch (level) {
+        NexaSurfaceLevel.background ||
+        NexaSurfaceLevel.surface ||
+        NexaSurfaceLevel.grouped =>
+          0,
+        NexaSurfaceLevel.floating => AppDimens.elevationLevel3,
+        NexaSurfaceLevel.modal => AppDimens.elevationLevel3,
+      };
 
-  static Border? _borderFor(NexaSurfaceLevel level, Brightness brightness) {
+  static Border? _borderFor(NexaSurfaceLevel level, ColorScheme scheme) {
     if (level == NexaSurfaceLevel.grouped ||
         level == NexaSurfaceLevel.surface) {
-      return Border.all(
-        color: AppColors.separatorFor(brightness).withValues(
-          alpha: brightness == Brightness.dark ? 0.78 : 0.62,
-        ),
-        width: 0.55,
-      );
-    }
-    if (level == NexaSurfaceLevel.floating) {
-      return Border.all(
-        color: brightness == Brightness.dark
-            ? Colors.white.withValues(alpha: 0.075)
-            : Colors.black.withValues(alpha: 0.045),
-        width: 0.6,
-      );
+      return Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5));
     }
     return null;
   }
+
+  /// Exposed for tests that need the resolved tonal fill.
+  static List<BoxShadow> shadowFor(
+    NexaSurfaceLevel level,
+    Brightness brightness,
+  ) =>
+      switch (level) {
+        NexaSurfaceLevel.floating ||
+        NexaSurfaceLevel.modal =>
+          AppShadows.level3(brightness),
+        _ => AppShadows.none,
+      };
 }
 
 /// Resolves the surface fill color for a level and brightness.
 Color nexaSurfaceColor(NexaSurfaceLevel level, Brightness brightness) {
-  switch (level) {
-    case NexaSurfaceLevel.background:
-      return AppColors.backgroundFor(brightness);
-    case NexaSurfaceLevel.surface:
-      return AppColors.surfaceFor(brightness);
-    case NexaSurfaceLevel.grouped:
-      return AppColors.surfaceGroupedFor(brightness);
-    case NexaSurfaceLevel.floating:
-      return AppColors.surfaceFor(brightness).withValues(alpha: 0.82);
-    case NexaSurfaceLevel.modal:
-      return AppColors.surfaceFor(brightness);
-  }
+  final scheme = AppColors.scheme(brightness);
+  return switch (level) {
+    NexaSurfaceLevel.background => scheme.surface,
+    NexaSurfaceLevel.surface => scheme.surfaceContainerLow,
+    NexaSurfaceLevel.grouped => scheme.surfaceContainer,
+    NexaSurfaceLevel.floating => scheme.surfaceContainerHigh,
+    NexaSurfaceLevel.modal => scheme.surfaceContainerHigh,
+  };
 }

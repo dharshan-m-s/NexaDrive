@@ -281,17 +281,14 @@ class _LockScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = Theme.of(context).colorScheme.primary;
+    final scheme = Theme.of(context).colorScheme;
     return ColoredBox(
-      color: brightness == Brightness.dark
-          ? const Color(0xFF000000)
-          : const Color(0xFFF7F8FA),
+      color: scheme.surface,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.lock_rounded, size: 56, color: accent),
+            Icon(Icons.lock_rounded, size: 56, color: scheme.primary),
             const SizedBox(height: 16),
             Text(
               'NexaDrive is locked',
@@ -301,7 +298,7 @@ class _LockScreen extends StatelessWidget {
             Text(
               'Unlock with your device screen lock.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).textTheme.bodySmall?.color,
+                    color: scheme.onSurfaceVariant,
                   ),
               textAlign: TextAlign.center,
             ),

@@ -3,7 +3,7 @@
 Checklist for every page and component of the app plus the security findings
 from this round of review. Use it as a manual regression QA run before each
 release. References: `SECURITY_AUDIT.md` (deep audit), `SECURITY.md`,
-`ONE_UI_REDESIGN_REPORT.md` (design system).
+`DESIGN_SYSTEM.md` and `UI_DESIGN_TOKENS.md` (current Material 3 design system).
 
 ## Cross-cutting security review (this pass)
 
@@ -29,11 +29,13 @@ production and a scratch database pass `PRAGMA integrity_check` = `ok`).
 New surface added this round and reviewed:
 
 - `GET /api/files/thumbnail` — authenticated (401 without bearer), path
-  validated with `safe_relative_path`, images only, decode failures → 415
-  (client falls back to a full download). Response is
-  `image/jpeg` with `Cache-Control: private, max-age=86400`; the internal
-  `x-nexadrive-cacheable` marker is stripped before the response leaves the
-  server. Server-side thumbnail cache is bounded (1024 entries, 10 min TTL).
+  validated with `safe_relative_path`; images, videos and PDFs are supported.
+  Video/PDF previews require optional server tools and use fixed argv with a
+  timeout; unavailable tools or decode failures → 415 (client shows a type
+  glyph). Response is `image/jpeg` with `Cache-Control: private, max-age=86400`;
+  the internal `x-nexadrive-cacheable` marker is stripped before the response
+  leaves the server. Server-side thumbnail cache is bounded (1024 entries,
+  10 min TTL).
 - `PUBLIC_URL` — optional; surfaced only in `GET /api/server/status` and
   startup log. No client-visible behavior change when absent.
 - Every non-thumbnail response remains `no-store` (no user data cached by
@@ -48,12 +50,13 @@ grid/pinch behaviour where relevant.
 
 | Check | Status |
 |---|---|
-| Bottom nav (phone) / sidebar (desktop) always matches the visible page | OK |
+| Floating Material pill (phone) / Material navigation rail (desktop) always matches the visible page | OK |
 | "More" sheet on narrow screens opens and scrolls when it is taller than the sheet | OK |
 | Theme switch (Settings → Appearance) applies instantly to every page | OK |
-| Selected tab uses the One UI accent; unselected rows are neutral | OK |
+| Selected destination uses seeded ColorScheme `primary` / `primaryContainer` roles; unselected rows use neutral `surfaceContainer` roles and Material state layers | OK |
 | 401 anywhere routes back to login (no dangling session) | OK |
 | Touch targets ≥ 48 dp on phone | OK |
+| Reduced motion collapses non-essential transitions to cross-fades/instant changes | OK |
 
 ### Login (ui/screens/login)
 
@@ -147,8 +150,8 @@ grid/pinch behaviour where relevant.
 
 - Removed Tailscale/magic-DNS assumptions from app copy (login hint, error
   string, footer) and neutralized the root README network framing.
-- Removed the unused `google_fonts` dependency (offline constraint + One UI
-  uses the system font face).
+- Removed the unused `google_fonts` dependency (offline constraint + Material 3
+  uses the platform font face).
 - Fixed `stop-nexadrive.sh` to address the actual systemd unit (`nexadrive`,
   not `nexadrive-server`).
 - Added a visible "Connected to" server row in Settings (users can see which

@@ -16,7 +16,7 @@ import '../../widgets/nexa_page.dart';
 /// controller method, and every visual state maps 1:1 onto an
 /// [UpdateStatus].
 ///
-/// Typography contract: every text carries an explicit [NexaTypography] token.
+/// Typography contract: every text carries an explicit [AppTextStyle] role.
 /// Nothing relies on an inherited [DefaultTextStyle], so no text can
 /// accidentally render with a decoration it never asked for.
 class UpdateCenterScreen extends StatelessWidget {
@@ -102,6 +102,32 @@ String _subtitleText(UpdateController controller, UpdateStatus status) {
   }
 }
 
+/// Semantic families used by the status card. Every tone resolves to a
+/// Material 3 foreground/container pair; no screen owns raw colors.
+enum _StatusTone { primary, success, warning, error }
+
+Color _statusForeground(BuildContext context, _StatusTone tone) {
+  final scheme = Theme.of(context).colorScheme;
+  final brightness = Theme.of(context).brightness;
+  return switch (tone) {
+    _StatusTone.primary => scheme.primary,
+    _StatusTone.success => AppColors.successFor(brightness),
+    _StatusTone.warning => AppColors.warningFor(brightness),
+    _StatusTone.error => scheme.error,
+  };
+}
+
+Color _statusContainer(BuildContext context, _StatusTone tone) {
+  final scheme = Theme.of(context).colorScheme;
+  final brightness = Theme.of(context).brightness;
+  return switch (tone) {
+    _StatusTone.primary => scheme.primaryContainer,
+    _StatusTone.success => AppColors.successContainerFor(brightness),
+    _StatusTone.warning => AppColors.warningContainerFor(brightness),
+    _StatusTone.error => scheme.errorContainer,
+  };
+}
+
 /// The hero status card: CURRENT VERSION → LATEST VERSION with a status
 /// ribbon and, while working, an integrated progress bar.
 class _VersionPanel extends StatelessWidget {
@@ -111,174 +137,169 @@ class _VersionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final status = controller.status;
-    final (icon, headline, color) = _visuals(status, brightness);
+    final (icon, headline, tone) = _visuals(status);
     final working = status == UpdateStatus.checking ||
         status == UpdateStatus.downloading ||
         status == UpdateStatus.verifying;
 
-    return Container(
-      padding: const EdgeInsets.all(AppDimens.space20),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceFor(brightness),
+    return Card(
+      color: scheme.surfaceContainerLow,
+      surfaceTintColor: Colors.transparent,
+      elevation: AppDimens.elevationSubtle,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppDimens.radiusCard),
-        border: brightness == Brightness.dark
-            ? Border.all(color: AppColors.separatorFor(brightness))
-            : null,
-        boxShadow: const [
-          BoxShadow(
-            color: AppColors.shadowColorSoft,
-            blurRadius: 20,
-            offset: Offset(0, 6),
-          ),
-        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _StatusBadge(icon: icon, color: color, spinning: working),
-              const SizedBox(width: AppDimens.space12),
-              Expanded(
-                child: Text(
-                  headline,
-                  style: NexaTypography.sectionHeader.copyWith(
-                    color: AppColors.labelPrimaryFor(brightness),
+      child: Padding(
+        padding: const EdgeInsets.all(AppDimens.space20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _StatusBadge(icon: icon, tone: tone),
+                const SizedBox(width: AppDimens.space12),
+                Expanded(
+                  child: Text(
+                    headline,
+                    style: AppTextStyle.titleMedium.copyWith(
+                      color: scheme.onSurface,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimens.space16),
-          _VersionLine(controller: controller, status: status),
-          AnimatedSize(
-            duration: AppMotion.resolve(context, AppMotion.fast),
-            curve: AppMotion.standard,
-            alignment: Alignment.topCenter,
-            child: working || status == UpdateStatus.paused
-                ? _ProgressBar(controller: controller, color: color)
-                : const SizedBox.shrink(),
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: AppDimens.space16),
+            _VersionLine(controller: controller, status: status),
+            AnimatedSize(
+              duration: AppMotion.resolve(context, AppMotion.fast),
+              curve: AppMotion.curveFor(context, AppMotion.standard),
+              alignment: Alignment.topCenter,
+              child: working || status == UpdateStatus.paused
+                  ? _ProgressBar(
+                      controller: controller,
+                      color: _statusForeground(context, tone),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  (IconData, String, Color) _visuals(UpdateStatus status, Brightness b) {
-    final accent = AppColors.accentFor(b);
-    final success = AppColors.successFor(b);
-    final warning = AppColors.warningFor(b);
-    final error = AppColors.errorFor(b);
+  (IconData, String, _StatusTone) _visuals(UpdateStatus status) {
     return switch (status) {
       UpdateStatus.idle => (
           Icons.system_update_alt_rounded,
           'Not checked yet',
-          accent,
+          _StatusTone.primary,
         ),
       UpdateStatus.checking => (
           Icons.cloud_sync_outlined,
           'Checking for updates',
-          accent,
+          _StatusTone.primary,
         ),
       UpdateStatus.upToDate => (
           Icons.check_circle_rounded,
           'Up to date',
-          success,
+          _StatusTone.success,
         ),
       UpdateStatus.updateAvailable => (
           Icons.system_update_alt_rounded,
           'Update available',
-          accent,
+          _StatusTone.primary,
         ),
       UpdateStatus.mandatory => (
           Icons.error_outline_rounded,
           'Mandatory update',
-          warning,
+          _StatusTone.warning,
         ),
       UpdateStatus.downloading => (
           Icons.download_rounded,
           'Downloading',
-          accent,
+          _StatusTone.primary,
         ),
       UpdateStatus.paused => (
           Icons.pause_circle_outline_rounded,
           'Download paused',
-          warning,
+          _StatusTone.warning,
         ),
       UpdateStatus.verifying => (
           Icons.verified_rounded,
           'Verifying download',
-          accent,
+          _StatusTone.primary,
         ),
       UpdateStatus.readyToInstall => (
           Icons.inventory_2_outlined,
           'Ready to install',
-          accent,
+          _StatusTone.primary,
         ),
       UpdateStatus.installingHandoff => (
           Icons.handyman_outlined,
           'Continue in the installer',
-          accent,
+          _StatusTone.primary,
         ),
       UpdateStatus.completed => (
           Icons.check_circle_rounded,
           'Installed',
-          success,
+          _StatusTone.success,
         ),
-      UpdateStatus.failed => (Icons.error_rounded, 'Update failed', error),
+      UpdateStatus.failed => (
+          Icons.error_rounded,
+          'Update failed',
+          _StatusTone.error,
+        ),
       UpdateStatus.cancelled => (
           Icons.cancel_outlined,
           'Cancelled',
-          warning,
+          _StatusTone.warning,
         ),
-      UpdateStatus.offline => (Icons.cloud_off_rounded, 'Offline', warning),
+      UpdateStatus.offline => (
+          Icons.cloud_off_rounded,
+          'Offline',
+          _StatusTone.warning,
+        ),
       UpdateStatus.unsupported => (
           Icons.priority_high_rounded,
           'Unsupported',
-          warning,
+          _StatusTone.warning,
         ),
       UpdateStatus.needsUserAction => (
           Icons.lock_outline_rounded,
           'Permission needed',
-          warning,
+          _StatusTone.warning,
         ),
     };
   }
 }
 
-/// The colored status icon with a gentle breathe animation while a check or
-/// download is in flight. Respects the reduced-motion setting.
+/// A tonal status icon. The adjacent headline carries the status as text, so
+/// the icon is excluded from semantics and never encodes state by color alone.
 class _StatusBadge extends StatelessWidget {
   final IconData icon;
-  final Color color;
-  final bool spinning;
+  final _StatusTone tone;
 
   const _StatusBadge({
     required this.icon,
-    required this.color,
-    required this.spinning,
+    required this.tone,
   });
 
   @override
   Widget build(BuildContext context) {
-    final tile = Container(
-      width: AppDimens.iconTileLarge,
-      height: AppDimens.iconTileLarge,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(AppDimens.radiusInner),
+    // Deliberately static: the progress indicator already communicates work,
+    // so the icon never animates continuously or defeats reduced motion.
+    return ExcludeSemantics(
+      child: CircleAvatar(
+        radius: AppDimens.space24,
+        backgroundColor: _statusContainer(context, tone),
+        foregroundColor: _statusForeground(context, tone),
+        child: Icon(icon, size: AppDimens.iconMedium),
       ),
-      child: Icon(icon, color: color, size: AppDimens.iconMedium),
     );
-    // Deliberately static: an in-flight indicator already communicates work
-    // (determinate bar / spinner below), so the icon never animates
-    // continuously. Infinite pulses defeat pumpAndSettle in tests and cost
-    // frames for no informational gain.
-    return tile;
   }
 }
 
@@ -292,7 +313,7 @@ class _VersionLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final current = controller.currentVersion?.toString() ?? '—';
     final latest = controller.manifestVersionLabel;
     final showLatest = latest != null &&
@@ -317,13 +338,13 @@ class _VersionLine extends StatelessWidget {
         _VersionFigure(
           label: 'CURRENT',
           value: current,
-          color: AppColors.labelSecondaryFor(brightness),
+          color: scheme.onSurfaceVariant,
         ),
         if (showLatest)
           _VersionFigure(
             label: 'LATEST',
             value: latest,
-            color: AppColors.labelPrimaryFor(brightness),
+            color: scheme.onSurface,
           ),
       ],
     );
@@ -349,16 +370,14 @@ class _VersionFigure extends StatelessWidget {
       children: [
         Text(
           label,
-          style: NexaTypography.micro.copyWith(
-            color: AppColors.labelTertiaryFor(Theme.of(context).brightness),
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.8,
+          style: AppTextStyle.labelSmall.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: AppDimens.space2),
         Text(
           'v$value',
-          style: NexaTypography.metricValue.copyWith(color: color),
+          style: AppTextStyle.display.copyWith(color: color),
         ),
       ],
     );

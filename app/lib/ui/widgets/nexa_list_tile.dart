@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
-import 'nexa_pressable.dart';
 
-/// Standard list row with leading icon, title, subtitle, trailing.
+/// Standard Material 3 list row with leading icon, title, subtitle, trailing.
 class NexaListTile extends StatelessWidget {
   final IconData? leadingIcon;
 
@@ -73,29 +72,22 @@ class NexaListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = AppColors.accentFor(brightness);
-    final onAccent = AppColors.onAccentContainerFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
+    final brightness = scheme.brightness;
     final resolvedIcon = leadingIcon ?? icon;
 
     Widget? leadingWidget = leading;
     if (leadingWidget == null && resolvedIcon != null) {
-      final tint =
-          leadingIconColor ?? _semanticTint(resolvedIcon, accent, brightness);
+      final tint = leadingIconColor ??
+          _semanticTint(resolvedIcon, scheme.primary, brightness);
       final background = leadingBackgroundColor ??
-          tint.withValues(alpha: brightness == Brightness.dark ? 0.20 : 0.11);
+          tint.withValues(alpha: brightness == Brightness.dark ? 0.20 : 0.12);
       leadingWidget = Container(
         width: AppDimens.iconTileLarge,
         height: AppDimens.iconTileLarge,
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-          border: Border.all(
-            color: tint.withValues(
-              alpha: brightness == Brightness.dark ? 0.30 : 0.18,
-            ),
-            width: 0.8,
-          ),
+          borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
         ),
         child: Icon(
           resolvedIcon,
@@ -105,27 +97,25 @@ class NexaListTile extends StatelessWidget {
       );
     }
 
-    final row = ListTile(
+    final foreground = !enabled
+        ? scheme.onSurface.withValues(alpha: 0.38)
+        : selected
+            ? scheme.onSecondaryContainer
+            : scheme.onSurface;
+
+    return ListTile(
       enabled: enabled,
       selected: selected,
       onTap: onTap,
       onLongPress: onLongPress,
-      selectedTileColor: AppColors.accentContainerFor(brightness),
-      minTileHeight: minHeight ?? AppDimens.listHeightLarge,
+      selectedTileColor: scheme.secondaryContainer,
+      minTileHeight: minHeight ?? AppDimens.listHeight,
       leading: leadingWidget,
       title: Text(
         title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: AppTextStyle.rowTitle.copyWith(
-          color: selected
-              ? onAccent
-              : (enabled
-                  ? AppColors.labelPrimaryFor(brightness)
-                  : AppColors.labelTertiaryFor(brightness)),
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-          letterSpacing: -0.1,
-        ),
+        style: AppTextStyle.titleMedium.copyWith(color: foreground),
       ),
       subtitle: subtitle == null
           ? null
@@ -133,15 +123,15 @@ class NexaListTile extends StatelessWidget {
               subtitle!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyle.caption1.copyWith(
-                color: AppColors.labelSecondaryFor(brightness),
+              style: AppTextStyle.bodyMedium.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
             ),
       trailing: trailing ??
           (showChevron
               ? Icon(
                   Icons.chevron_right_rounded,
-                  color: AppColors.labelTertiaryFor(brightness),
+                  color: scheme.onSurfaceVariant,
                   size: AppDimens.iconMedium,
                 )
               : null),
@@ -153,15 +143,6 @@ class NexaListTile extends StatelessWidget {
             horizontal: AppDimens.pageMargin,
             vertical: AppDimens.space4,
           ),
-      visualDensity: VisualDensity.compact,
-    );
-
-    return NexaPressable(
-      enabled: enabled && (onTap != null || onLongPress != null),
-      scale: false,
-      tintColor: AppColors.labelPrimaryFor(brightness).withValues(alpha: 0.045),
-      borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-      child: row,
     );
   }
 }

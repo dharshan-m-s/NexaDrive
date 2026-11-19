@@ -43,6 +43,16 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
     });
   }
 
+  void setFilter(ScanFilter mode) => setState(() => _filter = mode);
+  void rotateLeft() => _rotateLeft();
+  void rotateRight() => _rotateRight();
+  void autoCrop() => _autoCrop();
+  void resetCrop() => setState(() => _crop = null);
+  void apply() => _apply();
+
+  ScanFilter get filter => _filter;
+  Rect? get crop => _crop;
+
   void _apply() {
     widget.page.rightTurns = _turns;
     widget.page.filter = _filter;
@@ -94,17 +104,24 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _topBar(),
-            Expanded(child: _preview()),
-            _filterBar(brightness),
-            _actionBar(brightness),
-          ],
+    // Immersive scan editor over the page image: one complete dark scheme.
+    final darkTheme = Theme.of(context).copyWith(
+      brightness: Brightness.dark,
+      colorScheme: AppColors.scheme(Brightness.dark),
+    );
+    return Theme(
+      data: darkTheme,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _topBar(),
+              Expanded(child: _preview()),
+              const _FilterBar(),
+              const _ActionBar(),
+            ],
+          ),
         ),
       ),
     );
@@ -118,36 +135,29 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
         AppDimens.pageMargin,
         AppDimens.space6,
       ),
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          brightness: Brightness.dark,
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-                brightness: Brightness.dark,
-              ),
+      child: NexaSurface(
+        level: NexaSurfaceLevel.floating,
+        radius: AppDimens.radiusPill,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space4,
+          vertical: AppDimens.space2,
         ),
-        child: NexaLiquidGlass(
-          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-          blurSigma: 16,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.space4,
-            vertical: AppDimens.space2,
-          ),
-          showShadow: false,
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                onPressed: () => Navigator.of(context).pop(false),
-                icon: const Icon(Icons.close_rounded, color: Colors.white),
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+              onPressed: () => Navigator.of(context).pop(false),
+              icon: const Icon(Icons.close_rounded),
+            ),
+            const SizedBox(width: AppDimens.space4),
+            Text(
+              'Page ${widget.page.number} of ${widget.totalPages}',
+              style: AppTextStyle.titleSmall.copyWith(
+                color: Theme.of(context).colorScheme.onSurface,
               ),
-              const SizedBox(width: AppDimens.space4),
-              Text(
-                'Page ${widget.page.number} of ${widget.totalPages}',
-                style: AppTextStyle.rowTitle.copyWith(color: Colors.white),
-              ),
-              const Spacer(),
-            ],
-          ),
+            ),
+            const Spacer(),
+          ],
         ),
       ),
     );
@@ -177,48 +187,59 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
       ),
     );
   }
+}
 
-  Widget _filterBar(Brightness brightness) {
+class _FilterBar extends StatelessWidget {
+  const _FilterBar();
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimens.space16),
-      child: NexaLiquidGlass(
-        borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-        blurSigma: 14,
-        tintOpacity: 0.10,
+      child: NexaSurface(
+        level: NexaSurfaceLevel.floating,
+        radius: AppDimens.radiusXLarge,
         padding: const EdgeInsets.symmetric(
           horizontal: AppDimens.space8,
           vertical: AppDimens.space6,
         ),
-        showShadow: false,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _chip('Original', ScanFilter.color, brightness),
-            _chip('Grayscale', ScanFilter.grayscale, brightness),
-            _chip('B&W', ScanFilter.blackAndWhite, brightness),
+            _chip(context, 'Original', ScanFilter.color),
+            _chip(context, 'Grayscale', ScanFilter.grayscale),
+            _chip(context, 'B&W', ScanFilter.blackAndWhite),
           ],
         ),
       ),
     );
   }
 
-  Widget _chip(String label, ScanFilter mode, Brightness brightness) {
-    final selected = _filter == mode;
+  Widget _chip(BuildContext context, String label, ScanFilter mode) {
+    final state = context.findAncestorStateOfType<_ScanEditScreenState>()!;
+    final scheme = Theme.of(context).colorScheme;
+    final selected = state.filter == mode;
     return ChoiceChip(
       label: Text(label),
       selected: selected,
-      labelStyle: AppTextStyle.caption.copyWith(
-        color: selected ? AppColors.accentDark : Colors.white70,
-        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+      labelStyle: AppTextStyle.labelSmall.copyWith(
+        color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
       ),
-      selectedColor: AppColors.accentContainerDark,
-      backgroundColor: Colors.white10,
+      selectedColor: scheme.primaryContainer,
+      backgroundColor: scheme.surfaceContainerHigh,
+      showCheckmark: false,
       side: BorderSide.none,
-      onSelected: (_) => setState(() => _filter = mode),
+      onSelected: (_) => state.setFilter(mode),
     );
   }
+}
 
-  Widget _actionBar(Brightness brightness) {
+class _ActionBar extends StatelessWidget {
+  const _ActionBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.findAncestorStateOfType<_ScanEditScreenState>()!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimens.space12,
@@ -226,31 +247,30 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
         AppDimens.space12,
         AppDimens.space12,
       ),
-      child: NexaLiquidGlass(
-        borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
-        blurSigma: 16,
-        tintOpacity: 0.12,
+      child: NexaSurface(
+        level: NexaSurfaceLevel.floating,
+        radius: AppDimens.radiusXLarge,
         padding: const EdgeInsets.symmetric(
           horizontal: AppDimens.space8,
           vertical: AppDimens.space6,
         ),
-        showShadow: true,
         child: SafeArea(
           top: false,
           child: Row(
             children: [
-              _actionBtn(Icons.rotate_left_rounded, 'Rotate left', _rotateLeft),
-              _actionBtn(
-                  Icons.rotate_right_rounded, 'Rotate right', _rotateRight),
-              _actionBtn(
-                  Icons.center_focus_strong_rounded, 'Auto-crop', _autoCrop),
-              if (_crop != null)
-                _actionBtn(Icons.restart_alt_rounded, 'Reset crop',
-                    () => setState(() => _crop = null)),
+              _actionBtn(context, Icons.rotate_left_rounded, 'Rotate left',
+                  state.rotateLeft),
+              _actionBtn(context, Icons.rotate_right_rounded, 'Rotate right',
+                  state.rotateRight),
+              _actionBtn(context, Icons.center_focus_strong_rounded,
+                  'Auto-crop', state.autoCrop),
+              if (state.crop != null)
+                _actionBtn(context, Icons.restart_alt_rounded, 'Reset crop',
+                    state.resetCrop),
               const Spacer(),
               FilledButton(
                 onPressed: () {
-                  _apply();
+                  state.apply();
                   Navigator.of(context).pop(true);
                 },
                 child: const Text('Apply'),
@@ -262,26 +282,19 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
     );
   }
 
-  Widget _actionBtn(IconData icon, String label, VoidCallback onTap) {
+  Widget _actionBtn(
+    BuildContext context,
+    IconData icon,
+    String label,
+    VoidCallback onTap,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(right: AppDimens.space8),
-      child: Semantics(
-        button: true,
-        label: label,
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white12,
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: Colors.white70, size: 22),
-          ),
-        ),
+      child: IconButton(
+        tooltip: label,
+        onPressed: onTap,
+        icon: Icon(icon, color: scheme.onSurfaceVariant),
       ),
     );
   }

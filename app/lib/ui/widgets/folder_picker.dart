@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import '../../core/models/file_entry.dart';
 import '../../services/api.dart';
 import 'nexa_components.dart';
 
-/// One UI folder picker that browses the user's server directory tree.
+/// Material 3 folder picker that browses the user's server directory tree.
 ///
 /// Returns the server-relative destination path ("" = My files root) when a
 /// folder is picked, or null if cancelled. Browsing is done through the API,
@@ -105,9 +104,7 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final secondary = AppColors.textSecondaryFor(brightness);
-
+    final scheme = Theme.of(context).colorScheme;
     final titleText = _path.isEmpty ? widget.title : _path;
 
     return SafeArea(
@@ -135,23 +132,18 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
                         _navigateTo(idx < 0 ? '' : p.substring(0, idx));
                       },
                       style: IconButton.styleFrom(
-                        backgroundColor: AppColors.fillFor(brightness),
+                        backgroundColor: scheme.surfaceContainerHigh,
                       ),
                       icon: const Icon(Icons.arrow_upward_rounded),
                     )
                   else
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: AppColors.accentContainerFor(brightness),
-                        borderRadius:
-                            BorderRadius.circular(AppDimens.radiusMedium),
-                      ),
-                      child: Icon(
-                        Icons.folder_open_rounded,
-                        size: 22,
-                        color: AppColors.accentTextFor(brightness),
+                    SizedBox(
+                      width: AppDimens.touchTarget,
+                      height: AppDimens.touchTarget,
+                      child: Center(
+                        child: NexaFileGlyph.folder(
+                          size: AppDimens.iconTileLarge,
+                        ),
                       ),
                     ),
                   const SizedBox(width: AppDimens.space12),
@@ -161,10 +153,8 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
                       children: [
                         Text(
                           'DESTINATION',
-                          style: AppTextStyle.caption2.copyWith(
-                            color: AppColors.accentTextFor(brightness),
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.0,
+                          style: AppTextStyle.labelMedium.copyWith(
+                            color: scheme.primary,
                           ),
                         ),
                         const SizedBox(height: AppDimens.space2),
@@ -172,8 +162,8 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
                           titleText,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTextStyle.sectionHeader.copyWith(
-                            color: AppColors.labelPrimaryFor(brightness),
+                          style: AppTextStyle.titleMedium.copyWith(
+                            color: scheme.onSurface,
                           ),
                         ),
                       ],
@@ -195,7 +185,9 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
                     horizontal: AppDimens.pageMargin),
                 child: Text(
                   'Moving here keeps your files on this server path.',
-                  style: AppTextStyle.caption.copyWith(color: secondary),
+                  style: AppTextStyle.bodySmall.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             const SizedBox(height: AppDimens.space8),
@@ -210,13 +202,10 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
                 AppDimens.pageMargin,
                 AppDimens.space12,
               ),
-              child: SizedBox(
-                height: 48,
-                child: FilledButton(
-                  onPressed:
-                      _loading ? null : () => Navigator.of(context).pop(_path),
-                  child: Text('Move to $titleText'),
-                ),
+              child: FilledButton(
+                onPressed:
+                    _loading ? null : () => Navigator.of(context).pop(_path),
+                child: Text('Move to $titleText'),
               ),
             ),
           ],
@@ -226,8 +215,7 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
   }
 
   Widget _buildList() {
-    final brightness = Theme.of(context).brightness;
-    final secondary = AppColors.textSecondaryFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
 
     if (_loading) {
       return const SizedBox(
@@ -263,36 +251,27 @@ class _FolderPickerBodyState extends State<FolderPickerBody> {
       itemCount: _folders.length,
       itemBuilder: (context, i) {
         final folder = _folders[i];
-        return InkWell(
-          borderRadius: BorderRadius.circular(AppDimens.radiusInner),
+        return ListTile(
           onTap: () => _navigateTo(folder.path),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.space4,
-              vertical: AppDimens.space10,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.folder_rounded,
-                  color: AppColors.accentFor(brightness),
-                ),
-                const SizedBox(width: AppDimens.space12),
-                Expanded(
-                  child: Text(
-                    folder.name,
-                    style: AppTextStyle.rowTitle.copyWith(
-                      color: AppColors.textPrimaryFor(brightness),
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: secondary,
-                ),
-              ],
+          leading: SizedBox(
+            width: AppDimens.iconTileLarge,
+            height: AppDimens.iconTileLarge,
+            child: Center(
+              child: NexaFileGlyph.folder(size: 36),
             ),
           ),
+          title: Text(
+            folder.name,
+            style: AppTextStyle.titleMedium.copyWith(color: scheme.onSurface),
+          ),
+          trailing: Icon(
+            Icons.chevron_right_rounded,
+            color: scheme.onSurfaceVariant,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+          ),
+          minTileHeight: AppDimens.listHeight,
         );
       },
     );

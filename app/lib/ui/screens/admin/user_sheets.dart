@@ -20,7 +20,7 @@ typedef UserSaveCallback = Future<String?> Function({
   bool disabled,
 });
 
-/// Opens the account editor as a One UI bottom sheet (the single editing
+/// Opens the account editor as a Material 3 bottom sheet (the single editing
 /// surface for both creating and editing an account).
 ///
 /// Validation runs before [onSave]; a returned error string is shown inside

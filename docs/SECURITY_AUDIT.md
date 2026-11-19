@@ -140,11 +140,14 @@ avoid WAL writes).
 New/changed surface reviewed this round:
 
 - **`GET /api/files/thumbnail`** (authenticated). Path validated with
-  `safe_relative_path`; images only; corrupt/undecodable (e.g. HEIC/AVIF)
-  → `415`, and the client falls back to a full download. Response is a JPEG
-  generated server-side with a bounded in-memory cache (1024 entries, 10 min
-  TTL) and `Cache-Control: private, max-age=86400` via an internal marker
-  stripped by `security_headers`. Unauthenticated probe verified → `401`.
+  `safe_relative_path`; images decode in-process, while video/PDF previews use
+  optional `ffmpeg` / `pdftoppm` via fixed argv (never a shell), a 20 s timeout
+  and kill-on-drop. PDFs render into a private UUID temporary directory that is
+  always removed. Unavailable tools, corrupt media or decode failures → `415`,
+  and the client falls back to a type glyph. Response is a JPEG generated
+  server-side with a bounded in-memory cache (1024 entries, 10 min TTL) and
+  `Cache-Control: private, max-age=86400` via an internal marker stripped by
+  `security_headers`. Unauthenticated probe verified → `401`.
 - **`PUBLIC_URL`** (optional env). Exposed only in `GET /api/server/status`
   and the startup log; absent when unset. No client-visible behavior when
   unset.

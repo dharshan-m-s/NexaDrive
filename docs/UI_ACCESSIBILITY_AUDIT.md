@@ -1,4 +1,6 @@
-# NexaDrive UI — Accessibility Audit (current build)
+# NexaDrive UI — Accessibility Audit (former 1.1.0 build)
+
+> **Historical record — superseded.** This document is a point-in-time record of NexaDrive's former One UI / Liquid Glass design. It is not current guidance: see [docs/DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) (Material 3 / Material You) and `docs/UI_DESIGN_TOKENS.md`.
 
 > Fact-based audit of the 1.1.0 UI. Ratios computed from hex via WCAG relative
 > luminance (sRGB, gamma-space math); all marked values are **[computed]**.

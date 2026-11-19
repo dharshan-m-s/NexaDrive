@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
-/// File-type detection and icon mapping for the NexaDrive file browser.
+import '../design/app_colors.dart';
+
+/// File-type detection and the shared visual identity for NexaDrive icons.
 ///
-/// Keeps the One UI visual language by mapping MIME/extension categories to a
-/// single neutral document icon with a category tint + label, instead of a
-/// colorful icon per extension.
-/// The One UI-neutral category for a file.
+/// Screens never invent folder or file artwork. They ask [FileKind] for the
+/// category/format and render it through [NexaFileGlyph], so a PDF looks the
+/// same in list, grid, search, shared and dashboard views.
 enum Category {
   folder,
   image,
@@ -15,6 +16,22 @@ enum Category {
   document,
   archive,
   text,
+  unknown
+}
+
+/// A finer-grained format used only for icon identity and labels.
+enum FileFormat {
+  folder,
+  image,
+  video,
+  audio,
+  pdf,
+  word,
+  sheet,
+  slides,
+  text,
+  code,
+  archive,
   unknown
 }
 
@@ -29,7 +46,8 @@ abstract final class FileKind {
     'heic',
     'heif',
     'tif',
-    'tiff'
+    'tiff',
+    'svg'
   };
   static const Set<String> _video = {
     'mp4',
@@ -59,20 +77,24 @@ abstract final class FileKind {
     'md',
     'markdown',
     'log',
+    'nfo',
+    'ini',
+    'cfg',
+    'conf',
+    'toml',
+  };
+  static const Set<String> _code = {
     'json',
     'xml',
     'yaml',
     'yml',
-    'conf',
-    'ini',
-    'cfg',
-    'toml',
-    'csv',
     'html',
     'htm',
     'css',
     'js',
+    'jsx',
     'ts',
+    'tsx',
     'dart',
     'rs',
     'py',
@@ -85,7 +107,6 @@ abstract final class FileKind {
     'hpp',
     'sh',
     'sql',
-    'nfo'
   };
   static const Set<String> _archive = {
     'zip',
@@ -124,28 +145,109 @@ abstract final class FileKind {
     if (_doc.contains(e)) return 'application/msword';
     if (_sheet.contains(e)) return 'application/vnd.ms-excel';
     if (_slides.contains(e)) return 'application/vnd.ms-powerpoint';
-    if (_text.contains(e)) return 'text/plain';
+    if (_code.contains(e) || _text.contains(e)) return 'text/plain';
     if (_archive.contains(e)) return 'application/zip';
     return 'application/octet-stream';
   }
 
   static Category category({required String name, required String type}) {
     if (type == 'folder') return Category.folder;
-    final e = ext(name);
-    if (_images.contains(e)) return Category.image;
-    if (_video.contains(e)) return Category.video;
-    if (_audio.contains(e)) return Category.audio;
-    if (e == 'pdf') return Category.pdf;
-    if (_doc.contains(e) || _sheet.contains(e) || _slides.contains(e)) {
-      return Category.document;
-    }
-    if (_archive.contains(e)) return Category.archive;
-    if (_text.contains(e)) return Category.text;
-    return Category.unknown;
+    final format = formatOf(name);
+    return switch (format) {
+      FileFormat.folder => Category.folder,
+      FileFormat.image => Category.image,
+      FileFormat.video => Category.video,
+      FileFormat.audio => Category.audio,
+      FileFormat.pdf => Category.pdf,
+      FileFormat.word ||
+      FileFormat.sheet ||
+      FileFormat.slides =>
+        Category.document,
+      FileFormat.text || FileFormat.code => Category.text,
+      FileFormat.archive => Category.archive,
+      FileFormat.unknown => Category.unknown,
+    };
   }
 
-  /// Icon for a file category — neutral document shapes, tinted by category
-  /// using a muted accent (One UI keeps file icons calm).
+  /// The format identity used by the shared glyph component.
+  static FileFormat formatOf(String name, {String type = 'file'}) {
+    if (type == 'folder') return FileFormat.folder;
+    final e = ext(name);
+    if (_images.contains(e)) return FileFormat.image;
+    if (_video.contains(e)) return FileFormat.video;
+    if (_audio.contains(e)) return FileFormat.audio;
+    if (e == 'pdf') return FileFormat.pdf;
+    if (_doc.contains(e)) return FileFormat.word;
+    if (_sheet.contains(e)) return FileFormat.sheet;
+    if (_slides.contains(e)) return FileFormat.slides;
+    if (_archive.contains(e)) return FileFormat.archive;
+    if (_code.contains(e)) return FileFormat.code;
+    if (_text.contains(e)) return FileFormat.text;
+    return FileFormat.unknown;
+  }
+
+  /// A short, restrained mark printed on the document glyph.
+  static String formatMark(FileFormat format, [String name = '']) {
+    switch (format) {
+      case FileFormat.pdf:
+        return 'PDF';
+      case FileFormat.word:
+        return 'DOC';
+      case FileFormat.sheet:
+        return 'XLS';
+      case FileFormat.slides:
+        return 'PPT';
+      case FileFormat.text:
+        return 'TXT';
+      case FileFormat.code:
+        return '</>';
+      case FileFormat.archive:
+        final e = ext(name);
+        if (e.isNotEmpty && e.length <= 4) return e.toUpperCase();
+        return 'ARC';
+      case FileFormat.audio:
+        return 'AUD';
+      case FileFormat.video:
+        return 'VID';
+      case FileFormat.image:
+        return 'IMG';
+      case FileFormat.folder:
+      case FileFormat.unknown:
+        return '';
+    }
+  }
+
+  /// The single tint for a format, tuned for light and dark warm surfaces.
+  static Color formatTint(FileFormat format, Brightness brightness) {
+    final dark = brightness == Brightness.dark;
+    return switch (format) {
+      FileFormat.folder =>
+        dark ? AppColors.folderOchreDark : AppColors.folderOchreLight,
+      FileFormat.pdf => dark ? AppColors.filePdfDark : AppColors.filePdfLight,
+      FileFormat.archive =>
+        dark ? AppColors.fileArchiveDark : AppColors.fileArchiveLight,
+      FileFormat.word =>
+        dark ? AppColors.fileWordDark : AppColors.fileWordLight,
+      FileFormat.sheet =>
+        dark ? AppColors.fileSheetDark : AppColors.fileSheetLight,
+      FileFormat.slides =>
+        dark ? AppColors.fileSlidesDark : AppColors.fileSlidesLight,
+      FileFormat.text =>
+        dark ? AppColors.fileTextDark : AppColors.fileTextLight,
+      FileFormat.code =>
+        dark ? AppColors.fileCodeDark : AppColors.fileCodeLight,
+      FileFormat.audio =>
+        dark ? AppColors.fileAudioDark : AppColors.fileAudioLight,
+      FileFormat.video =>
+        dark ? AppColors.fileVideoDark : AppColors.fileVideoLight,
+      FileFormat.image =>
+        dark ? AppColors.fileImageDark : AppColors.fileImageLight,
+      FileFormat.unknown =>
+        dark ? AppColors.fileTextDark : AppColors.fileTextLight,
+    };
+  }
+
+  /// Compatibility helper for code that still asks by [Category].
   static IconData icon(Category category) {
     switch (category) {
       case Category.folder:
@@ -169,62 +271,30 @@ abstract final class FileKind {
     }
   }
 
-  /// Tint for the neutral icon.
+  /// Compatibility tint. New UI uses [formatTint].
   static Color tint(Category category, Brightness brightness) {
-    switch (category) {
-      case Category.folder:
-        return const Color(0xFF0B87D0); // soft accent blue
-      case Category.image:
-        return const Color(0xFFB25E00); // muted amber
-      case Category.video:
-        return const Color(0xFF8E24AA); // muted purple
-      case Category.audio:
-        return const Color(0xFF00897B); // muted teal
-      case Category.pdf:
-        return const Color(0xFFC62828); // one UI error-red accent
-      case Category.document:
-        return const Color(0xFF5B5F66); // neutral gray
-      case Category.archive:
-        return const Color(0xFF6D4C41); // muted brown
-      case Category.text:
-        return const Color(0xFF455A64); // cool slate
-      case Category.unknown:
-        return const Color(0xFF8A9099);
-    }
+    return switch (category) {
+      Category.folder => AppColors.accentFor(brightness),
+      Category.image => formatTint(FileFormat.image, brightness),
+      Category.video => formatTint(FileFormat.video, brightness),
+      Category.audio => formatTint(FileFormat.audio, brightness),
+      Category.pdf => formatTint(FileFormat.pdf, brightness),
+      Category.document => formatTint(FileFormat.text, brightness),
+      Category.archive => formatTint(FileFormat.archive, brightness),
+      Category.text => formatTint(FileFormat.text, brightness),
+      Category.unknown => AppColors.textTertiaryFor(brightness),
+    };
   }
 
-  /// Tile fill used behind the category icon (soft, low-contrast).
   static Color tileFill(Category category, Brightness brightness) {
-    final tint = tintValue(category);
+    final color = tint(category, brightness);
     return brightness == Brightness.dark
-        ? (tint.withValues(alpha: 0.20))
-        : (tint.withValues(alpha: 0.12));
+        ? color.withValues(alpha: 0.20)
+        : color.withValues(alpha: 0.10);
   }
 
-  static Color tintValue(Category category) {
-    switch (category) {
-      case Category.folder:
-        return const Color(0xFF0B87D0);
-      case Category.image:
-        return const Color(0xFFB25E00);
-      case Category.video:
-        return const Color(0xFF8E24AA);
-      case Category.audio:
-        return const Color(0xFF00897B);
-      case Category.pdf:
-        return const Color(0xFFC62828);
-      case Category.document:
-        return const Color(0xFF5B5F66);
-      case Category.archive:
-        return const Color(0xFF6D4C41);
-      case Category.text:
-        return const Color(0xFF455A64);
-      case Category.unknown:
-        return const Color(0xFF8A9099);
-    }
-  }
+  static Color tintValue(Category category) => tint(category, Brightness.light);
 
-  /// Human-readable category label for accessibility and metadata.
   static String label(Category category) {
     switch (category) {
       case Category.folder:
@@ -248,7 +318,6 @@ abstract final class FileKind {
     }
   }
 
-  /// Whether NexaDrive can render this file in-app.
   static bool isPreviewable(Category category) {
     switch (category) {
       case Category.image:

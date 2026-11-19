@@ -1,28 +1,31 @@
 # NexaDrive Screen Specifications (Redesigned)
 
-> Per-screen One UI destination spec for the redesigned client. Each entry names
-> the owning file, its structure, and the design rules that apply. All file paths
-> under `app/lib/`.
+> Per-screen Material 3 (Material You) destination spec for the client. Each entry
+> names the owning file, its structure, and the design rules that apply. All file
+> paths are under `app/lib/`. Colour, type, shape, elevation and motion follow
+> `DESIGN_SYSTEM.md` / `UI_DESIGN_TOKENS.md`: seeded ColorScheme, `surfaceContainer`
+> roles, Material state layers, 48dp touch targets and reduced motion.
 
 ## Shell & navigation
 
 ### `ui/shell/app_shell.dart` + `ui/shell/navigation.dart`
-- **Desktop (≥900px):** 236dp sidebar rail — brand mark + primary destinations
-  (`SideNavItem`, tokenized `accentContainerFor` fill + `onAccentContainerFor`
-  content when selected), utility destinations pinned (Transfers / Sync center /
-  Notifications), Settings pinned bottom. Content centered and capped at
-  `contentMaxWidth = 1100`.
-- **Mobile (<900px):** `NexaBottomNav` (five destinations; fifth = More sheet).
-  Selecting More opens `showNexaSheet` with Scan document / Transfers / Trash /
-  Sync center / Notifications / Settings.
+- **Desktop (≥900px):** 236dp Material navigation rail — brand mark + primary
+  destinations (`SideNavItem`, seeded ColorScheme `primaryContainer` fill +
+  `onPrimaryContainer` content when selected, Material state layers), utility
+  destinations pinned (Transfers / Sync center / Notifications), Settings pinned
+  bottom. Content centered and capped at `contentMaxWidth = 1100`.
+- **Mobile (<900px):** floating Material pill (`NexaBottomNav`, five destinations;
+  fifth = More sheet) on a tonal `surfaceContainer` surface with Material state
+  layers. Selecting More opens `showNexaSheet` with Scan document / Transfers /
+  Trash / Sync center / Notifications / Settings.
 - Queue lifecycle: 30s timer + app resume + server-instance check feed
   `TransferQueue.process`; session-expiry cancels background transfers and
   returns to Login. Desktop auto-sync runs on start/resume.
 - Scan document pushes `ScannerScreen` (real camera), not a tab swap.
 
 ## Home (`ui/screens/home/home_screen.dart`)
-- `NexaHero` storage hero (gradient family per brightness, `heroTextOnGradient`
-  text, metric + storage bar, ring accent).
+- `NexaHero` storage hero (tonal seeded surface, Material type and shape, metric
+  + storage bar, `primary` ring).
 - `_QuickActionsGrid`: vertical `NexaFocusBlock`s (Upload / Scan / Photos /
   Shared / Transfers) in the interaction area.
 - Real recent files: `api.listFiles('/')` filtered/sorted by modified; pending
@@ -30,8 +33,8 @@
 
 ## My Files (`ui/screens/files/files_screen.dart`)
 - `_GroupHeader` section headers ("Folders" / "Files") inside `NexaGroupedList`.
-- Rows via `NexaFileTile` (accent folder icon, size/time subtitle, token
-  selection state).
+- Rows via `NexaFileTile` (seeded `primary` folder icon, size/time subtitle,
+  Material state-layer selection state).
 - Long-press selection → `NexaActionBar` (Trash / Move / Copy / Share / Save).
 - File menu + unsupported-type sheets via `showNexaSheet`.
 - Header search action opens `screens/search/search_screen.dart`.
@@ -64,13 +67,13 @@
   a Download flow (`DownloadToViewScreen`).
 - **Audio** (`viewers/audio_viewer_screen.dart`): streams via `downloadToFile` to
   temp then `audioplayers` `DeviceFileSource`; play/pause, ±10s skip, progress
-  slider (accent), duration via `Format.duration`.
+  slider (seeded `primary`), duration via `Format.duration`.
 - **Video** (`media/video_player_screen.dart`): `VideoPlayerController.networkUrl`
   with `authHeaders`, play/pause overlay, scrubber, position/duration; black
   chrome; falls back to Download when the platform media backend is unavailable.
 
 ## Transfers (`ui/screens/transfers/transfers_screen.dart`)
-- Grouped: Uploading (with byte progress + accent `LinearProgressIndicator`),
+- Grouped: Uploading (with byte progress + seeded `primary` `LinearProgressIndicator`),
   Needs attention (retry/remove), Completed (clear).
 - Rows are `NexaSurface` (L1) tiles; empty state = offline hint.
 
@@ -89,8 +92,8 @@
   (`NexaSurface` + `Material.transparency` + `ListTile`), create-user dialog,
   disable toggle.
 - **Notifications** (`ui/screens/notifications/notifications_screen.dart`):
-  All/Unread segmented filter; unread rows tinted (`accentContainerLight` /
-  `surfaceAltDark`); mark-read.
+  All/Unread segmented filter; unread rows tinted with seeded ColorScheme
+  `primaryContainer` / `surfaceContainer` roles; mark-read.
 - **Trash** (`ui/screens/trash/trash_screen.dart`): `NexaPage` + restore /
   delete-forever actions with confirmation.
 

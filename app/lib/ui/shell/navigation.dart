@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_motion.dart';
 import '../../../core/design/app_typography.dart';
 
-/// Desktop navigation — an iOS-style source list: brand at top, the primary
-/// destinations, then utility destinations, with the active row marked by an
-/// inset group fill rather than a rail indicator.
+/// Desktop navigation — a Material 3 persistent rail.
+///
+/// Primary destinations use a `secondaryContainer` selected indicator and
+/// Material state layers; utility actions sit in a quieter group below.
 class SideNavigation extends StatelessWidget {
   final int index;
   final ValueChanged<int> onSelected;
@@ -25,20 +25,12 @@ class SideNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final surface = AppColors.surfaceFor(brightness);
-    final primary = AppColors.textPrimaryFor(brightness);
-    final accent = AppColors.accentFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
 
     return SizedBox(
       width: AppDimens.navRailWidth,
       child: Container(
-        decoration: BoxDecoration(
-          color: surface,
-          border: Border(
-            right: BorderSide(color: AppColors.separatorFor(brightness)),
-          ),
-        ),
+        color: scheme.surfaceContainerLow,
         child: Column(
           children: [
             Padding(
@@ -51,14 +43,18 @@ class SideNavigation extends StatelessWidget {
               child: Row(
                 children: [
                   Container(
-                    width: 36,
-                    height: 36,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
-                      color: accent,
-                      borderRadius: BorderRadius.circular(9),
+                      color: scheme.primaryContainer,
+                      borderRadius:
+                          BorderRadius.circular(AppDimens.radiusMedium),
                     ),
-                    child: const Icon(Icons.cloud_rounded,
-                        color: Colors.white, size: 22),
+                    child: Icon(
+                      Icons.cloud_rounded,
+                      color: scheme.onPrimaryContainer,
+                      size: AppDimens.iconMedium,
+                    ),
                   ),
                   const SizedBox(width: AppDimens.space12),
                   Expanded(
@@ -66,8 +62,9 @@ class SideNavigation extends StatelessWidget {
                       'NexaDrive',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style:
-                          AppTextStyle.sectionHeader.copyWith(color: primary),
+                      style: AppTextStyle.titleMedium.copyWith(
+                        color: scheme.onSurface,
+                      ),
                     ),
                   ),
                 ],
@@ -75,39 +72,45 @@ class SideNavigation extends StatelessWidget {
             ),
             Expanded(
               child: ListView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: AppDimens.space12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimens.space12,
+                ),
                 children: [
                   SideNavItem(
-                      icon: Icons.home_outlined,
-                      selectedIcon: Icons.home_rounded,
-                      label: 'Home',
-                      selected: index == 0,
-                      onTap: () => onSelected(0)),
+                    icon: Icons.home_outlined,
+                    selectedIcon: Icons.home_rounded,
+                    label: 'Home',
+                    selected: index == 0,
+                    onTap: () => onSelected(0),
+                  ),
                   SideNavItem(
-                      icon: Icons.folder_outlined,
-                      selectedIcon: Icons.folder_rounded,
-                      label: 'My files',
-                      selected: index == 1,
-                      onTap: () => onSelected(1)),
+                    icon: Icons.folder_outlined,
+                    selectedIcon: Icons.folder_rounded,
+                    label: 'My files',
+                    selected: index == 1,
+                    onTap: () => onSelected(1),
+                  ),
                   SideNavItem(
-                      icon: Icons.people_outline_rounded,
-                      selectedIcon: Icons.people_rounded,
-                      label: 'Shared',
-                      selected: index == 2,
-                      onTap: () => onSelected(2)),
+                    icon: Icons.people_outline_rounded,
+                    selectedIcon: Icons.people_rounded,
+                    label: 'Shared',
+                    selected: index == 2,
+                    onTap: () => onSelected(2),
+                  ),
                   SideNavItem(
-                      icon: Icons.photo_library_outlined,
-                      selectedIcon: Icons.photo_library_rounded,
-                      label: 'Photos',
-                      selected: index == 3,
-                      onTap: () => onSelected(3)),
+                    icon: Icons.photo_library_outlined,
+                    selectedIcon: Icons.photo_library_rounded,
+                    label: 'Photos',
+                    selected: index == 3,
+                    onTap: () => onSelected(3),
+                  ),
                   SideNavItem(
-                      icon: Icons.delete_outline_rounded,
-                      selectedIcon: Icons.delete_rounded,
-                      label: 'Trash',
-                      selected: index == 4,
-                      onTap: () => onSelected(4)),
+                    icon: Icons.delete_outline_rounded,
+                    selectedIcon: Icons.delete_rounded,
+                    label: 'Trash',
+                    selected: index == 4,
+                    onTap: () => onSelected(4),
+                  ),
                   const SizedBox(height: AppDimens.space12),
                   _UtilityNavItem(
                     icon: Icons.cloud_upload_outlined,
@@ -115,9 +118,10 @@ class SideNavigation extends StatelessWidget {
                     onTap: onTransfers,
                   ),
                   _UtilityNavItem(
-                      icon: Icons.sync_rounded,
-                      label: 'Sync center',
-                      onTap: onSync),
+                    icon: Icons.sync_rounded,
+                    label: 'Sync center',
+                    onTap: onSync,
+                  ),
                   _UtilityNavItem(
                     icon: Icons.notifications_outlined,
                     label: 'Notifications',
@@ -148,8 +152,8 @@ class SideNavigation extends StatelessWidget {
   }
 }
 
-/// A single sidebar row: an inset rounded selection fill, accent glyph.
-class SideNavItem extends StatefulWidget {
+/// A single rail row with a Material 3 selected indicator.
+class SideNavItem extends StatelessWidget {
   final IconData icon;
   final IconData? selectedIcon;
   final String label;
@@ -166,69 +170,41 @@ class SideNavItem extends StatefulWidget {
   });
 
   @override
-  State<SideNavItem> createState() => _SideNavItemState();
-}
-
-class _SideNavItemState extends State<SideNavItem> {
-  bool _hovered = false;
-
-  @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = AppColors.accentFor(brightness);
-    final secondary = AppColors.textSecondaryFor(brightness);
-    final primary = AppColors.textPrimaryFor(brightness);
-    final selected = widget.selected;
+    final scheme = Theme.of(context).colorScheme;
+    final active = scheme.onSecondaryContainer;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppDimens.space1),
+      padding: const EdgeInsets.symmetric(vertical: AppDimens.space2),
       child: Material(
-        type: MaterialType.transparency,
+        color: selected ? scheme.secondaryContainer : Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: widget.onTap,
-          onHover: (hovered) {
-            if (_hovered != hovered) {
-              setState(() => _hovered = hovered);
-            }
-          },
-          borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
           child: AnimatedContainer(
             duration: AppMotion.resolve(context, AppMotion.fast),
-            height: AppDimens.listHeightNarrow,
+            height: AppDimens.touchTarget,
             padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.space12,
-            ),
-            decoration: BoxDecoration(
-              color: selected
-                  ? AppColors.accentContainerFor(brightness)
-                  : _hovered
-                      ? AppColors.fillFor(brightness).withValues(alpha: 0.72)
-                      : Colors.transparent,
-              borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+              horizontal: AppDimens.space16,
             ),
             child: Row(
               children: [
-                AnimatedScale(
-                  scale: selected ? 1.06 : 1,
-                  duration: AppMotion.resolve(context, AppMotion.fast),
-                  child: Icon(
-                    selected
-                        ? (widget.selectedIcon ?? widget.icon)
-                        : widget.icon,
-                    size: 20,
-                    color: selected ? accent : secondary,
-                  ),
+                Icon(
+                  selected ? (selectedIcon ?? icon) : icon,
+                  size: AppDimens.iconMedium,
+                  color: selected ? active : scheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: AppDimens.space12),
                 Expanded(
                   child: Text(
-                    widget.label,
+                    label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyle.bodyEmphasized.copyWith(
-                      fontSize: 15,
-                      color: selected ? accent : primary,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    style: AppTextStyle.labelLarge.copyWith(
+                      color: selected ? active : scheme.onSurface,
                     ),
                   ),
                 ),
@@ -246,35 +222,40 @@ class _UtilityNavItem extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _UtilityNavItem(
-      {required this.icon, required this.label, required this.onTap});
+  const _UtilityNavItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final secondary = AppColors.textSecondaryFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppDimens.space1),
+      padding: const EdgeInsets.symmetric(vertical: AppDimens.space2),
       child: Material(
-        type: MaterialType.transparency,
+        color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
           child: SizedBox(
-            height: AppDimens.listHeightNarrow,
+            height: AppDimens.touchTarget,
             child: Row(
               children: [
-                const SizedBox(width: AppDimens.space12),
-                Icon(icon, size: 20, color: secondary),
+                const SizedBox(width: AppDimens.space16),
+                Icon(
+                  icon,
+                  size: AppDimens.iconMedium,
+                  color: scheme.onSurfaceVariant,
+                ),
                 const SizedBox(width: AppDimens.space12),
                 Expanded(
                   child: Text(
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyle.body.copyWith(
-                      fontSize: 15,
-                      color: AppColors.textPrimaryFor(brightness),
+                    style: AppTextStyle.labelLarge.copyWith(
+                      color: scheme.onSurface,
                     ),
                   ),
                 ),

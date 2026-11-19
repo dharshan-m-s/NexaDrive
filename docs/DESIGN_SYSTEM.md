@@ -1,67 +1,82 @@
-# NexaDrive Design System — Samsung One UI
+# NexaDrive design system
 
-> The single source of truth for how the Flutter client looks and behaves.
-> Governs `lib/core/design/` (tokens) and `lib/ui/widgets/` (primitives).
-> Design authority order (per AGENTS.md design review): explicit spec rules >
-> Samsung One UI principles > NexaDrive tokens > Apple methodology (review lens
-> only) > Flutter capabilities. Apple's visual language is intentionally absent.
+NexaDrive uses **Material 3 (Material You)** as its single visual language.
+The design system lives in `app/lib/core/design/` (`App*` tokens) and
+`app/lib/ui/widgets/` (`Nexa*` components). No screen may introduce a parallel
+palette, type scale, shadow system or custom navigation idiom.
 
-## 1. Design pillars
+## Foundations
 
-1. **Clear hierarchy.** Viewing area (title, context, status) at top; interaction
-   area (controls that matter) near the reach-thumb at the bottom.
-2. **Whitespace.** 24dp page gutters, generous section spacing, breathing room
-   over dense chrome.
-3. **Restrained motion.** Critically damped springs, fast settle, no idle looping.
-4. **Large legible type.** Hero titles, clear weights, size-specific tracking.
-5. **Consistent roundness.** Radii come only from `AppDimens` (`radiusInner`
-   18 · `radiusTile` 22 · `radiusCard` 28 · `radiusSheet` 24 · `radiusPill` 999).
-6. **Honest materials.** Tonal layering (surface hierarchy L0–L4) with restrained
-   shadow at L3+, not fake embossing.
-7. **One accent.** Samsung-application blue, tonal containers, never rainbow.
+### Color
 
-## 2. Tokens
+One seed color (`AppColors.seed`, currently `#6750A4`) generates the tonal
+palettes. `ColorScheme.fromSeed` is the runtime source of truth; `AppColors`
+exposes stable role names over it. Use roles, never raw hex:
 
-| Token file | Provides | Notes |
-|---|---|---|
-| `app_colors.dart` | `accent`, `accentSubtle`, `accentContainer`, `accentPressed`, surface/background L0–L4, status (success/warning/error + containers), `textPrimary/Secondary/Tertiary`, `divider`, `heroTextOnGradient` | Every color is resolved with `*For(Brightness)` — never a bare constant in a widget. |
-| `app_dimensions.dart` | gutters (24), radii (18/22/28/24), `iconSmall/Medium/Large`, `iconTileLarge`, `spaceN`, `elevation*`, `contentMaxWidth = 1100` | Spacing multiples of 4. |
-| `app_typography.dart` | `pageTitle`, `heroTitle` (38), `sectionHeader`, `metricValue` (26), `statValue` (18), `rowTitle`, `rowSubtitle`, `listHeader`, `chipLabel` (12), `micro`, `caption`, `dialogTitle`, `buttonSmall` | Weight + size + leading as a set; fixed sizes scale with the platform text scaler. |
-| `app_motion.dart` | durations `micro/fast/normal/slow`, curves `standard/enter/exit/fade`, springs (`response 0.35 / damping 1.0` critical), `reducedMotion(context)` helpers | Every animation duration in the app must come from here or `AppMotion.resolve(...)`. |
-| `app_shadows.dart` | `none`, `level1..level4` | Tone-based, restrained. |
-| `app_transitions.dart` | `NexaPageTransitionsBuilder`, `kNexaPageTransitions` | Glide-up + settle + cross-fade; skips entirely under reduced motion. |
-| `nexa_surfaces.dart` | `NexaSurface`, `NexaSurfaceLevel`, `nexaSurfaceColor` | Surface material primitive (L0–L4 levels replace the former `app_gradients.dart` washes). |
-| `app_theme.dart` | `buildAppTheme(brightness)` — scheme + component themes (filled/outlined chip/searchBar/bottomAppBar/navigationBar/bottomSheet/pageTransitions) | Single place the theme is composed. |
+- `primary` / `onPrimary` / `primaryContainer` / `onPrimaryContainer`
+- `secondary`, `tertiary` and their containers
+- `surface`, `surfaceContainerLowest`, `surfaceContainerLow`,
+  `surfaceContainer`, `surfaceContainerHigh`, `surfaceContainerHighest`
+- `onSurface`, `onSurfaceVariant`, `outline`, `outlineVariant`
+- `error` / `errorContainer`, plus tuned success/warning pairs
 
-### Surface hierarchy
+Light mode uses a near-white seeded surface; dark mode uses the seeded dark
+surface. Contrast floors: 4.5:1 for body text, 3:1 for large text and icons.
+Status is never conveyed by color alone.
 
-| Level | Token | Use |
-|---|---|---|
-| L0 background | `backgroundDark/Light` | Page behind everything |
-| L1 surface | `surfaceDark/Light` | Cards, rows, sheets |
-| L2 grouped/alt | `surfaceAltDark/Light` | Selected rows, grouped surfaces, unread rows |
-| L3 elevated/floating | `surfaceElevatedDark/Light` | Floating bars, action bars |
-| L4 modal | dialog/sheet surfaces | Highest priority |
+### Typography
 
-## 3. Layout doctrine
+`AppTextStyle` maps to the Material 3 scale:
 
-- **24dp page gutters** (`AppDimens.pageMargin`) on all interactive screens.
-- **Interaction area rule:** in app body layout, place bottom-area the actions
-  users reach for; keep labels/context in the viewing area (see SCREEN_SPECIFICATIONS.md).
-- **1100dp cap:** interaction content never exceeds `AppDimens.contentMaxWidth`,
-  centered on wide screens (enforced globally in `app_shell.dart`).
-- **Reachability:** primary actions live at the bottom (action bar, bottom nav);
-  secondary status at top.
+| Role | Size / line height / weight |
+| --- | --- |
+| `display` | 36 / 44 / 400 |
+| `headlineSmall` (`title3`) | 24 / 32 / 400 |
+| `titleLarge` | 22 / 28 / 400 |
+| `titleMedium` (`headline`, `rowTitle`) | 16 / 24 / 500 |
+| `titleSmall` (`callout`) | 14 / 20 / 500 |
+| `bodyLarge` (`body`) | 16 / 24 / 400 |
+| `bodyMedium` (`subheadline`) | 14 / 20 / 400 |
+| `bodySmall` (`footnote`) | 12 / 16 / 400 |
+| `labelLarge` (`button`) | 14 / 20 / 500 |
+| `labelMedium` (`chipLabel`) | 12 / 16 / 500 |
+| `labelSmall` (`caption`) | 11 / 16 / 500 |
 
-## 4. Conventions
+The platform font is intentional; it honours system font-size settings and
+stays native on Android, Windows and Linux.
 
-- Colors: always `Theme.of(context).brightness` → `AppColors.xFor(brightness)`.
-- Text: always an `AppTextStyle.*` base, `.copyWith` for adjustments.
-- Surfaces: prefer `NexaSurface(level:)` over hand-built `Container` decorations.
-- Icons: `IconData` from Material Icons; filled when selected, outlined when idle.
-- List rows under a decorated surface: wrap the `ListTile` in
-  `Material(type: MaterialType.transparency)` to avoid the
-  "ListTile background color or ink splashes may be invisible" assertion.
-- Motion while an element is touched: animate from the live value, never a
-  hard-cut target; no two consecutive springs in opposite directions.
-- No emoji, no confetti: honest materials and calm motion are the delight.
+### Shape and elevation
+
+Shape comes from `AppDimens`: extraSmall 4, small 8, medium 12, large 16,
+extraLarge 28, full pill 999. Buttons, chips and search bars use a stadium
+shape. Elevation is carried first by tonal surface roles; shadows are only for
+menus, the floating navigation pill and modals (level 3).
+
+### Motion
+
+`AppMotion` holds Material standard/entering/exiting curves and short
+durations. Springs are reserved for the one signature interaction: the
+floating navigation pill's travelling selection. Reduced motion replaces
+springs and slides with immediate state changes or cross-fades.
+
+## Navigation
+
+- Width `>= 900`: Material 3 navigation rail (`SideNavigation`) + content.
+- Narrower: the **floating pill** (`NexaBottomNav`) is the primary navigation.
+  Keep it; it is the deliberate NexaDrive signature. It now uses tonal M3
+  surfaces and Material state layers, not optical glass.
+- Pushed routes use the shared Material 3 fade-forward transition.
+
+## Accessibility and craft
+
+- 48dp minimum touch targets; 56dp list rows.
+- Semantic labels on every icon-only control.
+- Respect reduced motion, increased contrast and system text scaling.
+- One signature element per screen; everything else stays quiet.
+- Loading, empty and error states are part of the design, not afterthoughts.
+
+## Non-goals
+
+- No Apple/iOS chrome, no Cupertino theme, no custom Liquid Glass claims.
+- No hardcoded colors or font sizes in screens.
+- No third design system beside `App*` + `Nexa*`.

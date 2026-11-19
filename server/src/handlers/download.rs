@@ -8,11 +8,13 @@ use image::{ImageDecoder, ImageReader, codecs::jpeg::JpegEncoder};
 use std::{
     io::Cursor,
     path::Path,
+    process::Stdio,
     time::{Duration, Instant},
 };
 use tokio::{
     fs,
     io::{AsyncReadExt, AsyncSeekExt},
+    time::timeout,
 };
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
@@ -22,8 +24,8 @@ use crate::{
     handlers::admin::audit,
     models::{PathQuery, ThumbQuery},
     paths::{
-        content_disposition, is_photo, mime_for_file, mime_is_safe_inline, parse_byte_range,
-        safe_relative_path, user_root,
+        content_disposition, is_pdf, is_photo, is_video, mime_for_file, mime_is_safe_inline,
+        parse_byte_range, safe_relative_path, user_root,
     },
     state::{AppState, CachedThumb},
 };
@@ -171,10 +173,15 @@ const THUMB_CACHE_MAX_ENTRIES: usize = 1024;
 /// small server.
 const THUMB_CACHE_MAX_BYTES: usize = 128 * 1024 * 1024;
 const THUMB_CACHE_TTL: Duration = Duration::from_secs(600);
+/// External preview generators are optional. A slow or hostile file must never
+/// pin a request, so they run under a hard timeout and kill-on-drop.
+const THUMB_TOOL_TIMEOUT: Duration = Duration::from_secs(20);
+const THUMB_TOOL_MAX_STDOUT: usize = 8 * 1024 * 1024;
 
-/// Serves a small JPEG thumbnail of an image, generated server-side and
-/// kept in a bounded in-memory cache. This keeps mobile photo grids from
-/// downloading full-resolution originals just to render previews.
+/// Serves a small JPEG thumbnail, generated server-side and kept in a bounded
+/// in-memory cache. Images are decoded in-process; video and PDF previews use
+/// optional system tools (`ffmpeg` / `pdftoppm`) and degrade to 415 when those
+/// tools are unavailable. Clients keep full-resolution originals off the wire.
 pub(crate) async fn thumbnail(
     State(state): State<AppState>,
     axum::extract::Extension(user_id): axum::extract::Extension<Uuid>,
@@ -192,8 +199,13 @@ pub(crate) async fn thumbnail(
     if !metadata.is_file() {
         return Err(AppError::BadRequest("Not a file".into()));
     }
-    if !is_photo(&absolute) {
-        return Err(AppError::BadRequest("Not an image".into()));
+    let photo = is_photo(&absolute);
+    let video = is_video(&absolute);
+    let pdf = is_pdf(&absolute);
+    if !(photo || video || pdf) {
+        return Err(AppError::BadRequest(
+            "Preview is not available for this file type".into(),
+        ));
     }
     // 512 is the grid size. The photo viewer asks for a larger, still bounded
     // preview (2048) instead of downloading and decoding the full original.
@@ -204,7 +216,22 @@ pub(crate) async fn thumbnail(
         .and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let key = format!("{}:{}:{}", absolute.to_string_lossy(), modified_secs, max);
+    // The generator is part of the cache key so switching tools or adding
+    // video/PDF support cannot serve a stale preview for the same path.
+    let generator = if photo {
+        "image"
+    } else if video {
+        "video-ffmpeg"
+    } else {
+        "pdf-pdftoppm"
+    };
+    let key = format!(
+        "{}:{}:{}:{}",
+        absolute.to_string_lossy(),
+        modified_secs,
+        max,
+        generator
+    );
 
     {
         let mut guard = state.thumb_cache.lock().map_err(|_| AppError::Internal)?;
@@ -218,32 +245,26 @@ pub(crate) async fn thumbnail(
         }
     }
 
-    // Decode explicitly (not image::open) so the EXIF orientation is applied:
-    // phone photos store rotated pixels plus an orientation tag and would
-    // otherwise produce sideways or wrongly-cropped previews.
-    let mut reader = ImageReader::open(&absolute).map_err(|_| AppError::UnsupportedMedia)?;
-    reader.no_limits();
-    let mut decoder = reader
-        .into_decoder()
-        .map_err(|_| AppError::UnsupportedMedia)?;
-    let orientation = decoder
-        .orientation()
-        .unwrap_or(image::metadata::Orientation::NoTransforms);
-    let mut img =
-        image::DynamicImage::from_decoder(decoder).map_err(|_| AppError::UnsupportedMedia)?;
-    if orientation != image::metadata::Orientation::NoTransforms {
-        img.apply_orientation(orientation);
-    }
-    let thumb = img.thumbnail(max, max);
-    // Grid thumbnails are small enough that 84 is visually lossless; the
-    // viewer's larger preview gets a higher quality so zooming does not show
-    // JPEG blocking.
-    let quality = if max > 1024 { 90 } else { 84 };
-    let mut out = Cursor::new(Vec::new());
-    thumb
-        .write_with_encoder(JpegEncoder::new_with_quality(&mut out, quality))
-        .map_err(|_| AppError::Internal)?;
-    let bytes = out.into_inner();
+    let bytes = if photo {
+        // Decode explicitly (not image::open) so the EXIF orientation is
+        // applied: phone photos store rotated pixels plus an orientation tag
+        // and would otherwise produce sideways or wrongly-cropped previews.
+        let mut reader = ImageReader::open(&absolute).map_err(|_| AppError::UnsupportedMedia)?;
+        reader.no_limits();
+        let mut decoder = reader
+            .into_decoder()
+            .map_err(|_| AppError::UnsupportedMedia)?;
+        let orientation = decoder
+            .orientation()
+            .unwrap_or(image::metadata::Orientation::NoTransforms);
+        let img =
+            image::DynamicImage::from_decoder(decoder).map_err(|_| AppError::UnsupportedMedia)?;
+        encode_thumbnail(img, max, Some(orientation))?
+    } else if video {
+        video_thumbnail(&absolute.to_string_lossy(), max).await?
+    } else {
+        pdf_thumbnail(&absolute.to_string_lossy(), max).await?
+    };
 
     {
         let mut guard = state.thumb_cache.lock().map_err(|_| AppError::Internal)?;
@@ -276,6 +297,139 @@ pub(crate) async fn thumbnail(
         }
     }
     Ok(thumb_response(bytes))
+}
+
+fn encode_thumbnail(
+    mut img: image::DynamicImage,
+    max: u32,
+    orientation: Option<image::metadata::Orientation>,
+) -> Result<Vec<u8>, AppError> {
+    if let Some(orientation) = orientation {
+        if orientation != image::metadata::Orientation::NoTransforms {
+            img.apply_orientation(orientation);
+        }
+    }
+    let thumb = img.thumbnail(max, max);
+    // Grid thumbnails are small enough that 84 is visually lossless; the
+    // viewer's larger preview gets a higher quality so zooming does not show
+    // JPEG blocking.
+    let quality = if max > 1024 { 90 } else { 84 };
+    let mut out = Cursor::new(Vec::new());
+    thumb
+        .write_with_encoder(JpegEncoder::new_with_quality(&mut out, quality))
+        .map_err(|_| AppError::Internal)?;
+    Ok(out.into_inner())
+}
+
+/// Runs an optional preview generator with fixed argv (never a shell).
+async fn run_preview_tool(
+    program: &'static str,
+    args: &[&str],
+) -> Result<std::process::Output, AppError> {
+    let mut command = tokio::process::Command::new(program);
+    command
+        .args(args)
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .stdout(Stdio::piped())
+        .kill_on_drop(true);
+    timeout(THUMB_TOOL_TIMEOUT, command.output())
+        .await
+        .map_err(|_| AppError::UnsupportedMedia)?
+        .map_err(|_| AppError::UnsupportedMedia)
+}
+
+/// Normalizes an external tool's first frame into the same bounded JPEG format
+/// as in-process image previews.
+fn decode_thumbnail_frame(bytes: Vec<u8>, max: u32) -> Result<Vec<u8>, AppError> {
+    if bytes.is_empty() || bytes.len() > THUMB_TOOL_MAX_STDOUT {
+        return Err(AppError::UnsupportedMedia);
+    }
+    let mut reader = ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|_| AppError::UnsupportedMedia)?;
+    reader.no_limits();
+    let mut decoder = reader
+        .into_decoder()
+        .map_err(|_| AppError::UnsupportedMedia)?;
+    let orientation = decoder
+        .orientation()
+        .unwrap_or(image::metadata::Orientation::NoTransforms);
+    let img = image::DynamicImage::from_decoder(decoder).map_err(|_| AppError::UnsupportedMedia)?;
+    encode_thumbnail(img, max, Some(orientation))
+}
+
+/// ffmpeg writes a single MJPEG frame to stdout.
+async fn video_thumbnail(path: &str, max: u32) -> Result<Vec<u8>, AppError> {
+    let output = run_preview_tool(
+        "ffmpeg",
+        &[
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            path,
+            "-frames:v",
+            "1",
+            "-an",
+            "-sn",
+            "-dn",
+            "-f",
+            "image2pipe",
+            "-vcodec",
+            "mjpeg",
+            "pipe:1",
+        ],
+    )
+    .await?;
+    if !output.status.success() {
+        return Err(AppError::UnsupportedMedia);
+    }
+    decode_thumbnail_frame(output.stdout, max)
+}
+
+/// pdftoppm writes to files, not stdout, so render into a private temporary
+/// directory and remove it on every path. The prefix is a fresh UUID and no
+/// user-controlled string ever reaches an argv element or shell.
+async fn pdf_thumbnail(path: &str, max: u32) -> Result<Vec<u8>, AppError> {
+    let dir = std::env::temp_dir().join(format!("nexadrive-thumb-{}", Uuid::new_v4()));
+    fs::create_dir(&dir)
+        .await
+        .map_err(|_| AppError::UnsupportedMedia)?;
+    let prefix = dir.join("page");
+    let prefix_arg = prefix.to_string_lossy().to_string();
+    let max_arg = max.to_string();
+
+    let result = async {
+        let output = run_preview_tool(
+            "pdftoppm",
+            &[
+                "-f",
+                "1",
+                "-l",
+                "1",
+                "-singlefile",
+                "-scale-to",
+                &max_arg,
+                "-jpeg",
+                path,
+                &prefix_arg,
+            ],
+        )
+        .await?;
+        if !output.status.success() {
+            return Err(AppError::UnsupportedMedia);
+        }
+        let bytes = fs::read(dir.join("page.jpg"))
+            .await
+            .map_err(|_| AppError::UnsupportedMedia)?;
+        decode_thumbnail_frame(bytes, max)
+    }
+    .await;
+
+    let _ = fs::remove_dir_all(&dir).await;
+    result
 }
 
 fn thumb_response(bytes: Vec<u8>) -> Response {

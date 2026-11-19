@@ -1,5 +1,7 @@
 # NexaDrive — Final Engineering Audit
 
+> **Historical record — superseded.** This document is a point-in-time record of NexaDrive's former One UI / Liquid Glass design. It is not current guidance: see [docs/DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) (Material 3 / Material You) and `docs/UI_DESIGN_TOKENS.md`.
+
 Audit of the local working tree at `/mnt/data3/nexadrive` (working tree, not the remote).
 Every claim carries one of these labels:
 

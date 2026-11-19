@@ -10,7 +10,7 @@ import 'admin_user_rules.dart';
 import 'user_sheets.dart';
 import 'users_controller.dart';
 
-/// Users administration — an iOS-style grouped account list.
+/// Users administration — a Material 3 account list with tonal surfaces.
 ///
 /// Architecture: the page renders [UsersController] state. All account
 /// mutations go through the controller; the UI owns presentation only.
@@ -310,7 +310,7 @@ class _UsersScreenState extends State<UsersScreen> {
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.errorFor(Theme.of(context).brightness),
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onError,
             ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Delete account'),
@@ -434,7 +434,7 @@ class _SummaryStrip extends StatelessWidget {
 
 /// One account row: avatar, identity with status chips, storage subtitle, and
 /// the actions affordance. Inside the grouped panel this reads as a single
-/// iOS Settings-style row.
+/// Material 3 row with a leading avatar and trailing controls.
 class _UserRow extends StatelessWidget {
   final UserProfile user;
   final Session session;
@@ -489,27 +489,24 @@ class _UserRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Text(
+                      user.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyle.rowTitle.copyWith(
+                        color: disabled
+                            ? AppColors.labelTertiaryFor(brightness)
+                            : AppColors.labelPrimaryFor(brightness),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: AppDimens.space4),
+                    Wrap(
+                      spacing: AppDimens.space4,
+                      runSpacing: AppDimens.space4,
                       children: [
-                        Flexible(
-                          child: Text(
-                            user.displayName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyle.rowTitle.copyWith(
-                              color: disabled
-                                  ? AppColors.labelTertiaryFor(brightness)
-                                  : AppColors.labelPrimaryFor(brightness),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        if (user.isAdmin) ...[
-                          const SizedBox(width: AppDimens.space6),
-                          NexaChip.filled(label: 'Admin'),
-                        ],
-                        if (isAdminSelf) ...[
-                          const SizedBox(width: AppDimens.space6),
+                        if (user.isAdmin) NexaChip.filled(label: 'Admin'),
+                        if (isAdminSelf)
                           NexaChip.tonal(
                             label: 'You',
                             tintColor:
@@ -517,16 +514,13 @@ class _UserRow extends StatelessWidget {
                             tintForeground:
                                 AppColors.onSuccessContainerFor(brightness),
                           ),
-                        ],
-                        if (disabled) ...[
-                          const SizedBox(width: AppDimens.space6),
+                        if (disabled)
                           NexaChip.tonal(
                             label: 'Blocked',
                             tintColor: AppColors.errorContainerFor(brightness),
                             tintForeground:
                                 AppColors.onErrorContainerFor(brightness),
                           ),
-                        ],
                       ],
                     ),
                     const SizedBox(height: AppDimens.space2),

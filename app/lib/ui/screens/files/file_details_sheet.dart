@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../core/models/file_entry.dart';
 import '../../../core/utils/file_kind.dart';
 import '../../../core/utils/format.dart';
 import '../../../services/api.dart';
+import '../../widgets/nexa_file_glyph.dart';
 
-/// One UI details sheet — path, kind, size and modified time in a calm,
+/// Material 3 details sheet — path, kind, size and modified time in a calm,
 /// low-contrast layout.
 class FileDetailsSheet extends StatelessWidget {
   final FileEntry file;
@@ -16,7 +16,7 @@ class FileDetailsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final category = file.category;
 
     return SafeArea(
@@ -34,16 +34,21 @@ class FileDetailsSheet extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: AppDimens.iconTileLarge,
+                  height: AppDimens.iconTileLarge,
                   decoration: BoxDecoration(
-                    color: FileKind.tileFill(category, brightness),
-                    borderRadius: BorderRadius.circular(AppDimens.radiusInner),
+                    color: scheme.secondaryContainer,
+                    borderRadius:
+                        BorderRadius.circular(AppDimens.radiusStandard),
                   ),
-                  child: Icon(
-                    FileKind.icon(category),
-                    color: FileKind.tint(category, brightness),
-                    size: 26,
+                  child: Center(
+                    child: file.isFolder
+                        ? const NexaFileGlyph.folder(size: 32)
+                        : NexaFileGlyph(
+                            name: file.name,
+                            type: file.type,
+                            size: 32,
+                          ),
                   ),
                 ),
                 const SizedBox(width: AppDimens.space12),
@@ -55,15 +60,16 @@ class FileDetailsSheet extends StatelessWidget {
                         file.name,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyle.rowTitle.copyWith(
-                          color: AppColors.textPrimaryFor(brightness),
+                        style: AppTextStyle.titleMedium.copyWith(
+                          color: scheme.onSurface,
                         ),
                       ),
                       const SizedBox(height: AppDimens.space2),
                       Text(
                         FileKind.label(category),
-                        style: AppTextStyle.caption.copyWith(
-                            color: AppColors.textSecondaryFor(brightness)),
+                        style: AppTextStyle.labelSmall.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -100,23 +106,25 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final secondary = AppColors.textSecondaryFor(Theme.of(context).brightness);
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppDimens.space6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 90,
-            child: Text(label,
-                style: AppTextStyle.caption.copyWith(color: secondary)),
+            width: AppDimens.touchTarget * 2,
+            child: Text(
+              label,
+              style: AppTextStyle.labelMedium.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
           ),
           Expanded(
             child: Text(
               value,
-              style: AppTextStyle.rowTitle.copyWith(
-                color: AppColors.textPrimaryFor(Theme.of(context).brightness),
-              ),
+              style: AppTextStyle.bodyMedium.copyWith(color: scheme.onSurface),
             ),
           ),
         ],

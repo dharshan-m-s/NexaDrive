@@ -1,4 +1,6 @@
-> **Current implementation note (2026-11-02):** This document records the earlier UI baseline. For the current screen/component coverage and redesign status, use [Premium UI Redesign Coverage](PREMIUM_UI_REDESIGN_COVERAGE.md). For actual media rendering behavior, use [File Format Support](FILE_FORMAT_SUPPORT.md). Source code on `beta` remains authoritative where this historical inventory differs.
+> **Historical record — superseded.** This document is a point-in-time record of NexaDrive's former One UI / Liquid Glass design. It is not current guidance: see [docs/DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) (Material 3 / Material You) and `docs/UI_DESIGN_TOKENS.md`.
+>
+> **Earlier-baseline note (2026-11-02):** This document records the earlier UI baseline. For the current screen/component coverage and design rules, use [the Material 3 design system](DESIGN_SYSTEM.md). For actual media rendering behavior, use [File Format Support](FILE_FORMAT_SUPPORT.md). Source code on `beta` remains authoritative where this historical inventory differs.
 
 # NexaDrive UI — Screen Specification
 

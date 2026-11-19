@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
-import '../../core/design/app_motion.dart';
-import 'nexa_surface.dart';
 
-/// Premium storage overview card used as the main dashboard anchor.
-/// It is informational when [onTap] is null and interactive only when a real
-/// destination is supplied.
+/// Flat editorial storage summary.
+///
+/// The dashboard anchor is deliberately not a card: a compact overline, the
+/// metric, a segmented usage indicator and one quiet detail line do the work.
 class NexaHero extends StatelessWidget {
   final String label;
   final String value;
@@ -32,246 +30,146 @@ class NexaHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final ink = AppColors.labelPrimaryFor(brightness);
-    final secondaryInk = AppColors.labelSecondaryFor(brightness);
-    final accent = AppColors.accentFor(brightness);
-    final usedFraction = fraction.clamp(0.0, 1.0).toDouble();
+    final scheme = Theme.of(context).colorScheme;
+    final used = fraction.clamp(0.0, 1.0).toDouble();
 
-    return NexaSurface(
-      level: NexaSurfaceLevel.floating,
-      color: AppColors.surfaceElevatedFor(brightness),
-      radius: AppDimens.radiusXLarge,
-      onTap: onTap,
-      padding: const EdgeInsets.fromLTRB(
-        AppDimens.space20,
-        AppDimens.space16,
-        AppDimens.space20,
-        AppDimens.space16,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppDimens.space12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.accentContainerFor(brightness),
-                  borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-                ),
-                child: Icon(
-                  Icons.cloud_outlined,
-                  size: 20,
-                  color: AppColors.accentTextFor(brightness),
-                ),
-              ),
-              const SizedBox(width: AppDimens.space10),
-              Expanded(
-                child: Text(
-                  label,
-                  style: AppTextStyle.subheadline.copyWith(
-                    color: ink,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (onTap != null)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      actionLabel,
-                      style: AppTextStyle.caption2.copyWith(
-                        color: accent,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.45,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label.toUpperCase(),
+                      style: AppTextStyle.sectionHeader.copyWith(
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(width: AppDimens.space4),
-                    Icon(Icons.arrow_outward_rounded, size: 15, color: accent),
-                  ],
-                )
-              else
-                Text(
-                  'OVERVIEW',
-                  style: AppTextStyle.caption2.copyWith(
-                    color: secondaryInk,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
                   ),
-                ),
-            ],
-          ),
-          const SizedBox(height: AppDimens.space20),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                  if (onTap != null)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          actionLabel.toUpperCase(),
+                          style: AppTextStyle.labelSmall.copyWith(
+                            color: scheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: AppDimens.space4),
+                        Icon(
+                          Icons.arrow_outward_rounded,
+                          size: AppDimens.iconSmall,
+                          color: scheme.primary,
+                        ),
+                      ],
+                    )
+                  else
                     Text(
-                      value,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyle.heroTitle.copyWith(
-                        color: ink,
-                        fontSize: 38,
-                        height: 1.02,
-                        letterSpacing: -1.0,
-                        fontWeight: FontWeight.w700,
+                      'OVERVIEW',
+                      style: AppTextStyle.labelSmall.copyWith(
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
-                    if (secondary != null && secondary!.isNotEmpty) ...[
-                      const SizedBox(height: AppDimens.space6),
-                      Text(
+                ],
+              ),
+              const SizedBox(height: AppDimens.space12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyle.metricValue.copyWith(
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  if (secondary != null && secondary!.isNotEmpty) ...[
+                    const SizedBox(width: AppDimens.space8),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppDimens.space6),
+                      child: Text(
                         secondary!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyle.subheadline.copyWith(
-                          color: secondaryInk,
-                          fontWeight: FontWeight.w500,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
-                    ],
+                    ),
                   ],
-                ),
+                  if (trailing != null) ...[
+                    const Spacer(),
+                    trailing!,
+                  ],
+                ],
               ),
-              const SizedBox(width: AppDimens.space12),
-              if (trailing != null)
-                trailing!
-              else if (secondary != null)
-                _HeroRing(
-                  fraction: usedFraction,
-                  size: 76,
-                  stroke: 6,
-                  color: accent,
-                  track: AppColors.fillFor(brightness),
-                  centre: '${(usedFraction * 100).round()}%',
-                  centreColor: ink,
-                )
-              else
-                Container(
-                  width: 68,
-                  height: 68,
-                  decoration: BoxDecoration(
-                    color: AppColors.fillFor(brightness),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.cloud_done_rounded,
-                    color: accent,
-                    size: 32,
+              if (secondary != null) ...[
+                const SizedBox(height: AppDimens.space16),
+                Semantics(
+                  label: label,
+                  value: '${(used * 100).round()}% used',
+                  child: _SegmentedUsageBar(
+                    fraction: used,
+                    color: scheme.primary,
+                    track: scheme.surfaceContainerHighest,
                   ),
                 ),
-            ],
-          ),
-          if (secondary != null) ...[
-            const SizedBox(height: AppDimens.space20),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: usedFraction),
-                duration: AppMotion.resolve(context, AppMotion.normal),
-                curve: AppMotion.standardCurve,
-                builder: (context, progress, _) => LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 6,
-                  color: accent,
-                  backgroundColor: AppColors.fillFor(brightness),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: AppDimens.space12),
-          Row(
-            children: [
-              Icon(
-                Icons.check_circle_outline_rounded,
-                size: 15,
-                color: secondaryInk,
-              ),
-              const SizedBox(width: AppDimens.space6),
-              Expanded(
-                child: Text(
-                  detail,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyle.caption1.copyWith(
-                    color: secondaryInk,
-                    fontWeight: FontWeight.w500,
-                  ),
+              ],
+              const SizedBox(height: AppDimens.space12),
+              Text(
+                detail,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyle.bodySmall.copyWith(
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _HeroRing extends StatelessWidget {
+class _SegmentedUsageBar extends StatelessWidget {
   final double fraction;
-  final double size;
-  final double stroke;
   final Color color;
   final Color track;
-  final String centre;
-  final Color centreColor;
 
-  const _HeroRing({
+  const _SegmentedUsageBar({
     required this.fraction,
-    required this.size,
-    required this.stroke,
     required this.color,
     required this.track,
-    required this.centre,
-    required this.centreColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox.expand(
-            child: CircularProgressIndicator(
-              value: 1,
-              strokeWidth: stroke,
-              strokeCap: StrokeCap.round,
-              color: track,
-              backgroundColor: Colors.transparent,
-            ),
-          ),
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: fraction.clamp(0.0, 1.0)),
-            duration: AppMotion.resolve(context, AppMotion.normal),
-            curve: AppMotion.standardCurve,
-            builder: (context, value, _) => SizedBox.expand(
-              child: CircularProgressIndicator(
-                value: value,
-                strokeWidth: stroke,
-                strokeCap: StrokeCap.round,
-                color: color,
-                backgroundColor: Colors.transparent,
+    const segments = 14;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+      child: Row(
+        children: List.generate(segments, (index) {
+          final filled = (index + 1) / segments <= fraction + 0.0001;
+          return Expanded(
+            child: Container(
+              height: AppDimens.space8,
+              margin: EdgeInsets.only(
+                right: index == segments - 1 ? 0 : AppDimens.space2,
               ),
+              color: filled ? color : track,
             ),
-          ),
-          Text(
-            centre,
-            style: AppTextStyle.headline.copyWith(
-              color: centreColor,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.4,
-            ),
-          ),
-        ],
+          );
+        }),
       ),
     );
   }

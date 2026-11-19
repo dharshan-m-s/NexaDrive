@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexadrive/core/design/app_colors.dart';
 import 'package:nexadrive/core/design/app_dimensions.dart';
+import 'package:nexadrive/core/design/app_motion.dart';
 import 'package:nexadrive/core/design/app_theme.dart';
+import 'package:nexadrive/core/design/app_typography.dart';
 import 'package:nexadrive/core/design/nexa_surfaces.dart';
 import 'package:nexadrive/main.dart';
 import 'package:nexadrive/services/session.dart';
@@ -46,14 +48,16 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('Liquid Glass owns a clipped backdrop surface', (tester) async {
+  testWidgets('NexaLiquidGlass renders a tonal Material surface',
+      (tester) async {
+    final scheme = AppColors.lightScheme;
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light(),
         home: const Scaffold(
           body: Center(
             child: NexaLiquidGlass(
-              child: Text('Glass control'),
+              child: Text('Tonal control'),
             ),
           ),
         ),
@@ -64,18 +68,18 @@ void main() {
     expect(
       find.descendant(
         of: find.byType(NexaLiquidGlass),
-        matching: find.byType(BackdropFilter),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Material && widget.color == scheme.surfaceContainerHigh,
+        ),
       ),
       findsOneWidget,
+      reason: 'the compatibility wrapper now paints an M3 container role',
     );
     expect(
-      find.ancestor(
-        of: find.byType(BackdropFilter),
-        matching: find.byType(ClipRRect),
-      ),
-      findsAtLeastNWidgets(1),
-      reason:
-          'the shader backdrop must be protected by a rounded clipping surface',
+      find.byType(BackdropFilter),
+      findsNothing,
+      reason: 'optical glass is no longer part of the design system',
     );
     expect(tester.takeException(), isNull);
   });
@@ -91,23 +95,20 @@ void main() {
         expect(find.textContaining('Good morning'), findsNothing);
         expect(find.textContaining('Good afternoon'), findsNothing);
         expect(find.textContaining('Good evening'), findsNothing);
-        // The dock owns one clipped backdrop blur; content surfaces stay flat.
+        // The pill is a tonal M3 surface; no optical material remains.
+        final scheme = dark ? AppColors.darkScheme : AppColors.lightScheme;
         expect(
           find.descendant(
             of: find.byType(NexaBottomNav),
-            matching: find.byType(BackdropFilter),
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Material &&
+                  widget.color == scheme.surfaceContainerHigh,
+            ),
           ),
-          findsOneWidget,
+          findsAtLeastNWidgets(1),
         );
-        expect(
-          find.ancestor(
-            of: find.byType(NexaBottomNav),
-            matching: find.byType(BackdropFilter),
-          ),
-          findsNothing,
-          reason:
-              'the clipped dock contains its own blur rather than wrapping the page',
-        );
+        expect(find.byType(BackdropFilter), findsNothing);
         // Every destination is present and hit-testable.
         for (final label in ['Home', 'Files', 'Shared', 'Photos', 'More']) {
           expect(find.text(label), findsOneWidget);
@@ -116,7 +117,7 @@ void main() {
       });
     }
 
-    testWidgets('high contrast uses an opaque dock fallback', (tester) async {
+    testWidgets('high contrast keeps the tonal pill legible', (tester) async {
       await tester.pumpWidget(
         MediaQuery(
           data: const MediaQueryData(highContrast: true),
@@ -133,18 +134,23 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(find.byType(BackdropFilter), findsNothing);
       expect(
         find.descendant(
           of: find.byType(NexaBottomNav),
-          matching: find.byType(BackdropFilter),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Material &&
+                widget.color == AppColors.lightScheme.surfaceContainerHigh,
+          ),
         ),
-        findsNothing,
+        findsAtLeastNWidgets(1),
       );
       expect(find.text('Home'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the glass dock floats over a full-height page',
+    testWidgets('the tonal pill floats over a full-height page',
         (tester) async {
       await pumpShell(tester);
       // The pill is not Scaffold chrome: it floats over the body.
@@ -156,10 +162,12 @@ void main() {
           tester.view.physicalSize.width / tester.view.devicePixelRatio;
       final height =
           tester.view.physicalSize.height / tester.view.devicePixelRatio;
-      // The pill itself is inset; transparent page space surrounds it.
+      // The pill is a compact centred capsule; transparent page space
+      // surrounds it so it never reads as a full-width dock.
       final pill = tester.getRect(find.byType(NexaBottomNav));
-      expect(pill.left, closeTo(AppDimens.pageMargin, 1.0));
-      expect(pill.right, closeTo(width - AppDimens.pageMargin, 1.0));
+      expect(pill.width, lessThanOrEqualTo(AppDimens.bottomNavMaxWidth));
+      expect(pill.left, closeTo((width - pill.width) / 2, 1.0));
+      expect(pill.right, closeTo(width - pill.left, 1.0));
       expect(pill.bottom, closeTo(height - AppDimens.space10, 1.0),
           reason: 'a clear gap lifts the pill above the bottom edge');
       final capsule = tester.getRect(
@@ -170,9 +178,9 @@ void main() {
             )
             .first,
       );
-      expect(capsule.left, closeTo(AppDimens.pageMargin, 1.0),
+      expect(capsule.left, closeTo(pill.left, 1.0),
           reason: 'the capsule is inset from the screen edge');
-      expect(capsule.right, closeTo(width - AppDimens.pageMargin, 1.0));
+      expect(capsule.right, closeTo(pill.right, 1.0));
       expect(capsule.height, closeTo(AppDimens.bottomNavHeight, 1.0));
 
       // The page host fills the available screen behind the independently
@@ -281,7 +289,7 @@ void main() {
           tester.view.physicalSize.height / tester.view.devicePixelRatio;
       final pill = tester.getRect(find.byType(NexaBottomNav));
       // The capsule keeps its own height: the gesture inset is never absorbed
-      // into the pill's glass (which would make it read as bulky).
+      // into the pill's surface (which would make it read as bulky).
       final capsule = tester.getRect(
         find
             .descendant(
@@ -344,7 +352,7 @@ void main() {
     });
   });
 
-  group('glass surfaces', () {
+  group('tonal surfaces', () {
     Future<void> pump(WidgetTester tester, Widget child, Brightness b) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -356,8 +364,9 @@ void main() {
     }
 
     for (final b in [Brightness.light, Brightness.dark]) {
-      testWidgets('floating surface blurs only when asked (${b.name})',
+      testWidgets('floating surface uses an M3 container role (${b.name})',
           (tester) async {
+        final scheme = AppColors.scheme(b);
         await pump(
           tester,
           const NexaSurface(
@@ -367,12 +376,25 @@ void main() {
           ),
           b,
         );
-        expect(find.byType(BackdropFilter), findsOneWidget);
+        final material = tester.widget<Material>(
+          find.descendant(
+            of: find.byType(NexaSurface),
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Material &&
+                  widget.color == scheme.surfaceContainerHigh,
+            ),
+          ),
+        );
+        expect(material.elevation, AppDimens.elevationLevel3);
+        // `useBlur` is compatibility-only; M3 separation is tonal.
+        expect(find.byType(BackdropFilter), findsNothing);
         expect(tester.takeException(), isNull);
       });
 
-      testWidgets('grouped surface is flat, not glass (${b.name})',
+      testWidgets('grouped surface is flat and tonal (${b.name})',
           (tester) async {
+        final scheme = AppColors.scheme(b);
         await pump(
           tester,
           const NexaSurface(
@@ -381,7 +403,16 @@ void main() {
           ),
           b,
         );
-        // Glass is selective: content surfaces must not be frosted.
+        final material = tester.widget<Material>(
+          find.descendant(
+            of: find.byType(NexaSurface),
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Material && widget.color == scheme.surfaceContainer,
+            ),
+          ),
+        );
+        expect(material.elevation, 0);
         expect(find.byType(BackdropFilter), findsNothing);
         expect(tester.takeException(), isNull);
       });
@@ -390,8 +421,22 @@ void main() {
 
   group('design tokens are coherent', () {
     test('touch targets meet the accessibility floor', () {
-      expect(AppDimens.touchTarget, greaterThanOrEqualTo(44));
       expect(AppDimens.touchTarget, greaterThanOrEqualTo(48));
+      expect(AppDimens.listHeight, greaterThanOrEqualTo(56));
+    });
+
+    test('the warm editorial palette owns the Material roles', () {
+      expect(AppColors.seed, AppColors.forestLight);
+      expect(AppColors.lightScheme.primary, AppColors.forestLight);
+      expect(AppColors.lightScheme.surface, AppColors.canvasLight);
+      expect(AppColors.lightScheme.primaryContainer, AppColors.selectionLight);
+      expect(AppColors.lightScheme.onSurface, AppColors.inkLight);
+      expect(AppColors.darkScheme.primary, AppColors.forestDark);
+      expect(AppColors.darkScheme.surface, AppColors.canvasDark);
+      expect(AppColors.darkScheme.primaryContainer, AppColors.selectionDark);
+      expect(AppColors.darkScheme.onSurface, AppColors.inkDark);
+      expect(AppColors.scheme(Brightness.light), AppColors.lightScheme);
+      expect(AppColors.scheme(Brightness.dark), AppColors.darkScheme);
     });
 
     test('light and dark define distinct, non-inverted surfaces', () {
@@ -402,6 +447,37 @@ void main() {
       // both appearances (tonal separation, not a simple inversion).
       expect(groupedLight, isNot(AppColors.backgroundLight));
       expect(groupedDark, isNot(AppColors.backgroundDark));
+      expect(
+        AppColors.lightScheme.surfaceContainerLow,
+        isNot(AppColors.lightScheme.surface),
+      );
+    });
+
+    test('shape scale is restrained and editorial', () {
+      expect(AppDimens.radiusExtraSmall, 4);
+      expect(AppDimens.radiusSmall, 8);
+      expect(AppDimens.radiusStandard, 12);
+      expect(AppDimens.radiusMedium, 18);
+      expect(AppDimens.radiusLarge, 24);
+      expect(AppDimens.radiusSheet, 28);
+      expect(AppDimens.radiusPill, greaterThanOrEqualTo(999));
+    });
+
+    test('typography keeps the editorial hierarchy in Material roles', () {
+      expect(AppTextStyle.bodyLarge.fontSize, 14.5);
+      expect(AppTextStyle.bodyMedium.fontSize, 13);
+      expect(AppTextStyle.labelLarge.fontSize, 14);
+      expect(AppTextStyle.labelSmall.fontSize, 11);
+      expect(AppTextStyle.titleLarge.fontSize, 21);
+      expect(AppTextStyle.display.fontSize, 42);
+      expect(AppTextStyle.sectionHeader.letterSpacing, 1.1);
+    });
+
+    test('motion uses standard and entering/exiting curves', () {
+      expect(AppMotion.standard, isA<Cubic>());
+      expect(AppMotion.enter, isA<Cubic>());
+      expect(AppMotion.exit, isA<Cubic>());
+      expect(AppMotion.navigation, const Duration(milliseconds: 300));
     });
   });
 }

@@ -3,9 +3,14 @@ import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
-import 'nexa_pressable.dart';
+import 'nexa_surface.dart';
 
-/// Opens an iOS-style modal bottom sheet.
+/// Opens a Material 3 modal bottom sheet.
+///
+/// The sheet itself uses the theme's `bottomSheetTheme` (tonal surface, 28dp
+/// top corners, elevation 3). Callers whose content is a menu wrap it in a
+/// [NexaSheetBody] so it paints its own modal surface over the transparent
+/// sheet background.
 Future<T?> showNexaSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
@@ -36,10 +41,7 @@ Future<T?> showNexaSheet<T>(
 /// relies on the theme surface for its background (rounded top, drag handle).
 ///
 /// Use this for self-contained bodies such as [FileShareSheet] or [FolderPicker].
-/// Use [showNexaSheet] with a [NexaSheetBody] instead for menu/action sheets:
-/// [NexaSheetBody] paints its own opaque elevated surface, separate from the
-/// floating navigation dock and from the page beneath it. A self-contained
-/// body such as [FolderPickerBody] should use [showNexaFormSheet] instead.
+/// Use [showNexaSheet] with a [NexaSheetBody] instead for menu/action sheets.
 Future<T?> showNexaFormSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
@@ -113,7 +115,7 @@ class NexaSheetHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final hasTrailing = trailing != null || onClose != null;
 
     return Padding(
@@ -127,20 +129,16 @@ class NexaSheetHeader extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: AppDimens.touchTarget,
+            height: AppDimens.touchTarget,
             decoration: BoxDecoration(
-              color: AppColors.accentContainerFor(brightness),
-              borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-              border: Border.all(
-                color:
-                    AppColors.accentTextFor(brightness).withValues(alpha: 0.12),
-              ),
+              color: scheme.primaryContainer,
+              borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
             ),
             child: Icon(
               icon ?? _iconForTitle(title),
-              size: 21,
-              color: AppColors.accentTextFor(brightness),
+              size: AppDimens.iconMedium,
+              color: scheme.onPrimaryContainer,
             ),
           ),
           const SizedBox(width: AppDimens.space12),
@@ -152,16 +150,16 @@ class NexaSheetHeader extends StatelessWidget {
                   title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyle.sectionHeader.copyWith(
-                    color: AppColors.labelPrimaryFor(brightness),
+                  style: AppTextStyle.titleMedium.copyWith(
+                    color: scheme.onSurface,
                   ),
                 ),
                 if (subtitle != null) ...[
                   const SizedBox(height: AppDimens.space4),
                   Text(
                     subtitle!,
-                    style: AppTextStyle.caption1.copyWith(
-                      color: AppColors.labelSecondaryFor(brightness),
+                    style: AppTextStyle.bodySmall.copyWith(
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -176,9 +174,9 @@ class NexaSheetHeader extends StatelessWidget {
                   icon: Icon(
                     Icons.close_rounded,
                     size: AppDimens.iconMedium,
-                    color: AppColors.labelSecondaryFor(brightness),
+                    color: scheme.onSurfaceVariant,
                   ),
-                  tooltip: 'Close',
+                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                 ),
           ],
         ],
@@ -187,7 +185,7 @@ class NexaSheetHeader extends StatelessWidget {
   }
 }
 
-/// Sheet content wrapper with proper styling.
+/// Sheet content wrapper with a modal Material surface.
 class NexaSheetBody extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -205,35 +203,24 @@ class NexaSheetBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final surface = AppColors.surfaceFor(brightness);
-
-    return Material(
-      color: Colors.transparent,
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(AppDimens.radiusXLarge),
-        ),
-        child: Material(
-          color: surface,
-          child: Padding(
-            // Keep text fields above the on-screen keyboard: stop the sheet's
-            // scroll viewport where the keyboard begins.
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.viewInsetsOf(context).bottom,
-            ),
-            child: SingleChildScrollView(
-              padding: padding,
-              child: child,
-            ),
-          ),
+    return NexaSurface(
+      level: NexaSurfaceLevel.modal,
+      radius: AppDimens.radiusSheet,
+      child: Padding(
+        // Keep text fields above the on-screen keyboard: stop the sheet's
+        // scroll viewport where the keyboard begins.
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        child: SingleChildScrollView(
+          padding: padding,
+          child: child,
         ),
       ),
     );
   }
 }
 
-/// Sheet action row — icon + label.
+/// Sheet action row — icon + label, rendered as a Material 3 list row.
 class NexaSheetAction extends StatefulWidget {
   final IconData icon;
   final String title;
@@ -261,107 +248,56 @@ class NexaSheetAction extends StatefulWidget {
 }
 
 class _NexaSheetActionState extends State<NexaSheetAction> {
-  bool _hovered = false;
-
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final isDestructive = widget.destructive;
-    final fg = isDestructive
-        ? AppColors.errorFor(brightness)
-        : (widget.iconColor ?? AppColors.labelPrimaryFor(brightness));
+    final scheme = Theme.of(context).colorScheme;
+    final fg = widget.destructive
+        ? scheme.error
+        : (widget.iconColor ?? scheme.primary);
     final bg = widget.backgroundColor ??
-        (isDestructive
-            ? AppColors.errorContainerFor(brightness)
-            : AppColors.fillFor(brightness));
+        (widget.destructive
+            ? scheme.errorContainer
+            : scheme.surfaceContainerHigh);
 
-    return NexaPressable(
-      scale: false,
-      enabled: widget.enabled && widget.onTap != null,
-      tintColor: AppColors.labelPrimaryFor(brightness).withValues(alpha: 0.04),
-      borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.enabled ? widget.onTap : null,
-          onHover: (hovered) {
-            if (widget.enabled && _hovered != hovered) {
-              setState(() => _hovered = hovered);
-            }
-          },
-          borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-          child: AnimatedContainer(
-            duration: AppMotion.resolve(context, AppMotion.fast),
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.space16,
-              vertical: AppDimens.space12,
-            ),
-            decoration: BoxDecoration(
-              color: widget.enabled && _hovered
-                  ? AppColors.fillFor(brightness).withValues(alpha: 0.58)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-            ),
-            child: Row(
-              children: [
-                AnimatedScale(
-                  scale: _hovered && widget.enabled ? 1.035 : 1,
-                  duration: AppMotion.resolve(context, AppMotion.fast),
-                  child: Container(
-                    width: AppDimens.iconTileLarge,
-                    height: AppDimens.iconTileLarge,
-                    decoration: BoxDecoration(
-                      color: bg,
-                      borderRadius: BorderRadius.circular(
-                        AppDimens.radiusStandard,
-                      ),
-                    ),
-                    child: Icon(
-                      widget.icon,
-                      color: widget.enabled
-                          ? fg
-                          : AppColors.labelTertiaryFor(brightness),
-                      size: AppDimens.iconMedium,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppDimens.space16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.title,
-                        style: AppTextStyle.rowTitle.copyWith(
-                          color: widget.enabled
-                              ? AppColors.labelPrimaryFor(brightness)
-                              : AppColors.labelTertiaryFor(brightness),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      if (widget.subtitle != null) ...[
-                        const SizedBox(height: AppDimens.space2),
-                        Text(
-                          widget.subtitle!,
-                          style: AppTextStyle.caption1.copyWith(
-                            color: AppColors.labelSecondaryFor(brightness),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (widget.onTap != null && !isDestructive)
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    size: AppDimens.iconMedium,
-                    color: AppColors.labelTertiaryFor(brightness),
-                  ),
-              ],
-            ),
-          ),
+    return ListTile(
+      enabled: widget.enabled,
+      onTap: widget.enabled ? widget.onTap : null,
+      leading: Container(
+        width: AppDimens.iconTileLarge,
+        height: AppDimens.iconTileLarge,
+        decoration: BoxDecoration(
+          color: widget.enabled ? bg : bg.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+        ),
+        child: Icon(
+          widget.icon,
+          color: widget.enabled ? fg : scheme.onSurface.withValues(alpha: 0.38),
+          size: AppDimens.iconMedium,
         ),
       ),
+      title: Text(
+        widget.title,
+        style: AppTextStyle.titleSmall.copyWith(color: scheme.onSurface),
+      ),
+      subtitle: widget.subtitle == null
+          ? null
+          : Text(
+              widget.subtitle!,
+              style: AppTextStyle.bodySmall.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+      trailing: widget.onTap != null && !widget.destructive
+          ? Icon(
+              Icons.chevron_right_rounded,
+              size: AppDimens.iconMedium,
+              color: scheme.onSurfaceVariant,
+            )
+          : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+      ),
+      minTileHeight: AppDimens.listHeight,
     );
   }
 }
@@ -397,19 +333,19 @@ class _ActionSheetWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Drag handle
+        // Drag handle — the Material bottom-sheet grabber.
         Container(
-          width: 36,
-          height: 4,
+          width: AppDimens.space32,
+          height: AppDimens.space4,
           margin: const EdgeInsets.only(top: AppDimens.space12),
           decoration: BoxDecoration(
-            color: AppColors.separatorOpaqueFor(brightness),
-            borderRadius: BorderRadius.circular(2),
+            color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(AppDimens.radiusExtraSmall),
           ),
         ),
         if (title != null || message != null) ...[
@@ -426,16 +362,16 @@ class _ActionSheetWrapper extends StatelessWidget {
                 if (title != null)
                   Text(
                     title!,
-                    style: AppTextStyle.sectionHeader.copyWith(
-                      color: AppColors.labelPrimaryFor(brightness),
+                    style: AppTextStyle.titleMedium.copyWith(
+                      color: scheme.onSurface,
                     ),
                   ),
                 if (message != null) ...[
                   const SizedBox(height: AppDimens.space4),
                   Text(
                     message!,
-                    style: AppTextStyle.caption1.copyWith(
-                      color: AppColors.labelSecondaryFor(brightness),
+                    style: AppTextStyle.bodySmall.copyWith(
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -450,7 +386,7 @@ class _ActionSheetWrapper extends StatelessWidget {
   }
 }
 
-/// Confirmation dialog (iOS-style alert).
+/// Material 3 confirmation dialog.
 Future<bool?> showNexaConfirmation({
   required BuildContext context,
   required String title,
@@ -491,55 +427,46 @@ class NexaConfirmationDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final confirmColor = isDestructive
-        ? AppColors.errorFor(brightness)
-        : AppColors.accentFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
+    final container =
+        isDestructive ? scheme.errorContainer : scheme.primaryContainer;
+    final onContainer =
+        isDestructive ? scheme.onErrorContainer : scheme.onPrimaryContainer;
 
     return AlertDialog(
-      backgroundColor: AppColors.surfaceFor(brightness),
-      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppDimens.radiusXLarge),
+        borderRadius: BorderRadius.circular(AppDimens.radiusDialog),
       ),
       title: Row(
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: AppDimens.touchTarget,
+            height: AppDimens.touchTarget,
             decoration: BoxDecoration(
-              color: (isDestructive
-                  ? AppColors.errorContainerFor(brightness)
-                  : AppColors.accentContainerFor(brightness)),
-              borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+              color: container,
+              borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
             ),
             child: Icon(
               icon ??
                   (isDestructive
                       ? Icons.delete_outline_rounded
                       : Icons.help_outline_rounded),
-              color: isDestructive
-                  ? AppColors.errorFor(brightness)
-                  : AppColors.accentTextFor(brightness),
-              size: 21,
+              color: onContainer,
+              size: AppDimens.iconMedium,
             ),
           ),
           const SizedBox(width: AppDimens.space12),
           Expanded(
             child: Text(
               title,
-              style: AppTextStyle.sectionHeader.copyWith(
-                color: AppColors.labelPrimaryFor(brightness),
-              ),
+              style: AppTextStyle.titleMedium.copyWith(color: scheme.onSurface),
             ),
           ),
         ],
       ),
       content: Text(
         message,
-        style: AppTextStyle.body.copyWith(
-          color: AppColors.labelSecondaryFor(brightness),
-        ),
+        style: AppTextStyle.bodyMedium.copyWith(color: scheme.onSurfaceVariant),
       ),
       actionsPadding: const EdgeInsets.fromLTRB(
         AppDimens.space16,
@@ -552,34 +479,18 @@ class NexaConfirmationDialog extends StatelessWidget {
         TextButton(
           onPressed: () => Navigator.pop(context, false),
           style: TextButton.styleFrom(
-            foregroundColor: AppColors.labelSecondaryFor(brightness),
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.space24,
-              vertical: AppDimens.space12,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            ),
+            foregroundColor: scheme.onSurfaceVariant,
           ),
-          child: Text(cancelText, style: AppTextStyle.buttonSmall),
+          child: Text(cancelText, style: AppTextStyle.labelLarge),
         ),
         const SizedBox(width: AppDimens.space8),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
           style: FilledButton.styleFrom(
-            backgroundColor: confirmColor,
-            foregroundColor: isDestructive
-                ? Colors.white
-                : (brightness == Brightness.dark ? Colors.black : Colors.white),
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.space24,
-              vertical: AppDimens.space12,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-            ),
+            backgroundColor: isDestructive ? scheme.error : scheme.primary,
+            foregroundColor: isDestructive ? scheme.onError : scheme.onPrimary,
           ),
-          child: Text(confirmText, style: AppTextStyle.buttonSmall),
+          child: Text(confirmText, style: AppTextStyle.labelLarge),
         ),
       ],
     );

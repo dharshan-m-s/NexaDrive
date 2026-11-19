@@ -1,7 +1,9 @@
 # NexaDrive UI — Interaction Map
 
-> Every reachable interaction in the current app, its trigger surface, and its
-> effect. Line-accurate to 1.1.0. No redesign intent.
+> Every reachable interaction in the app, its trigger surface, and its effect.
+> Interaction behaviour is unchanged by the Material 3 redesign; shell chrome is
+> named with current terms (floating Material pill on mobile, Material navigation
+> rail on desktop). See `DESIGN_SYSTEM.md`.
 
 ---
 
@@ -11,9 +13,9 @@
 LoginScreen
    │ pushReplacement (success) / pushAndRemoveUntil (logout, 401 clear)
    ▼
-AppShell  (index 0..5 in-place swap; desktop sidebar / mobile bottom nav)
+AppShell  (index 0..5 in-place swap; desktop Material navigation rail / mobile floating Material pill)
    0 Home                1 My files          2 Shared           3 Photos
-   5 Settings            4 Trash (mobile bottom: via More sheet; desktop: sidebar)
+   5 Settings            4 Trash (mobile pill: via More sheet; desktop: rail)
    │
    ├─ push → TransfersScreen        (Home pending-tile, nav, More, Settings)
    ├─ push → SyncCenterScreen       (nav "Sync center", More, Settings)
@@ -41,7 +43,7 @@ predictive back uses `PopScope` only in UploadProgressDialog).
 | Gesture | On | Effect |
 |---------|----|--------|
 | Tap | SideNavItem (desktop) | `index = n`, cross-fade page (AnimatedSwitcher 200ms easeOut/in) |
-| Tap | OneUiBottomNav destination | index 0–3 selects; **4 "More" opens modal sheet** (nav item never selected) |
+| Tap | floating Material pill destination | index 0–3 selects; **4 "More" opens modal sheet** (nav item never selected) |
 | Tap | More sheet "Scan document" | pops sheet; **nothing else happens** (no camera) |
 | Tap | More sheet "Trash"/"Settings" | pops sheet; sets `index = 4 / 5` |
 | Tap | More sheet "Transfers/Sync center/Notifications" | pops sheet; pushes the target screen |
@@ -163,11 +165,12 @@ folder selection is allowed (move/copy/delete/share); share on N>0 lists entries
 | Dialog show | showDialog | platform default `[EST]` | platform |
 | Press ripple | InkSparkle / InkWell | Material `[EST]` ~200 | splash |
 | Pull-to-refresh | RefreshIndicator | Material ~145/200 fps clamp `[EST]` | spring, system |
-| Page route push/pop | FadeForwards (Android/Linux/Win), Zoom (iOS/macOS) | Material defaults `[EST]` | per builder |
+| Page route push/pop | shared Material 3 fade-forward transition | Material 3 motion | per builder |
 
 Debt: the 200 ms cross-fade and 180 ms status swap are hardcoded `Duration` literals and
 do NOT source from `AppMotion`; sheets/dialogs use Material default motion rather than
-the One UI enter/exit tokens; InteractiveViewer zoom uses Flutter default springiness.
+the Material entering/exiting curves; InteractiveViewer zoom uses Flutter default
+springiness. Reduced motion is handled by `AppMotion.resolve` where applied.
 `AppMotion` helpers (`defaultSwitcher`, `resolve`) exist but are largely unused (`[EST]`):
 source search shows `AppMotion` imported only in `home_screen.dart`.
 

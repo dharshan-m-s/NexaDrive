@@ -5,13 +5,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdfx/pdfx.dart';
 import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_dimensions.dart';
+import '../../../../core/design/app_typography.dart';
 import '../../../../core/models/file_entry.dart';
 import '../../../../core/utils/format.dart';
 import '../../../services/api.dart';
 import '../../widgets/download_to_view.dart';
 import '../../widgets/nexa_components.dart';
 
-/// One UI PDF viewer.
+/// Material 3 PDF viewer with tonal viewer chrome.
 ///
 /// A real in-app renderer (pdfium) with pinch to zoom and a page scroller on
 /// platforms with native PDF support (Android/iOS/Windows/macOS/web). Where
@@ -131,7 +132,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final textTheme = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    final showingDocument =
+        !_loading && _error == null && _supported && _controller != null;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundFor(brightness),
@@ -139,9 +142,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         children: [
           Positioned.fill(
             child: SafeArea(
-              top: false,
-              bottom: false,
-              child: _buildBody(brightness),
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  top: AppDimens.space56 + AppDimens.space8,
+                ),
+                child: _buildBody(brightness),
+              ),
             ),
           ),
           Positioned(
@@ -150,9 +156,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             top: 0,
             child: SafeArea(
               bottom: false,
-              child: NexaLiquidGlass(
-                borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-                blurSigma: 16,
+              child: NexaSurface(
+                level: NexaSurfaceLevel.floating,
+                radius: AppDimens.radiusPill,
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppDimens.space4,
                   vertical: AppDimens.space2,
@@ -165,20 +171,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       onPressed: () => Navigator.of(context).maybePop(),
                       icon: const Icon(Icons.arrow_back_rounded),
                     ),
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.accentContainerFor(brightness),
-                        borderRadius:
-                            BorderRadius.circular(AppDimens.radiusStandard),
-                      ),
-                      child: Icon(
-                        Icons.picture_as_pdf_rounded,
-                        size: 19,
-                        color: AppColors.accentTextFor(brightness),
-                      ),
-                    ),
+                    NexaFileGlyph(name: widget.file.name, size: 22),
                     const SizedBox(width: AppDimens.space8),
                     Expanded(
                       child: Column(
@@ -189,15 +182,15 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                             widget.file.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
+                            style: AppTextStyle.headline.copyWith(
+                              color: scheme.onSurface,
                             ),
                           ),
                           if (widget.file.size != null)
                             Text(
                               Format.bytes(widget.file.size),
-                              style: textTheme.labelSmall?.copyWith(
-                                color: AppColors.textSecondaryFor(brightness),
+                              style: AppTextStyle.caption.copyWith(
+                                color: scheme.onSurfaceVariant,
                               ),
                             ),
                         ],
@@ -213,6 +206,41 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
               ),
             ),
           ),
+          if (showingDocument)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: MediaQuery.paddingOf(context).bottom + AppDimens.space12,
+              child: IgnorePointer(
+                child: Center(
+                  child: NexaSurface(
+                    level: NexaSurfaceLevel.floating,
+                    radius: AppDimens.radiusPill,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimens.space12,
+                      vertical: AppDimens.space6,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.touch_app_outlined,
+                          size: AppDimens.iconSmall,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: AppDimens.space6),
+                        Text(
+                          'Pinch to zoom · Drag to pan',
+                          style: AppTextStyle.caption.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

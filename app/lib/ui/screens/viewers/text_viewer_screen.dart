@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
-import '../../../../core/design/app_colors.dart';
 import '../../../../core/design/app_dimensions.dart';
 import '../../../../core/design/app_typography.dart';
 import '../../../../core/models/file_entry.dart';
@@ -84,7 +83,7 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       body: SafeArea(
@@ -97,16 +96,10 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
           leading: const NexaBackButton(),
           headerAction: _text == null
               ? null
-              : NexaLiquidGlass(
-                  borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                  padding: EdgeInsets.zero,
-                  blurSigma: 12,
-                  showShadow: false,
-                  child: IconButton(
-                    tooltip: 'Copy all text',
-                    onPressed: _copyText,
-                    icon: const Icon(Icons.copy_all_outlined),
-                  ),
+              : IconButton(
+                  tooltip: 'Copy all text',
+                  onPressed: _copyText,
+                  icon: const Icon(Icons.copy_all_outlined),
                 ),
           body: switch ((_text, _error)) {
             (null, null) => const NexaLoadingBlock(),
@@ -124,47 +117,49 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
                   _load();
                 },
               ),
-            (final String text, _) => Container(
-                width: double.infinity,
-                color: brightness == Brightness.dark
-                    ? AppColors.surfaceDark
-                    : AppColors.surfaceLight,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppDimens.pageMargin,
-                        AppDimens.space12,
-                        AppDimens.pageMargin,
-                        AppDimens.space8,
-                      ),
-                      child: Text(
-                        '${text.isEmpty ? 0 : '\n'.allMatches(text).length + 1} lines · '
-                        '${text.length} characters',
-                        style: AppTextStyle.caption.copyWith(
-                          color: AppColors.textSecondaryFor(brightness),
-                        ),
-                      ),
+            (final String text, _) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      0,
+                      AppDimens.space4,
+                      0,
+                      AppDimens.space12,
                     ),
-                    Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${text.isEmpty ? 0 : '\n'.allMatches(text).length + 1} lines · '
+                          '${text.length} characters',
+                          style: AppTextStyle.caption.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: AppDimens.space8),
+                        Divider(height: 1, color: scheme.outlineVariant),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Scrollbar(
                       child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppDimens.pageMargin,
-                          AppDimens.space8,
-                          AppDimens.pageMargin,
-                          AppDimens.pageMargin,
+                        padding: const EdgeInsets.only(
+                          top: AppDimens.space8,
+                          bottom: AppDimens.space24,
                         ),
                         child: SelectableText(
                           text,
                           style: AppTextStyle.code.copyWith(
-                            color: AppColors.textPrimaryFor(brightness),
+                            color: scheme.onSurface,
+                            height: 1.65,
                           ),
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
           },
         ),

@@ -311,9 +311,10 @@ class Api {
   Uri fileDownloadUri(String path) =>
       _uri('/api/files/download', {'path': path});
 
-  /// Fetches a server-generated JPEG thumbnail. Throws [ApiException] with
-  /// status 415 when the server can't generate one (e.g. HEIC without a
-  /// codec) so callers can fall back to a full download.
+  /// Fetches a server-generated JPEG thumbnail for images, videos and PDFs.
+  /// Throws [ApiException] with status 415 when the server cannot generate one
+  /// (missing decoder/tool or unsupported format), so callers can show a type
+  /// glyph instead of a broken image.
   Future<Uint8List> thumbnail(String path, {int max = 512}) async {
     final response = await _client.get(
       _uri('/api/files/thumbnail', {'path': path, 'max': '$max'}),

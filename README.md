@@ -70,7 +70,7 @@ docs/           reference docs (API, security, deployment, design system)
 ## Technology stack
 
 - **Client:** Flutter / Dart, the `Nexa*` component library over centralized
-  `App*` design tokens (iOS-inspired Liquid Glass look), single codebase for
+  `App*` design tokens (Material 3 / Material You), single codebase for
   Android, Windows and Linux.
 - **Server:** Rust (tokio + axum + sqlx), embedded SQLite (WAL), Argon2id
   password hashing, SHA-256-stored bearer sessions, Restic backup integration.
@@ -103,7 +103,7 @@ This repository is a complete runnable MVP foundation:
 - Systemd service
 - Optional Tailscale Serve / reverse proxy exposure (no hardcoded DNS)
 - Flutter Android/Windows/Linux client
-- iOS-inspired responsive design (the `Nexa*` component system)
+- Material 3 responsive design (the `Nexa*` component system)
 - Light/dark mode
 - Search/filter UI
 - GitHub Actions checks
@@ -285,20 +285,21 @@ See `docs/GITHUB_ACTIONS.md`.
 
 ## Design direction
 
-The client uses a Samsung One UI-inspired visual language:
+The client uses **Material 3 (Material You)** as its single visual language:
 
-- large readable headers
-- generous spacing
-- rounded surfaces
-- comfortable touch targets
-- bottom navigation on phones
-- sidebar navigation on desktop
-- light/dark themes
-- responsive layouts
+- one seeded tonal color scheme with light and dark variants
+- Material 3 type scale, shape scale and elevation
+- state layers and standard Material components
+- a floating pill navigation on phones (the NexaDrive signature)
+- a Material navigation rail on desktop
+- 48dp touch targets and accessible contrast
+- responsive layouts across one Flutter codebase
 
-The supplied Apple Design Skill repository is used as a cross-platform UX review methodology, not as the visual language. Its README explicitly describes it as framework-agnostic and usable with Flutter, with guidance covering layout, accessibility, typography, motion, search, settings and other UX areas.
+The Apple Design Skill repository is used only for its cross-platform
+accessibility and craft review discipline, not as the visual language. No
+Apple platform chrome or Liquid Glass material is used.
 
-Design skill:
+Design review methodology:
 https://github.com/dickwu/apple-design-skill
 
 ## Data layout

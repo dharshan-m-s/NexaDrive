@@ -1,72 +1,13 @@
 import 'package:flutter/material.dart';
-import 'app_motion.dart';
 
-/// NexaDrive page transition.
-///
-/// THE REFERENCE: the iOS interactive push. The incoming page slides in from
-/// the trailing edge while the outgoing page recedes with a slight parallax and
-/// dim — the destination feels spatially connected to the source, never like a
-/// hard swap. Honours reduced motion by skipping the animation entirely.
-class NexaPageTransitionsBuilder extends PageTransitionsBuilder {
+/// Material 3 page transition: the incoming page fades and moves forward
+/// slightly while the outgoing page dims. No horizontal slide, no parallax.
+class NexaPageTransitionsBuilder extends FadeForwardsPageTransitionsBuilder {
   const NexaPageTransitionsBuilder();
-
-  @override
-  Widget buildTransitions<T>(
-    PageRoute<T> route,
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-    Widget child,
-  ) {
-    if (AppMotion.reducedMotion(context)) return child;
-
-    // The outgoing page slides left by a third and dims slightly.
-    final secondaryCurve = CurvedAnimation(
-      parent: secondaryAnimation,
-      curve: AppMotion.standard,
-    );
-    final outgoingSlide = Tween<Offset>(
-      begin: Offset.zero,
-      end: const Offset(-0.3, 0),
-    ).animate(secondaryCurve);
-    final outgoingFade =
-        Tween<double>(begin: 1.0, end: 0.88).animate(secondaryCurve);
-    final outgoingScale =
-        Tween<double>(begin: 1.0, end: 0.985).animate(secondaryCurve);
-
-    // The incoming page slides in from the right edge.
-    final primaryCurve = CurvedAnimation(
-      parent: animation,
-      curve: AppMotion.enterCurve,
-      reverseCurve: AppMotion.exitCurve,
-    );
-    final incomingSlide = Tween<Offset>(
-      begin: const Offset(1, 0),
-      end: Offset.zero,
-    ).animate(primaryCurve);
-    final incomingScale =
-        Tween<double>(begin: 0.985, end: 1.0).animate(primaryCurve);
-
-    return SlideTransition(
-      position: outgoingSlide,
-      child: ScaleTransition(
-        scale: outgoingScale,
-        child: FadeTransition(
-          opacity: outgoingFade,
-          child: SlideTransition(
-            position: incomingSlide,
-            child: ScaleTransition(
-              scale: incomingScale,
-              child: child,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
-/// Applies the NexaDrive page transitions for every target platform.
+/// Applies the Material 3 transition to every target platform so the app feels
+/// identical on mobile and desktop.
 const PageTransitionsTheme kNexaPageTransitions = PageTransitionsTheme(
   builders: {
     TargetPlatform.android: NexaPageTransitionsBuilder(),

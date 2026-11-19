@@ -1,6 +1,8 @@
 # NexaDrive UI — Reverse-Engineering Reference
 
-> Status: line-accurate documentation of the **current** app as of 2026-09-11.
+> **Historical record — superseded.** This document is a point-in-time record of NexaDrive's former One UI / Liquid Glass design. It is not current guidance: see [docs/DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) (Material 3 / Material You) and `docs/UI_DESIGN_TOKENS.md`.
+
+> Status: line-accurate documentation of the app as of 2026-09-11.
 > This document describes what exists today so a future agent can write a One UI 9-inspired
 > design spec without guessing. Every value is taken from source unless marked **[EST]**.
 > No design changes were made to produce this document.

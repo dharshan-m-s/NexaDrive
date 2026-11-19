@@ -13,7 +13,7 @@ import '../../services/api.dart';
 import '../../services/upload_item.dart';
 import '../../services/upload_manager.dart';
 
-/// One UI upload progress dialog — modal while active, showing per-file
+/// Material 3 upload progress dialog — modal while active, showing per-file
 /// progress, then a summary with retry for failures.
 ///
 /// The dialog is a *view* of the queue, not the queue itself. Closing it does
@@ -32,7 +32,7 @@ class _TransferMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(
@@ -41,23 +41,22 @@ class _TransferMetric extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: color.withValues(
-              alpha: brightness == Brightness.dark ? 0.16 : 0.09),
+            alpha: scheme.brightness == Brightness.dark ? 0.16 : 0.09,
+          ),
           borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-          border: Border.all(color: color.withValues(alpha: 0.16)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label,
-                style: AppTextStyle.caption2.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.7)),
+            Text(
+              label,
+              style: AppTextStyle.labelMedium.copyWith(color: color),
+            ),
             const SizedBox(height: AppDimens.space2),
-            Text(value,
-                style: AppTextStyle.title2.copyWith(
-                    color: AppColors.labelPrimaryFor(brightness),
-                    fontWeight: FontWeight.w700)),
+            Text(
+              value,
+              style: AppTextStyle.titleMedium.copyWith(color: scheme.onSurface),
+            ),
           ],
         ),
       ),
@@ -184,9 +183,9 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final brightness = theme.brightness;
-    final secondary = AppColors.textSecondaryFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
+    final brightness = scheme.brightness;
+    final secondary = scheme.onSurfaceVariant;
     final total =
         _items.fold<int>(0, (int sum, UploadItem item) => sum + item.size);
     final done = _items.fold<int>(
@@ -214,10 +213,10 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
     final Widget statusIcon;
     final String statusTitle;
     if (isActive) {
-      statusIcon = const SizedBox(
-        width: 22,
-        height: 22,
-        child: CircularProgressIndicator(strokeWidth: 2),
+      statusIcon = SizedBox(
+        width: AppDimens.iconSmall,
+        height: AppDimens.iconSmall,
+        child: CircularProgressIndicator(strokeWidth: 2, color: scheme.primary),
       );
       statusTitle = 'Uploading…';
     } else if (allSucceeded) {
@@ -225,37 +224,28 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
           Icon(Icons.check_circle_rounded, color: successFor(brightness));
       statusTitle = 'Upload complete';
     } else if (_items.isEmpty) {
-      statusIcon = Icon(
-        Icons.error_outline_rounded,
-        color: brightness == Brightness.dark
-            ? AppColors.errorDark
-            : AppColors.errorLight,
-      );
+      statusIcon = Icon(Icons.error_outline_rounded, color: scheme.error);
       statusTitle = 'Nothing was uploaded';
     } else {
-      statusIcon = Icon(
-        Icons.error_outline_rounded,
-        color: brightness == Brightness.dark
-            ? AppColors.errorDark
-            : AppColors.errorLight,
-      );
+      statusIcon = Icon(Icons.error_outline_rounded, color: scheme.error);
       statusTitle = 'Upload finished with issues';
     }
 
     return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDimens.radiusDialog),
+      ),
       title: Row(
         children: [
           AnimatedSwitcher(
-            duration: AppMotion.fast,
+            duration: AppMotion.resolve(context, AppMotion.fast),
             child: SizedBox(key: ValueKey(statusTitle), child: statusIcon),
           ),
           const SizedBox(width: AppDimens.space12),
           Expanded(
             child: Text(
               statusTitle,
-              style: AppTextStyle.dialogTitle.copyWith(
-                color: AppColors.textPrimaryFor(brightness),
-              ),
+              style: AppTextStyle.titleMedium.copyWith(color: scheme.onSurface),
             ),
           ),
         ],
@@ -269,25 +259,28 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
             Text(
               '${Format.count(completed, 'file')} uploaded to '
               '${widget.destination.isEmpty ? 'My files' : widget.destination}',
-              style: AppTextStyle.caption.copyWith(color: secondary),
+              style: AppTextStyle.bodySmall.copyWith(color: secondary),
             ),
             const SizedBox(height: AppDimens.space12),
             Row(
               children: [
                 _TransferMetric(
-                    label: 'DONE',
-                    value: completed.toString(),
-                    color: successFor(brightness)),
+                  label: 'DONE',
+                  value: completed.toString(),
+                  color: successFor(brightness),
+                ),
                 const SizedBox(width: AppDimens.space8),
                 _TransferMetric(
-                    label: 'ACTIVE',
-                    value: active.toString(),
-                    color: AppColors.accentFor(brightness)),
+                  label: 'ACTIVE',
+                  value: active.toString(),
+                  color: scheme.primary,
+                ),
                 const SizedBox(width: AppDimens.space8),
                 _TransferMetric(
-                    label: 'ISSUES',
-                    value: failed.toString(),
-                    color: AppColors.errorFor(brightness)),
+                  label: 'ISSUES',
+                  value: failed.toString(),
+                  color: scheme.error,
+                ),
               ],
             ),
             const SizedBox(height: AppDimens.space12),
@@ -299,8 +292,9 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
                 borderRadius: BorderRadius.circular(AppDimens.radiusPill),
                 child: LinearProgressIndicator(
                   value: value,
-                  minHeight: 8,
-                  backgroundColor: AppColors.fillFor(brightness),
+                  minHeight: AppDimens.space8,
+                  color: scheme.primary,
+                  backgroundColor: scheme.primaryContainer,
                 ),
               ),
             ),
@@ -308,13 +302,13 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
             Text(
               '${Format.bytes(done)} of ${Format.bytes(total)}'
               '${paused > 0 ? ' · $paused paused' : ''}',
-              style: AppTextStyle.micro.copyWith(color: secondary),
+              style: AppTextStyle.labelSmall.copyWith(color: secondary),
             ),
             const SizedBox(height: AppDimens.space12),
             if (_items.isEmpty)
               Text(
                 'No files could be started.',
-                style: AppTextStyle.caption.copyWith(color: secondary),
+                style: AppTextStyle.bodySmall.copyWith(color: secondary),
               )
             else
               Flexible(
@@ -389,7 +383,8 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
       b == Brightness.dark ? AppColors.successDark : AppColors.successLight;
 
   Widget _buildRow(BuildContext context, UploadItem item) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
+    final brightness = scheme.brightness;
     final state = item.state;
     final failed = state == UploadState.failed;
     final doneStatus = state == UploadState.completed;
@@ -407,29 +402,27 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
       label = 'Uploaded';
     } else if (failed) {
       icon = Icons.error_outline_rounded;
-      color = brightness == Brightness.dark
-          ? AppColors.errorDark
-          : AppColors.errorLight;
+      color = scheme.error;
       label = item.error ?? 'Failed';
     } else if (cancelled) {
       icon = Icons.cancel_outlined;
-      color = secondaryFor(brightness);
+      color = scheme.onSurfaceVariant;
       label = 'Cancelled';
     } else if (paused) {
       icon = Icons.pause_circle_outline_rounded;
-      color = secondaryFor(brightness);
+      color = scheme.onSurfaceVariant;
       label = 'Paused';
     } else if (uploading) {
       icon = Icons.cloud_upload_outlined;
-      color = AppColors.accentFor(brightness);
+      color = scheme.primary;
       label = '${Format.bytes(item.transferred)} / ${Format.bytes(item.size)}';
     } else if (state == UploadState.retrying) {
       icon = Icons.refresh_rounded;
-      color = AppColors.accentFor(brightness);
+      color = scheme.primary;
       label = 'Retrying…';
     } else {
       icon = Icons.schedule_rounded;
-      color = secondaryFor(brightness);
+      color = scheme.onSurfaceVariant;
       label = 'Waiting…';
     }
 
@@ -447,16 +440,18 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
                   item.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyle.caption.copyWith(
-                    color: AppColors.textPrimaryFor(brightness),
-                    fontWeight: FontWeight.w600,
+                  style: AppTextStyle.labelMedium.copyWith(
+                    color: scheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: AppDimens.space4),
                 if (!doneStatus && !failed)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-                    child: LinearProgressIndicator(value: frac, minHeight: 4),
+                    child: LinearProgressIndicator(
+                      value: frac,
+                      minHeight: AppDimens.space4,
+                    ),
                   ),
                 if (!doneStatus) ...[
                   const SizedBox(height: AppDimens.space4),
@@ -464,12 +459,8 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
                     label,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyle.micro.copyWith(
-                      color: failed
-                          ? (brightness == Brightness.dark
-                              ? AppColors.errorDark
-                              : AppColors.errorLight)
-                          : secondaryFor(brightness),
+                    style: AppTextStyle.bodySmall.copyWith(
+                      color: failed ? scheme.error : scheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -484,7 +475,7 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
 
   /// The per-row control: pause, resume, retry or cancel.
   Widget _rowAction(UploadItem item) {
-    final brightness = Theme.of(context).brightness;
+    final scheme = Theme.of(context).colorScheme;
     final state = item.state;
     if (state == UploadState.completed) {
       return IconButton(
@@ -504,9 +495,7 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
           _refresh();
         },
         icon: const Icon(Icons.refresh_rounded, size: AppDimens.iconSmall),
-        color: brightness == Brightness.dark
-            ? AppColors.errorDark
-            : AppColors.errorLight,
+        color: scheme.error,
       );
     }
     if (state == UploadState.paused) {
@@ -529,5 +518,5 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
     );
   }
 
-  Color secondaryFor(Brightness b) => AppColors.textSecondaryFor(b);
+  Color secondaryFor(Brightness b) => AppColors.scheme(b).onSurfaceVariant;
 }

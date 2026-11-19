@@ -62,6 +62,51 @@ void main() {
     );
   });
 
+  test('completed transfers do not survive a queue restore', () async {
+    final now = DateTime(2026, 11, 20, 9);
+    final done = UploadItem(
+      id: 'done-1',
+      localPath: '${root.path}/done.jpg',
+      name: 'done.jpg',
+      folder: '',
+      size: 16,
+      transferred: 16,
+      state: UploadState.completed,
+      error: null,
+      attempts: 0,
+      temporarySource: false,
+      createdAt: now,
+      updatedAt: now,
+    );
+    final active = UploadItem(
+      id: 'active-1',
+      localPath: '${root.path}/active.jpg',
+      name: 'active.jpg',
+      folder: '',
+      size: 16,
+      transferred: 0,
+      state: UploadState.queued,
+      error: null,
+      attempts: 0,
+      temporarySource: false,
+      createdAt: now,
+      updatedAt: now,
+    );
+    await UploadStore(journal).appendAll([done, active]);
+
+    final restored = UploadManager.forTesting(journal);
+    addTearDown(restored.dispose);
+    await restored.ready;
+
+    expect(
+      restored.items().map((item) => item.id),
+      <String>['active-1'],
+      reason: 'a finished transfer is a transient status, not queue history',
+    );
+    final persisted = await UploadStore(journal).load();
+    expect(persisted.map((item) => item.id), <String>['active-1']);
+  });
+
   test('delete all empties the in-memory queue and the journal', () async {
     await enqueueFiles(4);
     expect(manager.items(), hasLength(4));

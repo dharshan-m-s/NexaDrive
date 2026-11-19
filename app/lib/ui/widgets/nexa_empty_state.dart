@@ -1,59 +1,55 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import 'nexa_button.dart';
 
+/// Layered tonal artwork for empty states — no optical glass or heavy shadows.
 class _EmptyIllustration extends StatelessWidget {
   final IconData icon;
   final double size;
   final Color accent;
-  final Brightness brightness;
 
   const _EmptyIllustration({
     required this.icon,
     required this.size,
     required this.accent,
-    required this.brightness,
   });
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return ExcludeSemantics(
       child: SizedBox(
-        width: size + 20,
-        height: size + 20,
+        width: size + AppDimens.space20,
+        height: size + AppDimens.space20,
         child: Stack(
           alignment: Alignment.center,
           children: [
             Positioned(
-              left: 2,
-              top: 6,
+              left: AppDimens.space2,
+              top: AppDimens.space6,
               child: Transform.rotate(
                 angle: -0.12,
                 child: Container(
                   width: size * 0.84,
                   height: size * 0.84,
                   decoration: BoxDecoration(
-                    color: AppColors.fillFor(brightness),
+                    color: scheme.surfaceContainer,
                     borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-                    border: Border.all(
-                      color: AppColors.separatorFor(brightness),
-                    ),
                   ),
                 ),
               ),
             ),
             Positioned(
-              right: 2,
-              bottom: 5,
+              right: AppDimens.space2,
+              bottom: AppDimens.space4 + AppDimens.space1,
               child: Transform.rotate(
                 angle: 0.10,
                 child: Container(
                   width: size * 0.84,
                   height: size * 0.84,
                   decoration: BoxDecoration(
-                    color: AppColors.accentContainerFor(brightness),
+                    color: scheme.primaryContainer,
                     borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
                   ),
                 ),
@@ -63,21 +59,8 @@ class _EmptyIllustration extends StatelessWidget {
               width: size,
               height: size,
               decoration: BoxDecoration(
-                color: AppColors.surfaceFor(brightness),
+                color: scheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-                border: Border.all(
-                  color: AppColors.separatorFor(brightness),
-                  width: 0.8,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(
-                      alpha: brightness == Brightness.dark ? 0.16 : 0.045,
-                    ),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
               ),
               child: Icon(icon, size: size * 0.45, color: accent),
             ),
@@ -115,8 +98,7 @@ class NexaEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = AppColors.accentFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
 
     final content = Padding(
       padding: const EdgeInsets.symmetric(
@@ -129,24 +111,21 @@ class NexaEmptyState extends StatelessWidget {
           _EmptyIllustration(
             icon: icon,
             size: iconSize,
-            accent: accent,
-            brightness: brightness,
+            accent: scheme.primary,
           ),
           const SizedBox(height: AppDimens.space12),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: AppTextStyle.title3.copyWith(
-              color: AppColors.labelPrimaryFor(brightness),
-            ),
+            style: AppTextStyle.headlineSmall.copyWith(color: scheme.onSurface),
           ),
           if (hint != null) ...[
             const SizedBox(height: AppDimens.space4),
             Text(
               hint!,
               textAlign: TextAlign.center,
-              style: AppTextStyle.subheadline.copyWith(
-                color: AppColors.labelSecondaryFor(brightness),
+              style: AppTextStyle.bodyMedium.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ],

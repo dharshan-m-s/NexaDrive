@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
@@ -75,10 +74,8 @@ class NexaLoadingBlock extends StatelessWidget {
                   const SizedBox(height: AppDimens.space12),
                   Text(
                     label!,
-                    style: AppTextStyle.caption1.copyWith(
-                      color: AppColors.labelSecondaryFor(
-                        Theme.of(context).brightness,
-                      ),
+                    style: AppTextStyle.bodySmall.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -106,9 +103,8 @@ class NexaLoadingState extends StatelessWidget {
             const SizedBox(height: AppDimens.space12),
             Text(
               label!,
-              style: AppTextStyle.caption1.copyWith(
-                color:
-                    AppColors.labelSecondaryFor(Theme.of(context).brightness),
+              style: AppTextStyle.bodySmall.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -135,11 +131,11 @@ class NexaSkeletonList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final baseColor = AppColors.fillFor(brightness);
-    final highlightColor = brightness == Brightness.dark
-        ? Colors.white.withValues(alpha: 0.08)
-        : Colors.black.withValues(alpha: 0.06);
+    final scheme = Theme.of(context).colorScheme;
+    final baseColor = scheme.surfaceContainerHighest;
+    final highlightColor = scheme.onSurface.withValues(
+      alpha: scheme.brightness == Brightness.dark ? 0.08 : 0.06,
+    );
 
     return ListView.builder(
       itemCount: itemCount,
@@ -243,7 +239,8 @@ class _SkeletonItemState extends State<_SkeletonItem>
                       decoration: BoxDecoration(
                         color: Color.lerp(widget.baseColor,
                             widget.highlightColor, _animation.value),
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius:
+                            BorderRadius.circular(AppDimens.radiusExtraSmall),
                       ),
                     ),
                     const SizedBox(height: AppDimens.space4),
@@ -253,7 +250,8 @@ class _SkeletonItemState extends State<_SkeletonItem>
                       decoration: BoxDecoration(
                         color: Color.lerp(widget.baseColor,
                             widget.highlightColor, _animation.value * 0.7),
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius:
+                            BorderRadius.circular(AppDimens.radiusExtraSmall),
                       ),
                     ),
                   ],
@@ -293,11 +291,11 @@ class NexaSkeletonGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final baseColor = AppColors.fillFor(brightness);
-    final highlightColor = brightness == Brightness.dark
-        ? Colors.white.withValues(alpha: 0.08)
-        : Colors.black.withValues(alpha: 0.06);
+    final scheme = Theme.of(context).colorScheme;
+    final baseColor = scheme.surfaceContainerHighest;
+    final highlightColor = scheme.onSurface.withValues(
+      alpha: scheme.brightness == Brightness.dark ? 0.08 : 0.06,
+    );
 
     return GridView.builder(
       padding: const EdgeInsets.all(AppDimens.pageMargin),
@@ -339,12 +337,23 @@ class _SkeletonGridItemState extends State<_SkeletonGridItem>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+      duration: AppMotion.ambient,
       vsync: this,
-    )..repeat(reverse: true);
-    _animation = Tween(begin: 0.6, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
+    _animation = Tween(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: AppMotion.standardCurve),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.reducedMotion(context)) {
+      _controller.stop();
+      _controller.value = 0.5;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
   }
 
   @override
@@ -360,7 +369,7 @@ class _SkeletonGridItemState extends State<_SkeletonGridItem>
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            color: AppColors.surfaceGroupedFor(Theme.of(context).brightness),
+            color: Theme.of(context).colorScheme.surfaceContainer,
             borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
           ),
           padding: const EdgeInsets.all(AppDimens.space12),
@@ -383,7 +392,8 @@ class _SkeletonGridItemState extends State<_SkeletonGridItem>
                 decoration: BoxDecoration(
                   color: Color.lerp(widget.baseColor, widget.highlightColor,
                       _animation.value),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius:
+                      BorderRadius.circular(AppDimens.radiusExtraSmall),
                 ),
               ),
               const SizedBox(height: AppDimens.space4),
@@ -393,7 +403,8 @@ class _SkeletonGridItemState extends State<_SkeletonGridItem>
                 decoration: BoxDecoration(
                   color: Color.lerp(widget.baseColor, widget.highlightColor,
                       _animation.value * 0.7),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius:
+                      BorderRadius.circular(AppDimens.radiusExtraSmall),
                 ),
               ),
             ],

@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_typography.dart';
 import 'nexa_surface.dart';
 
-/// One UI-inspired quick-action block with native-feeling press feedback.
+/// Material 3 quick-action block on a tonal grouped surface.
 class NexaFocusBlock extends StatelessWidget {
   final IconData icon;
   final Color? tint;
@@ -27,72 +26,60 @@ class NexaFocusBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final accent = tint ?? AppColors.accentFor(brightness);
+    final scheme = Theme.of(context).colorScheme;
+    final accent = tint ?? scheme.primary;
+    final horizontal = layout == NexaFocusBlockLayout.horizontal;
 
     final content = Column(
-      crossAxisAlignment: layout == NexaFocusBlockLayout.horizontal
-          ? CrossAxisAlignment.start
-          : CrossAxisAlignment.center,
+      crossAxisAlignment:
+          horizontal ? CrossAxisAlignment.start : CrossAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: layout == NexaFocusBlockLayout.horizontal ? 52 : 64,
-          height: layout == NexaFocusBlockLayout.horizontal ? 52 : 64,
+          width:
+              horizontal ? AppDimens.iconTileLarge : AppDimens.touchTargetLarge,
+          height:
+              horizontal ? AppDimens.iconTileLarge : AppDimens.touchTargetLarge,
           decoration: BoxDecoration(
-            color: AppColors.accentContainerFor(brightness),
-            borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-            border: Border.all(
-                color: accent.withValues(
-                    alpha: brightness == Brightness.dark ? 0.26 : 0.15)),
+            color: scheme.primaryContainer,
+            borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
           ),
           child: Icon(
             icon,
-            size: layout == NexaFocusBlockLayout.horizontal ? 22 : 26,
+            size: horizontal ? AppDimens.iconSmall : AppDimens.iconMedium,
             color: accent,
           ),
         ),
         const SizedBox(height: AppDimens.space12),
         Text(
           title,
-          textAlign: layout == NexaFocusBlockLayout.horizontal
-              ? TextAlign.start
-              : TextAlign.center,
-          style: AppTextStyle.title2.copyWith(
-            color: AppColors.labelPrimaryFor(brightness),
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.2,
-          ),
+          textAlign: horizontal ? TextAlign.start : TextAlign.center,
+          style: AppTextStyle.titleMedium.copyWith(color: scheme.onSurface),
         ),
         if (subtitle != null) ...[
           const SizedBox(height: AppDimens.space4),
           Text(
             subtitle!,
-            textAlign: layout == NexaFocusBlockLayout.horizontal
-                ? TextAlign.start
-                : TextAlign.center,
-            style: AppTextStyle.caption1.copyWith(
-              color: AppColors.labelSecondaryFor(brightness),
+            textAlign: horizontal ? TextAlign.start : TextAlign.center,
+            style: AppTextStyle.bodySmall.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
           ),
         ],
-        if (showChevron && layout == NexaFocusBlockLayout.horizontal) ...[
+        if (showChevron && horizontal) ...[
           const SizedBox(height: AppDimens.space8),
           Row(
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
               Text(
                 'Open',
-                style: AppTextStyle.caption1.copyWith(
-                  color: AppColors.accentFor(brightness),
-                  fontWeight: FontWeight.w600,
-                ),
+                style: AppTextStyle.labelMedium.copyWith(color: scheme.primary),
               ),
               const SizedBox(width: AppDimens.space4),
               Icon(
                 Icons.chevron_right_rounded,
                 size: AppDimens.iconSmall,
-                color: AppColors.accentFor(brightness),
+                color: scheme.primary,
               ),
             ],
           ),
@@ -105,7 +92,7 @@ class NexaFocusBlock extends StatelessWidget {
       radius: AppDimens.radiusMedium,
       padding: const EdgeInsets.all(AppDimens.space16),
       onTap: onTap,
-      child: layout == NexaFocusBlockLayout.horizontal
+      child: horizontal
           ? Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

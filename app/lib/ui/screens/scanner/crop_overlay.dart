@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../core/design/app_colors.dart';
+import '../../../core/design/app_dimensions.dart';
 
 /// A draggable crop rectangle for scan page editing.
 ///
@@ -41,7 +41,8 @@ class _CropOverlayState extends State<CropOverlay> {
               child: CustomPaint(
                 painter: _CropPainter(
                   rect: _displayRect(box),
-                  color: AppColors.accent,
+                  color: Theme.of(context).colorScheme.primary,
+                  accent: Theme.of(context).colorScheme.primary,
                 ),
               ),
             ),
@@ -154,11 +155,18 @@ enum _DragHandle { nw, ne, sw, se, none }
 class _CropPainter extends CustomPainter {
   final Rect rect;
   final Color color;
+  final Color accent;
 
-  const _CropPainter({required this.rect, required this.color});
+  const _CropPainter({
+    required this.rect,
+    required this.color,
+    required this.accent,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Semantic scrim: crop guides sit directly over user media, so no scheme
+    // surface role can guarantee contrast there.
     final scrim = Paint()..color = const Color(0x99000000);
     final path = Path()
       ..fillType = PathFillType.evenOdd
@@ -168,13 +176,13 @@ class _CropPainter extends CustomPainter {
 
     final border = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
+      ..strokeWidth = AppDimens.space2
       ..color = color;
     canvas.drawRect(rect, border);
 
     // Rule-of-thirds guide.
     final grid = Paint()
-      ..strokeWidth = 1
+      ..strokeWidth = AppDimens.space1
       ..color = color.withValues(alpha: 0.45);
     for (var i = 1; i < 3; i++) {
       final x = rect.left + rect.width * i / 3;
@@ -183,15 +191,16 @@ class _CropPainter extends CustomPainter {
       canvas.drawLine(Offset(rect.left, y), Offset(rect.right, y), grid);
     }
 
-    // L-shaped corner grips stay visible over both light and dark scans.
+    // L-shaped corner grips stay visible over both light and dark scans:
+    // dark outline under the theme primary stroke.
     final outline = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 7
+      ..strokeWidth = AppDimens.space6 + AppDimens.space1
       ..strokeCap = StrokeCap.round
-      ..color = Colors.black.withValues(alpha: 0.48);
+      ..color = const Color(0x99000000);
     final grip = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
+      ..strokeWidth = AppDimens.space4
       ..strokeCap = StrokeCap.round
       ..color = color;
     const arm = 24.0;
@@ -213,18 +222,18 @@ class _CropPainter extends CustomPainter {
 
     // Mid-edge handles make the crop affordance discoverable without
     // introducing additional drag targets or changing the existing gesture map.
-    final edgeHandle = Paint()..color = Colors.white.withValues(alpha: 0.86);
+    final edgeHandle = Paint()..color = accent;
     for (final point in [
       Offset(rect.center.dx, rect.top),
       Offset(rect.center.dx, rect.bottom),
       Offset(rect.left, rect.center.dy),
       Offset(rect.right, rect.center.dy),
     ]) {
-      canvas.drawCircle(point, 3.5, edgeHandle);
+      canvas.drawCircle(point, AppDimens.space4 - AppDimens.space1, edgeHandle);
     }
   }
 
   @override
   bool shouldRepaint(_CropPainter old) =>
-      old.rect != rect || old.color != color;
+      old.rect != rect || old.color != color || old.accent != accent;
 }
