@@ -304,10 +304,10 @@ fn encode_thumbnail(
     max: u32,
     orientation: Option<image::metadata::Orientation>,
 ) -> Result<Vec<u8>, AppError> {
-    if let Some(orientation) = orientation {
-        if orientation != image::metadata::Orientation::NoTransforms {
-            img.apply_orientation(orientation);
-        }
+    if let Some(orientation) =
+        orientation.filter(|orientation| *orientation != image::metadata::Orientation::NoTransforms)
+    {
+        img.apply_orientation(orientation);
     }
     let thumb = img.thumbnail(max, max);
     // Grid thumbnails are small enough that 84 is visually lossless; the
