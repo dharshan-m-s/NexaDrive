@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
-import 'nexa_progress.dart';
+import 'nexa_motion.dart';
 
 /// Cross-fades between mutually exclusive page bodies — loading to content,
 /// content to error — so a resolved request settles in place instead of
@@ -15,7 +15,7 @@ import 'nexa_progress.dart';
 /// Layout is passed through untouched: each state receives exactly the
 /// constraints it would have got standing alone, so a state that fills a scroll
 /// region keeps filling it and nothing grows or shrink-wraps unexpectedly.
-/// Reduced motion swaps instantly.
+/// Platform reduce swaps instantly; the app-level setting leaves a short fade.
 class NexaStateSwitcher extends StatelessWidget {
   const NexaStateSwitcher({
     super.key,
@@ -31,10 +31,10 @@ class NexaStateSwitcher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedSwitcher(
-      duration: AppMotion.resolve(context, AppMotion.normal),
-      switchInCurve: AppMotion.curveFor(context, AppMotion.enter),
-      switchOutCurve: AppMotion.curveFor(context, AppMotion.exit),
-      reverseDuration: AppMotion.resolve(context, AppMotion.fast),
+      duration: AppMotion.resolveStateChange(context, AppMotion.normal),
+      switchInCurve: AppMotion.resolveCurve(context, AppMotion.enter),
+      switchOutCurve: AppMotion.resolveCurve(context, AppMotion.exit),
+      reverseDuration: AppMotion.resolveStateChange(context, AppMotion.fast),
       layoutBuilder: (currentChild, previousChildren) => Stack(
         fit: StackFit.passthrough,
         children: <Widget>[
@@ -66,11 +66,11 @@ class NexaLoadingBlock extends StatelessWidget {
       padding: EdgeInsets.symmetric(vertical: inset),
       child: Center(
         child: label == null
-            ? NexaCircularProgress(size: size)
+            ? NexaAnimatedProgress(size: size)
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  NexaCircularProgress(size: size),
+                  NexaAnimatedProgress(size: size),
                   const SizedBox(height: AppDimens.space12),
                   Text(
                     label!,
@@ -98,7 +98,7 @@ class NexaLoadingState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const NexaCircularProgress(),
+          const NexaAnimatedProgress(),
           if (label != null) ...[
             const SizedBox(height: AppDimens.space12),
             Text(
@@ -179,15 +179,18 @@ class _SkeletonItemState extends State<_SkeletonItem>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
+  bool _settled = false;
 
   @override
   void initState() {
     super.initState();
+    // One bounded settle on appearance replaces the old endless shimmer. The
+    // placeholders stay legible at every frame and cost no ongoing ticks.
     _controller = AnimationController(
-      duration: AppMotion.ambient,
+      duration: AppMotion.fast,
       vsync: this,
     );
-    _animation = Tween(begin: 0.6, end: 1.0).animate(
+    _animation = Tween(begin: 0.6, end: 0.8).animate(
       CurvedAnimation(parent: _controller, curve: AppMotion.standardCurve),
     );
   }
@@ -197,9 +200,11 @@ class _SkeletonItemState extends State<_SkeletonItem>
     super.didChangeDependencies();
     if (AppMotion.reducedMotion(context)) {
       _controller.stop();
-      _controller.value = 0.5;
-    } else if (!_controller.isAnimating) {
-      _controller.repeat(reverse: true);
+      _controller.value = 1.0;
+      _settled = true;
+    } else if (!_settled) {
+      _settled = true;
+      _controller.forward();
     }
   }
 
@@ -211,75 +216,78 @@ class _SkeletonItemState extends State<_SkeletonItem>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) {
-        return Container(
-          height: widget.height,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.pageMargin,
-            vertical: AppDimens.space8,
-          ),
-          child: Row(
-            children: [
-              if (widget.showLeading) ...[
-                Container(
-                  width: AppDimens.iconTileLarge,
-                  height: AppDimens.iconTileLarge,
-                  decoration: BoxDecoration(
-                    color: Color.lerp(widget.baseColor, widget.highlightColor,
-                        _animation.value),
-                    borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _animation,
+        builder: (context, child) {
+          return Container(
+            height: widget.height,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.pageMargin,
+              vertical: AppDimens.space8,
+            ),
+            child: Row(
+              children: [
+                if (widget.showLeading) ...[
+                  Container(
+                    width: AppDimens.iconTileLarge,
+                    height: AppDimens.iconTileLarge,
+                    decoration: BoxDecoration(
+                      color: Color.lerp(widget.baseColor, widget.highlightColor,
+                          _animation.value),
+                      borderRadius:
+                          BorderRadius.circular(AppDimens.radiusMedium),
+                    ),
+                  ),
+                  const SizedBox(width: AppDimens.space12),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 120,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: Color.lerp(widget.baseColor,
+                              widget.highlightColor, _animation.value),
+                          borderRadius:
+                              BorderRadius.circular(AppDimens.radiusExtraSmall),
+                        ),
+                      ),
+                      const SizedBox(height: AppDimens.space4),
+                      Container(
+                        width: 80,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: Color.lerp(widget.baseColor,
+                              widget.highlightColor, _animation.value * 0.7),
+                          borderRadius:
+                              BorderRadius.circular(AppDimens.radiusExtraSmall),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: AppDimens.space12),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 120,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: Color.lerp(widget.baseColor,
-                            widget.highlightColor, _animation.value),
-                        borderRadius:
-                            BorderRadius.circular(AppDimens.radiusExtraSmall),
-                      ),
+                if (widget.showTrailing) ...[
+                  const SizedBox(width: AppDimens.space12),
+                  Container(
+                    width: AppDimens.iconMedium,
+                    height: AppDimens.iconMedium,
+                    decoration: BoxDecoration(
+                      color: Color.lerp(widget.baseColor, widget.highlightColor,
+                          _animation.value),
+                      borderRadius:
+                          BorderRadius.circular(AppDimens.radiusStandard),
                     ),
-                    const SizedBox(height: AppDimens.space4),
-                    Container(
-                      width: 80,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: Color.lerp(widget.baseColor,
-                            widget.highlightColor, _animation.value * 0.7),
-                        borderRadius:
-                            BorderRadius.circular(AppDimens.radiusExtraSmall),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (widget.showTrailing) ...[
-                const SizedBox(width: AppDimens.space12),
-                Container(
-                  width: AppDimens.iconMedium,
-                  height: AppDimens.iconMedium,
-                  decoration: BoxDecoration(
-                    color: Color.lerp(widget.baseColor, widget.highlightColor,
-                        _animation.value),
-                    borderRadius:
-                        BorderRadius.circular(AppDimens.radiusStandard),
                   ),
-                ),
+                ],
               ],
-            ],
-          ),
-        );
-      },
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -338,15 +346,18 @@ class _SkeletonGridItemState extends State<_SkeletonGridItem>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
+  bool _settled = false;
 
   @override
   void initState() {
     super.initState();
+    // One bounded settle on appearance replaces the old endless shimmer. The
+    // placeholders stay legible at every frame and cost no ongoing ticks.
     _controller = AnimationController(
-      duration: AppMotion.ambient,
+      duration: AppMotion.fast,
       vsync: this,
     );
-    _animation = Tween(begin: 0.6, end: 1.0).animate(
+    _animation = Tween(begin: 0.6, end: 0.8).animate(
       CurvedAnimation(parent: _controller, curve: AppMotion.standardCurve),
     );
   }
@@ -356,9 +367,11 @@ class _SkeletonGridItemState extends State<_SkeletonGridItem>
     super.didChangeDependencies();
     if (AppMotion.reducedMotion(context)) {
       _controller.stop();
-      _controller.value = 0.5;
-    } else if (!_controller.isAnimating) {
-      _controller.repeat(reverse: true);
+      _controller.value = 1.0;
+      _settled = true;
+    } else if (!_settled) {
+      _settled = true;
+      _controller.forward();
     }
   }
 
@@ -370,53 +383,56 @@ class _SkeletonGridItemState extends State<_SkeletonGridItem>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) {
-        return Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
-          ),
-          padding: const EdgeInsets.all(AppDimens.space12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: double.infinity,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Color.lerp(widget.baseColor, widget.highlightColor,
-                      _animation.value),
-                  borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _animation,
+        builder: (context, child) {
+          return Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+            ),
+            padding: const EdgeInsets.all(AppDimens.space12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Color.lerp(widget.baseColor, widget.highlightColor,
+                        _animation.value),
+                    borderRadius:
+                        BorderRadius.circular(AppDimens.radiusStandard),
+                  ),
                 ),
-              ),
-              const Spacer(),
-              Container(
-                width: double.infinity,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: Color.lerp(widget.baseColor, widget.highlightColor,
-                      _animation.value),
-                  borderRadius:
-                      BorderRadius.circular(AppDimens.radiusExtraSmall),
+                const Spacer(),
+                Container(
+                  width: double.infinity,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: Color.lerp(widget.baseColor, widget.highlightColor,
+                        _animation.value),
+                    borderRadius:
+                        BorderRadius.circular(AppDimens.radiusExtraSmall),
+                  ),
                 ),
-              ),
-              const SizedBox(height: AppDimens.space4),
-              Container(
-                width: 60,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: Color.lerp(widget.baseColor, widget.highlightColor,
-                      _animation.value * 0.7),
-                  borderRadius:
-                      BorderRadius.circular(AppDimens.radiusExtraSmall),
+                const SizedBox(height: AppDimens.space4),
+                Container(
+                  width: 60,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: Color.lerp(widget.baseColor, widget.highlightColor,
+                        _animation.value * 0.7),
+                    borderRadius:
+                        BorderRadius.circular(AppDimens.radiusExtraSmall),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -439,6 +440,45 @@ void main() {
           reason: 'onUnauthorized should be invoked when a 401 is returned');
     });
   });
+  group('One-shot file downloads', () {
+    test('streams the body to disk without entering the durable queue',
+        () async {
+      final directory =
+          await Directory.systemTemp.createTemp('nexadrive-api-download-');
+      addTearDown(() => directory.delete(recursive: true));
+      final target = '${directory.path}${Platform.pathSeparator}file.bin';
+      final requests = <http.BaseRequest>[];
+
+      final api = Api(
+        Session()
+          ..serverUrl = 'https://server.com'
+          ..token = 'token',
+        client: MockClient((request) async {
+          requests.add(request);
+          expect(request.url.path, '/api/files/download');
+          expect(request.headers.containsKey('Range'), isFalse);
+          return http.Response.bytes(
+            utf8.encode('one-shot payload'),
+            200,
+            headers: {'content-type': 'application/octet-stream'},
+          );
+        }),
+      );
+
+      await api.downloadToFile('folder/file.bin', target);
+
+      expect(requests, hasLength(1));
+      expect(File(target).readAsStringSync(), 'one-shot payload');
+      expect(
+        directory
+            .listSync()
+            .where((entity) => entity.path.endsWith('.tmp'))
+            .toList(),
+        isEmpty,
+      );
+    });
+  });
+
   group('Resumable upload completion', () {
     setUp(() async {
       setUpStorage();

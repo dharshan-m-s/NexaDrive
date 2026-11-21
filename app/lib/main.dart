@@ -6,6 +6,7 @@ import 'services/api.dart';
 import 'services/app_lock.dart';
 import 'services/background_transfer_service.dart';
 import 'services/session.dart';
+import 'core/design/app_motion.dart';
 import 'core/design/app_scroll.dart';
 import 'core/design/app_theme.dart';
 import 'ui/screens/login/login_screen.dart';
@@ -54,6 +55,10 @@ Future<void> main() async {
   }
 
   final prefs = await SharedPreferences.getInstance();
+
+  // Read the app-level motion preference once, before the first frame. The
+  // notifier is rebuilt below so a change in Settings applies immediately.
+  await AppMotion.loadReduceAnimationsPreference(prefs);
 
   runApp(NexaDriveApp(session: session, prefs: prefs));
 }
@@ -105,30 +110,36 @@ class _NexaDriveAppState extends State<NexaDriveApp> {
           systemNavigationBarDividerColor: Colors.transparent,
         );
 
-        return AnnotatedRegion<SystemUiOverlayStyle>(
-          value: overlay,
-          child: MaterialApp(
-            title: 'NexaDrive',
-            debugShowCheckedModeBanner: false,
-            scrollBehavior: const NexaScrollBehavior(),
-            theme: AppTheme.light(highContrast: highContrast),
-            darkTheme: AppTheme.dark(highContrast: highContrast),
-            themeMode: mode == 'light'
-                ? ThemeMode.light
-                : mode == 'dark'
-                    ? ThemeMode.dark
-                    : ThemeMode.system,
-            home: widget.session.token == null
-                ? LoginScreen(session: widget.session)
-                : AppLockGate(
-                    service: widget.appLock ?? AppLockService(),
-                    child: AppShell(
-                      session: widget.session,
-                      prefs: widget.prefs,
-                      api: widget.api,
-                    ),
-                  ),
-          ),
+        return ValueListenableBuilder<bool>(
+          valueListenable: AppMotion.appReduceAnimations,
+          builder: (context, reduceAnimations, _) {
+            return AnnotatedRegion<SystemUiOverlayStyle>(
+              value: overlay,
+              child: MaterialApp(
+                title: 'NexaDrive',
+                debugShowCheckedModeBanner: false,
+                navigatorObservers: [AppShell.routeObserver],
+                scrollBehavior: const NexaScrollBehavior(),
+                theme: AppTheme.light(highContrast: highContrast),
+                darkTheme: AppTheme.dark(highContrast: highContrast),
+                themeMode: mode == 'light'
+                    ? ThemeMode.light
+                    : mode == 'dark'
+                        ? ThemeMode.dark
+                        : ThemeMode.system,
+                home: widget.session.token == null
+                    ? LoginScreen(session: widget.session)
+                    : AppLockGate(
+                        service: widget.appLock ?? AppLockService(),
+                        child: AppShell(
+                          session: widget.session,
+                          prefs: widget.prefs,
+                          api: widget.api,
+                        ),
+                      ),
+              ),
+            );
+          },
         );
       },
     );

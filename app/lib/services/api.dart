@@ -349,17 +349,30 @@ class Api {
     return response.bodyBytes;
   }
 
+  /// In-memory download (images, SAF one-shot saves). The lease is held for
+  /// the whole body read so even a buffered transfer keeps the process alive.
   Future<Uint8List> download(String path) async {
-    final response = await _client
-        .get(
-          _uri('/api/files/download', {'path': path}),
-          headers: _headers,
-        )
-        .timeout(_transferTimeout);
-    _check(response);
-    return response.bodyBytes;
+    final lease = ForegroundTransferService.instance.acquireDownload();
+    try {
+      final response = await _client
+          .get(
+            _uri('/api/files/download', {'path': path}),
+            headers: _headers,
+          )
+          .timeout(_transferTimeout);
+      _check(response);
+      return response.bodyBytes;
+    } finally {
+      lease.release();
+    }
   }
 
+  /// Streams one file to disk for one-shot needs (sync, viewers, share save).
+  ///
+  /// This deliberately does not use [DurableDownloadManager]: those callers
+  /// own their own retry/baseline state and must complete or fail within the
+  /// call itself. User-initiated, resumable saves go through
+  /// `DownloadService.downloadToFile`, which owns the durable queue.
   Future<void> downloadToFile(String path, String targetPath) async {
     final lease = ForegroundTransferService.instance.acquireDownload();
     try {
@@ -369,7 +382,10 @@ class Api {
     }
   }
 
-  Future<void> _downloadToFileUntracked(String path, String targetPath) async {
+  Future<void> _downloadToFileUntracked(
+    String path,
+    String targetPath,
+  ) async {
     final request =
         http.Request('GET', _uri('/api/files/download', {'path': path}));
     request.headers.addAll(_headers);
@@ -377,7 +393,9 @@ class Api {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final body = await response.stream.bytesToString();
       throw ApiException(
-          response.statusCode, _messageFromBody(body, response.statusCode));
+        response.statusCode,
+        messageFromBody(body, response.statusCode),
+      );
     }
     final tempPath =
         '$targetPath.nexadrive-download-${DateTime.now().microsecondsSinceEpoch}.tmp';
@@ -881,14 +899,6 @@ class Api {
       // A body without a code is fine.
     }
     return null;
-  }
-
-  String _messageFromBody(String body, int status) {
-    try {
-      return (jsonDecode(body) as Map)['error']?.toString() ?? 'Request failed';
-    } catch (_) {
-      return 'Request failed ($status)';
-    }
   }
 
   /// Public wrapper used by the download service to surface server error

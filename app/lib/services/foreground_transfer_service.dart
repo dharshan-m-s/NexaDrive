@@ -73,8 +73,23 @@ class ForegroundTransferService {
   Timer? _retryTimer;
   Future<void> _operation = Future<void>.value();
 
+  /// Bumped on every ledger change. Each queued platform call carries the
+  /// generation it was created for; superseded calls are skipped even when a
+  /// previous channel call was slow or failed.
+  int _generation = 0;
+  int _skippedApplies = 0;
+
+  /// A denial is remembered only until the ledger goes idle, so the next
+  /// transfer can ask again (and the user can also grant it in system settings).
+  bool _notificationPermissionDenied = false;
+
   /// Completes after all queued platform calls have been attempted.
   Future<void> get idle => _operation;
+
+  /// How many superseded platform calls were discarded. Exposed for the
+  /// generation-race test; the ledger never uses it for behaviour.
+  @visibleForTesting
+  int get skippedApplies => _skippedApplies;
 
   /// The active upload queue size, reported by [UploadManager].
   void setQueuedUploads(int count) {
@@ -132,6 +147,8 @@ class ForegroundTransferService {
     final next = _composeStatus();
     if (next == _desiredStatus) return;
     _desiredStatus = next;
+    _generation++;
+    final generation = _generation;
     _stopTimer?.cancel();
     _stopTimer = null;
     _retryTimer?.cancel();
@@ -139,22 +156,29 @@ class ForegroundTransferService {
     if (next == null && stopGrace > Duration.zero) {
       _stopTimer = Timer(stopGrace, () {
         _stopTimer = null;
-        _enqueueApply();
+        _enqueueApply(generation);
       });
       return;
     }
-    _enqueueApply();
+    _enqueueApply(generation);
   }
 
-  void _enqueueApply() {
-    _operation = _operation.then((_) => _apply()).catchError((Object _) {});
+  void _enqueueApply([int? generation]) {
+    final token = generation ?? _generation;
+    _operation =
+        _operation.then((_) => _apply(token)).catchError((Object _) {});
   }
 
-  Future<void> _apply() async {
+  Future<void> _apply(int generation) async {
     if (!_enabled) return;
+    // A newer ledger change (or a cancelled idle grace) owns the platform now.
+    // Comparing the captured status to the live one cannot detect this race:
+    // both reads see the same mutable field after a superseding update.
+    if (generation != _generation) {
+      _skippedApplies++;
+      return;
+    }
     final desired = _desiredStatus;
-    // A new lease may have arrived while a delayed stop was queued.
-    if (desired == null && _desiredStatus != null) return;
     if (desired == _shownStatus) return;
 
     try {
@@ -163,11 +187,16 @@ class ForegroundTransferService {
           await _channel.invokeMethod<void>('stop');
         }
         _platformMayBeRunning = false;
+        _notificationPermissionDenied = false;
       } else {
         final Map<String, Object?> arguments = <String, Object?>{
           'text': desired,
         };
         if (!_platformMayBeRunning) {
+          // The prompt is best effort: denial, a missing Activity (background
+          // worker) or a channel error never stops the transfer. A denial is
+          // retried by the next transfer once this ledger has gone idle.
+          await _ensureNotificationPermission();
           // Assume the native start may have happened even when the channel
           // throws, so the next idle transition still clears the notification.
           _platformMayBeRunning = true;
@@ -188,10 +217,46 @@ class ForegroundTransferService {
           _retryTimer = null;
           if (_desiredStatus != null) {
             _shownStatus = null;
-            _enqueueApply();
+            _enqueueApply(generation);
           }
         });
       }
     }
+  }
+
+  /// Whether Android currently allows the ongoing transfer notification.
+  ///
+  /// Returns true on other platforms and when the channel is unavailable, so
+  /// callers never treat a notification problem as a transfer failure.
+  Future<bool> notificationsEnabled() async {
+    if (!_enabled) return true;
+    try {
+      return await _channel.invokeMethod<bool>('notificationsEnabled') ?? true;
+    } catch (error) {
+      debugPrint('NexaDrive notification status unavailable: $error');
+      return true;
+    }
+  }
+
+  /// Requests POST_NOTIFICATIONS when an Activity is available.
+  ///
+  /// Returns false for a denial or when there is no Activity (a background
+  /// isolate), and is safe to call again on a later transfer.
+  Future<bool> requestNotificationPermission() async {
+    if (!_enabled) return true;
+    try {
+      return await _channel
+              .invokeMethod<bool>('requestNotificationPermission') ??
+          true;
+    } catch (error) {
+      debugPrint('NexaDrive notification prompt unavailable: $error');
+      return true;
+    }
+  }
+
+  Future<void> _ensureNotificationPermission() async {
+    if (_notificationPermissionDenied) return;
+    if (await notificationsEnabled()) return;
+    _notificationPermissionDenied = !await requestNotificationPermission();
   }
 }

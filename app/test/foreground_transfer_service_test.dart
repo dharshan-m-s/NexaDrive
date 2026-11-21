@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -95,6 +97,58 @@ void main() {
     expect(status(), 'Syncing folders');
 
     sync.release();
+    await service.idle;
+    expect(count('stop'), 1);
+  });
+
+  test('superseded applies are skipped during a slow platform call', () async {
+    final gate = Completer<void>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (MethodCall call) async {
+      calls.add(call);
+      if (call.method == 'start') await gate.future;
+      return null;
+    });
+
+    final download = service.acquireDownload();
+    // Let the first apply reach the channel before superseding it.
+    await Future<void>.delayed(Duration.zero);
+    service.setQueuedUploads(2);
+    service.setQueuedUploads(0);
+    gate.complete();
+
+    await service.idle;
+    expect(service.skippedApplies, greaterThan(0));
+    expect(count('start'), 1);
+    expect(count('stop'), 0);
+    expect(status(), 'Downloading 1 file');
+
+    download.release();
+    await service.idle;
+    expect(count('stop'), 1);
+  });
+
+  test('a superseded idle stop cannot stop a newly started transfer', () async {
+    final gate = Completer<void>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (MethodCall call) async {
+      calls.add(call);
+      if (call.method == 'start') await gate.future;
+      return null;
+    });
+
+    final first = service.acquireDownload();
+    await Future<void>.delayed(Duration.zero);
+    first.release(); // queues a stop behind the blocked start
+    final second = service.acquireDownload();
+    gate.complete();
+
+    await service.idle;
+    expect(service.skippedApplies, greaterThan(0));
+    expect(count('stop'), 0);
+    expect(status(), 'Downloading 1 file');
+
+    second.release();
     await service.idle;
     expect(count('stop'), 1);
   });

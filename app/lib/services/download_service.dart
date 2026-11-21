@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -8,7 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import 'api.dart';
-import 'foreground_transfer_service.dart';
+import 'durable_download_manager.dart';
 
 /// Result of a completed save.
 class SaveResult {
@@ -231,13 +230,8 @@ class DownloadService {
 
     if (size != null && size <= _androidMemorySaveLimit) {
       // One-shot: download fully, then let SAF write the document.
-      final lease = ForegroundTransferService.instance.acquireDownload();
-      late final Uint8List bytes;
-      try {
-        bytes = await api.download(remotePath);
-      } finally {
-        lease.release();
-      }
+      // Api.download owns its own FGS lease; do not double-count it here.
+      final bytes = await api.download(remotePath);
       final uri = await FilePicker.saveFile(
         fileName: fileName,
         bytes: bytes,
@@ -299,11 +293,11 @@ class DownloadService {
 
   // -------------------------------------------------------------- core stream
 
-  /// Streams [remotePath] to [targetPath] atomically: bytes are written to a
-  /// unique `.part` sibling and renamed over the destination only after the
-  /// server response has been fully received. Progress is reported when the
-  /// server provides a Content-Length. Cancels by [CancelToken] delete the
-  /// partial file.
+  /// Streams [remotePath] to [targetPath] atomically through the durable
+  /// download queue. Bytes are written to a deterministic `.part` sibling and
+  /// renamed over the destination only after the response is complete. The
+  /// queue holds one FGS lease for the whole transfer, reports only received
+  /// bytes, and lets a process death resume from the confirmed offset.
   Future<void> downloadToFile(
     String remotePath,
     String targetPath, {
@@ -311,115 +305,16 @@ class DownloadService {
     void Function(int received, int? total)? onProgress,
     CancelToken? cancel,
   }) async {
-    final lease = ForegroundTransferService.instance.acquireDownload();
-    try {
-      await _downloadToFileUntracked(
-        remotePath,
-        targetPath,
-        timeout: timeout,
-        onProgress: onProgress,
-        cancel: cancel,
-      );
-    } finally {
-      lease.release();
-    }
-  }
-
-  Future<void> _downloadToFileUntracked(
-    String remotePath,
-    String targetPath, {
-    required Duration timeout,
-    void Function(int received, int? total)? onProgress,
-    CancelToken? cancel,
-  }) async {
-    final request = http.Request('GET', api.fileDownloadUri(remotePath));
-    request.headers.addAll(api.authHeaders);
-
-    final response = await api.rawClient.send(request).timeout(timeout,
-        onTimeout: () => throw const SaveException(
-              'The server took too long to respond. Check the connection and try again.',
-            ));
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final body = await response.stream.bytesToString();
-      throw SaveException(Api.messageFromBody(body, response.statusCode));
-    }
-
-    final destination = File(targetPath);
-    final parent = destination.parent.path;
-    final tempPath =
-        '$parent${Platform.pathSeparator}.${_baseName(targetPath)}.nexadrive-${DateTime.now().microsecondsSinceEpoch}.part';
-    final temp = File(tempPath);
-    final sink = temp.openWrite();
-    IOSink? activeSink = sink;
-    var received = 0;
-    final total = response.contentLength;
-    StreamSubscription<List<int>>? subscription;
-
-    try {
-      final completer = Completer<void>();
-      subscription = response.stream.listen(
-        (chunk) {
-          if (cancel?.isCancelled == true) {
-            subscription?.cancel();
-            if (!completer.isCompleted) {
-              completer.completeError(const SaveCancelled());
-            }
-            return;
-          }
-          received += chunk.length;
-          activeSink?.add(chunk);
-          onProgress?.call(received, total);
-        },
-        onError: (Object e) {
-          if (!completer.isCompleted) {
-            completer.completeError(
-              e is SaveException ? e : SaveException(_friendlyNetworkError(e)),
-            );
-          }
-        },
-        onDone: () {
-          if (!completer.isCompleted) completer.complete();
-        },
-        cancelOnError: true,
-      );
-      await completer.future.timeout(timeout);
-      await activeSink.flush();
-      await activeSink.close();
-      activeSink = null;
-
-      // Publish atomically: rename over any previous file.
-      if (await destination.exists()) {
-        await destination.delete();
-      }
-      await temp.rename(targetPath);
-    } catch (e) {
-      try {
-        await activeSink?.close();
-      } catch (_) {}
-      try {
-        await temp.delete();
-      } catch (_) {}
-      rethrow;
-    } finally {
-      await subscription?.cancel();
-    }
-  }
-
-  String _baseName(String path) {
-    final clean = path.replaceAll('\\', '/');
-    final i = clean.lastIndexOf('/');
-    return i < 0 ? clean : clean.substring(i + 1);
-  }
-
-  String _friendlyNetworkError(Object e) {
-    if (e is SocketException) {
-      return 'The connection dropped while downloading. Check the network and try again.';
-    }
-    if (e is TimeoutException) {
-      return 'The download stalled and was stopped. Try again.';
-    }
-    return 'The download failed: $e';
+    final manager = DurableDownloadManager.instance;
+    manager.attach(api);
+    final id = await manager.enqueue(
+      remotePath: remotePath,
+      targetPath: targetPath,
+      timeout: timeout,
+      onProgress: onProgress,
+      cancel: cancel,
+    );
+    await manager.waitFor(id);
   }
 }
 

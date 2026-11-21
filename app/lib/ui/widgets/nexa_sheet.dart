@@ -3,6 +3,7 @@ import '../../core/design/app_colors.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
+import 'nexa_motion.dart';
 import 'nexa_surface.dart';
 
 /// Opens a Material 3 modal bottom sheet.
@@ -11,6 +12,11 @@ import 'nexa_surface.dart';
 /// top corners, elevation 3). Callers whose content is a menu wrap it in a
 /// [NexaSheetBody] so it paints its own modal surface over the transparent
 /// sheet background.
+///
+/// Entrance/exit uses [AppMotion.sheetAnimationStyle], a controlled near-critical
+/// settle. Drag-to-dismiss and its velocity snap stay with the framework's
+/// bottom-sheet recogniser; app-level reduce motion shortens the entrance but
+/// leaves the essential content fully visible throughout.
 Future<T?> showNexaSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
@@ -169,14 +175,17 @@ class NexaSheetHeader extends StatelessWidget {
           if (hasTrailing) ...[
             const SizedBox(width: AppDimens.space12),
             trailing ??
-                IconButton(
-                  onPressed: onClose ?? () => Navigator.pop(context),
-                  icon: Icon(
-                    Icons.close_rounded,
-                    size: AppDimens.iconMedium,
-                    color: scheme.onSurfaceVariant,
+                NexaElasticPress(
+                  child: IconButton(
+                    onPressed: onClose ?? () => Navigator.pop(context),
+                    icon: Icon(
+                      Icons.close_rounded,
+                      size: AppDimens.iconMedium,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    tooltip:
+                        MaterialLocalizations.of(context).closeButtonTooltip,
                   ),
-                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                 ),
           ],
         ],
@@ -259,45 +268,54 @@ class _NexaSheetActionState extends State<NexaSheetAction> {
             ? scheme.errorContainer
             : scheme.surfaceContainerHigh);
 
-    return ListTile(
+    // Full-width rows keep their geometry; a tonal press state carries the
+    // feedback instead of shrinking the row and exposing the sheet behind it.
+    return NexaElasticPress(
       enabled: widget.enabled,
-      onTap: widget.enabled ? widget.onTap : null,
-      leading: Container(
-        width: AppDimens.iconTileLarge,
-        height: AppDimens.iconTileLarge,
-        decoration: BoxDecoration(
-          color: widget.enabled ? bg : bg.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+      scale: false,
+      tintColor: scheme.onSurface.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+      child: ListTile(
+        enabled: widget.enabled,
+        onTap: widget.enabled ? widget.onTap : null,
+        leading: Container(
+          width: AppDimens.iconTileLarge,
+          height: AppDimens.iconTileLarge,
+          decoration: BoxDecoration(
+            color: widget.enabled ? bg : bg.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+          ),
+          child: Icon(
+            widget.icon,
+            color:
+                widget.enabled ? fg : scheme.onSurface.withValues(alpha: 0.38),
+            size: AppDimens.iconMedium,
+          ),
         ),
-        child: Icon(
-          widget.icon,
-          color: widget.enabled ? fg : scheme.onSurface.withValues(alpha: 0.38),
-          size: AppDimens.iconMedium,
+        title: Text(
+          widget.title,
+          style: AppTextStyle.titleSmall.copyWith(color: scheme.onSurface),
         ),
-      ),
-      title: Text(
-        widget.title,
-        style: AppTextStyle.titleSmall.copyWith(color: scheme.onSurface),
-      ),
-      subtitle: widget.subtitle == null
-          ? null
-          : Text(
-              widget.subtitle!,
-              style: AppTextStyle.bodySmall.copyWith(
-                color: scheme.onSurfaceVariant,
+        subtitle: widget.subtitle == null
+            ? null
+            : Text(
+                widget.subtitle!,
+                style: AppTextStyle.bodySmall.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
-            ),
-      trailing: widget.onTap != null && !widget.destructive
-          ? Icon(
-              Icons.chevron_right_rounded,
-              size: AppDimens.iconMedium,
-              color: scheme.onSurfaceVariant,
-            )
-          : null,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+        trailing: widget.onTap != null && !widget.destructive
+            ? Icon(
+                Icons.chevron_right_rounded,
+                size: AppDimens.iconMedium,
+                color: scheme.onSurfaceVariant,
+              )
+            : null,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+        ),
+        minTileHeight: AppDimens.listHeight,
       ),
-      minTileHeight: AppDimens.listHeight,
     );
   }
 }
@@ -476,21 +494,26 @@ class NexaConfirmationDialog extends StatelessWidget {
       ),
       actionsAlignment: MainAxisAlignment.end,
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          style: TextButton.styleFrom(
-            foregroundColor: scheme.onSurfaceVariant,
+        NexaElasticPress(
+          child: TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(
+              foregroundColor: scheme.onSurfaceVariant,
+            ),
+            child: Text(cancelText, style: AppTextStyle.labelLarge),
           ),
-          child: Text(cancelText, style: AppTextStyle.labelLarge),
         ),
         const SizedBox(width: AppDimens.space8),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, true),
-          style: FilledButton.styleFrom(
-            backgroundColor: isDestructive ? scheme.error : scheme.primary,
-            foregroundColor: isDestructive ? scheme.onError : scheme.onPrimary,
+        NexaElasticPress(
+          child: FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: isDestructive ? scheme.error : scheme.primary,
+              foregroundColor:
+                  isDestructive ? scheme.onError : scheme.onPrimary,
+            ),
+            child: Text(confirmText, style: AppTextStyle.labelLarge),
           ),
-          child: Text(confirmText, style: AppTextStyle.labelLarge),
         ),
       ],
     );

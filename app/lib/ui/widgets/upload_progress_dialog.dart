@@ -13,12 +13,13 @@ import '../../services/api.dart';
 import '../../services/upload_item.dart';
 import '../../services/upload_manager.dart';
 
-/// Material 3 upload progress dialog — modal while active, showing per-file
-/// progress, then a summary with retry for failures.
+/// Material 3 upload progress dialog — an explicit queue view for headless and
+/// integration flows, showing per-file progress and retry for failures.
 ///
-/// The dialog is a *view* of the queue, not the queue itself. Closing it does
-/// not stop a transfer: the upload keeps running and stays visible on the
-/// Transfers screen.
+/// Normal uploads use [UploadProgressDialog.showSources], which only enqueues:
+/// the shell's transfer strip is the persistent progress surface. This widget
+/// remains a public view of the queue, but auto-closes shortly after its batch
+/// is terminal so it can never be left behind as a modal.
 class _TransferMetric extends StatelessWidget {
   final String label;
   final String value;
@@ -76,7 +77,7 @@ class UploadProgressDialog extends StatefulWidget {
     required this.destination,
   });
 
-  /// Queues [files] and shows the progress dialog.
+  /// Queues [files] without opening a modal. Progress lives in the shell strip.
   static Future<void> show(
     BuildContext context, {
     required List<PlatformFile> files,
@@ -99,34 +100,39 @@ class UploadProgressDialog extends StatefulWidget {
     await showSources(context, sources: sources, folder: folder);
   }
 
-  /// Queues [sources] and shows the progress dialog.
+  /// Queues [sources] without opening a modal.
+  ///
+  /// The shell observes the same queue and owns all completion feedback, so a
+  /// second progress surface here would only cover the navigation pill.
   static Future<void> showSources(
     BuildContext context, {
     required List<UploadSource> sources,
     required String folder,
     Api? api,
   }) async {
-    if (sources.isEmpty) return;
+    await _enqueue(sources: sources, folder: folder, api: api);
+  }
+
+  /// Enqueue helper shared by the normal picker flow and the explicit dialog
+  /// entry point used by integration tests.
+  static Future<List<String>> _enqueue({
+    required List<UploadSource> sources,
+    required String folder,
+    Api? api,
+  }) async {
+    if (sources.isEmpty) return const <String>[];
     final manager = UploadManager.current;
     if (api != null) manager.attach(api);
     // Yield once so the selection screen can paint before the journal batch
     // and queue notifications are processed.
     await Future<void>.delayed(Duration.zero);
     final ids = await manager.enqueueAll(sources, folder);
-    if (!context.mounted) return;
-    if (ids.isEmpty) return;
-    await showDialog<void>(
-      context: context,
-      builder: (_) => UploadProgressDialog(
-        manager: manager,
-        uploadIds: ids,
-        destination: folder,
-      ),
-    );
+    return ids;
   }
 
   /// Path-based variant used by tests and headless flows: uploads the files at
-  /// [paths] without going through a platform file picker.
+  /// [paths] without going through a platform file picker, then shows the
+  /// explicit progress view. The dialog auto-closes once the batch is terminal.
   static Future<void> showPaths(
     BuildContext context, {
     required Api api,
@@ -143,8 +149,20 @@ class UploadProgressDialog extends StatefulWidget {
         size: size,
       ));
     }
-    if (!context.mounted) return;
-    await showSources(context, sources: sources, folder: folder, api: api);
+    final ids = await _enqueue(
+      sources: sources,
+      folder: folder,
+      api: api,
+    );
+    if (!context.mounted || ids.isEmpty) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => UploadProgressDialog(
+        manager: UploadManager.current,
+        uploadIds: ids,
+        destination: folder,
+      ),
+    );
   }
 
   @override
@@ -154,6 +172,7 @@ class UploadProgressDialog extends StatefulWidget {
 class _UploadProgressDialogState extends State<UploadProgressDialog> {
   /// The items of this batch, in queue order.
   List<UploadItem> _items = [];
+  Timer? _autoCloseTimer;
 
   @override
   void initState() {
@@ -164,6 +183,7 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
 
   @override
   void dispose() {
+    _autoCloseTimer?.cancel();
     widget.manager.removeListener(_refresh);
     super.dispose();
   }
@@ -179,6 +199,32 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
       if (item != null) items.add(item);
     }
     setState(() => _items = items);
+    _scheduleAutoClose();
+  }
+
+  /// Terminal items can be pruned, so a missing id is treated as finished.
+  bool _allTerminal() {
+    final byId = <String, UploadItem>{
+      for (final item in widget.manager.items()) item.id: item,
+    };
+    return widget.uploadIds.every(
+      (id) => byId[id]?.state.isTerminal ?? true,
+    );
+  }
+
+  void _scheduleAutoClose() {
+    if (_autoCloseTimer != null || !_allTerminal()) return;
+    // Enough time to read the final summary, then the route goes away.
+    _autoCloseTimer = Timer(AppMotion.ambient * 2, _closeIfActive);
+  }
+
+  void _closeIfActive() {
+    if (!mounted || !context.mounted) return;
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isActive) return;
+    // Remove this dialog's own route. A plain pop could dismiss a newer page
+    // that was pushed on top while the batch was finishing.
+    Navigator.of(context).removeRoute(route);
   }
 
   @override

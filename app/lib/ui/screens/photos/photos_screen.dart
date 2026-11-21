@@ -84,9 +84,17 @@ class _PhotosScreenState extends State<PhotosScreen> {
   final Set<String> _selected = <String>{};
   int _gridColumns = 3;
   int? _activePointer;
+  Offset? _lastPointerPosition;
   bool _dragSelecting = false;
   int? _dragAnchorIndex;
   Set<String> _dragBaseSelection = const <String>{};
+
+  /// Keeps a range drag alive when the pointer reaches the viewport edge.
+  /// Flutter owns the frame loop and clamps at both scroll extents, so this is
+  /// interruptible the instant the pointer moves away or the drag ends.
+  EdgeDraggingAutoScroller? _selectionAutoScroller;
+  static const double _autoScrollEdge = AppDimens.space48;
+  static const double _autoScrollVelocity = 24;
 
   /// The last cell the drag tip reached. Range selection fires one haptic per
   /// newly reached cell, not one per pointer move.
@@ -115,6 +123,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   @override
   void dispose() {
+    _selectionAutoScroller?.stopAutoScroll();
     _selectionFocusNode.dispose();
     super.dispose();
   }
@@ -163,11 +172,34 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   void _onPointerDown(PointerDownEvent event) {
     _activePointer = event.pointer;
+    _lastPointerPosition = event.position;
   }
 
   void _onPointerMove(PointerMoveEvent event) {
+    _lastPointerPosition = event.position;
     if (!_dragSelecting || event.pointer != _activePointer) return;
-    final path = _pathAtPosition(event.position);
+    _selectAtLastPointer();
+    _updateSelectionAutoScroll(event.position);
+  }
+
+  void _onPointerUp(PointerEvent event) {
+    if (event.pointer != _activePointer) return;
+    _activePointer = null;
+    _lastPointerPosition = null;
+    _dragSelecting = false;
+    _dragAnchorIndex = null;
+    _dragBaseSelection = const <String>{};
+    _dragLastIndex = null;
+    _selectionAutoScroller?.stopAutoScroll();
+  }
+
+  /// Applies the visible range at the last known pointer position. Reused by
+  /// the auto-scroller so content moving under a still finger keeps selecting.
+  void _selectAtLastPointer() {
+    if (!mounted || !_dragSelecting) return;
+    final position = _lastPointerPosition;
+    if (position == null) return;
+    final path = _pathAtPosition(position);
     if (path == null) return;
     final index = _indexByPath[path];
     if (index == null) return;
@@ -177,24 +209,63 @@ class _PhotosScreenState extends State<PhotosScreen> {
     if (_selectRangeTo(visual)) AppHaptics.selection();
   }
 
-  void _onPointerUp(PointerEvent event) {
-    if (event.pointer != _activePointer) return;
-    _activePointer = null;
-    _dragSelecting = false;
-    _dragAnchorIndex = null;
-    _dragBaseSelection = const <String>{};
-    _dragLastIndex = null;
+  void _updateSelectionAutoScroll(Offset position) {
+    if (!_dragSelecting || !mounted) return;
+    final scroller = _selectionAutoScroller;
+    if (scroller != null && !scroller.scrollable.mounted) {
+      _selectionAutoScroller = null;
+      return;
+    }
+    scroller?.startAutoScrollIfNecessary(
+      Rect.fromCircle(center: position, radius: _autoScrollEdge),
+    );
+  }
+
+  void _bindSelectionAutoScroll(String path, Offset position) {
+    if (!mounted) return;
+    final scrollable = _keyForCell(path)
+        .currentContext
+        ?.findAncestorStateOfType<ScrollableState>();
+    if (scrollable == null || !scrollable.mounted) return;
+    final existing = _selectionAutoScroller;
+    if (existing?.scrollable == scrollable) {
+      _updateSelectionAutoScroll(position);
+      return;
+    }
+    existing?.stopAutoScroll();
+    _selectionAutoScroller = EdgeDraggingAutoScroller(
+      scrollable,
+      velocityScalar: _autoScrollVelocity,
+      onScrollViewScrolled: () {
+        _selectAtLastPointer();
+        // The helper caches the target relative to the scroll origin. Refresh
+        // it each step so a stationary finger keeps scrolling instead of
+        // falling out of range after the first increment.
+        final position = _lastPointerPosition;
+        if (position != null) _updateSelectionAutoScroll(position);
+      },
+    );
+    _updateSelectionAutoScroll(position);
   }
 
   void _onScaleStart(ScaleStartDetails details) {
+    // Cheap early capture when the recognizer happens to accept with two
+    // fingers. The common one-finger accept is handled lazily in _onScaleUpdate.
     if (details.pointerCount == 2) {
       _pinchBaseColumns = _gridColumns.toDouble();
     }
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details) {
-    final base = _pinchBaseColumns;
-    if (base == null || details.pointerCount < 2) return;
+    if (details.pointerCount < 2 || _dragSelecting) return;
+    var base = _pinchBaseColumns;
+    if (base == null) {
+      // Flutter's scale recognizer normally accepts with a single pointer, so
+      // onScaleStart rarely sees two. Capture the base on the first genuine
+      // two-finger update instead, or the pinch never engages at all.
+      base = _gridColumns.toDouble();
+      _pinchBaseColumns = base;
+    }
     if (!base.isFinite || base <= 0) return;
     final scale = details.scale;
     // Interactive pinching is inverted relative to layout density: fingers
@@ -235,6 +306,15 @@ class _PhotosScreenState extends State<PhotosScreen> {
     _dragAnchorIndex = visualAnchor;
     _dragSelecting = true;
     _keyboardAnchorIndex = null;
+    _lastPointerPosition = globalPosition;
+    // Entering selection rewraps the page in a Focus node, which rebuilds the
+    // scroll view. Bind only after that frame so the scroller is still mounted.
+    final anchorPath = _pathAtVisual(visualAnchor);
+    final pointer = _activePointer;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_dragSelecting || _activePointer != pointer) return;
+      _bindSelectionAutoScroll(anchorPath, globalPosition);
+    });
     final hit = _pathAtPosition(globalPosition);
     final hitIndex = hit == null ? null : _indexByPath[hit];
     final target = hitIndex == null ? visualAnchor : _visualIndexOf(hitIndex);
@@ -888,6 +968,17 @@ class _PhotosScreenState extends State<PhotosScreen> {
       );
     }
 
+    // The contextual bar floats over the grid. Tracking at this level keeps a
+    // range drag alive when the finger reaches the bottom edge over that bar.
+    page = Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _onPointerDown,
+      onPointerMove: _onPointerMove,
+      onPointerUp: _onPointerUp,
+      onPointerCancel: _onPointerUp,
+      child: page,
+    );
+
     return PopScope(
       canPop: !_selecting,
       onPopInvokedWithResult: (didPop, _) {
@@ -960,74 +1051,67 @@ class _PhotosScreenState extends State<PhotosScreen> {
               onScaleStart: _onScaleStart,
               onScaleUpdate: _onScaleUpdate,
               onScaleEnd: _onScaleEnd,
-              child: Listener(
-                onPointerDown: _onPointerDown,
-                onPointerMove: _onPointerMove,
-                onPointerUp: _onPointerUp,
-                onPointerCancel: _onPointerUp,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (_) {
-                    _pruneCellKeys();
-                    return false;
-                  },
-                  child: CustomScrollView(
-                    slivers: [
-                      for (final (label, indices) in groups) ...[
-                        SliverToBoxAdapter(
-                          child:
-                              _MonthHeader(label: label, count: indices.length),
-                        ),
-                        SliverPadding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppDimens.space2,
-                          ),
-                          sliver: SliverGrid.builder(
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: _gridColumns,
-                              mainAxisSpacing: AppDimens.space2,
-                              crossAxisSpacing: AppDimens.space2,
-                              childAspectRatio: 1,
-                            ),
-                            itemCount: indices.length,
-                            itemBuilder: (context, i) {
-                              final index = indices[i];
-                              final path = _pathAt(index);
-                              return _PhotoCell(
-                                key: _keyForCell(path),
-                                bytes: _thumbBytes(index),
-                                decodeWidth: decodeWidth,
-                                category: _categoryAt(index),
-                                unavailable: _noThumbnail.contains(path),
-                                name:
-                                    _photos[index]['name']?.toString() ?? path,
-                                semanticLabel:
-                                    '${_mediaLabel(_categoryAt(index))}: '
-                                    '${_photos[index]['name'] ?? path}',
-                                heroTag: 'photo:$path',
-                                selected: _selected.contains(path),
-                                selecting: _selecting,
-                                onTap: () => _onCellTap(index),
-                                onLongPressStart: (position) =>
-                                    _onCellLongPress(index, position),
-                                onVisible: () => _ensureThumb(_images, index),
-                              );
-                            },
-                          ),
-                        ),
-                        const SliverToBoxAdapter(
-                          child: SizedBox(height: AppDimens.space16),
-                        ),
-                      ],
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (_) {
+                  _pruneCellKeys();
+                  return false;
+                },
+                child: CustomScrollView(
+                  slivers: [
+                    for (final (label, indices) in groups) ...[
                       SliverToBoxAdapter(
-                        child: SizedBox(
-                          height: bottomClearance > AppDimens.space24
-                              ? bottomClearance
-                              : AppDimens.space24,
+                        child:
+                            _MonthHeader(label: label, count: indices.length),
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimens.space2,
+                        ),
+                        sliver: SliverGrid.builder(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: _gridColumns,
+                            mainAxisSpacing: AppDimens.space2,
+                            crossAxisSpacing: AppDimens.space2,
+                            childAspectRatio: 1,
+                          ),
+                          itemCount: indices.length,
+                          itemBuilder: (context, i) {
+                            final index = indices[i];
+                            final path = _pathAt(index);
+                            return _PhotoCell(
+                              key: _keyForCell(path),
+                              bytes: _thumbBytes(index),
+                              decodeWidth: decodeWidth,
+                              category: _categoryAt(index),
+                              unavailable: _noThumbnail.contains(path),
+                              name: _photos[index]['name']?.toString() ?? path,
+                              semanticLabel:
+                                  '${_mediaLabel(_categoryAt(index))}: '
+                                  '${_photos[index]['name'] ?? path}',
+                              heroTag: 'photo:$path',
+                              selected: _selected.contains(path),
+                              selecting: _selecting,
+                              onTap: () => _onCellTap(index),
+                              onLongPressStart: (position) =>
+                                  _onCellLongPress(index, position),
+                              onVisible: () => _ensureThumb(_images, index),
+                            );
+                          },
                         ),
                       ),
+                      const SliverToBoxAdapter(
+                        child: SizedBox(height: AppDimens.space16),
+                      ),
                     ],
-                  ),
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: bottomClearance > AppDimens.space24
+                            ? bottomClearance
+                            : AppDimens.space24,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

@@ -91,6 +91,14 @@ class _FilesScreenState extends State<FilesScreen> {
   bool _dragSelecting = false;
   int? _dragAnchorIndex;
   Set<String> _dragBaseSelection = const <String>{};
+
+  /// Keeps a range drag alive when the pointer reaches the viewport edge.
+  /// Flutter owns the frame loop and clamps at both scroll extents, so this is
+  /// interruptible the instant the pointer moves away or the drag ends.
+  EdgeDraggingAutoScroller? _selectionAutoScroller;
+  static const double _autoScrollEdge = AppDimens.space48;
+  static const double _autoScrollVelocity = 24;
+
   int _keyboardAnchorIndex = 0;
   int _keyboardExtentIndex = 0;
   bool _dropHovering = false;
@@ -113,6 +121,12 @@ class _FilesScreenState extends State<FilesScreen> {
     load();
     final intent = widget.intent;
     if (intent != null) _scheduleIntent(intent);
+  }
+
+  @override
+  void dispose() {
+    _selectionAutoScroller?.stopAutoScroll();
+    super.dispose();
   }
 
   @override
@@ -496,11 +510,8 @@ class _FilesScreenState extends State<FilesScreen> {
   void _onPointerMove(PointerMoveEvent event) {
     _lastPointerPosition = event.position;
     if (!_dragSelecting || event.pointer != _activePointer) return;
-    final path = _pathAtPosition(event.position);
-    if (path == null) return;
-    final visible = _visibleItems;
-    final index = visible.indexWhere((entry) => entry.path == path);
-    if (index >= 0) _selectRangeTo(index);
+    _selectAtLastPointer();
+    _updateSelectionAutoScroll(event.position);
   }
 
   void _onPointerUp(PointerEvent event) {
@@ -510,9 +521,62 @@ class _FilesScreenState extends State<FilesScreen> {
     _dragSelecting = false;
     _dragAnchorIndex = null;
     _dragBaseSelection = const <String>{};
+    _selectionAutoScroller?.stopAutoScroll();
+  }
+
+  /// Applies the visible range at the last known pointer position. Reused by
+  /// the auto-scroller so content moving under a still finger keeps selecting.
+  void _selectAtLastPointer() {
+    if (!mounted || !_dragSelecting) return;
+    final position = _lastPointerPosition;
+    if (position == null) return;
+    final path = _pathAtPosition(position);
+    if (path == null) return;
+    final index = _visibleItems.indexWhere((entry) => entry.path == path);
+    if (index >= 0) _selectRangeTo(index);
+  }
+
+  void _updateSelectionAutoScroll(Offset position) {
+    if (!_dragSelecting || !mounted) return;
+    final scroller = _selectionAutoScroller;
+    if (scroller != null && !scroller.scrollable.mounted) {
+      _selectionAutoScroller = null;
+      return;
+    }
+    scroller?.startAutoScrollIfNecessary(
+      Rect.fromCircle(center: position, radius: _autoScrollEdge),
+    );
+  }
+
+  void _bindSelectionAutoScroll(String path, Offset position) {
+    if (!mounted) return;
+    final scrollable = _keyForFileCell(path, grid: _grid)
+        .currentContext
+        ?.findAncestorStateOfType<ScrollableState>();
+    if (scrollable == null || !scrollable.mounted) return;
+    final existing = _selectionAutoScroller;
+    if (existing?.scrollable == scrollable) {
+      _updateSelectionAutoScroll(position);
+      return;
+    }
+    existing?.stopAutoScroll();
+    _selectionAutoScroller = EdgeDraggingAutoScroller(
+      scrollable,
+      velocityScalar: _autoScrollVelocity,
+      onScrollViewScrolled: () {
+        _selectAtLastPointer();
+        // Keep the cached drag target in screen space while the finger rests
+        // at the edge; otherwise the helper stops after one increment.
+        final position = _lastPointerPosition;
+        if (position != null) _updateSelectionAutoScroll(position);
+      },
+    );
+    _updateSelectionAutoScroll(position);
   }
 
   void _onScaleStart(ScaleStartDetails details) {
+    // Cheap early capture when the recognizer happens to accept with two
+    // fingers. The common one-finger accept is handled lazily in _onScaleUpdate.
     if (details.pointerCount == 2) {
       // Density is a grid concept; make the pinch visible even when the user
       // is currently in the compact list.
@@ -522,8 +586,16 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details) {
-    final base = _pinchBaseColumns;
-    if (base == null || details.pointerCount < 2) return;
+    if (details.pointerCount < 2 || _dragSelecting) return;
+    var base = _pinchBaseColumns;
+    if (base == null) {
+      // Density is a grid concept; make the pinch visible even when the user
+      // starts from the compact list. Switch before capturing the base so the
+      // list -> grid transition is part of the same gesture.
+      if (!_grid) setState(() => _grid = true);
+      base = _gridColumns.toDouble();
+      _pinchBaseColumns = base;
+    }
     if (!base.isFinite || base <= 0) return;
     final scale = details.scale;
     // Interactive pinching is inverted relative to layout density: fingers
@@ -581,6 +653,16 @@ class _FilesScreenState extends State<FilesScreen> {
     }
     _dragAnchorIndex = anchor;
     _dragSelecting = true;
+    final pointer = _lastPointerPosition;
+    final activePointer = _activePointer;
+    if (pointer != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_dragSelecting || _activePointer != activePointer) {
+          return;
+        }
+        _bindSelectionAutoScroll(path, pointer);
+      });
+    }
     final hit = _pathAtPosition(_lastPointerPosition ?? Offset.zero);
     final target =
         hit == null ? anchor : visible.indexWhere((entry) => entry.path == hit);
@@ -1091,140 +1173,147 @@ class _FilesScreenState extends State<FilesScreen> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _handleBack();
       },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _ViewArea(
-            title: crumb,
-            subtitle: subtitle,
-            selecting: _selecting,
-            selectedCount: _selected.length,
-            accent: accent,
-            onBackToRoot: _path.isEmpty
-                ? null
-                : () {
-                    setState(() => _path = '');
-                    load();
-                  },
-            onExitSelection: _exitSelection,
-            onToggleView: () => setState(() => _grid = !_grid),
-            isGrid: _grid,
-            gridColumns: _gridColumns,
-            onLayout: _showGridLayoutPicker,
-            onNewFolder: _selecting ? null : _createFolder,
-            onUpload: _selecting ? null : _pickAndUpload,
-            onUploadFolder: _selecting ? null : _pickAndUploadFolder,
-            onSearch: _selecting
-                ? null
-                : (query) => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => SearchScreen(
-                          api: widget.api,
-                          initialQuery: query,
+      // Track the whole page so a drag that ends over the contextual bar still
+      // stops edge auto-scroll.
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: _onPointerDown,
+        onPointerMove: _onPointerMove,
+        onPointerUp: _onPointerUp,
+        onPointerCancel: _onPointerUp,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _ViewArea(
+              title: crumb,
+              subtitle: subtitle,
+              selecting: _selecting,
+              selectedCount: _selected.length,
+              accent: accent,
+              onBackToRoot: _path.isEmpty
+                  ? null
+                  : () {
+                      setState(() => _path = '');
+                      load();
+                    },
+              onExitSelection: _exitSelection,
+              onToggleView: () => setState(() => _grid = !_grid),
+              isGrid: _grid,
+              gridColumns: _gridColumns,
+              onLayout: _showGridLayoutPicker,
+              onNewFolder: _selecting ? null : _createFolder,
+              onUpload: _selecting ? null : _pickAndUpload,
+              onUploadFolder: _selecting ? null : _pickAndUploadFolder,
+              onSearch: _selecting
+                  ? null
+                  : (query) => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => SearchScreen(
+                            api: widget.api,
+                            initialQuery: query,
+                          ),
                         ),
                       ),
-                    ),
-            onSort: _selecting ? null : _pickSort,
-            onRefresh: load,
-            onScan: _selecting
-                ? null
-                : () => Navigator.of(context)
-                        .push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            ScannerScreen(api: widget.api, folder: _path),
-                      ),
-                    )
-                        .then((saved) {
-                      if (saved == true) load();
-                    }),
-          ),
-          NexaRevealBar(
-            // The path is always readable, even one level down, so navigation
-            // never depends on remembering what the header title means.
-            visible: !_selecting && _path.isNotEmpty,
-            alignment: Alignment.topLeft,
-            child: _Breadcrumb(
-              path: _path,
-              accent: accent,
-              onBreadcrumb: (p) {
-                setState(() => _path = p);
-                load();
-              },
+              onSort: _selecting ? null : _pickSort,
+              onRefresh: load,
+              onScan: _selecting
+                  ? null
+                  : () => Navigator.of(context)
+                          .push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ScannerScreen(api: widget.api, folder: _path),
+                        ),
+                      )
+                          .then((saved) {
+                        if (saved == true) load();
+                      }),
             ),
-          ),
-          NexaRevealBar(
-            visible:
-                !_selecting && !_loading && _error == null && _items.isNotEmpty,
-            alignment: Alignment.topLeft,
-            child: _FileFilterBar(
-              selected: _filter,
-              folderCount: _folderCount,
-              fileCount: _fileCount,
-              onChanged: (value) => setState(() => _filter = value),
-            ),
-          ),
-          Expanded(
-            child: Focus(
-              autofocus: true,
-              child: CallbackShortcuts(
-                bindings: {
-                  SingleActivator(
-                    LogicalKeyboardKey.keyA,
-                    control: true,
-                  ): _selectAllVisible,
-                  SingleActivator(
-                    LogicalKeyboardKey.keyA,
-                    meta: true,
-                  ): _selectAllVisible,
-                  SingleActivator(LogicalKeyboardKey.escape): () {
-                    if (!_shortcutsBlocked() && _selecting) _exitSelection();
-                  },
-                  SingleActivator(LogicalKeyboardKey.arrowDown): () =>
-                      _moveKeyboardSelection(_verticalStep, extend: false),
-                  SingleActivator(
-                    LogicalKeyboardKey.arrowDown,
-                    shift: true,
-                  ): () => _moveKeyboardSelection(_verticalStep, extend: true),
-                  SingleActivator(LogicalKeyboardKey.arrowUp): () =>
-                      _moveKeyboardSelection(-_verticalStep, extend: false),
-                  SingleActivator(
-                    LogicalKeyboardKey.arrowUp,
-                    shift: true,
-                  ): () => _moveKeyboardSelection(-_verticalStep, extend: true),
-                  SingleActivator(LogicalKeyboardKey.arrowRight): () =>
-                      _moveKeyboardSelection(1, extend: false),
-                  SingleActivator(
-                    LogicalKeyboardKey.arrowRight,
-                    shift: true,
-                  ): () => _moveKeyboardSelection(1, extend: true),
-                  SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
-                      _moveKeyboardSelection(-1, extend: false),
-                  SingleActivator(
-                    LogicalKeyboardKey.arrowLeft,
-                    shift: true,
-                  ): () => _moveKeyboardSelection(-1, extend: true),
+            NexaRevealBar(
+              // The path is always readable, even one level down, so navigation
+              // never depends on remembering what the header title means.
+              visible: !_selecting && _path.isNotEmpty,
+              alignment: Alignment.topLeft,
+              child: _Breadcrumb(
+                path: _path,
+                accent: accent,
+                onBreadcrumb: (p) {
+                  setState(() => _path = p);
+                  load();
                 },
-                child: DropTarget(
-                  enable: !_selecting,
-                  onDragEntered: (_) => setState(() => _dropHovering = true),
-                  onDragExited: (_) => setState(() => _dropHovering = false),
-                  onDragDone: (details) {
-                    setState(() => _dropHovering = false);
-                    unawaited(_handleDroppedFiles(details.files));
+              ),
+            ),
+            NexaRevealBar(
+              visible: !_selecting &&
+                  !_loading &&
+                  _error == null &&
+                  _items.isNotEmpty,
+              alignment: Alignment.topLeft,
+              child: _FileFilterBar(
+                selected: _filter,
+                folderCount: _folderCount,
+                fileCount: _fileCount,
+                onChanged: (value) => setState(() => _filter = value),
+              ),
+            ),
+            Expanded(
+              child: Focus(
+                autofocus: true,
+                child: CallbackShortcuts(
+                  bindings: {
+                    SingleActivator(
+                      LogicalKeyboardKey.keyA,
+                      control: true,
+                    ): _selectAllVisible,
+                    SingleActivator(
+                      LogicalKeyboardKey.keyA,
+                      meta: true,
+                    ): _selectAllVisible,
+                    SingleActivator(LogicalKeyboardKey.escape): () {
+                      if (!_shortcutsBlocked() && _selecting) _exitSelection();
+                    },
+                    SingleActivator(LogicalKeyboardKey.arrowDown): () =>
+                        _moveKeyboardSelection(_verticalStep, extend: false),
+                    SingleActivator(
+                      LogicalKeyboardKey.arrowDown,
+                      shift: true,
+                    ): () =>
+                        _moveKeyboardSelection(_verticalStep, extend: true),
+                    SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+                        _moveKeyboardSelection(-_verticalStep, extend: false),
+                    SingleActivator(
+                      LogicalKeyboardKey.arrowUp,
+                      shift: true,
+                    ): () =>
+                        _moveKeyboardSelection(-_verticalStep, extend: true),
+                    SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+                        _moveKeyboardSelection(1, extend: false),
+                    SingleActivator(
+                      LogicalKeyboardKey.arrowRight,
+                      shift: true,
+                    ): () => _moveKeyboardSelection(1, extend: true),
+                    SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+                        _moveKeyboardSelection(-1, extend: false),
+                    SingleActivator(
+                      LogicalKeyboardKey.arrowLeft,
+                      shift: true,
+                    ): () => _moveKeyboardSelection(-1, extend: true),
                   },
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: GestureDetector(
-                          onScaleStart: _onScaleStart,
-                          onScaleUpdate: _onScaleUpdate,
-                          onScaleEnd: _onScaleEnd,
-                          child: Listener(
-                            onPointerDown: _onPointerDown,
-                            onPointerMove: _onPointerMove,
-                            onPointerUp: _onPointerUp,
-                            onPointerCancel: _onPointerUp,
+                  child: DropTarget(
+                    enable: !_selecting,
+                    onDragEntered: (_) => setState(() => _dropHovering = true),
+                    onDragExited: (_) => setState(() => _dropHovering = false),
+                    onDragDone: (details) {
+                      setState(() => _dropHovering = false);
+                      unawaited(_handleDroppedFiles(details.files));
+                    },
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: GestureDetector(
+                            onScaleStart: _onScaleStart,
+                            onScaleUpdate: _onScaleUpdate,
+                            onScaleEnd: _onScaleEnd,
                             child: NotificationListener<ScrollNotification>(
                               onNotification: (_) {
                                 _pruneFileCellKeys();
@@ -1234,136 +1323,139 @@ class _FilesScreenState extends State<FilesScreen> {
                             ),
                           ),
                         ),
-                      ),
-                      if (_hoveredEntry != null &&
-                          !_dropHovering &&
-                          MediaQuery.sizeOf(context).width >= 900)
-                        Positioned(
-                          right: AppDimens.space16,
-                          top: AppDimens.space16,
-                          child: IgnorePointer(
-                            child: _HoverPreview(
-                              entry: _hoveredEntry!,
-                              thumbnail: _thumbFor(_hoveredEntry!),
+                        if (_hoveredEntry != null &&
+                            !_dropHovering &&
+                            MediaQuery.sizeOf(context).width >= 900)
+                          Positioned(
+                            right: AppDimens.space16,
+                            top: AppDimens.space16,
+                            child: IgnorePointer(
+                              child: _HoverPreview(
+                                entry: _hoveredEntry!,
+                                thumbnail: _thumbFor(_hoveredEntry!),
+                              ),
                             ),
                           ),
-                        ),
-                      if (_dropHovering)
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: Padding(
-                              padding: const EdgeInsets.all(AppDimens.space16),
-                              child: NexaSurface(
-                                level: NexaSurfaceLevel.floating,
-                                radius: AppDimens.radiusMedium,
-                                child: Center(
-                                  child: Semantics(
-                                    label: 'Drop files to upload',
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(
-                                          Icons.cloud_upload_outlined,
-                                        ),
-                                        const SizedBox(
-                                          width: AppDimens.space12,
-                                        ),
-                                        Flexible(
-                                          child: Text(
-                                            'Drop to upload to ${_path.isEmpty ? 'My files' : _path}',
-                                            style: AppTextStyle.titleSmall,
-                                            overflow: TextOverflow.ellipsis,
+                        if (_dropHovering)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.all(AppDimens.space16),
+                                child: NexaSurface(
+                                  level: NexaSurfaceLevel.floating,
+                                  radius: AppDimens.radiusMedium,
+                                  child: Center(
+                                    child: Semantics(
+                                      label: 'Drop files to upload',
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.cloud_upload_outlined,
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(
+                                            width: AppDimens.space12,
+                                          ),
+                                          Flexible(
+                                            child: Text(
+                                              'Drop to upload to ${_path.isEmpty ? 'My files' : _path}',
+                                              style: AppTextStyle.titleSmall,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          NexaRevealBar(
-            visible: _selecting,
-            child: NexaActionBar(
-              aboveFloatingNav: true,
-              leading: IconButton(
-                tooltip: 'Cancel selection',
-                onPressed: _exitSelection,
-                icon: const Icon(Icons.close_rounded),
-              ),
-              title: Format.count(_selected.length, 'item'),
-              titleWidget: AnimatedSwitcher(
-                duration: AppMotion.resolve(context, AppMotion.fast),
-                switchInCurve: AppMotion.curveFor(context, AppMotion.standard),
-                switchOutCurve: AppMotion.curveFor(context, AppMotion.standard),
-                child: Text(
-                  Format.count(_selected.length, 'item'),
-                  key: ValueKey(_selected.length),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyle.titleMedium.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface,
+            NexaRevealBar(
+              visible: _selecting,
+              child: NexaActionBar(
+                aboveFloatingNav: true,
+                leading: IconButton(
+                  tooltip: 'Cancel selection',
+                  onPressed: _exitSelection,
+                  icon: const Icon(Icons.close_rounded),
+                ),
+                title: Format.count(_selected.length, 'item'),
+                titleWidget: AnimatedSwitcher(
+                  duration: AppMotion.resolve(context, AppMotion.fast),
+                  switchInCurve:
+                      AppMotion.curveFor(context, AppMotion.standard),
+                  switchOutCurve:
+                      AppMotion.curveFor(context, AppMotion.standard),
+                  child: Text(
+                    Format.count(_selected.length, 'item'),
+                    key: ValueKey(_selected.length),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyle.titleMedium.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
                 ),
+                actions: [
+                  NexaActionItem(
+                    icon: _visibleItems.isNotEmpty &&
+                            _visibleItems.every(
+                              (entry) => _selected.contains(entry.path),
+                            )
+                        ? Icons.deselect_rounded
+                        : Icons.select_all_rounded,
+                    label: _visibleItems.isNotEmpty &&
+                            _visibleItems.every(
+                              (entry) => _selected.contains(entry.path),
+                            )
+                        ? 'Clear'
+                        : 'Select all',
+                    onTap: _toggleSelectAll,
+                  ),
+                  NexaActionItem(
+                    icon: Icons.playlist_add_rounded,
+                    label: 'From here',
+                    onTap: _selectAllFromHere,
+                  ),
+                  NexaActionItem(
+                    icon: Icons.delete_outline_rounded,
+                    label: 'Trash',
+                    color: Theme.of(context).colorScheme.error,
+                    onTap: () => _deleteItems(),
+                  ),
+                  NexaActionItem(
+                    icon: Icons.drive_file_move_outlined,
+                    label: 'Move',
+                    onTap: () => _moveItems(),
+                  ),
+                  NexaActionItem(
+                    icon: Icons.copy_rounded,
+                    label: 'Copy',
+                    onTap: () => _copyItems(),
+                  ),
+                  NexaActionItem(
+                    icon: Icons.share_outlined,
+                    label: 'Share',
+                    onTap: () => _shareSelected(),
+                  ),
+                  NexaActionItem(
+                    icon: Icons.download_outlined,
+                    label: 'Save',
+                    onTap: () => _downloadSelected(),
+                  ),
+                ],
               ),
-              actions: [
-                NexaActionItem(
-                  icon: _visibleItems.isNotEmpty &&
-                          _visibleItems.every(
-                            (entry) => _selected.contains(entry.path),
-                          )
-                      ? Icons.deselect_rounded
-                      : Icons.select_all_rounded,
-                  label: _visibleItems.isNotEmpty &&
-                          _visibleItems.every(
-                            (entry) => _selected.contains(entry.path),
-                          )
-                      ? 'Clear'
-                      : 'Select all',
-                  onTap: _toggleSelectAll,
-                ),
-                NexaActionItem(
-                  icon: Icons.playlist_add_rounded,
-                  label: 'From here',
-                  onTap: _selectAllFromHere,
-                ),
-                NexaActionItem(
-                  icon: Icons.delete_outline_rounded,
-                  label: 'Trash',
-                  color: Theme.of(context).colorScheme.error,
-                  onTap: () => _deleteItems(),
-                ),
-                NexaActionItem(
-                  icon: Icons.drive_file_move_outlined,
-                  label: 'Move',
-                  onTap: () => _moveItems(),
-                ),
-                NexaActionItem(
-                  icon: Icons.copy_rounded,
-                  label: 'Copy',
-                  onTap: () => _copyItems(),
-                ),
-                NexaActionItem(
-                  icon: Icons.share_outlined,
-                  label: 'Share',
-                  onTap: () => _shareSelected(),
-                ),
-                NexaActionItem(
-                  icon: Icons.download_outlined,
-                  label: 'Save',
-                  onTap: () => _downloadSelected(),
-                ),
-              ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
