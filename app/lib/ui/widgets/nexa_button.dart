@@ -55,7 +55,9 @@ class NexaFilledButton extends StatelessWidget {
             Size(fullWidth ? double.infinity : 64, AppDimens.touchTarget),
         padding: padding ??
             const EdgeInsets.symmetric(horizontal: AppDimens.space24),
-        shape: const StadiumBorder(),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+        ),
         textStyle: AppTextStyle.labelLarge,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
@@ -111,7 +113,9 @@ class NexaOutlinedButton extends StatelessWidget {
             Size(fullWidth ? double.infinity : 64, AppDimens.touchTarget),
         padding: padding ??
             const EdgeInsets.symmetric(horizontal: AppDimens.space24),
-        shape: const StadiumBorder(),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+        ),
         textStyle: AppTextStyle.labelLarge,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
@@ -163,7 +167,9 @@ class NexaTextButton extends StatelessWidget {
               horizontal: AppDimens.space16,
               vertical: AppDimens.space8,
             ),
-        shape: const StadiumBorder(),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+        ),
         textStyle: AppTextStyle.labelLarge,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
@@ -201,7 +207,9 @@ class NexaDestructiveButton extends StatelessWidget {
           AppDimens.touchTarget,
         ),
         padding: const EdgeInsets.symmetric(horizontal: AppDimens.space24),
-        shape: const StadiumBorder(),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
+        ),
         textStyle: AppTextStyle.labelLarge,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),

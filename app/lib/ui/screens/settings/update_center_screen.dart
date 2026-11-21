@@ -8,6 +8,7 @@ import '../../../core/design/app_typography.dart';
 import '../../../update/app_platform.dart';
 import '../../../update/update_controller.dart';
 import '../../widgets/nexa_page.dart';
+import '../../widgets/nexa_surface.dart';
 
 /// The Update Center, rebuilt from scratch.
 ///
@@ -144,49 +145,43 @@ class _VersionPanel extends StatelessWidget {
         status == UpdateStatus.downloading ||
         status == UpdateStatus.verifying;
 
-    return Card(
-      color: scheme.surfaceContainerLow,
-      surfaceTintColor: Colors.transparent,
-      elevation: AppDimens.elevationSubtle,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppDimens.radiusCard),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.space20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                _StatusBadge(icon: icon, tone: tone),
-                const SizedBox(width: AppDimens.space12),
-                Expanded(
-                  child: Text(
-                    headline,
-                    style: AppTextStyle.titleMedium.copyWith(
-                      color: scheme.onSurface,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
+      radius: AppDimens.radiusCard,
+      padding: const EdgeInsets.all(AppDimens.space20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _StatusBadge(icon: icon, tone: tone),
+              const SizedBox(width: AppDimens.space12),
+              Expanded(
+                child: Text(
+                  headline,
+                  style: AppTextStyle.titleMedium.copyWith(
+                    color: scheme.onSurface,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
-            const SizedBox(height: AppDimens.space16),
-            _VersionLine(controller: controller, status: status),
-            AnimatedSize(
-              duration: AppMotion.resolve(context, AppMotion.fast),
-              curve: AppMotion.curveFor(context, AppMotion.standard),
-              alignment: Alignment.topCenter,
-              child: working || status == UpdateStatus.paused
-                  ? _ProgressBar(
-                      controller: controller,
-                      color: _statusForeground(context, tone),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimens.space16),
+          _VersionLine(controller: controller, status: status),
+          AnimatedSize(
+            duration: AppMotion.resolve(context, AppMotion.fast),
+            curve: AppMotion.curveFor(context, AppMotion.standard),
+            alignment: Alignment.topCenter,
+            child: working || status == UpdateStatus.paused
+                ? _ProgressBar(
+                    controller: controller,
+                    color: _statusForeground(context, tone),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
       ),
     );
   }
@@ -1014,15 +1009,10 @@ class _Section extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    return Container(
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
+      radius: AppDimens.radiusCard,
       padding: const EdgeInsets.all(AppDimens.space16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceFor(brightness),
-        borderRadius: BorderRadius.circular(AppDimens.radiusCard),
-        border: brightness == Brightness.dark
-            ? Border.all(color: AppColors.separatorFor(brightness))
-            : null,
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

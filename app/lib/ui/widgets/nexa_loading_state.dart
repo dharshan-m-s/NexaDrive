@@ -121,12 +121,17 @@ class NexaSkeletonList extends StatelessWidget {
   final bool showLeading;
   final bool showTrailing;
 
+  /// Bottom scroll clearance, so the last skeleton row never hides behind the
+  /// floating navigation pill.
+  final EdgeInsetsGeometry padding;
+
   const NexaSkeletonList({
     super.key,
     this.itemCount = 5,
     this.height = AppDimens.listHeightLarge,
     this.showLeading = true,
     this.showTrailing = false,
+    this.padding = EdgeInsets.zero,
   });
 
   @override
@@ -138,6 +143,7 @@ class NexaSkeletonList extends StatelessWidget {
     );
 
     return ListView.builder(
+      padding: padding,
       itemCount: itemCount,
       itemBuilder: (context, index) => _SkeletonItem(
         height: height,

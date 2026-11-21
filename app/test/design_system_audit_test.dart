@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nexadrive/core/design/app_colors.dart';
 import 'package:nexadrive/core/design/app_dimensions.dart';
 import 'package:nexadrive/core/design/app_motion.dart';
+import 'package:nexadrive/core/design/app_shadows.dart';
 import 'package:nexadrive/core/design/app_theme.dart';
 import 'package:nexadrive/core/design/app_typography.dart';
 import 'package:nexadrive/core/design/nexa_surfaces.dart';
@@ -198,6 +199,22 @@ void main() {
           reason: 'the page must continue behind the floating pill');
       expect(page.bottom, greaterThan(capsule.top),
           reason: 'the pill overlays the page instead of reserving a sheet');
+    });
+
+    testWidgets('the tonal pill carries a restrained token-backed shadow',
+        (tester) async {
+      await pumpShell(tester);
+      final decorated = tester.widget<DecoratedBox>(
+        find
+            .descendant(
+              of: find.byType(NexaBottomNav),
+              matching: find.byType(DecoratedBox),
+            )
+            .first,
+      );
+      final decoration = decorated.decoration as BoxDecoration;
+      expect(decoration.boxShadow, AppShadows.level2(Brightness.light));
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('last scroll item can be reached above the floating pill',

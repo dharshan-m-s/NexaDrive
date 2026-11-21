@@ -43,7 +43,10 @@ class FileShareSheet extends StatefulWidget {
 class _FileShareSheetState extends State<FileShareSheet> {
   String _permission = 'view';
   bool _busy = false;
-  int _createdCount = 0;
+
+  /// Attempts completed, including failures. The progress bar must never claim
+  /// that every attempted link was created.
+  int _processedCount = 0;
   final List<_ShareLink> _links = <_ShareLink>[];
   final Map<String, String> _failures = <String, String>{};
   String? _error;
@@ -79,7 +82,7 @@ class _FileShareSheetState extends State<FileShareSheet> {
     setState(() {
       _busy = true;
       _error = null;
-      _createdCount = 0;
+      _processedCount = 0;
       _links.clear();
       _failures.clear();
     });
@@ -118,7 +121,7 @@ class _FileShareSheetState extends State<FileShareSheet> {
         _failures[file.name] = e.toString();
       }
       if (!mounted) return;
-      setState(() => _createdCount++);
+      setState(() => _processedCount++);
     }
     if (!mounted) return;
     setState(() => _busy = false);
@@ -310,16 +313,16 @@ class _FileShareSheetState extends State<FileShareSheet> {
                   ),
                 ),
               ],
-              if (_busy && _createdCount > 0) ...[
+              if (_busy && _processedCount > 0) ...[
                 const SizedBox(height: AppDimens.space16),
                 LinearProgressIndicator(
                   value: widget.files.isEmpty
                       ? null
-                      : _createdCount / widget.files.length,
+                      : _processedCount / widget.files.length,
                 ),
                 const SizedBox(height: AppDimens.space8),
                 Text(
-                  'Creating links… ($_createdCount of ${widget.files.length})',
+                  'Sharing files… ($_processedCount of ${widget.files.length})',
                   style: AppTextStyle.bodySmall.copyWith(color: secondary),
                 ),
               ],

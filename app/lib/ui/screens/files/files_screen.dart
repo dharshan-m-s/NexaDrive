@@ -1066,8 +1066,13 @@ class _FilesScreenState extends State<FilesScreen> {
                   : 'content:${_grid ? 'grid' : 'list'}:${_filter.name}';
 
   Widget _buildBody() {
+    // The shell already publishes pill-inclusive clearance through MediaQuery.
+    // Adding the pill height again left a dead strip between the last row and
+    // the navigation. Standalone windows still get a calm minimum gutter.
     final bottomClearance = MediaQuery.paddingOf(context).bottom;
-    final bottomPadding = bottomClearance + AppDimens.bottomNavHeight;
+    final bottomPadding = bottomClearance > AppDimens.space24
+        ? bottomClearance
+        : AppDimens.space24;
 
     if (_loading) {
       return NexaSkeletonList(
@@ -1075,6 +1080,7 @@ class _FilesScreenState extends State<FilesScreen> {
         height: AppDimens.listHeightHero,
         showLeading: true,
         showTrailing: true,
+        padding: EdgeInsets.only(bottom: bottomPadding),
       );
     }
 

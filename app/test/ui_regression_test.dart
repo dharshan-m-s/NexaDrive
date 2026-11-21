@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:nexadrive/core/design/app_colors.dart';
@@ -275,6 +276,22 @@ void main() {
       // The floating navigation remains mounted beneath the menu.
       expect(find.text('Home'), findsOneWidget);
       expect(find.text('Files'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Escape dismisses the modal More menu', (tester) async {
+      final api = shellApi();
+      await pumpShell(tester, api);
+
+      await tester.tap(find.text('More'));
+      await tester.pumpAndSettle();
+      expect(find.text('Scan'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Scan'), findsNothing);
+      expect(find.text('Home'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

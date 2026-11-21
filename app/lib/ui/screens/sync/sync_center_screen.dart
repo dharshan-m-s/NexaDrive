@@ -54,46 +54,54 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
       _loadError = null;
     });
     final manager = SyncManager(widget.api);
+
+    String? folder;
+    List<Map<String, String>> androidFolders = <Map<String, String>>[];
+    DateTime? lastSync;
+    String? deviceId;
+    var conflicts = 0;
+    List<Map<String, dynamic>> devices = <Map<String, dynamic>>[];
+    Object? localError;
+    Object? deviceError;
+
+    // Local state and server state are independent: a failed device list must
+    // never blank the screen, and a failed local read must never leave the page
+    // spinning forever because the fallback read failed a second time.
     try {
-      final folder = await manager.folder();
-      final androidFolders = Platform.isAndroid
-          ? await manager.androidFolders()
-          : <Map<String, String>>[];
-      final lastSync = await manager.lastSyncAt();
-      final deviceId = await manager.deviceId();
-      final conflicts = await manager.conflictCount();
-      final devices = await widget.api.syncDevices();
-      if (!mounted) return;
-      setState(() {
-        _folderPath = folder;
-        _androidFolders = androidFolders;
-        _lastSyncAt = lastSync;
-        _thisDeviceId = deviceId;
-        _conflicts = conflicts;
-        _devices = devices;
-        _loading = false;
-      });
+      folder = await manager.folder();
+      if (Platform.isAndroid) androidFolders = await manager.androidFolders();
+      lastSync = await manager.lastSyncAt();
+      deviceId = await manager.deviceId();
+      conflicts = await manager.conflictCount();
     } catch (e) {
-      // Local state still renders even when the device list cannot be fetched,
-      // so a network blip never blanks the whole screen.
-      final folder = await manager.folder();
-      final androidFolders = Platform.isAndroid
-          ? await manager.androidFolders()
-          : <Map<String, String>>[];
-      final lastSync = await manager.lastSyncAt();
-      final deviceId = await manager.deviceId();
-      if (!mounted) return;
-      setState(() {
-        _folderPath = folder;
-        _androidFolders = androidFolders;
-        _lastSyncAt = lastSync;
-        _thisDeviceId = deviceId;
-        _loading = false;
-        _loadError = e is ApiException
-            ? e.message
-            : 'The linked device list could not be loaded.';
-      });
+      localError = e;
     }
+    try {
+      devices = await widget.api.syncDevices();
+    } catch (e) {
+      deviceError = e;
+    }
+
+    String? loadError;
+    if (localError != null) {
+      loadError = 'Local sync settings could not be loaded.';
+    } else if (deviceError != null) {
+      loadError = deviceError is ApiException
+          ? deviceError.message
+          : 'The linked device list could not be loaded.';
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _folderPath = folder;
+      _androidFolders = androidFolders;
+      _lastSyncAt = lastSync;
+      _thisDeviceId = deviceId;
+      _conflicts = conflicts;
+      _devices = devices;
+      _loading = false;
+      _loadError = loadError;
+    });
   }
 
   Future<void> _chooseFolder() async {
@@ -353,7 +361,9 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
         SnackBar(
           content: Text(message),
           behavior: SnackBarBehavior.floating,
-          shape: const StadiumBorder(),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+          ),
         ),
       );
   }
@@ -599,59 +609,56 @@ class _StatusCard extends StatelessWidget {
         ),
     };
 
-    return Card(
-      color: scheme.surfaceContainerLow,
-      elevation: AppDimens.elevationLevel1,
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.space20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: AppDimens.iconTile,
-                  height: AppDimens.iconTile,
-                  decoration: BoxDecoration(
-                    color: container,
-                    borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
-                  ),
-                  child: Icon(icon, color: tint),
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
+      padding: const EdgeInsets.all(AppDimens.space20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: AppDimens.iconTile,
+                height: AppDimens.iconTile,
+                decoration: BoxDecoration(
+                  color: container,
+                  borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
                 ),
-                const SizedBox(width: AppDimens.space16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: AppTextStyle.titleMedium.copyWith(
-                          color: scheme.onSurface,
-                        ),
+                child: Icon(icon, color: tint),
+              ),
+              const SizedBox(width: AppDimens.space16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTextStyle.titleMedium.copyWith(
+                        color: scheme.onSurface,
                       ),
-                      const SizedBox(height: AppDimens.space4),
-                      Text(
-                        body,
-                        style: AppTextStyle.bodyMedium.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
+                    ),
+                    const SizedBox(height: AppDimens.space4),
+                    Text(
+                      body,
+                      style: AppTextStyle.bodyMedium.copyWith(
+                        color: scheme.onSurfaceVariant,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            if (enabled) ...[
-              const SizedBox(height: AppDimens.space16),
-              LinearProgressIndicator(
-                minHeight: AppDimens.space4,
-                backgroundColor: scheme.primaryContainer,
-                color: scheme.primary,
               ),
             ],
+          ),
+          if (enabled) ...[
+            const SizedBox(height: AppDimens.space16),
+            LinearProgressIndicator(
+              minHeight: AppDimens.space4,
+              backgroundColor: scheme.primaryContainer,
+              color: scheme.primary,
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -671,71 +678,68 @@ class _AndroidFoldersCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
-      color: scheme.surfaceContainerLow,
-      elevation: AppDimens.elevationLevel1,
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.space16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (folders.isEmpty)
-              Text(
-                'No phone folders selected yet',
-                style: AppTextStyle.bodyMedium.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              )
-            else
-              for (final folder in folders) ...[
-                Row(
-                  children: [
-                    NexaFileGlyph.folder(size: AppDimens.iconLarge),
-                    const SizedBox(width: AppDimens.space12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            folder['name'] ?? 'Phone folder',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyle.titleMedium.copyWith(
-                              color: scheme.onSurface,
-                            ),
-                          ),
-                          Text(
-                            'Saved to My Files/${folder['remoteName'] ?? folder['name']}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyle.bodySmall.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Remove folder',
-                      onPressed: () => onRemove(folder),
-                      icon: const Icon(Icons.remove_circle_outline_rounded),
-                    ),
-                  ],
-                ),
-                if (folder != folders.last)
-                  const Divider(height: AppDimens.space20),
-              ],
-            const SizedBox(height: AppDimens.space12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: onChoose,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Add another folder'),
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
+      padding: const EdgeInsets.all(AppDimens.space16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (folders.isEmpty)
+            Text(
+              'No phone folders selected yet',
+              style: AppTextStyle.bodyMedium.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
+            )
+          else
+            for (final folder in folders) ...[
+              Row(
+                children: [
+                  NexaFileGlyph.folder(size: AppDimens.iconLarge),
+                  const SizedBox(width: AppDimens.space12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          folder['name'] ?? 'Phone folder',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyle.titleMedium.copyWith(
+                            color: scheme.onSurface,
+                          ),
+                        ),
+                        Text(
+                          'Saved to My Files/${folder['remoteName'] ?? folder['name']}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyle.bodySmall.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Remove folder',
+                    onPressed: () => onRemove(folder),
+                    icon: const Icon(Icons.remove_circle_outline_rounded),
+                  ),
+                ],
+              ),
+              if (folder != folders.last)
+                const Divider(height: AppDimens.space20),
+            ],
+          const SizedBox(height: AppDimens.space12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onChoose,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add another folder'),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -755,46 +759,42 @@ class _FolderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
-      color: scheme.surfaceContainerLow,
-      elevation: AppDimens.elevationLevel1,
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.space16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              folder ?? 'No folder selected',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyle.titleMedium.copyWith(
-                color:
-                    folder == null ? scheme.onSurfaceVariant : scheme.onSurface,
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
+      padding: const EdgeInsets.all(AppDimens.space16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            folder ?? 'No folder selected',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyle.titleMedium.copyWith(
+              color:
+                  folder == null ? scheme.onSurfaceVariant : scheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: AppDimens.space12),
+          Wrap(
+            spacing: AppDimens.space8,
+            runSpacing: AppDimens.space4,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onChoose,
+                icon: const Icon(Icons.folder_open_rounded,
+                    size: AppDimens.iconSmall),
+                label: Text(folder == null ? 'Choose folder' : 'Change folder'),
               ),
-            ),
-            const SizedBox(height: AppDimens.space12),
-            Wrap(
-              spacing: AppDimens.space8,
-              runSpacing: AppDimens.space4,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: onChoose,
-                  icon: const Icon(Icons.folder_open_rounded,
+              if (folder != null)
+                TextButton.icon(
+                  onPressed: onClear,
+                  icon: const Icon(Icons.link_off_rounded,
                       size: AppDimens.iconSmall),
-                  label:
-                      Text(folder == null ? 'Choose folder' : 'Change folder'),
+                  label: const Text('Stop syncing'),
                 ),
-                if (folder != null)
-                  TextButton.icon(
-                    onPressed: onClear,
-                    icon: const Icon(Icons.link_off_rounded,
-                        size: AppDimens.iconSmall),
-                    label: const Text('Stop syncing'),
-                  ),
-              ],
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -807,26 +807,23 @@ class _LastRunCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
-      color: scheme.surfaceContainerLow,
-      elevation: AppDimens.elevationLevel1,
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.space16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Last run',
-              style: AppTextStyle.titleMedium.copyWith(color: scheme.onSurface),
-            ),
-            const SizedBox(height: AppDimens.space8),
-            _Row(label: 'Uploaded', value: result.uploaded),
-            _Row(label: 'Downloaded', value: result.downloaded),
-            _Row(label: 'Deleted', value: result.deleted),
-            _Row(label: 'Conflicts', value: result.conflicts, warn: true),
-            _Row(label: 'Errors', value: result.errors, warn: true),
-          ],
-        ),
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
+      padding: const EdgeInsets.all(AppDimens.space16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Last run',
+            style: AppTextStyle.titleMedium.copyWith(color: scheme.onSurface),
+          ),
+          const SizedBox(height: AppDimens.space8),
+          _Row(label: 'Uploaded', value: result.uploaded),
+          _Row(label: 'Downloaded', value: result.downloaded),
+          _Row(label: 'Deleted', value: result.deleted),
+          _Row(label: 'Conflicts', value: result.conflicts, warn: true),
+          _Row(label: 'Errors', value: result.errors, warn: true),
+        ],
       ),
     );
   }
@@ -931,7 +928,9 @@ class _ConflictCardState extends State<_ConflictCard> {
         SnackBar(
           content: Text(e.toString()),
           behavior: SnackBarBehavior.floating,
-          shape: const StadiumBorder(),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+          ),
         ),
       );
     }
@@ -942,70 +941,68 @@ class _ConflictCardState extends State<_ConflictCard> {
     final brightness = Theme.of(context).brightness;
     final onContainer = AppColors.onWarningContainerFor(brightness);
     if (_loading || _items.isEmpty) return const SizedBox.shrink();
-    return Card(
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
       color: AppColors.warningContainerFor(brightness),
-      elevation: AppDimens.elevationLevel1,
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.space16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      padding: const EdgeInsets.all(AppDimens.space16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.warning_amber_rounded,
+                  size: AppDimens.iconMedium, color: onContainer),
+              const SizedBox(width: AppDimens.space8),
+              Text(
+                'Conflicts',
+                style: AppTextStyle.titleMedium.copyWith(color: onContainer),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimens.space4),
+          Text(
+            'A copy of the cloud version was saved next to the local file.',
+            style: AppTextStyle.bodySmall.copyWith(color: onContainer),
+          ),
+          const SizedBox(height: AppDimens.space12),
+          for (final item in _items) ...[
+            Text(
+              item['path'] ?? '',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyle.bodyMedium.copyWith(color: onContainer),
+            ),
+            const SizedBox(height: AppDimens.space8),
+            Wrap(
+              spacing: AppDimens.space8,
+              runSpacing: AppDimens.space4,
               children: [
-                Icon(Icons.warning_amber_rounded,
-                    size: AppDimens.iconMedium, color: onContainer),
-                const SizedBox(width: AppDimens.space8),
-                Text(
-                  'Conflicts',
-                  style: AppTextStyle.titleMedium.copyWith(color: onContainer),
+                FilledButton.tonal(
+                  onPressed: () => _resolve(
+                    item['path']!,
+                    (m, p) => m.resolveConflictKeepLocal(p),
+                  ),
+                  child: const Text('Keep mine'),
+                ),
+                OutlinedButton(
+                  onPressed: () => _resolve(
+                    item['path']!,
+                    (m, p) => m.resolveConflictKeepRemote(p),
+                  ),
+                  child: const Text('Keep cloud'),
+                ),
+                TextButton(
+                  onPressed: () => _resolve(
+                    item['path']!,
+                    (m, p) => m.resolveConflictKeepBoth(p),
+                  ),
+                  child: const Text('Keep both'),
                 ),
               ],
             ),
-            const SizedBox(height: AppDimens.space4),
-            Text(
-              'A copy of the cloud version was saved next to the local file.',
-              style: AppTextStyle.bodySmall.copyWith(color: onContainer),
-            ),
-            const SizedBox(height: AppDimens.space12),
-            for (final item in _items) ...[
-              Text(
-                item['path'] ?? '',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyle.bodyMedium.copyWith(color: onContainer),
-              ),
-              const SizedBox(height: AppDimens.space8),
-              Wrap(
-                spacing: AppDimens.space8,
-                runSpacing: AppDimens.space4,
-                children: [
-                  FilledButton.tonal(
-                    onPressed: () => _resolve(
-                      item['path']!,
-                      (m, p) => m.resolveConflictKeepLocal(p),
-                    ),
-                    child: const Text('Keep mine'),
-                  ),
-                  OutlinedButton(
-                    onPressed: () => _resolve(
-                      item['path']!,
-                      (m, p) => m.resolveConflictKeepRemote(p),
-                    ),
-                    child: const Text('Keep cloud'),
-                  ),
-                  TextButton(
-                    onPressed: () => _resolve(
-                      item['path']!,
-                      (m, p) => m.resolveConflictKeepBoth(p),
-                    ),
-                    child: const Text('Keep both'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppDimens.space16),
-            ],
+            const SizedBox(height: AppDimens.space16),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -1048,9 +1045,8 @@ class _DeviceRow extends StatelessWidget {
         DateTime.tryParse(device['last_seen_at']?.toString() ?? '');
     final name = device['name']?.toString() ?? 'Device';
 
-    return Card(
-      color: scheme.surfaceContainerLow,
-      elevation: AppDimens.elevationLevel1,
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
       child: ListTile(
         minTileHeight: AppDimens.listHeight,
         leading: CircleAvatar(
@@ -1121,50 +1117,47 @@ class _Notice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
-      color: scheme.surfaceContainerLow,
-      elevation: AppDimens.elevationLevel1,
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.space16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: AppDimens.iconTile,
-              height: AppDimens.iconTile,
-              decoration: BoxDecoration(
-                color: scheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
-              ),
-              child: Icon(
-                icon,
-                size: AppDimens.iconSmall,
-                color: scheme.onSecondaryContainer,
-              ),
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
+      padding: const EdgeInsets.all(AppDimens.space16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: AppDimens.iconTile,
+            height: AppDimens.iconTile,
+            decoration: BoxDecoration(
+              color: scheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
             ),
-            const SizedBox(width: AppDimens.space12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: AppTextStyle.titleMedium.copyWith(
-                      color: scheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.space4),
-                  Text(
-                    body,
-                    style: AppTextStyle.bodySmall.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
+            child: Icon(
+              icon,
+              size: AppDimens.iconSmall,
+              color: scheme.onSecondaryContainer,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: AppDimens.space12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: AppTextStyle.titleMedium.copyWith(
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space4),
+                Text(
+                  body,
+                  style: AppTextStyle.bodySmall.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

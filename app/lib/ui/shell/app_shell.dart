@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
@@ -90,7 +91,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   void _handleSystemBack(bool didPop) {
-    if (!didPop && index != 0 && index != 1) _goTo(0);
+    if (didPop) return;
+    // The More panel is the topmost layer: dismiss it before changing tabs so
+    // back never leaves an orphaned scrim over a different destination.
+    if (_moreSheetOpen) {
+      _closeMoreMenu();
+      return;
+    }
+    if (index != 0 && index != 1) _goTo(0);
   }
 
   /// Opens My files and asks it to start [intent], so a Home shortcut performs
@@ -826,7 +834,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // Desktop: persistent sidebar rail.
     if (desktop) {
       return PopScope(
-          canPop: index == 0,
+          canPop: index == 0 && !_moreSheetOpen,
           onPopInvokedWithResult: (didPop, _) => _handleSystemBack(didPop),
           child: Scaffold(
             body: Row(
@@ -866,7 +874,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         AppDimens.space12 * 2 + AppDimens.bottomNavHeight + bottomInset + 18;
 
     return PopScope(
-        canPop: index == 0,
+        canPop: index == 0 && !_moreSheetOpen,
         onPopInvokedWithResult: (didPop, _) => _handleSystemBack(didPop),
         child: Scaffold(
           // This is the app canvas, not a navigation bar: the page fills the
@@ -875,19 +883,22 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           body: Stack(
             fit: StackFit.expand,
             children: [
-              MediaQuery(
-                // Keep the page at full height so its background/content can
-                // continue behind the pill. This inset is a scroll-clearance
-                // hint only; the pill itself remains the only bottom overlay.
-                data: MediaQuery.of(context).copyWith(
-                  padding: MediaQuery.paddingOf(context).copyWith(
-                    bottom: pillInset,
+              ExcludeSemantics(
+                excluding: _moreSheetOpen,
+                child: MediaQuery(
+                  // Keep the page at full height so its background/content can
+                  // continue behind the pill. This inset is a scroll-clearance
+                  // hint only; the pill itself remains the only bottom overlay.
+                  data: MediaQuery.of(context).copyWith(
+                    padding: MediaQuery.paddingOf(context).copyWith(
+                      bottom: pillInset,
+                    ),
                   ),
-                ),
-                child: _PageHost(
-                  index: index,
-                  visited: _visited,
-                  pages: pages,
+                  child: _PageHost(
+                    index: index,
+                    visited: _visited,
+                    pages: pages,
+                  ),
                 ),
               ),
               if (_moreSheetOpen) ...[
@@ -909,7 +920,26 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                       AppDimens.space10 * 2 +
                       bottomInset +
                       28,
-                  child: _buildMoreMenu(),
+                  child: Focus(
+                    autofocus: true,
+                    onKeyEvent: (node, event) {
+                      final isEscape =
+                          event is KeyDownEvent || event is KeyRepeatEvent;
+                      if (!isEscape ||
+                          event.logicalKey != LogicalKeyboardKey.escape) {
+                        return KeyEventResult.ignored;
+                      }
+                      _closeMoreMenu();
+                      return KeyEventResult.handled;
+                    },
+                    child: Semantics(
+                      scopesRoute: true,
+                      namesRoute: true,
+                      explicitChildNodes: true,
+                      label: 'More tools and settings',
+                      child: _buildMoreMenu(),
+                    ),
+                  ),
                 ),
               ],
               if (!_shareSheetShowing)
@@ -919,28 +949,31 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   // Keep the pill separate from the system gesture area; the pill's
                   // own surface, outline, and shadow create its floating appearance.
                   bottom: AppDimens.space10 + bottomInset,
-                  child: SafeArea(
-                    top: false,
-                    bottom: false,
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: AppDimens.bottomNavMaxWidth,
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppDimens.space12,
+                  child: ExcludeSemantics(
+                    excluding: _moreSheetOpen,
+                    child: SafeArea(
+                      top: false,
+                      bottom: false,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxWidth: AppDimens.bottomNavMaxWidth,
                           ),
-                          child: NexaBottomNav(
-                            currentIndex: index >= 4 ? 4 : index,
-                            onTap: (value) {
-                              if (value == 4) {
-                                _showMoreSheet();
-                              } else {
-                                _goTo(value);
-                              }
-                            },
-                            items: NexaBottomNavItems.primary,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppDimens.space12,
+                            ),
+                            child: NexaBottomNav(
+                              currentIndex: index >= 4 ? 4 : index,
+                              onTap: (value) {
+                                if (value == 4) {
+                                  _showMoreSheet();
+                                } else {
+                                  _goTo(value);
+                                }
+                              },
+                              items: NexaBottomNavItems.primary,
+                            ),
                           ),
                         ),
                       ),

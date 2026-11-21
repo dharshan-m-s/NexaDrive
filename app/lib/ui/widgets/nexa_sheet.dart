@@ -85,7 +85,7 @@ class NexaSheetHeader extends StatelessWidget {
   IconData _iconForTitle(String value) {
     final normalized = value.toLowerCase();
     if (normalized.contains('share')) {
-      return Icons.ios_share_rounded;
+      return Icons.share_outlined;
     }
     if (normalized.contains('propert') || normalized.contains('detail')) {
       return Icons.info_outline_rounded;

@@ -793,14 +793,19 @@ class _ActivityPanel extends StatelessWidget {
           SizedBox(
             height: 150,
             width: double.infinity,
-            child: CustomPaint(
-              painter: _ActivityPainter(
-                days: days,
-                // Data series resolved from M3 roles via the active scheme.
-                bar: scheme.primary,
-                empty: scheme.surfaceContainerHighest,
-                text: scheme.onSurfaceVariant,
-                grid: scheme.outlineVariant,
+            child: Semantics(
+              label: days.isEmpty
+                  ? 'File activity: no data'
+                  : 'File activity: ${days.map((day) => '${day.label} ${day.count} changes').join(', ')}',
+              child: CustomPaint(
+                painter: _ActivityPainter(
+                  days: days,
+                  // Data series resolved from M3 roles via the active scheme.
+                  bar: scheme.primary,
+                  empty: scheme.surfaceContainerHighest,
+                  text: scheme.onSurfaceVariant,
+                  grid: scheme.outlineVariant,
+                ),
               ),
             ),
           ),

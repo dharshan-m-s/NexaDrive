@@ -3,6 +3,7 @@ import 'package:flutter/physics.dart';
 import '../../core/design/app_dimensions.dart';
 import '../../core/design/app_haptics.dart';
 import '../../core/design/app_motion.dart';
+import '../../core/design/app_shadows.dart';
 import '../../core/design/app_typography.dart';
 import 'nexa_liquid_glass.dart';
 
@@ -27,25 +28,27 @@ class NexaBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: AppDimens.bottomNavHeight,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Positioned.fill(
-            child: NexaLiquidGlass(
-              borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-              padding: EdgeInsets.zero,
-              child: SizedBox(
-                width: double.infinity,
-                height: AppDimens.bottomNavHeight,
-                child: _NavRow(
-                  items: items,
-                  currentIndex: currentIndex,
-                  onTap: onTap,
-                ),
-              ),
+      // A quiet, token-backed lift sells the pill as a floating object without
+      // turning it into a heavy card. The tonal surface stays opaque.
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+          boxShadow: AppShadows.level2(Theme.of(context).brightness),
+        ),
+        child: NexaLiquidGlass(
+          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+          padding: EdgeInsets.zero,
+          showShadow: false,
+          child: SizedBox(
+            width: double.infinity,
+            height: AppDimens.bottomNavHeight,
+            child: _NavRow(
+              items: items,
+              currentIndex: currentIndex,
+              onTap: onTap,
             ),
           ),
-        ],
+        ),
       ),
     );
   }

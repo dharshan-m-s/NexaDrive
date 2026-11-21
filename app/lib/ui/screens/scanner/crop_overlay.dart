@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/design/app_dimensions.dart';
 
 /// A draggable crop rectangle for scan page editing.
@@ -25,6 +26,13 @@ class CropOverlay extends StatefulWidget {
 class _CropOverlayState extends State<CropOverlay> {
   _DragHandle? _handle;
   Rect? _dragStart;
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,22 +41,86 @@ class _CropOverlayState extends State<CropOverlay> {
         final box = _fittedRect(constraints.biggest, widget.aspect);
         return ClipRect(
           child: SizedBox.expand(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onPanStart: (d) => _beginDrag(d.localPosition, box),
-              onPanUpdate: (d) => _updateDrag(d.localPosition, box),
-              onPanEnd: (_) => _handle = null,
-              child: CustomPaint(
-                painter: _CropPainter(
-                  rect: _displayRect(box),
-                  color: Theme.of(context).colorScheme.primary,
-                  accent: Theme.of(context).colorScheme.primary,
+            child: Focus(
+              focusNode: _focusNode,
+              onKeyEvent: _onKeyEvent,
+              child: Semantics(
+                label: 'Crop area',
+                hint: 'Tap, then use arrow keys to move the crop. '
+                    'Hold Shift to resize it.',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (_) => _focusNode.requestFocus(),
+                  onPanStart: (d) => _beginDrag(d.localPosition, box),
+                  onPanUpdate: (d) => _updateDrag(d.localPosition, box),
+                  onPanEnd: (_) => _handle = null,
+                  child: CustomPaint(
+                    painter: _CropPainter(
+                      rect: _displayRect(box),
+                      color: Theme.of(context).colorScheme.primary,
+                      accent: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final direction = switch (event.logicalKey) {
+      LogicalKeyboardKey.arrowLeft => const Offset(-1, 0),
+      LogicalKeyboardKey.arrowRight => const Offset(1, 0),
+      LogicalKeyboardKey.arrowUp => const Offset(0, -1),
+      LogicalKeyboardKey.arrowDown => const Offset(0, 1),
+      _ => null,
+    };
+    if (direction == null) return KeyEventResult.ignored;
+
+    const step = 0.02;
+    const minSize = 0.06;
+    final resize = HardwareKeyboard.instance.isShiftPressed;
+    final next = resize
+        ? _resize(widget.value, direction, step, minSize)
+        : _translate(widget.value, direction, step);
+    if (next == widget.value) return KeyEventResult.ignored;
+    widget.onChanged(next);
+    return KeyEventResult.handled;
+  }
+
+  Rect _translate(Rect rect, Offset direction, double step) {
+    final dx = direction.dx * step;
+    final dy = direction.dy * step;
+    return Rect.fromLTWH(
+      (rect.left + dx).clamp(0.0, 1 - rect.width).toDouble(),
+      (rect.top + dy).clamp(0.0, 1 - rect.height).toDouble(),
+      rect.width,
+      rect.height,
+    );
+  }
+
+  Rect _resize(Rect rect, Offset direction, double step, double minSize) {
+    final dx = direction.dx * step;
+    final dy = direction.dy * step;
+    return Rect.fromLTRB(
+      direction.dx < 0
+          ? (rect.left + dx).clamp(0.0, rect.right - minSize).toDouble()
+          : rect.left,
+      direction.dy < 0
+          ? (rect.top + dy).clamp(0.0, rect.bottom - minSize).toDouble()
+          : rect.top,
+      direction.dx > 0
+          ? (rect.right + dx).clamp(rect.left + minSize, 1.0).toDouble()
+          : rect.right,
+      direction.dy > 0
+          ? (rect.bottom + dy).clamp(rect.top + minSize, 1.0).toDouble()
+          : rect.bottom,
     );
   }
 

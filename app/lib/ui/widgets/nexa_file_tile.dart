@@ -45,57 +45,66 @@ class NexaFileTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final details = subtitle ?? _metadata(context, entry);
 
-    return Material(
-      color: selected ? scheme.primaryContainer : Colors.transparent,
-      child: InkWell(
-        onTap: onTap == null ? null : () => onTap!(entry),
-        onLongPress: onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.rowInset,
-            vertical: AppDimens.space10,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _leading(),
-              const SizedBox(width: AppDimens.space16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      entry.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyle.rowTitle.copyWith(
-                        color: scheme.onSurface,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${entry.name}, $details',
+      hint: selecting
+          ? 'Toggles selection'
+          : 'Opens ${entry.isFolder ? 'folder' : 'file'}. Long press and drag to select several.',
+      child: Material(
+        color: selected ? scheme.primaryContainer : Colors.transparent,
+        child: InkWell(
+          onTap: onTap == null ? null : () => onTap!(entry),
+          onLongPress: onLongPress,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.rowInset,
+              vertical: AppDimens.space10,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _leading(),
+                const SizedBox(width: AppDimens.space16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        entry.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyle.rowTitle.copyWith(
+                          color: scheme.onSurface,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppDimens.space4),
-                    Text(
-                      subtitle ?? _metadata(context, entry),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyle.bodySmall.copyWith(
-                        color: scheme.onSurfaceVariant,
+                      const SizedBox(height: AppDimens.space4),
+                      Text(
+                        details,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyle.bodySmall.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              if (trailing != null) ...[
-                const SizedBox(width: AppDimens.space8),
-                trailing!,
-              ] else if (entry.isFolder && showChevron)
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: scheme.onSurfaceVariant,
-                  size: AppDimens.iconSmall,
-                ),
-            ],
+                if (trailing != null) ...[
+                  const SizedBox(width: AppDimens.space8),
+                  trailing!,
+                ] else if (entry.isFolder && showChevron)
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: scheme.onSurfaceVariant,
+                    size: AppDimens.iconSmall,
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -146,7 +155,7 @@ class _FileLeading extends StatelessWidget {
   Widget build(BuildContext context) {
     if (thumbnail != null) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+        borderRadius: BorderRadius.circular(AppDimens.radiusStandard),
         child: Image.memory(
           thumbnail!,
           width: AppDimens.iconTile,
@@ -157,7 +166,6 @@ class _FileLeading extends StatelessWidget {
           cacheWidth:
               (AppDimens.iconTile * MediaQuery.devicePixelRatioOf(context))
                   .round(),
-          semanticLabel: 'Preview of ${entry.name}',
           errorBuilder: (_, __, ___) => _glyph(context),
         ),
       );
@@ -250,79 +258,88 @@ class NexaFileGridTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final hasPreview = thumbnail != null;
+    final details = NexaFileTile._metadata(context, entry);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap == null ? null : () => onTap!(entry),
-        onLongPress: onLongPress,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: ClipRRect(
-                      borderRadius:
-                          BorderRadius.circular(AppDimens.radiusExtraSmall),
-                      child: hasPreview
-                          ? Image.memory(
-                              thumbnail!,
-                              fit: BoxFit.cover,
-                              cacheWidth: _gridDecodeWidth(context).round(),
-                              gaplessPlayback: true,
-                              semanticLabel: 'Preview of ${entry.name}',
-                              errorBuilder: (_, __, ___) =>
-                                  _previewArtwork(context),
-                            )
-                          : _previewArtwork(context),
-                    ),
-                  ),
-                  if (selected)
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${entry.name}, $details',
+      hint: selecting
+          ? 'Toggles selection'
+          : 'Opens ${entry.isFolder ? 'folder' : 'file'}. Long press and drag to select several.',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap == null ? null : () => onTap!(entry),
+          onLongPress: onLongPress,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AspectRatio(
+                aspectRatio: 1,
+                child: Stack(
+                  children: [
                     Positioned.fill(
-                      child: IgnorePointer(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(
-                              AppDimens.radiusExtraSmall,
-                            ),
-                            border: Border.all(
-                              color: scheme.primary,
-                              width: AppDimens.space1,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(
+                          AppDimens.radiusStandard,
+                        ),
+                        child: hasPreview
+                            ? Image.memory(
+                                thumbnail!,
+                                fit: BoxFit.cover,
+                                cacheWidth: _gridDecodeWidth(context).round(),
+                                gaplessPlayback: true,
+                                errorBuilder: (_, __, ___) =>
+                                    _previewArtwork(context),
+                              )
+                            : _previewArtwork(context),
+                      ),
+                    ),
+                    if (selected)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(
+                                AppDimens.radiusStandard,
+                              ),
+                              border: Border.all(
+                                color: scheme.primary,
+                                width: AppDimens.space1,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  if (selecting)
-                    Positioned(
-                      top: AppDimens.space6,
-                      right: AppDimens.space6,
-                      child: _SelectionBadge(selected: selected),
-                    ),
-                ],
+                    if (selecting)
+                      Positioned(
+                        top: AppDimens.space6,
+                        right: AppDimens.space6,
+                        child: _SelectionBadge(selected: selected),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: AppDimens.space10),
-            Text(
-              entry.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyle.callout.copyWith(color: scheme.onSurface),
-            ),
-            const SizedBox(height: AppDimens.space2),
-            Text(
-              NexaFileTile._metadata(context, entry),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyle.bodySmall.copyWith(
-                color: scheme.onSurfaceVariant,
+              const SizedBox(height: AppDimens.space10),
+              Text(
+                entry.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyle.callout.copyWith(color: scheme.onSurface),
               ),
-            ),
-          ],
+              const SizedBox(height: AppDimens.space2),
+              Text(
+                details,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyle.bodySmall.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

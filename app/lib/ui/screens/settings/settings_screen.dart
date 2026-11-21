@@ -14,6 +14,7 @@ import '../../widgets/nexa_grouped_list.dart';
 import '../../widgets/nexa_list_tile.dart';
 import '../../widgets/nexa_page.dart';
 import '../../widgets/nexa_sheet.dart';
+import '../../widgets/nexa_surface.dart';
 import '../admin/audit_log_screen.dart';
 import '../admin/users_screen.dart';
 import 'update_center_screen.dart';
@@ -221,72 +222,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Card(
-            color: scheme.surfaceContainerLow,
-            surfaceTintColor: Colors.transparent,
-            elevation: AppDimens.elevationSubtle,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppDimens.radiusCard),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(AppDimens.space16),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: AppDimens.space28,
-                    backgroundColor: scheme.primaryContainer,
-                    foregroundColor: scheme.onPrimaryContainer,
-                    child: Text(_initial, style: AppTextStyle.titleLarge),
-                  ),
-                  const SizedBox(width: AppDimens.space16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          session.displayName ?? session.username ?? '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyle.titleMedium.copyWith(
-                            color: scheme.onSurface,
-                          ),
+          NexaSurface(
+            level: NexaSurfaceLevel.surface,
+            radius: AppDimens.radiusCard,
+            padding: const EdgeInsets.all(AppDimens.space16),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: AppDimens.space28,
+                  backgroundColor: scheme.primaryContainer,
+                  foregroundColor: scheme.onPrimaryContainer,
+                  child: Text(_initial, style: AppTextStyle.titleLarge),
+                ),
+                const SizedBox(width: AppDimens.space16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        session.displayName ?? session.username ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyle.titleMedium.copyWith(
+                          color: scheme.onSurface,
                         ),
-                        const SizedBox(height: AppDimens.space4),
-                        Text(
-                          session.username ?? '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyle.bodySmall.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                      ),
+                      const SizedBox(height: AppDimens.space4),
+                      Text(
+                        session.username ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyle.bodySmall.copyWith(
+                          color: scheme.onSurfaceVariant,
                         ),
-                        const SizedBox(height: AppDimens.space8),
-                        Chip(
-                          avatar: IconTheme(
-                            data: IconThemeData(
-                              color: scheme.onSecondaryContainer,
-                              size: AppDimens.iconSmall,
-                            ),
-                            child: Icon(
-                              isAdmin
-                                  ? Icons.admin_panel_settings_outlined
-                                  : Icons.verified_user_outlined,
-                            ),
-                          ),
-                          label: Text(isAdmin ? 'Administrator' : 'Member'),
-                          backgroundColor: scheme.secondaryContainer,
-                          labelStyle: AppTextStyle.labelSmall.copyWith(
+                      ),
+                      const SizedBox(height: AppDimens.space8),
+                      Chip(
+                        avatar: IconTheme(
+                          data: IconThemeData(
                             color: scheme.onSecondaryContainer,
+                            size: AppDimens.iconSmall,
                           ),
-                          side: BorderSide.none,
-                          shape: const StadiumBorder(),
-                          visualDensity: VisualDensity.compact,
+                          child: Icon(
+                            isAdmin
+                                ? Icons.admin_panel_settings_outlined
+                                : Icons.verified_user_outlined,
+                          ),
                         ),
-                      ],
-                    ),
+                        label: Text(isAdmin ? 'Administrator' : 'Member'),
+                        backgroundColor: scheme.secondaryContainer,
+                        labelStyle: AppTextStyle.labelSmall.copyWith(
+                          color: scheme.onSecondaryContainer,
+                        ),
+                        side: BorderSide.none,
+                        shape: const StadiumBorder(),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: AppDimens.space24),

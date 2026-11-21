@@ -409,7 +409,7 @@ class _TrashRow extends StatelessWidget {
       leading: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Checkbox.adaptive(
+          Checkbox(
             value: selected,
             onChanged: (value) => onSelected(value ?? false),
             semanticLabel: 'Select $name',

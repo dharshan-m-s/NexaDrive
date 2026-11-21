@@ -36,7 +36,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byTooltip('Select clip.mp4'), findsOneWidget);
-      expect(find.bySemanticsLabel('Preview of clip.mp4'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'^clip\.mp4, ')), findsOneWidget);
 
       await tester.tap(find.byTooltip('Select clip.mp4'));
       await tester.pump();
@@ -69,7 +69,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.bySemanticsLabel('Preview of $name'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp('^${RegExp.escape(name)}, ')),
+        findsOneWidget,
+      );
     });
   }
 }

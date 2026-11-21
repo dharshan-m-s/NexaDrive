@@ -524,7 +524,7 @@ class _TransferRow extends StatelessWidget {
           ),
           minTileHeight: AppDimens.listHeight,
           leading: selecting
-              ? Checkbox.adaptive(
+              ? Checkbox(
                   value: selected,
                   onChanged:
                       onSelect == null ? null : (_) => onSelect!(item.id),
