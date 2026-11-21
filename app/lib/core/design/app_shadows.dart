@@ -53,6 +53,24 @@ abstract final class AppShadows {
         ),
       ];
 
+  /// The floating navigation pill sits above page content rather than inside a
+  /// sheet, so it needs a wider ambient halo plus a tighter contact shadow.
+  /// Both layers stay tonal: no colored or glow-like elevation.
+  static List<BoxShadow> floatingPill(Brightness brightness) => [
+        BoxShadow(
+          color: shadow(brightness, light: 0x1F, dark: 0x66),
+          blurRadius: 14,
+          spreadRadius: -2,
+          offset: const Offset(0, 6),
+        ),
+        BoxShadow(
+          color: shadow(brightness, light: 0x3D, dark: 0x80),
+          blurRadius: 4,
+          spreadRadius: -1,
+          offset: const Offset(0, 2),
+        ),
+      ];
+
   /// Modal sheets use level 3 in Material 3.
   static List<BoxShadow> sheet(Brightness brightness) => level3(brightness);
 

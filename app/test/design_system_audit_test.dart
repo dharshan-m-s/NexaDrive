@@ -201,7 +201,7 @@ void main() {
           reason: 'the pill overlays the page instead of reserving a sheet');
     });
 
-    testWidgets('the tonal pill carries a restrained token-backed shadow',
+    testWidgets('the tonal pill carries a visible token-backed shadow',
         (tester) async {
       await pumpShell(tester);
       final decorated = tester.widget<DecoratedBox>(
@@ -213,7 +213,8 @@ void main() {
             .first,
       );
       final decoration = decorated.decoration as BoxDecoration;
-      expect(decoration.boxShadow, AppShadows.level2(Brightness.light));
+      expect(decoration.boxShadow, AppShadows.floatingPill(Brightness.light));
+      expect(decoration.boxShadow, isNot(AppShadows.level2(Brightness.light)));
       expect(tester.takeException(), isNull);
     });
 

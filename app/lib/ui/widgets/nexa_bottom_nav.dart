@@ -33,7 +33,7 @@ class NexaBottomNav extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppDimens.radiusPill),
-          boxShadow: AppShadows.level2(Theme.of(context).brightness),
+          boxShadow: AppShadows.floatingPill(Theme.of(context).brightness),
         ),
         child: NexaLiquidGlass(
           borderRadius: BorderRadius.circular(AppDimens.radiusPill),
