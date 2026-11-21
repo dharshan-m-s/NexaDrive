@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import 'api.dart';
+import 'foreground_transfer_service.dart';
 
 /// Result of a completed save.
 class SaveResult {
@@ -230,7 +231,13 @@ class DownloadService {
 
     if (size != null && size <= _androidMemorySaveLimit) {
       // One-shot: download fully, then let SAF write the document.
-      final bytes = await api.download(remotePath);
+      final lease = ForegroundTransferService.instance.acquireDownload();
+      late final Uint8List bytes;
+      try {
+        bytes = await api.download(remotePath);
+      } finally {
+        lease.release();
+      }
       final uri = await FilePicker.saveFile(
         fileName: fileName,
         bytes: bytes,
@@ -301,6 +308,27 @@ class DownloadService {
     String remotePath,
     String targetPath, {
     Duration timeout = const Duration(minutes: 30),
+    void Function(int received, int? total)? onProgress,
+    CancelToken? cancel,
+  }) async {
+    final lease = ForegroundTransferService.instance.acquireDownload();
+    try {
+      await _downloadToFileUntracked(
+        remotePath,
+        targetPath,
+        timeout: timeout,
+        onProgress: onProgress,
+        cancel: cancel,
+      );
+    } finally {
+      lease.release();
+    }
+  }
+
+  Future<void> _downloadToFileUntracked(
+    String remotePath,
+    String targetPath, {
+    required Duration timeout,
     void Function(int received, int? total)? onProgress,
     CancelToken? cancel,
   }) async {

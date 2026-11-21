@@ -26,6 +26,9 @@ void nexadriveBackgroundDispatcher() {
 
       final manager = UploadManager.background();
       manager.attach(Api(session));
+      // UploadManager reports active workers to the shared work ledger, which
+      // raises the same Android foreground notification from this background
+      // engine. The plugin channel is registered on every FlutterEngine.
       final pending = await manager.runPending();
       return pending == 0;
     } catch (error, stack) {

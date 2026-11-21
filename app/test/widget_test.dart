@@ -41,8 +41,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('NexaDrive'), findsOneWidget);
-    // The sidebar and the editorial page title both label Home.
-    expect(find.text('Home'), findsNWidgets(2));
+    // On desktop the restored Home page is titled Overview; the sidebar still
+    // labels the destination Home.
+    expect(find.text('Overview'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
   });

@@ -535,6 +535,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.19.0"
+  nexa_foreground_service:
+    dependency: "direct main"
+    description:
+      path: "lib/services/nexa_foreground_service"
+      relative: true
+    source: path
+    version: "0.0.1"
   objective_c:
     dependency: transitive
     description:

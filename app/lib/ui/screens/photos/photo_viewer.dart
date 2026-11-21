@@ -1042,9 +1042,11 @@ class _ZoomIndicator extends StatelessWidget {
 /// Owns the mobile swipe-to-dismiss gesture around the page view.
 ///
 /// Vertical drags are only registered while the photo is at fit scale and no
-/// browse layer is open. Horizontal PageView swipes, pinch zoom and double-tap
-/// keep their own recognizers; `InteractiveViewer` disables panning at fit so
-/// it cannot steal the downward drag.
+/// browse layer is open. While a second finger is down the vertical recognizers
+/// are removed entirely, so pinch zoom owns the gesture arena. Horizontal
+/// PageView swipes, pinch zoom and double-tap keep their own recognizers;
+/// `InteractiveViewer` disables panning at fit so it cannot steal the downward
+/// drag.
 class _SwipeDismissLayer extends StatefulWidget {
   final bool canDismiss;
   final bool canShowDetails;
@@ -1070,14 +1072,17 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
   double _settleFrom = 0;
   AnimationController? _settle;
 
+  /// Raw pointer IDs seen by [Listener]. A second finger means the user is
+  /// pinching the photo, so vertical dismissal must yield to the viewer's
+  /// scale recognizer until every finger is lifted.
+  final Set<int> _activePointers = <int>{};
+  bool _pinchSuspended = false;
+
   @override
   void didUpdateWidget(covariant _SwipeDismissLayer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_drag != 0 && !widget.canDismiss) {
-      _settle?.stop();
-      _settle?.dispose();
-      _settle = null;
-      _drag = 0;
+      _resetDismissDrag(notify: false);
     }
   }
 
@@ -1085,6 +1090,36 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
   void dispose() {
     _settle?.dispose();
     super.dispose();
+  }
+
+  /// Cancels any visual offset from a dismissal drag without playing a settle
+  /// animation. A pinch is a different gesture and must not inherit that
+  /// motion.
+  void _resetDismissDrag({bool notify = true}) {
+    _settle?.stop();
+    _settle?.dispose();
+    _settle = null;
+    if (_drag == 0) return;
+    _drag = 0;
+    if (notify && mounted) setState(() {});
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    final wasSuspended = _pinchSuspended;
+    _activePointers.add(event.pointer);
+    if (_activePointers.length > 1) {
+      _resetDismissDrag(notify: false);
+      _pinchSuspended = true;
+    }
+    if (wasSuspended != _pinchSuspended && mounted) setState(() {});
+  }
+
+  void _onPointerUpOrCancel(PointerEvent event) {
+    _activePointers.remove(event.pointer);
+    if (_activePointers.isEmpty && _pinchSuspended) {
+      _pinchSuspended = false;
+      if (mounted) setState(() {});
+    }
   }
 
   void _settleBack() {
@@ -1114,7 +1149,11 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
   Widget build(BuildContext context) {
     final height = MediaQuery.sizeOf(context).height;
     final maxDrag = height * 0.65;
-    final gesturesEnabled = widget.canDismiss || widget.canShowDetails;
+    // Two fingers belong to InteractiveViewer's pinch recognizer. Removing the
+    // vertical recognizers avoids an arena race at fit scale, where the photo
+    // is not yet zoomed enough for panning to win on its own.
+    final gesturesEnabled =
+        (widget.canDismiss || widget.canShowDetails) && !_pinchSuspended;
 
     Widget content = widget.child;
     if (_drag > 0 && !AppMotion.reducedMotion(context)) {
@@ -1128,42 +1167,47 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
       );
     }
 
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onVerticalDragStart: gesturesEnabled
-          ? (_) {
-              _settle?.stop();
-              if (_drag != 0) setState(() => _drag = 0);
-            }
-          : null,
-      onVerticalDragUpdate: widget.canDismiss
-          ? (details) {
-              if (details.delta.dy <= 0 && _drag <= 0) return;
-              setState(() {
-                _drag = (_drag + details.delta.dy).clamp(0.0, maxDrag);
-              });
-            }
-          : null,
-      onVerticalDragEnd: gesturesEnabled
-          ? (details) {
-              final velocity = details.primaryVelocity ?? 0;
-              if (widget.canDismiss && _drag > 0) {
-                if (_drag > height * 0.16 || (velocity > 650 && _drag > 20)) {
-                  setState(() => _drag = 0);
-                  widget.onDismiss();
-                } else {
-                  _settleBack();
+    return Listener(
+      onPointerDown: _onPointerDown,
+      onPointerUp: _onPointerUpOrCancel,
+      onPointerCancel: _onPointerUpOrCancel,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onVerticalDragStart: gesturesEnabled
+            ? (_) {
+                _settle?.stop();
+                if (_drag != 0) setState(() => _drag = 0);
+              }
+            : null,
+        onVerticalDragUpdate: gesturesEnabled && widget.canDismiss
+            ? (details) {
+                if (details.delta.dy <= 0 && _drag <= 0) return;
+                setState(() {
+                  _drag = (_drag + details.delta.dy).clamp(0.0, maxDrag);
+                });
+              }
+            : null,
+        onVerticalDragEnd: gesturesEnabled
+            ? (details) {
+                final velocity = details.primaryVelocity ?? 0;
+                if (widget.canDismiss && _drag > 0) {
+                  if (_drag > height * 0.16 || (velocity > 650 && _drag > 20)) {
+                    setState(() => _drag = 0);
+                    widget.onDismiss();
+                  } else {
+                    _settleBack();
+                  }
+                  return;
                 }
-                return;
+                // Google Photos reveals metadata with an upward swipe.
+                if (widget.canShowDetails && velocity < -500) {
+                  widget.onDetails();
+                }
               }
-              // Google Photos reveals metadata with an upward swipe.
-              if (widget.canShowDetails && velocity < -500) {
-                widget.onDetails();
-              }
-            }
-          : null,
-      onVerticalDragCancel: gesturesEnabled ? () => _settleBack() : null,
-      child: content,
+            : null,
+        onVerticalDragCancel: gesturesEnabled ? () => _settleBack() : null,
+        child: content,
+      ),
     );
   }
 }
@@ -1634,6 +1678,21 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
           });
         }
 
+        final minScale = fit * 0.9;
+        // InteractiveViewer's default boundary enforces a "cover" floor that
+        // is above our fitted transform. Expand the boundary just enough that
+        // this floor sits at or below minScale, so pinching in at fit really
+        // zooms out instead of jumping to cover. Pan stays bounded.
+        final boundaryMargin = math.max(
+          0.0,
+          math.max(
+                    viewport.width / minScale - photo.width,
+                    viewport.height / minScale - photo.height,
+                  ) /
+                  2 +
+              1.0,
+        );
+
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: widget.onTap,
@@ -1641,11 +1700,15 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
           child: InteractiveViewer(
             transformationController: _transform,
             constrained: false,
+            // Explicitly keep two-finger scaling available in both
+            // directions; panning is still only offered once zoomed.
+            boundaryMargin: EdgeInsets.all(boundaryMargin),
+            scaleEnabled: true,
             // At fit scale there is nothing to pan; leaving it off stops the
-            // viewer competing with the mobile swipe-to-dismiss gesture.
-            // Pinch, double-tap and the overflow zoom button are untouched.
+            // viewer competing with the mobile swipe-to-dismiss gesture. Once
+            // zoomed, pan stays enabled.
             panEnabled: _zoomed,
-            minScale: math.max(_fit * 0.9, 0.5),
+            minScale: minScale,
             maxScale: math.max(_fit * 8, 1.4),
             clipBehavior: Clip.none,
             child: RawImage(

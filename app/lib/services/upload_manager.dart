@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 
 import 'api.dart';
 import 'content_source.dart';
+import 'foreground_transfer_service.dart';
 import 'upload_item.dart';
 import 'upload_store.dart';
 
@@ -1310,6 +1311,9 @@ class UploadManager extends ChangeNotifier {
     _notifyTimer = Timer(const Duration(milliseconds: 120), () {
       _notifyTimer = null;
       if (!_disposed) notifyListeners();
+      // Work ledger, not app lifecycle: the Android foreground service stays
+      // up while a worker is active, including after the UI is backgrounded.
+      ForegroundTransferService.instance.setQueuedUploads(_active.length);
     });
   }
 
@@ -1318,6 +1322,7 @@ class UploadManager extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    ForegroundTransferService.instance.setQueuedUploads(0);
     _completedPrune?.cancel();
     _completedPrune = null;
     _notifyTimer?.cancel();

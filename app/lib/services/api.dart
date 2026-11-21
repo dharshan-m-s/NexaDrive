@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'foreground_transfer_service.dart';
 import 'session.dart';
 
 class ApiException implements Exception {
@@ -167,38 +168,59 @@ class Api {
     String folder, {
     required String uploadId,
   }) async {
-    if (file.path == null) {
-      // Not on local disk (e.g. a web pick): read the bytes eagerly.
-      final bytes = await file.readAsBytes();
-      return uploadBytes(bytes, file.name, folder, uploadId: uploadId);
+    final lease = ForegroundTransferService.instance.acquireUpload();
+    try {
+      if (file.path == null) {
+        // Not on local disk (e.g. a web pick): read the bytes eagerly.
+        final bytes = await file.readAsBytes();
+        return await _uploadBytesUntracked(bytes, file.name, folder,
+            uploadId: uploadId);
+      }
+
+      final request = http.MultipartRequest(
+        'POST',
+        _uri('/api/files/upload'),
+      );
+      request.headers.addAll(_headers);
+      request.fields['path'] = folder;
+      request.fields['upload_id'] = uploadId;
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          file.path!,
+          filename: file.name,
+        ),
+      );
+
+      final streamed = await _client.send(request).timeout(_transferTimeout);
+      final response =
+          await http.Response.fromStream(streamed).timeout(_controlTimeout);
+      _check(response);
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } finally {
+      lease.release();
     }
-
-    final request = http.MultipartRequest(
-      'POST',
-      _uri('/api/files/upload'),
-    );
-    request.headers.addAll(_headers);
-    request.fields['path'] = folder;
-    request.fields['upload_id'] = uploadId;
-
-    request.files.add(
-      await http.MultipartFile.fromPath(
-        'file',
-        file.path!,
-        filename: file.name,
-      ),
-    );
-
-    final streamed = await _client.send(request).timeout(_transferTimeout);
-    final response =
-        await http.Response.fromStream(streamed).timeout(_controlTimeout);
-    _check(response);
-    return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
   /// Upload path for content that is already in memory (generated PDFs,
   /// web picks without a local file).
   Future<Map<String, dynamic>> uploadBytes(
+    Uint8List bytes,
+    String name,
+    String folder, {
+    required String uploadId,
+  }) async {
+    final lease = ForegroundTransferService.instance.acquireUpload();
+    try {
+      return await _uploadBytesUntracked(bytes, name, folder,
+          uploadId: uploadId);
+    } finally {
+      lease.release();
+    }
+  }
+
+  Future<Map<String, dynamic>> _uploadBytesUntracked(
     Uint8List bytes,
     String name,
     String folder, {
@@ -339,6 +361,15 @@ class Api {
   }
 
   Future<void> downloadToFile(String path, String targetPath) async {
+    final lease = ForegroundTransferService.instance.acquireDownload();
+    try {
+      await _downloadToFileUntracked(path, targetPath);
+    } finally {
+      lease.release();
+    }
+  }
+
+  Future<void> _downloadToFileUntracked(String path, String targetPath) async {
     final request =
         http.Request('GET', _uri('/api/files/download', {'path': path}));
     request.headers.addAll(_headers);

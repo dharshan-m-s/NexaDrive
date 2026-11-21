@@ -1047,20 +1047,46 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  /// The shell's destinations, in navigation order.
+  @override
+  void didUpdateWidget(covariant AppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A new session or injected client means every destination must bind to
+    // fresh dependencies. The controller belongs to this State, but keep it in
+    // each page's inputs so a future replacement cannot serve stale widgets.
+    if (!identical(oldWidget.session, widget.session) ||
+        !identical(oldWidget.api, widget.api)) {
+      _invalidatePages();
+    }
+  }
+
+  /// One widget per destination, constructed on first build and reused.
   ///
-  /// These are rebuilt on each shell frame rather than cached, because a
-  /// destination's parameters (My files' pending intent) must be able to
-  /// update. State is still preserved: each index always holds the same widget
-  /// type, so Flutter reuses the existing element instead of recreating it.
-  List<Widget> _buildPages() => <Widget>[
-        HomeScreen(
+  /// The shell rebuilds often (transfer strip, sheets, toasts). Re-creating six
+  /// screens for every one of those frames — and again on every tab change —
+  /// made taps feel laggy. Identical widget instances let Flutter's
+  /// `updateChild` skip the page entirely, while visited destinations keep
+  /// their [State] in the [IndexedStack].
+  final List<Widget?> _pageCache = List<Widget?>.filled(_pageCount, null);
+  final List<_PageInputs?> _pageInputs =
+      List<_PageInputs?>.filled(_pageCount, null);
+  Object? _pageController;
+
+  void _invalidatePages() {
+    for (var i = 0; i < _pageCount; i++) {
+      _pageCache[i] = null;
+      _pageInputs[i] = null;
+    }
+  }
+
+  Widget _createPage(int index) {
+    final page = switch (index) {
+      0 => HomeScreen(
           session: widget.session,
           api: api,
           onNavigate: _goTo,
           onFilesIntent: _openFiles,
         ),
-        FilesScreen(
+      1 => FilesScreen(
           api: api,
           onBackAtRoot: () => _goTo(0),
           intent: _filesIntent,
@@ -1068,13 +1094,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             if (_filesIntent != null) setState(() => _filesIntent = null);
           },
         ),
-        SharedScreen(api: api),
-        PhotosScreen(
+      2 => SharedScreen(api: api),
+      3 => PhotosScreen(
           api: api,
           session: widget.session,
         ),
-        TrashScreen(api: api),
-        SettingsScreen(
+      4 => TrashScreen(api: api),
+      5 => SettingsScreen(
           session: widget.session,
           api: api,
           updateController: updateController,
@@ -1083,7 +1109,48 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           onOpenTransfers: _openTransfers,
           onOpenNotifications: _openNotifications,
         ),
-      ];
+      _ => const SizedBox.shrink(),
+    };
+    // Each page paints into its own layer, so shell overlays and tab reveals
+    // never force a visited screen to repaint.
+    return RepaintBoundary(child: page);
+  }
+
+  /// The shell's destinations, in navigation order.
+  ///
+  /// Only destinations whose inputs changed are reconstructed; My files is
+  /// rebuilt when [FilesIntent] changes and nowhere else.
+  List<Widget> _buildPages() {
+    // The controller is State-owned, but a replacement must not leave cached
+    // destinations bound to the old one.
+    if (!identical(_pageController, updateController)) {
+      _invalidatePages();
+      _pageController = updateController;
+    }
+    final inputs = <_PageInputs>[
+      _PageInputs(session: widget.session, api: api),
+      _PageInputs(api: api, intent: _filesIntent),
+      _PageInputs(api: api),
+      _PageInputs(session: widget.session, api: api),
+      _PageInputs(api: api),
+      _PageInputs(
+        session: widget.session,
+        api: api,
+        controller: updateController,
+      ),
+    ];
+    return List<Widget>.generate(_pageCount, (i) {
+      final cached = _pageCache[i];
+      final previous = _pageInputs[i];
+      if (cached != null && previous != null && previous.sameAs(inputs[i])) {
+        return cached;
+      }
+      final page = _createPage(i);
+      _pageCache[i] = page;
+      _pageInputs[i] = inputs[i];
+      return page;
+    }, growable: false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1308,17 +1375,39 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
 enum _SharedUploadChoice { root, createFolder, chooseFolder }
 
+/// Inputs a cached destination was built against. Services and the session are
+/// compared by identity; the one-shot Files intent is compared by value.
+class _PageInputs {
+  const _PageInputs({
+    this.session,
+    this.api,
+    this.controller,
+    this.intent,
+  });
+
+  final Object? session;
+  final Object? api;
+  final Object? controller;
+  final FilesIntent? intent;
+
+  bool sameAs(_PageInputs other) =>
+      identical(session, other.session) &&
+      identical(api, other.api) &&
+      identical(controller, other.controller) &&
+      intent == other.intent;
+}
+
 /// Holds every visited destination in one [IndexedStack].
 ///
 /// Navigation preserves each page's state: My files keeps the folder you were
 /// in, Photos keeps its scroll offset, and returning to a tab does not re-issue
-/// its request. Unvisited destinations render nothing, so they cost nothing
-/// until first opened.
+/// its request. Unvisited destinations render nothing until first opened.
 ///
-/// A tab switch reveals the destination with a short fade-through rather than a
-/// hard cut. The [IndexedStack] itself is never rebuilt, so the incoming page
-/// fades in over the one it replaces without losing scroll position or an
-/// in-flight request. Reduced motion skips the fade entirely.
+/// A tab switch reveals the destination with a short scale + slide + fade
+/// driven by [AppMotion.fluid]. The reveal starts on the frame of the tap, can
+/// be redirected by another tap without flashing back to transparent, and is
+/// skipped entirely for reduced motion. The cached page widgets are reused, so
+/// no scroll position or in-flight request is lost.
 ///
 /// The page host keeps normal content below the status bar. The shell passes
 /// bottom navigation clearance through MediaQuery, allowing scrollable pages
@@ -1340,32 +1429,54 @@ class _PageHost extends StatefulWidget {
 
 class _PageHostState extends State<_PageHost>
     with SingleTickerProviderStateMixin {
-  // Drives the fade-through. Starts settled so the first frame paints the shell
-  // at full opacity; every later index change replays it once.
+  // Starts settled so the first frame paints at full opacity. A tab change
+  // replays a short reveal; rapid taps continue from the value on screen.
   late final AnimationController _reveal = AnimationController(
     vsync: this,
     duration: AppMotion.fast,
     value: 1,
   );
 
-  late final Animation<double> _opacity = CurvedAnimation(
-    parent: _reveal,
-    curve: AppMotion.fadeCurve,
+  late final Animation<double> _fluid = _reveal.drive(
+    CurveTween(curve: AppMotion.fluid),
   );
 
-  late final Animation<Offset> _offset = Tween<Offset>(
-    begin: const Offset(0, 0.012),
-    end: Offset.zero,
-  ).animate(
-    CurvedAnimation(parent: _reveal, curve: AppMotion.standardCurve),
+  // Begin partially revealed so the destination is legible on the first frame;
+  // the overshoot is clamped for opacity below.
+  late final Animation<double> _opacity = _ClampedOpacity(
+    Tween<double>(begin: 0.35, end: 1).animate(_fluid),
   );
+
+  late final Animation<double> _scale = Tween<double>(
+    begin: 0.985,
+    end: 1,
+  ).animate(_fluid);
+
+  late final Animation<Offset> _offset = Tween<Offset>(
+    begin: const Offset(0, 0.008),
+    end: Offset.zero,
+  ).animate(_fluid);
 
   @override
   void didUpdateWidget(covariant _PageHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.index != widget.index) {
-      _reveal.forward(from: 0);
+    if (oldWidget.index != widget.index) _startReveal();
+  }
+
+  void _startReveal() {
+    if (AppMotion.reducedMotion(context)) {
+      _reveal
+        ..stop()
+        ..value = 1;
+      return;
     }
+    // Interrupt from the presentation value, never from the target: a second
+    // tap mid-reveal keeps the progress already made instead of flashing.
+    final from = _reveal.value >= 1 ? 0.0 : _reveal.value;
+    _reveal
+      ..stop()
+      ..value = from
+      ..forward();
   }
 
   @override
@@ -1396,8 +1507,24 @@ class _PageHostState extends State<_PageHost>
       bottom: false,
       child: FadeTransition(
         opacity: _opacity,
-        child: SlideTransition(position: _offset, child: stack),
+        child: SlideTransition(
+          position: _offset,
+          child: ScaleTransition(scale: _scale, child: stack),
+        ),
       ),
     );
   }
+}
+
+/// Keeps [AppMotion.fluid]'s tiny overshoot out of [FadeTransition], whose
+/// opacity must stay in 0..1.
+class _ClampedOpacity extends Animation<double>
+    with AnimationWithParentMixin<double> {
+  const _ClampedOpacity(this.parent);
+
+  @override
+  final Animation<double> parent;
+
+  @override
+  double get value => parent.value.clamp(0.0, 1.0);
 }

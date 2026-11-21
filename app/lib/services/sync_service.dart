@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'api.dart';
 import 'android_folder_backup.dart';
+import 'foreground_transfer_service.dart';
 import 'upload_manager.dart';
 
 class SyncResult {
@@ -326,12 +327,14 @@ class SyncManager {
   Future<SyncResult> sync({void Function(String)? onProgress}) {
     final running = _inFlight;
     if (running != null) return running;
+    final lease = ForegroundTransferService.instance.acquireSync();
     final started = _runSync(onProgress: onProgress);
     _inFlight = started;
     // Clear the guard on completion either way; swallow nothing, since
     // `_runSync` reports failures through `SyncResult` instead of throwing.
     unawaited(started.whenComplete(() {
       _inFlight = null;
+      lease.release();
     }));
     return started;
   }

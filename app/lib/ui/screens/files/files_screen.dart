@@ -524,8 +524,15 @@ class _FilesScreenState extends State<FilesScreen> {
   void _onScaleUpdate(ScaleUpdateDetails details) {
     final base = _pinchBaseColumns;
     if (base == null || details.pointerCount < 2) return;
-    final columns = NexaGridLayout.clamp((base * details.scale).round());
-    if (columns != _gridColumns) setState(() => _gridColumns = columns);
+    if (!base.isFinite || base <= 0) return;
+    final scale = details.scale;
+    // Interactive pinching is inverted relative to layout density: fingers
+    // coming together (scale < 1) reveal more columns, spreading shows fewer.
+    if (!scale.isFinite || scale <= 0) return;
+    final columns = NexaGridLayout.clamp((base / scale).round());
+    if (columns == _gridColumns) return;
+    setState(() => _gridColumns = columns);
+    AppHaptics.selection();
   }
 
   void _onScaleEnd(ScaleEndDetails details) {

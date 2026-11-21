@@ -274,8 +274,8 @@ void main() {
         findsWidgets,
       );
       // The floating navigation remains mounted beneath the menu.
-      // The editorial page title and the floating pill both label Home now.
-      expect(find.text('Home'), findsNWidgets(2));
+      // The restored Home has a NexaDrive page title, so the pill owns "Home".
+      expect(find.text('Home'), findsOneWidget);
       expect(find.text('Files'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -292,8 +292,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Scan'), findsNothing);
-      // The editorial page title and the floating pill both label Home now.
-      expect(find.text('Home'), findsNWidgets(2));
+      // The restored Home has a NexaDrive page title, so the pill owns "Home".
+      expect(find.text('Home'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

@@ -32,6 +32,13 @@ abstract final class AppMotion {
   static const Curve fade = Curves.easeOut;
   static const Curve fadeCurve = fade;
 
+  /// Fluid reveal: a restrained Material ease-out with a ~2% overshoot.
+  ///
+  /// Used for short, interruptible content reveals (scale/slide). Opacity must
+  /// be clamped when driven by this curve: [FadeTransition] only accepts 0..1.
+  static const Curve fluid = Cubic(0.0, 0.0, 0.2, 1.18);
+  static const Curve fluidCurve = fluid;
+
   /// Reserved for gesture-driven spring-like interpolation.
   static const Curve springCurve = Cubic(0.2, 0.0, 0.0, 1.0);
 
