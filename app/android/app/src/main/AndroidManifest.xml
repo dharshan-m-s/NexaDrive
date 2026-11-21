@@ -98,7 +98,7 @@
             android:exported="false" />
         <!-- Keeps the Flutter process alive during active uploads, downloads
              and sync. Not sticky: if the OS reclaims it, WorkManager resumes
-             the durable upload queue on its own schedule. -->
+             the durable upload queue and the one-off download journal task. -->
         <service
             android:name="io.nexadrive.foreground.TransferForegroundService"
             android:exported="false"

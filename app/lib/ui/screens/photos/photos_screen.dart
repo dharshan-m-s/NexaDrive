@@ -187,14 +187,23 @@ class _PhotosScreenState extends State<PhotosScreen> {
   }
 
   void _onScaleStart(ScaleStartDetails details) {
+    // Cheap early capture when the recognizer happens to accept with two
+    // fingers. The common one-finger accept is handled lazily in _onScaleUpdate.
     if (details.pointerCount == 2) {
       _pinchBaseColumns = _gridColumns.toDouble();
     }
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details) {
-    final base = _pinchBaseColumns;
-    if (base == null || details.pointerCount < 2) return;
+    if (details.pointerCount < 2 || _dragSelecting) return;
+    var base = _pinchBaseColumns;
+    if (base == null) {
+      // Flutter's scale recognizer normally accepts with a single pointer, so
+      // onScaleStart rarely sees two. Capture the base on the first genuine
+      // two-finger update instead, or the pinch never engages at all.
+      base = _gridColumns.toDouble();
+      _pinchBaseColumns = base;
+    }
     if (!base.isFinite || base <= 0) return;
     final scale = details.scale;
     // Interactive pinching is inverted relative to layout density: fingers

@@ -27,8 +27,6 @@ import '../screens/sync/sync_center_screen.dart';
 import '../screens/notifications/notifications_screen.dart';
 import '../screens/transfers/transfers_screen.dart';
 import '../screens/login/login_screen.dart';
-import '../../core/models/file_entry.dart';
-import '../navigation/file_opener.dart';
 import '../screens/scanner/scanner_screen.dart';
 import '../screens/search/search_screen.dart';
 import '../widgets/folder_picker.dart';
@@ -59,11 +57,17 @@ class AppShell extends StatefulWidget {
     this.api,
   });
 
+  /// Shared Navigator observer so any route pushed above the shell dismisses
+  /// the More overlay, even when the push came from a page outside the shell.
+  static final RouteObserver<ModalRoute<dynamic>> routeObserver =
+      RouteObserver<ModalRoute<dynamic>>();
+
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
+class _AppShellState extends State<AppShell>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin, RouteAware {
   int index = 0;
   late final Api api;
   late final UpdateController updateController;
@@ -71,12 +75,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late final UploadManager _uploads;
   StreamSubscription<UploadEvent>? _transferEvents;
   bool _transferStripVisible = false;
-  int _completedToastCount = 0;
-  int _failedToastCount = 0;
-  UploadEvent? _lastCompletedEvent;
-  Timer? _transferToastTimer;
+  Timer? _transferStripHoldTimer;
+  int _failedTransferCount = 0;
+  Timer? _transferNoticeTimer;
   bool _handlingExpiredSession = false;
   bool _moreSheetOpen = false;
+  ModalRoute<dynamic>? _observedRoute;
+  _PillNotice? _pillNotice;
+  int _pillNoticeId = 0;
   bool _shareSheetShowing = false;
   bool _deferShareProcessing = false;
   final Set<String> _activeSharedUris = <String>{};
@@ -95,6 +101,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   void _goTo(int value) {
     if (value < 0 || value >= _pageCount) return;
+    _closeMoreMenu();
     setState(() {
       index = value;
       _visited.add(value);
@@ -115,6 +122,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   /// Opens My files and asks it to start [intent], so a Home shortcut performs
   /// the action it names rather than just navigating.
   void _openFiles(FilesIntent intent) {
+    _closeMoreMenu();
     setState(() {
       _filesIntent = intent;
       index = 1;
@@ -164,6 +172,27 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       updateController.checkForUpdates();
     });
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (identical(route, _observedRoute)) return;
+    if (_observedRoute != null) {
+      AppShell.routeObserver.unsubscribe(this);
+    }
+    _observedRoute = route;
+    if (route != null) AppShell.routeObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPushNext() => _closeMoreMenu();
+
+  @override
+  void didPopNext() => _closeMoreMenu();
+
+  @override
+  void didPop() => _closeMoreMenu();
 
   void _pruneUpdateCache() {
     // Bounded download cache: prune keeps files only within size/age limits
@@ -260,17 +289,36 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     await _purgeLocalCaches();
     if (!mounted || !context.mounted) return;
     _toast('Session expired. Please sign in again.');
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => LoginScreen(session: widget.session)),
-      (_) => false,
-    );
+    unawaited(_resetToRoute(
+      MaterialPageRoute<void>(
+        builder: (_) => LoginScreen(session: widget.session),
+      ),
+    ));
   }
 
-  void _toast(String message) {
+  /// General ambient feedback lives in the pill's own bounds. No route, scrim
+  /// or global SnackBar queue is involved, so nothing can outlive the notice.
+  void _toast(String message) => _showPillNotice(message);
+
+  void _showPillNotice(
+    String message, {
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    setState(() {
+      _pillNotice = _PillNotice(
+        id: ++_pillNoticeId,
+        message: message,
+        actionLabel: actionLabel,
+        onAction: onAction,
+      );
+    });
+  }
+
+  void _dismissPillNotice(int id) {
+    if (!mounted || _pillNotice?.id != id) return;
+    setState(() => _pillNotice = null);
   }
 
   bool _hasTransferActivity() => _uploads.items().any(
@@ -287,88 +335,60 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       MediaQuery.textScalerOf(context).scale(AppDimens.transferStripHeight) +
       gap;
 
+  void _holdTransferStrip() {
+    if (!mounted) return;
+    if (!_transferStripVisible) {
+      setState(() => _transferStripVisible = true);
+    }
+    _transferStripHoldTimer?.cancel();
+    _transferStripHoldTimer = Timer(AppMotion.ambient * 2, () {
+      _transferStripHoldTimer = null;
+      if (!mounted || _hasTransferActivity()) return;
+      setState(() => _transferStripVisible = false);
+    });
+  }
+
   void _refreshTransferStrip() {
     if (!mounted) return;
-    final visible = _hasTransferActivity();
-    if (visible == _transferStripVisible) return;
-    setState(() => _transferStripVisible = visible);
+    if (_hasTransferActivity()) {
+      _transferStripHoldTimer?.cancel();
+      _transferStripHoldTimer = null;
+      if (!_transferStripVisible) {
+        setState(() => _transferStripVisible = true);
+      }
+      return;
+    }
+    // Keep the last transfer's summary readable for a moment after completion;
+    // the strip is the completion feedback, so a popup is never needed.
+    if (!_transferStripVisible || _transferStripHoldTimer != null) return;
+    _holdTransferStrip();
   }
 
   void _handleUploadEvent(UploadEvent event) {
     if (!mounted) return;
     if (event.kind == UploadEventKind.completed) {
-      _completedToastCount++;
-      _lastCompletedEvent = event;
-    } else {
-      _failedToastCount++;
-    }
-    _transferToastTimer?.cancel();
-    _transferToastTimer = Timer(
-      const Duration(milliseconds: 350),
-      _flushTransferToasts,
-    );
-  }
-
-  void _flushTransferToasts() {
-    if (!mounted) return;
-    final completed = _completedToastCount;
-    final failed = _failedToastCount;
-    _completedToastCount = 0;
-    _failedToastCount = 0;
-    if (completed == 0 && failed == 0) return;
-
-    // Never clear unrelated bars here: an Undo for a move/trash action can
-    // still be actionable when an upload finishes a moment later.
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) return;
-
-    if (failed > 0) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            failed == 1
-                ? 'That upload didn’t finish'
-                : '$failed uploads didn’t finish',
-          ),
-          action: SnackBarAction(
-            label: 'Retry',
-            onPressed: () => unawaited(_uploads.retryFailed()),
-          ),
-        ),
-      );
+      // A short upload can finish before the coalesced queue tick runs. Show
+      // the completion surface from the event itself so it is never skipped.
+      _holdTransferStrip();
       return;
     }
-
-    final completedEvent = _lastCompletedEvent;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          completed == 1 ? 'File uploaded' : '$completed files uploaded',
-        ),
-        action: SnackBarAction(
-          label: 'Open',
-          onPressed: () {
-            if (completedEvent == null) return;
-            unawaited(_openCompletedFile(completedEvent));
-          },
-        ),
-      ),
-    );
+    if (event.kind != UploadEventKind.failed) return;
+    _failedTransferCount++;
+    _transferNoticeTimer?.cancel();
+    _transferNoticeTimer = Timer(AppMotion.normal, _flushTransferNotices);
   }
 
-  Future<void> _openCompletedFile(UploadEvent event) async {
+  void _flushTransferNotices() {
     if (!mounted) return;
-    final path =
-        event.folder.isEmpty ? event.name : '${event.folder}/${event.name}';
-    await FileOpener.open(
-      context,
-      api: api,
-      entry: FileEntry(
-        name: event.name,
-        path: path,
-        type: 'file',
-        size: event.size,
-      ),
+    final failed = _failedTransferCount;
+    _failedTransferCount = 0;
+    if (failed == 0) return;
+    _showPillNotice(
+      failed == 1
+          ? 'That upload didn’t finish'
+          : '$failed uploads didn’t finish',
+      actionLabel: 'Retry',
+      onAction: () => unawaited(_uploads.retryFailed()),
     );
   }
 
@@ -411,25 +431,41 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     );
   }
 
+  /// Every shell-initiated route goes through here so no page or sheet can be
+  /// pushed while the More scrim is still mounted.
+  Future<void> _pushRoute(Route<void> route) async {
+    _closeMoreMenu();
+    if (!mounted) return;
+    await Navigator.of(context).push<void>(route);
+  }
+
+  Future<void> _resetToRoute(Route<void> route) async {
+    _closeMoreMenu();
+    if (!mounted) return;
+    await Navigator.of(context).pushAndRemoveUntil<void>(route, (_) => false);
+  }
+
   void _openSyncCenter() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => SyncCenterScreen(api: api)),
-    );
+    unawaited(_pushRoute(
+      MaterialPageRoute<void>(builder: (_) => SyncCenterScreen(api: api)),
+    ));
   }
 
   void _openNotifications() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => NotificationsScreen(api: api)),
-    );
+    unawaited(_pushRoute(
+      MaterialPageRoute<void>(builder: (_) => NotificationsScreen(api: api)),
+    ));
   }
 
   void _openTransfers() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const TransfersScreen()),
-    );
+    unawaited(_pushRoute(
+      MaterialPageRoute<void>(builder: (_) => const TransfersScreen()),
+    ));
   }
 
   Future<void> _showCommandPalette() async {
+    _closeMoreMenu();
+    if (!mounted) return;
     final controller = TextEditingController();
     final commands = <(IconData icon, String label, VoidCallback action)>[
       (Icons.home_outlined, 'Go to Home', () => _goTo(0)),
@@ -501,12 +537,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     title: Text('Search for “$query”'),
                     onTap: () {
                       Navigator.pop(sheetContext);
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
+                      unawaited(_pushRoute(
+                        MaterialPageRoute<void>(
                           builder: (_) =>
                               SearchScreen(api: api, initialQuery: query),
                         ),
-                      );
+                      ));
                     },
                   ),
                 for (final command in matches)
@@ -660,11 +696,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                         child: _moreMenuTile(
                           icon: Icons.document_scanner_outlined,
                           title: 'Scan',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
+                          onTap: () => unawaited(_pushRoute(
+                            MaterialPageRoute<void>(
                               builder: (_) => ScannerScreen(api: api),
                             ),
-                          ),
+                          )),
                         ),
                       ),
                       Expanded(
@@ -750,20 +786,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _queuedSharedFiles.addAll(files.where((file) => known.add(file.uri)));
     _deferShareProcessing = true;
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          action: SnackBarAction(
-            label: 'Review',
-            onPressed: () {
-              _deferShareProcessing = false;
-              unawaited(_processSharedFiles());
-            },
-          ),
-        ),
-      );
+    _showPillNotice(
+      message,
+      actionLabel: 'Review',
+      onAction: () {
+        _deferShareProcessing = false;
+        unawaited(_processSharedFiles());
+      },
+    );
   }
 
   Future<void> _processSharedFiles() async {
@@ -773,6 +803,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         _queuedSharedFiles.isEmpty) {
       return;
     }
+    _closeMoreMenu();
     _shareSheetShowing = true;
     _deferShareProcessing = false;
     setState(() {});
@@ -1011,10 +1042,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     await api.logout();
     await _purgeLocalCaches();
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => LoginScreen(session: widget.session)),
-      (_) => false,
-    );
+    unawaited(_resetToRoute(
+      MaterialPageRoute<void>(
+        builder: (_) => LoginScreen(session: widget.session),
+      ),
+    ));
   }
 
   /// Removes everything this account cached on the device: thumbnails, any
@@ -1038,7 +1070,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _queueTimer?.cancel();
     _transferEvents?.cancel();
-    _transferToastTimer?.cancel();
+    _transferNoticeTimer?.cancel();
+    _transferStripHoldTimer?.cancel();
+    if (_observedRoute != null) {
+      AppShell.routeObserver.unsubscribe(this);
+    }
     _uploads.removeListener(_refreshTransferStrip);
     // The app is no longer in the foreground, so the background worker may
     // take over the queue.
@@ -1152,6 +1188,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }, growable: false);
   }
 
+  Widget _buildPillNotice() {
+    final notice = _pillNotice!;
+    return NexaPillNotice(
+      key: ValueKey(notice.id),
+      message: notice.message,
+      actionLabel: notice.actionLabel,
+      onAction: notice.onAction,
+      onDismissed: () => _dismissPillNotice(notice.id),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
@@ -1174,6 +1221,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   LogicalKeyboardKey.keyK,
                   meta: true,
                 ): _showCommandPalette,
+                const SingleActivator(LogicalKeyboardKey.escape):
+                    _closeMoreMenu,
               },
               child: Focus(
                 autofocus: true,
@@ -1224,6 +1273,27 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                                 bottom: AppDimens.space16,
                                 child: _buildTransferStrip(maxWidth: 460),
                               ),
+                            if (_pillNotice != null && !_moreSheetOpen)
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: _transferStripVisible
+                                    ? _transferStripSpace(AppDimens.space16)
+                                    : AppDimens.space16,
+                                child: Center(
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: AppDimens.bottomNavMaxWidth,
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: AppDimens.space12,
+                                      ),
+                                      child: _buildPillNotice(),
+                                    ),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -1251,129 +1321,152 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     return PopScope(
         canPop: index == 0 && !_moreSheetOpen,
         onPopInvokedWithResult: (didPop, _) => _handleSystemBack(didPop),
-        child: Scaffold(
-          // This is the app canvas, not a navigation bar: the page fills the
-          // screen and paints behind the independently positioned pill.
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          body: Stack(
-            fit: StackFit.expand,
-            children: [
-              ExcludeSemantics(
-                excluding: _moreSheetOpen,
-                child: MediaQuery(
-                  // Keep the page at full height so its background/content can
-                  // continue behind the pill. This inset is a scroll-clearance
-                  // hint only; the pill itself remains the only bottom overlay.
-                  data: MediaQuery.of(context).copyWith(
-                    padding: MediaQuery.paddingOf(context).copyWith(
-                      bottom: pillInset,
-                    ),
-                  ),
-                  child: _PageHost(
-                    index: index,
-                    visited: _visited,
-                    pages: pages,
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: AppDimens.space10 +
-                    bottomInset +
-                    AppDimens.bottomNavHeight +
-                    AppDimens.space8,
-                child: ExcludeSemantics(
+        child: CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.escape): _closeMoreMenu,
+          },
+          child: Scaffold(
+            // This is the app canvas, not a navigation bar: the page fills the
+            // screen and paints behind the independently positioned pill.
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            body: Stack(
+              fit: StackFit.expand,
+              children: [
+                ExcludeSemantics(
                   excluding: _moreSheetOpen,
-                  child: _buildTransferStrip(),
-                ),
-              ),
-              if (_moreSheetOpen) ...[
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _closeMoreMenu,
-                    child: ColoredBox(
-                      color: Theme.of(context).colorScheme.scrim.withValues(
-                            alpha: 0.32,
-                          ),
+                  child: MediaQuery(
+                    // Keep the page at full height so its background/content can
+                    // continue behind the pill. This inset is a scroll-clearance
+                    // hint only; the pill itself remains the only bottom overlay.
+                    data: MediaQuery.of(context).copyWith(
+                      padding: MediaQuery.paddingOf(context).copyWith(
+                        bottom: pillInset,
+                      ),
+                    ),
+                    child: _PageHost(
+                      index: index,
+                      visited: _visited,
+                      pages: pages,
                     ),
                   ),
                 ),
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: AppDimens.bottomNavHeight +
-                      AppDimens.space10 * 2 +
+                  bottom: AppDimens.space10 +
                       bottomInset +
-                      28,
-                  child: Focus(
-                    autofocus: true,
-                    onKeyEvent: (node, event) {
-                      final isEscape =
-                          event is KeyDownEvent || event is KeyRepeatEvent;
-                      if (!isEscape ||
-                          event.logicalKey != LogicalKeyboardKey.escape) {
-                        return KeyEventResult.ignored;
-                      }
-                      _closeMoreMenu();
-                      return KeyEventResult.handled;
-                    },
-                    child: Semantics(
-                      scopesRoute: true,
-                      namesRoute: true,
-                      explicitChildNodes: true,
-                      label: 'More tools and settings',
-                      child: _buildMoreMenu(),
-                    ),
-                  ),
-                ),
-              ],
-              if (!_shareSheetShowing)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  // Keep the pill separate from the system gesture area; the pill's
-                  // own surface, outline, and shadow create its floating appearance.
-                  bottom: AppDimens.space10 + bottomInset,
+                      AppDimens.bottomNavHeight +
+                      AppDimens.space8,
                   child: ExcludeSemantics(
                     excluding: _moreSheetOpen,
-                    child: SafeArea(
-                      top: false,
-                      bottom: false,
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(
-                            maxWidth: AppDimens.bottomNavMaxWidth,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppDimens.space12,
+                    child: _buildTransferStrip(),
+                  ),
+                ),
+                if (_moreSheetOpen) ...[
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _closeMoreMenu,
+                      child: ColoredBox(
+                        color: Theme.of(context).colorScheme.scrim.withValues(
+                              alpha: 0.32,
                             ),
-                            child: NexaBottomNav(
-                              currentIndex: index >= 4 ? 4 : index,
-                              onTap: (value) {
-                                if (value == 4) {
-                                  _showMoreSheet();
-                                } else {
-                                  _goTo(value);
-                                }
-                              },
-                              items: NexaBottomNavItems.primary,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: AppDimens.bottomNavHeight +
+                        AppDimens.space10 * 2 +
+                        bottomInset +
+                        28,
+                    child: Focus(
+                      autofocus: true,
+                      onKeyEvent: (node, event) {
+                        final isEscape =
+                            event is KeyDownEvent || event is KeyRepeatEvent;
+                        if (!isEscape ||
+                            event.logicalKey != LogicalKeyboardKey.escape) {
+                          return KeyEventResult.ignored;
+                        }
+                        _closeMoreMenu();
+                        return KeyEventResult.handled;
+                      },
+                      child: Semantics(
+                        scopesRoute: true,
+                        namesRoute: true,
+                        explicitChildNodes: true,
+                        label: 'More tools and settings',
+                        child: _buildMoreMenu(),
+                      ),
+                    ),
+                  ),
+                ],
+                if (!_shareSheetShowing)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    // Keep the pill separate from the system gesture area; the pill's
+                    // own surface, outline, and shadow create its floating appearance.
+                    bottom: AppDimens.space10 + bottomInset,
+                    child: ExcludeSemantics(
+                      excluding: _moreSheetOpen,
+                      child: SafeArea(
+                        top: false,
+                        bottom: false,
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              maxWidth: AppDimens.bottomNavMaxWidth,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppDimens.space12,
+                              ),
+                              child: _pillNotice != null
+                                  ? _buildPillNotice()
+                                  : NexaBottomNav(
+                                      currentIndex: index >= 4 ? 4 : index,
+                                      onTap: (value) {
+                                        if (value == 4) {
+                                          _showMoreSheet();
+                                        } else {
+                                          _goTo(value);
+                                        }
+                                      },
+                                      items: NexaBottomNavItems.primary,
+                                    ),
                             ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ));
   }
 }
 
 enum _SharedUploadChoice { root, createFolder, chooseFolder }
+
+/// One transient in-pill message. A monotonically increasing id gives each
+/// notice a fresh key so back-to-back messages restart the auto-dismiss timer.
+class _PillNotice {
+  const _PillNotice({
+    required this.id,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final int id;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+}
 
 /// Inputs a cached destination was built against. Services and the session are
 /// compared by identity; the one-shot Files intent is compared by value.

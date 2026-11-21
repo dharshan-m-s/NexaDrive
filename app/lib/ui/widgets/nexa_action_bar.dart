@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/design/app_dimensions.dart';
-import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
+import 'nexa_motion.dart';
 import 'nexa_surface.dart';
 
 /// Reveals a bar by sliding it in and fading it, so entering and leaving a mode
@@ -25,19 +25,10 @@ class NexaRevealBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: AppMotion.resolve(context, AppMotion.normal),
-      reverseDuration: AppMotion.resolve(context, AppMotion.fast),
-      switchInCurve: AppMotion.curveFor(context, AppMotion.standardCurve),
-      switchOutCurve: AppMotion.curveFor(context, AppMotion.standardCurve),
-      transitionBuilder: (child, animation) => SizeTransition(
-        sizeFactor: animation,
-        alignment: alignment,
-        child: FadeTransition(opacity: animation, child: child),
-      ),
-      child: visible
-          ? KeyedSubtree(key: const ValueKey('shown'), child: child)
-          : const SizedBox.shrink(key: ValueKey('hidden')),
+    return NexaFlowReveal(
+      visible: visible,
+      alignment: alignment,
+      child: child,
     );
   }
 }
@@ -176,17 +167,20 @@ class NexaActionItem extends StatelessWidget {
           labelStyle: AppTextStyle.labelMedium.copyWith(color: effectiveFg),
         );
 
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
-      child: ChipTheme(
-        data: chipTheme,
-        child: ActionChip(
-          avatar: Icon(icon, size: AppDimens.iconSmall, color: effectiveFg),
-          label: Text(
-            label,
-            style: AppTextStyle.labelMedium.copyWith(color: effectiveFg),
+    return NexaElasticPress(
+      enabled: enabled,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppDimens.touchTarget),
+        child: ChipTheme(
+          data: chipTheme,
+          child: ActionChip(
+            avatar: Icon(icon, size: AppDimens.iconSmall, color: effectiveFg),
+            label: Text(
+              label,
+              style: AppTextStyle.labelMedium.copyWith(color: effectiveFg),
+            ),
+            onPressed: enabled ? onTap : null,
           ),
-          onPressed: enabled ? onTap : null,
         ),
       ),
     );
@@ -215,19 +209,22 @@ class NexaIconActionItem extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final fg = color ?? scheme.onSurfaceVariant;
 
-    return IconButton(
-      onPressed: enabled ? onTap : null,
-      icon: Icon(
-        icon,
-        size: AppDimens.iconMedium,
-        color: enabled ? fg : fg.withValues(alpha: 0.38),
-      ),
-      tooltip: tooltip,
-      style: IconButton.styleFrom(
-        backgroundColor: Colors.transparent,
-        minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
-        padding: const EdgeInsets.all(AppDimens.space8),
-        shape: const StadiumBorder(),
+    return NexaElasticPress(
+      enabled: enabled,
+      child: IconButton(
+        onPressed: enabled ? onTap : null,
+        icon: Icon(
+          icon,
+          size: AppDimens.iconMedium,
+          color: enabled ? fg : fg.withValues(alpha: 0.38),
+        ),
+        tooltip: tooltip,
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          minimumSize: const Size(AppDimens.touchTarget, AppDimens.touchTarget),
+          padding: const EdgeInsets.all(AppDimens.space8),
+          shape: const StadiumBorder(),
+        ),
       ),
     );
   }

@@ -1,18 +1,29 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:nexadrive/core/design/app_colors.dart';
 import 'package:nexadrive/core/design/app_theme.dart';
 import 'package:nexadrive/core/models/file_entry.dart';
 import 'package:nexadrive/main.dart';
 import 'package:nexadrive/services/api.dart';
 import 'package:nexadrive/services/session.dart';
+import 'package:nexadrive/services/upload_item.dart';
+import 'package:nexadrive/services/upload_manager.dart';
+import 'package:nexadrive/services/upload_store.dart';
 import 'package:nexadrive/ui/screens/files/file_share_sheet.dart';
+import 'package:nexadrive/ui/screens/home/home_screen.dart';
 import 'package:nexadrive/ui/screens/files/files_screen.dart';
 import 'package:nexadrive/ui/screens/trash/trash_screen.dart';
+import 'package:nexadrive/ui/shell/app_shell.dart';
+import 'package:nexadrive/ui/widgets/active_transfer_strip.dart';
+import 'package:nexadrive/ui/widgets/nexa_pill_notice.dart';
+import 'package:nexadrive/ui/widgets/upload_progress_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Layout and state regression tests for the redesigned screens.
@@ -58,6 +69,88 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
   }
+
+  /// The More overlay's scrim is the only 32%-alpha ColoredBox in the shell.
+  Finder moreScrim() => find.byWidgetPredicate(
+        (widget) =>
+            widget is ColoredBox &&
+            (widget.color.a * 255).round().clamp(0, 255) == 82,
+      );
+
+  group('Home screen', () {
+    testWidgets('quick actions do not inherit pill clearance as trailing space',
+        (tester) async {
+      tester.view.physicalSize = const Size(720, 1560);
+      tester.view.devicePixelRatio = 1.75;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final files = <Map<String, dynamic>>[
+        for (var i = 0; i < 3; i++)
+          {
+            'name': 'file$i.jpg',
+            'path': 'file$i.jpg',
+            'type': 'file',
+            'size': 1000,
+            'modified_at': '2026-11-21T10:0$i:00Z',
+          },
+      ];
+      final api = Api(
+        session(),
+        client: MockClient((request) async {
+          final path = request.url.path;
+          Object body;
+          if (path.endsWith('/api/storage')) {
+            body = {
+              'used_bytes': 1000,
+              'file_count': 24,
+              'quota_bytes': null,
+            };
+          } else if (path.endsWith('/api/files')) {
+            body = files;
+          } else {
+            body = <Object>[];
+          }
+          return http.Response.bytes(
+            utf8.encode(jsonEncode(body)),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      // The shell exposes floating-pill clearance through MediaQuery padding.
+      // A scrollable grid must not consume it as trailing sliver padding.
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: MediaQuery(
+            data: MediaQueryData(
+              padding: const EdgeInsets.only(bottom: 130),
+            ),
+            child: Scaffold(
+              body: HomeScreen(
+                session: session(),
+                api: api,
+                onNavigate: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await tester.pumpAndSettle();
+
+      final grid = tester.renderObject<RenderBox>(find.byType(GridView));
+      final gridBottom = grid.localToGlobal(Offset.zero).dy + grid.size.height;
+      final recentTop = tester.getTopLeft(find.text('RECENT')).dy;
+      expect(recentTop - gridBottom, greaterThanOrEqualTo(24));
+      expect(recentTop - gridBottom, lessThan(60));
+      expect(tester.takeException(), isNull);
+    });
+  });
 
   group('Files screen', () {
     testWidgets('an empty folder offers a real next action', (tester) async {
@@ -213,6 +306,13 @@ void main() {
 
     Future<void> pumpShell(WidgetTester tester, Api api) async {
       SharedPreferences.setMockInitialValues({});
+      // A private, disk-free journal keeps one test's transfers from leaving
+      // a strip or notice behind in another test.
+      UploadManager.forTesting(
+        File('unused-upload-queue.jsonl'),
+        bootstrap: false,
+        store: _MemoryUploadStore(),
+      );
       tester.view.physicalSize = const Size(400, 900);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -297,6 +397,100 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('switching tabs closes More and its scrim', (tester) async {
+      await pumpShell(tester, shellApi());
+
+      await tester.tap(find.text('More'));
+      await tester.pumpAndSettle();
+      expect(find.text('Scan'), findsOneWidget);
+      expect(moreScrim(), findsOneWidget);
+
+      await tester.tap(find.text('Files'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Scan'), findsNothing);
+      expect(moreScrim(), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a pushed route always closes More, back does not restore it',
+        (tester) async {
+      await pumpShell(tester, shellApi());
+
+      await tester.tap(find.text('More'));
+      await tester.pumpAndSettle();
+      expect(moreScrim(), findsOneWidget);
+
+      // Push directly through the Navigator: even a route the shell did not
+      // initiate must not leave the in-shell menu or scrim mounted.
+      final navigator = Navigator.of(tester.element(find.byType(AppShell)));
+      unawaited(navigator.push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('Pushed page')),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pushed page'), findsOneWidget);
+      expect(find.text('Scan'), findsNothing);
+      expect(moreScrim(), findsNothing);
+
+      navigator.pop();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pushed page'), findsNothing);
+      expect(find.text('Scan'), findsNothing);
+      expect(moreScrim(), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('upload completion leaves no modal or popup behind',
+        (tester) async {
+      final api = shellApi();
+      await pumpShell(tester, api);
+      // A checked-in fixture is visible both to the widget test's fake I/O
+      // proxy and to the real I/O zone that reads upload chunks.
+      final source = File('test/fixtures/upload_done.txt');
+
+      final shellContext = tester.element(find.byType(AppShell));
+      // Both the journal and the file chunk reads are real I/O, so they must
+      // run outside the widget test's fake-async zone. Waiting for the manager
+      // event avoids racing the background transfer against fake timers.
+      await tester.runAsync(() async {
+        final completed = UploadManager.current.events
+            .firstWhere((event) => event.kind == UploadEventKind.completed)
+            .timeout(const Duration(seconds: 10));
+        await UploadProgressDialog.showSources(
+          shellContext,
+          sources: [
+            UploadSource(
+              path: source.path,
+              name: 'done.txt',
+              size: 4,
+            ),
+          ],
+          folder: '',
+          api: api,
+        );
+        await completed;
+      });
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      expect(
+        UploadManager.current.items().single.state,
+        UploadState.completed,
+        reason: 'the fake server must actually finish the upload',
+      );
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(find.byType(NexaPillNotice), findsNothing);
+      // Completion feedback belongs here, and the strip lingers briefly.
+      expect(find.byType(ActiveTransferStrip), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets(
         "Home's New folder shortcut opens the folder dialog on My files",
         (tester) async {
@@ -338,6 +532,33 @@ void main() {
 
 /// Minimal HTTP client that fails every request, so [Api] surfaces a transport
 /// error exactly as it would against an unreachable server.
+/// Disk-free journal for widget tests: fake-async zones cannot settle real
+/// file I/O, and these tests only need completion feedback, not persistence.
+class _MemoryUploadStore extends UploadStore {
+  _MemoryUploadStore() : super(File('unused-upload-queue.jsonl'));
+
+  @override
+  Future<List<UploadItem>> load() async => const <UploadItem>[];
+
+  @override
+  Future<void> append(UploadItem item) async {}
+
+  @override
+  Future<void> appendAll(List<UploadItem> items) async {}
+
+  @override
+  Future<void> remove(String id) async {}
+
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<void> compact([List<UploadItem>? items]) async {}
+
+  @override
+  Future<void> dispose() async {}
+}
+
 class _NeverClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
@@ -357,10 +578,16 @@ class _TransportFailure implements Exception {
 class _ShellClient extends http.BaseClient {
   _ShellClient(this.onListing);
   final void Function() onListing;
+  final Map<String, int> _uploadSizes = <String, int>{};
+  final Map<String, String> _uploadPaths = <String, String>{};
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (request is http.StreamedRequest) {
+      await request.finalize().drain<void>();
+    }
     final path = request.url.path;
+    final query = request.url.queryParameters;
     Object body;
     switch (path) {
       case '/api/files':
@@ -382,6 +609,33 @@ class _ShellClient extends http.BaseClient {
           'api_version': '1.1.0',
           'instance_id': 'test'
         };
+      case '/api/uploads/chunk':
+        final id = query['upload_id'] ?? '';
+        final total = int.tryParse(query['total'] ?? '') ?? 0;
+        final folder = query['path'] ?? '';
+        final name = query['name'] ?? '';
+        final offset = int.tryParse(query['offset'] ?? '') ?? 0;
+        final remotePath = folder.isEmpty ? name : '$folder/$name';
+        _uploadSizes[id] = total;
+        _uploadPaths[id] = remotePath;
+        body = offset >= total
+            ? {
+                'status': 'completed',
+                'offset': total,
+                'bytes_received': total,
+                'path': remotePath,
+              }
+            : {'status': 'receiving', 'offset': total};
+      case '/api/uploads/status':
+        final id = query['upload_id'] ?? '';
+        final size = _uploadSizes[id];
+        body = size == null
+            ? {'status': 'unknown', 'bytes_received': 0}
+            : {
+                'status': 'receiving',
+                'bytes_received': size,
+                'path': _uploadPaths[id],
+              };
       default:
         body = <Object>[];
     }

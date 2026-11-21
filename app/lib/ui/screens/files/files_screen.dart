@@ -513,6 +513,8 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   void _onScaleStart(ScaleStartDetails details) {
+    // Cheap early capture when the recognizer happens to accept with two
+    // fingers. The common one-finger accept is handled lazily in _onScaleUpdate.
     if (details.pointerCount == 2) {
       // Density is a grid concept; make the pinch visible even when the user
       // is currently in the compact list.
@@ -522,8 +524,16 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details) {
-    final base = _pinchBaseColumns;
-    if (base == null || details.pointerCount < 2) return;
+    if (details.pointerCount < 2 || _dragSelecting) return;
+    var base = _pinchBaseColumns;
+    if (base == null) {
+      // Density is a grid concept; make the pinch visible even when the user
+      // starts from the compact list. Switch before capturing the base so the
+      // list -> grid transition is part of the same gesture.
+      if (!_grid) setState(() => _grid = true);
+      base = _gridColumns.toDouble();
+      _pinchBaseColumns = base;
+    }
     if (!base.isFinite || base <= 0) return;
     final scale = details.scale;
     // Interactive pinching is inverted relative to layout density: fingers

@@ -323,6 +323,21 @@ class _PhotoViewerState extends State<PhotoViewer> {
     _prefetchAround(index);
   }
 
+  /// Browsing is programmatic only: raw pointer events decide when a swipe is
+  /// a single finger page change, so a pinch can never be stolen mid-gesture.
+  void _changePage(int index) {
+    if (index < 0 || index >= _photos.length || index == _current) return;
+    if (AppMotion.reducedMotion(context)) {
+      _controller.jumpToPage(index);
+      return;
+    }
+    _controller.animateToPage(
+      index,
+      duration: AppMotion.resolve(context, AppMotion.normal),
+      curve: AppMotion.standard,
+    );
+  }
+
   /// One dark tonal scheme for every overlay that floats above the media.
   ThemeData _chromeTheme(BuildContext context) => Theme.of(context).copyWith(
         brightness: Brightness.dark,
@@ -675,12 +690,18 @@ class _PhotoViewerState extends State<PhotoViewer> {
             child: _SwipeDismissLayer(
               canDismiss: canDismiss,
               canShowDetails: !_zoomed && !_filmstripVisible,
+              canPage: !_zoomed && !_filmstripVisible,
               onDismiss: () {
                 if (mounted) Navigator.of(context).maybePop();
               },
               onDetails: _showDetails,
+              onPageDelta: (delta) => _changePage(_current + delta),
               child: PageView.builder(
                 controller: _controller,
+                // Browsing is owned by the raw-pointer layer above. This keeps
+                // scroll recognizers out of every pinch, including the first
+                // moments when only one finger has landed.
+                physics: const NeverScrollableScrollPhysics(),
                 onPageChanged: _onPageChanged,
                 itemCount: _photos.length,
                 itemBuilder: (context, i) {
@@ -837,13 +858,13 @@ class _PhotoViewerState extends State<PhotoViewer> {
           ),
           if (_photos.length > 1 && _filmstripVisible)
             _Filmstrip(
-              visible: _chromeVisible,
+              visible: _chromeVisible && !_zoomed,
               count: _photos.length,
               current: _current,
               pathFor: _pathAt,
               thumbnailFor: widget.thumbnailLookup,
               onJump: (index) {
-                _controller.jumpToPage(index);
+                _changePage(index);
                 _showChrome();
               },
             ),
@@ -1039,26 +1060,30 @@ class _ZoomIndicator extends StatelessWidget {
   }
 }
 
-/// Owns the mobile swipe-to-dismiss gesture around the page view.
+/// Owns the mobile swipe gestures around the page view.
 ///
-/// Vertical drags are only registered while the photo is at fit scale and no
-/// browse layer is open. While a second finger is down the vertical recognizers
-/// are removed entirely, so pinch zoom owns the gesture arena. Horizontal
-/// PageView swipes, pinch zoom and double-tap keep their own recognizers;
-/// `InteractiveViewer` disables panning at fit so it cannot steal the downward
-/// drag.
+/// The `PageView` itself is never scrollable: raw pointer events decide whether
+/// a gesture is a single-finger page swipe or a two-finger photo zoom. This is
+/// deliberate — a real pinch often lands its second finger after the first has
+/// already moved far enough for a scroll recognizer to claim the arena, which
+/// made zoom feel intermittent. `Listener` does not compete for that arena, so
+/// `InteractiveViewer` always receives pinch/scale events.
 class _SwipeDismissLayer extends StatefulWidget {
   final bool canDismiss;
   final bool canShowDetails;
+  final bool canPage;
   final VoidCallback onDismiss;
   final VoidCallback onDetails;
+  final ValueChanged<int> onPageDelta;
   final Widget child;
 
   const _SwipeDismissLayer({
     required this.canDismiss,
     required this.canShowDetails,
+    required this.canPage,
     required this.onDismiss,
     required this.onDetails,
+    required this.onPageDelta,
     required this.child,
   });
 
@@ -1073,16 +1098,29 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
   AnimationController? _settle;
 
   /// Raw pointer IDs seen by [Listener]. A second finger means the user is
-  /// pinching the photo, so vertical dismissal must yield to the viewer's
-  /// scale recognizer until every finger is lifted.
+  /// pinching the photo, so page swipes and vertical dismissal yield to the
+  /// viewer's scale recognizer until every finger is lifted.
   final Set<int> _activePointers = <int>{};
   bool _pinchSuspended = false;
+
+  /// Single-pointer horizontal tracking. This lives on [Listener] instead of a
+  /// [GestureDetector] so it can never win a gesture arena from a pinch.
+  int? _swipePointer;
+  Offset _swipeStart = Offset.zero;
+  Offset _swipeLast = Offset.zero;
+  Duration _swipeLastTime = Duration.zero;
+  Axis? _swipeAxis;
+  double _swipeDx = 0;
+  double _swipeVelocity = 0;
 
   @override
   void didUpdateWidget(covariant _SwipeDismissLayer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_drag != 0 && !widget.canDismiss) {
       _resetDismissDrag(notify: false);
+    }
+    if (_swipeDx != 0 && !widget.canPage) {
+      _resetSwipe(notify: false);
     }
   }
 
@@ -1104,22 +1142,97 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
     if (notify && mounted) setState(() {});
   }
 
+  void _resetSwipe({bool notify = true}) {
+    final hadOffset = _swipeDx != 0;
+    _swipePointer = null;
+    _swipeAxis = null;
+    _swipeDx = 0;
+    _swipeVelocity = 0;
+    if (hadOffset && notify && mounted) setState(() {});
+  }
+
   void _onPointerDown(PointerDownEvent event) {
     final wasSuspended = _pinchSuspended;
     _activePointers.add(event.pointer);
     if (_activePointers.length > 1) {
       _resetDismissDrag(notify: false);
+      _resetSwipe(notify: false);
       _pinchSuspended = true;
+    } else {
+      _resetSwipe(notify: false);
+      _swipePointer = event.pointer;
+      _swipeStart = event.position;
+      _swipeLast = event.position;
+      _swipeLastTime = event.timeStamp;
     }
     if (wasSuspended != _pinchSuspended && mounted) setState(() {});
   }
 
+  void _onPointerMove(PointerMoveEvent event) {
+    if (_swipePointer != event.pointer) return;
+    if (!widget.canPage || _pinchSuspended || _activePointers.length != 1) {
+      _resetSwipe();
+      return;
+    }
+
+    final dx = event.position.dx - _swipeStart.dx;
+    final dy = event.position.dy - _swipeStart.dy;
+    final slop = AppMotion.pressTouchSlop;
+    _swipeAxis ??= dx.abs() > slop && dx.abs() > dy.abs()
+        ? Axis.horizontal
+        : dy.abs() > slop
+            ? Axis.vertical
+            : null;
+    if (_swipeAxis != Axis.horizontal) {
+      _swipeLast = event.position;
+      _swipeLastTime = event.timeStamp;
+      return;
+    }
+
+    final elapsed = (event.timeStamp - _swipeLastTime).inMilliseconds;
+    if (elapsed > 0) {
+      _swipeVelocity = (event.position.dx - _swipeLast.dx) * 1000 / elapsed;
+    }
+    _swipeLast = event.position;
+    _swipeLastTime = event.timeStamp;
+
+    final width = MediaQuery.sizeOf(context).width;
+    final next = dx.clamp(-width * 0.6, width * 0.6);
+    if ((next - _swipeDx).abs() > 0.5 && mounted) {
+      setState(() => _swipeDx = next);
+    }
+  }
+
   void _onPointerUpOrCancel(PointerEvent event) {
+    final wasSwipe = _swipePointer == event.pointer;
+    final wasUp = event is PointerUpEvent;
     _activePointers.remove(event.pointer);
+    if (wasSwipe) _finishSwipe(wasUp: wasUp);
     if (_activePointers.isEmpty && _pinchSuspended) {
       _pinchSuspended = false;
       if (mounted) setState(() {});
     }
+  }
+
+  void _finishSwipe({required bool wasUp}) {
+    final axis = _swipeAxis;
+    final dx = _swipeDx;
+    final velocity = _swipeVelocity;
+    final tracked = _swipePointer != null;
+    _resetSwipe(notify: false);
+    if (!tracked || !wasUp || !widget.canPage || axis != Axis.horizontal) {
+      return;
+    }
+
+    final width = MediaQuery.sizeOf(context).width;
+    final threshold = width * 0.16;
+    final delta = dx <= -threshold || (velocity < -600 && dx < -20)
+        ? 1
+        : dx >= threshold || (velocity > 600 && dx > 20)
+            ? -1
+            : 0;
+    if (mounted) setState(() {});
+    if (delta != 0) widget.onPageDelta(delta);
   }
 
   void _settleBack() {
@@ -1155,20 +1268,22 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
     final gesturesEnabled =
         (widget.canDismiss || widget.canShowDetails) && !_pinchSuspended;
 
-    Widget content = widget.child;
-    if (_drag > 0 && !AppMotion.reducedMotion(context)) {
-      final progress = (_drag / height).clamp(0.0, 1.0);
-      content = Opacity(
-        opacity: (1 - progress * 0.5).clamp(0.35, 1.0),
-        child: Transform.translate(
-          offset: Offset(0, _drag),
-          child: content,
-        ),
-      );
-    }
+    // Keep this wrapper in the tree at all times. Conditionally inserting or
+    // removing it makes Flutter replace the PageView element, which recreates
+    // its PagePosition at the initial page and silently undoes a swipe.
+    final reduce = AppMotion.reducedMotion(context);
+    final progress = (_drag / height).clamp(0.0, 1.0);
+    final content = Opacity(
+      opacity: reduce ? 1.0 : (1 - progress * 0.5).clamp(0.35, 1.0),
+      child: Transform.translate(
+        offset: reduce ? Offset.zero : Offset(_swipeDx, _drag),
+        child: widget.child,
+      ),
+    );
 
     return Listener(
       onPointerDown: _onPointerDown,
+      onPointerMove: _onPointerMove,
       onPointerUp: _onPointerUpOrCancel,
       onPointerCancel: _onPointerUpOrCancel,
       child: GestureDetector(
@@ -1530,6 +1645,91 @@ class _MediaAction extends StatelessWidget {
   }
 }
 
+/// Pure, side-effect-free zoom policy for the full-screen photo viewer.
+///
+/// Kept at library scope with a public name so `test/photo_zoom_test.dart` can
+/// assert the exact bounds and matrices the viewer configures without pumping
+/// a network-backed image pipeline. `_ZoomablePhotoState` is the only consumer.
+abstract final class PhotoZoomPolicy {
+  /// Photos never shrink below their fitted display size.
+  static double minScale(double fit) => fit;
+
+  /// The ceiling is always relative to fit.
+  static double maxScale(double fit) => fit * 8;
+
+  /// Relative slack for floating-point pinch noise. A photo is "zoomed" as
+  /// soon as it is genuinely larger than fit, not at the old 1.25x threshold.
+  static const double zoomEpsilon = 1e-3;
+
+  static bool isZoomed(double currentScale, double fit) =>
+      currentScale > fit * (1 + zoomEpsilon);
+
+  static bool canPan(double currentScale, double fit) =>
+      isZoomed(currentScale, fit);
+
+  /// Double tap always returns to fit once there is any real zoom.
+  static double toggleTarget(double currentScale, double fit) =>
+      isZoomed(currentScale, fit) ? fit : fit * 3;
+
+  /// `InteractiveViewer` normally refuses to scale its child below the size
+  /// needed to *cover* the viewport. For a slightly taller photo that hidden
+  /// floor is ~1.2x fit, which both blocked zoom-out and enabled panning.
+  /// Infinite boundaries remove that hidden floor so [minScale] is the real
+  /// one; [settle] then applies our own centring and edge clamping.
+  static const EdgeInsets boundaryMargin = EdgeInsets.all(double.infinity);
+
+  static double fitFor(Size viewport, Size photo) {
+    if (photo.width <= 0 || photo.height <= 0) return 1;
+    return math
+        .min(viewport.width / photo.width, viewport.height / photo.height)
+        .clamp(0.02, 4.0);
+  }
+
+  /// Maps the image centre onto the viewport centre at [scale].
+  static Matrix4 matrixFor(double scale, Size viewport, Size photo) {
+    return Matrix4.identity()
+      ..translateByDouble(viewport.width / 2, viewport.height / 2, 0, 1)
+      ..scaleByDouble(scale, scale, scale, 1)
+      ..translateByDouble(-photo.width / 2, -photo.height / 2, 0, 1);
+  }
+
+  /// Applies the viewer's real bounds after every matrix change.
+  ///
+  /// At (or within floating-point noise of) fit this restores the exact
+  /// centred matrix, so a pinch can never strand the photo to one side. Once
+  /// zoomed, panning is clamped so the photo still covers the viewport.
+  static Matrix4 settle(Matrix4 matrix, Size viewport, Size photo, double fit) {
+    final scale = matrix.getMaxScaleOnAxis();
+    if (!isZoomed(scale, fit)) {
+      return matrixFor(fit, viewport, photo);
+    }
+    return clampTranslation(matrix, viewport, photo);
+  }
+
+  /// Clamps only the translation of [matrix]; its scale is left untouched.
+  static Matrix4 clampTranslation(Matrix4 matrix, Size viewport, Size photo) {
+    final scaledWidth = photo.width * matrix.getMaxScaleOnAxis();
+    final scaledHeight = photo.height * matrix.getMaxScaleOnAxis();
+    final translation = matrix.getTranslation();
+    final x = _clampAxis(translation.x, scaledWidth, viewport.width);
+    final y = _clampAxis(translation.y, scaledHeight, viewport.height);
+    if ((x - translation.x).abs() < 1e-9 && (y - translation.y).abs() < 1e-9) {
+      return matrix;
+    }
+    return matrix.clone()
+      ..setTranslation(translation
+        ..x = x
+        ..y = y);
+  }
+
+  static double _clampAxis(double offset, double scaled, double viewport) {
+    // Letterboxing is allowed: if the photo is still smaller than the
+    // viewport in this axis, keep it centred instead of pinning an edge.
+    if (scaled <= viewport) return (viewport - scaled) / 2;
+    return offset.clamp(viewport - scaled, 0.0);
+  }
+}
+
 class _ZoomablePhoto extends StatefulWidget {
   final ui.Image image;
   final bool active;
@@ -1565,6 +1765,13 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
   late final AnimationController _zoomAnim;
   Matrix4Tween? _zoomTween;
   bool _zoomed = false;
+
+  /// One flag for panning, page swipes and swipe dismissal. It becomes true
+  /// as soon as the photo is genuinely larger than fit.
+  bool _canPan = false;
+
+  /// Guards the re-entrant listener fired when we write the corrected matrix.
+  bool _applyingBounds = false;
   late final VoidCallback _zoomListener;
 
   @override
@@ -1591,7 +1798,10 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
   @override
   void didUpdateWidget(covariant _ZoomablePhoto oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.image != widget.image) {
+    final leftActive = oldWidget.active && !widget.active;
+    if (oldWidget.image != widget.image || leftActive) {
+      _zoomAnim.stop();
+      _zoomTween = null;
       _fitted = false;
       _transform.value = Matrix4.identity();
     }
@@ -1607,10 +1817,19 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
   }
 
   void _onTransformChanged() {
-    final scale = _transform.value.getMaxScaleOnAxis();
+    if (_applyingBounds) return;
+    final vp = _viewport;
+    final settled = vp == null
+        ? _transform.value
+        : PhotoZoomPolicy.settle(_transform.value, vp, _photo, _fit);
+    if (!_sameMatrix(settled, _transform.value)) {
+      _applyingBounds = true;
+      _transform.value = settled;
+      _applyingBounds = false;
+    }
+    final scale = settled.getMaxScaleOnAxis();
     final next = ImageDecodePolicy.filterQualityForScale(scale);
-    final zoomed = scale > _fit * 1.25;
-    if (next != _quality && mounted) setState(() => _quality = next);
+    final zoomed = PhotoZoomPolicy.isZoomed(scale, _fit);
     if (_fit > 0) {
       widget.onScaleChanged.call((scale / _fit).clamp(0.1, 20.0));
     }
@@ -1618,25 +1837,34 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
       _zoomed = zoomed;
       if (mounted) widget.onZoomedChanged.call(zoomed);
     }
+    if (next != _quality || zoomed != _canPan) {
+      if (!mounted) return;
+      setState(() {
+        _quality = next;
+        _canPan = zoomed;
+      });
+    }
+  }
+
+  static bool _sameMatrix(Matrix4 a, Matrix4 b) {
+    final left = a.storage;
+    final right = b.storage;
+    if (left.length != right.length) return false;
+    for (var i = 0; i < left.length; i++) {
+      if ((left[i] - right[i]).abs() > 1e-9) return false;
+    }
+    return true;
   }
 
   Size get _photo =>
       Size(widget.image.width.toDouble(), widget.image.height.toDouble());
 
-  double _fitFor(Size viewport, Size photo) {
-    if (photo.width <= 0 || photo.height <= 0) return 1;
-    return math
-        .min(viewport.width / photo.width, viewport.height / photo.height)
-        .clamp(0.02, 4.0);
-  }
+  double _fitFor(Size viewport, Size photo) =>
+      PhotoZoomPolicy.fitFor(viewport, photo);
 
   /// Maps the image centre onto the viewport centre at [scale].
-  Matrix4 _matrixFor(double scale, Size viewport, Size photo) {
-    return Matrix4.identity()
-      ..translateByDouble(viewport.width / 2, viewport.height / 2, 0, 1)
-      ..scaleByDouble(scale, scale, 1, 1)
-      ..translateByDouble(-photo.width / 2, -photo.height / 2, 0, 1);
-  }
+  Matrix4 _matrixFor(double scale, Size viewport, Size photo) =>
+      PhotoZoomPolicy.matrixFor(scale, viewport, photo);
 
   void _applyFit() {
     final vp = _viewport;
@@ -1649,7 +1877,9 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
     final vp = _viewport;
     if (vp == null) return;
     final nowScale = _transform.value.getMaxScaleOnAxis();
-    final target = nowScale > _fit * 1.25 ? _fit : _fit * 3.0;
+    final target = PhotoZoomPolicy.toggleTarget(nowScale, _fit);
+    // Both targets go through the same matrix builder so returning to fit is
+    // exactly centred, not the inverse of a stale pinch focal translation.
     final end = _matrixFor(target, vp, _photo);
     if (AppMotion.reducedMotion(context)) {
       _transform.value = end;
@@ -1678,21 +1908,6 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
           });
         }
 
-        final minScale = fit * 0.9;
-        // InteractiveViewer's default boundary enforces a "cover" floor that
-        // is above our fitted transform. Expand the boundary just enough that
-        // this floor sits at or below minScale, so pinching in at fit really
-        // zooms out instead of jumping to cover. Pan stays bounded.
-        final boundaryMargin = math.max(
-          0.0,
-          math.max(
-                    viewport.width / minScale - photo.width,
-                    viewport.height / minScale - photo.height,
-                  ) /
-                  2 +
-              1.0,
-        );
-
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: widget.onTap,
@@ -1700,16 +1915,16 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
           child: InteractiveViewer(
             transformationController: _transform,
             constrained: false,
-            // Explicitly keep two-finger scaling available in both
-            // directions; panning is still only offered once zoomed.
-            boundaryMargin: EdgeInsets.all(boundaryMargin),
+            // Infinite boundaries remove InteractiveViewer's hidden cover-scale
+            // floor. settle() is the single source of truth for centring and
+            // edge clamping, so fit really means fit.
+            boundaryMargin: PhotoZoomPolicy.boundaryMargin,
             scaleEnabled: true,
-            // At fit scale there is nothing to pan; leaving it off stops the
-            // viewer competing with the mobile swipe-to-dismiss gesture. Once
-            // zoomed, pan stays enabled.
-            panEnabled: _zoomed,
-            minScale: minScale,
-            maxScale: math.max(_fit * 8, 1.4),
+            // Panning, page swipes, filmstrip jumps and swipe dismissal all
+            // follow this same real-zoom flag.
+            panEnabled: _canPan,
+            minScale: PhotoZoomPolicy.minScale(fit),
+            maxScale: PhotoZoomPolicy.maxScale(fit),
             clipBehavior: Clip.none,
             child: RawImage(
               image: widget.image,

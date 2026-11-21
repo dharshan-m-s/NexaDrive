@@ -14,6 +14,7 @@ import '../../../services/session.dart';
 import '../../../services/upload_manager.dart';
 import '../../navigation/file_opener.dart';
 import '../../widgets/nexa_components.dart';
+import '../../widgets/nexa_motion.dart';
 import '../files/files_screen.dart' show FilesIntent;
 import '../transfers/transfers_screen.dart';
 import 'storage_insights_screen.dart';
@@ -234,46 +235,51 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ------------------------------------------------- storage hero
-          NexaStateSwitcher(
-            stateKey: ValueKey(_heroState),
-            child: storage != null
-                ? NexaSurface(
-                    level: NexaSurfaceLevel.grouped,
-                    radius: AppDimens.radiusLarge,
-                    padding: const EdgeInsets.all(AppDimens.space16),
-                    child: _StorageHero(
-                      storage: storage,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              StorageInsightsScreen(api: widget.api),
-                        ),
-                      ),
-                    ),
-                  )
-                : _loading
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.only(top: AppDimens.space40),
-                          child: NexaCircularProgress(
-                            size: AppDimens.iconMedium,
+          // ------------------------- storage hero + quick actions entrance
+          // One bounded, non-repeating stagger on the first screenful only.
+          NexaStagger(
+            children: [
+              NexaStateSwitcher(
+                stateKey: ValueKey(_heroState),
+                child: storage != null
+                    ? NexaSurface(
+                        level: NexaSurfaceLevel.grouped,
+                        radius: AppDimens.radiusLarge,
+                        padding: const EdgeInsets.all(AppDimens.space16),
+                        child: _StorageHero(
+                          storage: storage,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  StorageInsightsScreen(api: widget.api),
+                            ),
                           ),
                         ),
                       )
-                    : _HomeConnectionNotice(
-                        message:
-                            _error ?? 'Check your connection and try again.',
-                        onRetry: load,
-                      ),
-          ),
-          // ------------------------------------- quick actions (focus blocks)
-          const SizedBox(height: AppDimens.space24),
-          const _SectionHeader('Quick actions'),
-          const SizedBox(height: AppDimens.space12),
-          _QuickActionsGrid(
-            onNavigate: widget.onNavigate,
-            onFilesIntent: widget.onFilesIntent,
+                    : _loading
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.only(top: AppDimens.space40),
+                              child: NexaCircularProgress(
+                                size: AppDimens.iconMedium,
+                              ),
+                            ),
+                          )
+                        : _HomeConnectionNotice(
+                            message: _error ??
+                                'Check your connection and try again.',
+                            onRetry: load,
+                          ),
+              ),
+              // --------------------------------- quick actions (focus blocks)
+              const SizedBox(height: AppDimens.space24),
+              const _SectionHeader('Quick actions'),
+              const SizedBox(height: AppDimens.space12),
+              _QuickActionsGrid(
+                onNavigate: widget.onNavigate,
+                onFilesIntent: widget.onFilesIntent,
+              ),
+            ],
           ),
           const SizedBox(height: AppDimens.space24),
 
@@ -431,6 +437,10 @@ class _QuickActionsGrid extends StatelessWidget {
     ];
 
     return GridView.count(
+      // The shell exposes pill clearance through MediaQuery.padding.bottom.
+      // A scrollable grid would otherwise consume that inset as trailing
+      // sliver padding, leaving a large empty band after the quick actions.
+      padding: EdgeInsets.zero,
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),

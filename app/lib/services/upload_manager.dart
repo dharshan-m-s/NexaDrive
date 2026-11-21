@@ -111,10 +111,20 @@ class UploadManager extends ChangeNotifier {
 
   /// Creates a manager that writes its journal to [file].
   @visibleForTesting
-  static UploadManager forTesting(File file) {
-    final manager = UploadManager._(UploadStore(file));
+  static UploadManager forTesting(
+    File file, {
+    bool bootstrap = true,
+    UploadStore? store,
+  }) {
+    final manager = UploadManager._(store ?? UploadStore(file));
     _current = manager;
-    unawaited(manager._bootstrapForTesting());
+    if (bootstrap) {
+      unawaited(manager._bootstrapForTesting());
+    } else {
+      // Widget tests run in a fake-async zone where disk reads never settle;
+      // callers using this mode drive the queue with runAsync instead.
+      manager._readyCompleter.complete();
+    }
     return manager;
   }
 
@@ -317,7 +327,12 @@ class UploadManager extends ChangeNotifier {
   final Completer<void> _readyCompleter = Completer<void>();
 
   /// Waits until the journal has been loaded.
-  Future<void> get ready => _readyCompleter.future;
+  /// Completes synchronously once the journal has loaded. Returning a fresh
+  /// value future matters for tests that cross from a fake-async widget zone
+  /// into [runAsync], where a completer created in the other zone can stall.
+  Future<void> get ready => _readyCompleter.isCompleted
+      ? Future<void>.value()
+      : _readyCompleter.future;
 
   /// Runs the queued transfers and waits until no worker is busy.
   ///

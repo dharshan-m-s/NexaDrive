@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/design/app_colors.dart';
 import '../../../core/design/app_dimensions.dart';
+import '../../../core/design/app_motion.dart';
 import '../../../core/design/app_typography.dart';
 import '../../../services/api.dart';
 import '../../../services/app_lock.dart';
@@ -46,6 +47,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final AppLockService _appLock = AppLockService();
   bool? _appLockEnabled;
+  bool _reduceAnimations = AppMotion.appReducedMotion;
 
   @override
   void initState() {
@@ -152,6 +154,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (mounted) setState(() => _appLockEnabled = false);
       }
     }
+  }
+
+  /// Persists the app-level motion preference and applies it immediately via
+  /// AppMotion's notifier. Platform accessibility is checked separately at the
+  /// point of use, so this switch can never override it.
+  Future<void> _toggleReduceAnimations(bool value) async {
+    await AppMotion.setReduceAnimations(value);
+    if (!mounted) return;
+    setState(() => _reduceAnimations = value);
   }
 
   Future<void> _confirmLogout(BuildContext context) async {
@@ -293,6 +304,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Appearance',
                 subtitle: _themeLabel(session.themeMode),
                 onTap: () => _changeTheme(context),
+              ),
+              NexaListTile(
+                icon: Icons.animation_outlined,
+                title: 'Reduce animations',
+                subtitle: 'Immediate changes and short fades only',
+                showChevron: false,
+                trailing: Semantics(
+                  label: 'Reduce animations',
+                  child: Switch(
+                    value: _reduceAnimations,
+                    onChanged: _toggleReduceAnimations,
+                  ),
+                ),
               ),
               NexaListTile(
                 icon: Icons.security_rounded,
