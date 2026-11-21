@@ -818,6 +818,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
                       Expanded(
                         child: Text(
                           Format.count(_selected.length, 'item'),
+                          textAlign: TextAlign.center,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyle.bodyEmphasized.copyWith(

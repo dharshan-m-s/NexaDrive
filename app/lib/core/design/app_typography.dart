@@ -162,10 +162,10 @@ abstract final class AppTextStyle {
     fontWeight: FontWeight.w400,
   );
 
-  /// Navigation pill label.
+  /// Navigation pill label. Kept at Material's 12dp minimum for legibility.
   static const TextStyle navLabel = TextStyle(
-    fontSize: 11,
-    height: 15 / 11,
+    fontSize: 12,
+    height: 16 / 12,
     fontWeight: FontWeight.w600,
     letterSpacing: 0.2,
   );

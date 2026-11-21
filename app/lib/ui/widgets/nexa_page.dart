@@ -215,17 +215,19 @@ class _Header extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: scheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-                ),
-                child: Icon(
-                  icon ?? _iconForTitle(title),
-                  color: scheme.onSecondaryContainer,
-                  size: AppDimens.iconMedium,
+              ExcludeSemantics(
+                child: Container(
+                  width: AppDimens.touchTarget,
+                  height: AppDimens.touchTarget,
+                  decoration: BoxDecoration(
+                    color: scheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
+                  ),
+                  child: Icon(
+                    icon ?? _iconForTitle(title),
+                    color: scheme.onSecondaryContainer,
+                    size: AppDimens.iconMedium,
+                  ),
                 ),
               ),
               const SizedBox(width: AppDimens.space16),
@@ -244,6 +246,8 @@ class _Header extends StatelessWidget {
                       const SizedBox(height: AppDimens.space2),
                       Text(
                         subtitle!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTextStyle.bodySmall.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),

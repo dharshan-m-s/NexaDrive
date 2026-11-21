@@ -116,9 +116,15 @@ void main() {
           expect(sheetException, isNull,
               reason: '${themeEntry.key} ${sizeEntry.key} editor sheet');
 
-          // The actions sheet with a long, unbroken protection note.
-          await tester.tap(find.byTooltip('Account actions').at(0));
+          // The actions sheet with a long, unbroken protection note. Close the
+          // editor first so the row action is actually on-screen and tappable.
+          tester.state<NavigatorState>(find.byType(Navigator).first).pop();
           await tester.pumpAndSettle();
+          final actions = find.byIcon(Icons.more_vert_rounded).first;
+          await tester.ensureVisible(actions);
+          await tester.tap(actions);
+          await tester.pumpAndSettle();
+          expect(find.text('Edit account'), findsOneWidget);
           final actionsException = tester.takeException();
           expect(actionsException, isNull,
               reason: '${themeEntry.key} ${sizeEntry.key} actions sheet');
