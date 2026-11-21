@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/design/app_dimensions.dart';
@@ -20,14 +21,17 @@ import '../../../services/folder_source.dart'
     show FolderUploadPicker, SingleFileUploadPicker;
 import '../../../services/image_pipeline.dart';
 import '../../../services/thumbnail_cache.dart';
+import '../../../services/trash_restore.dart';
 import '../../../services/upload_manager.dart';
 import '../../widgets/folder_picker.dart';
 import '../../widgets/nexa_action_bar.dart';
+import '../../widgets/nexa_file_glyph.dart';
 import '../../widgets/nexa_file_tile.dart';
 import '../../widgets/nexa_layout_picker.dart';
 import '../../widgets/nexa_loading_state.dart';
 import '../../widgets/nexa_sheet.dart';
 import '../../widgets/nexa_surface.dart';
+import '../../widgets/nexa_undo.dart';
 import '../../widgets/upload_progress_dialog.dart';
 import '../scanner/scanner_screen.dart';
 import '../search/search_screen.dart';
@@ -87,6 +91,10 @@ class _FilesScreenState extends State<FilesScreen> {
   bool _dragSelecting = false;
   int? _dragAnchorIndex;
   Set<String> _dragBaseSelection = const <String>{};
+  int _keyboardAnchorIndex = 0;
+  int _keyboardExtentIndex = 0;
+  bool _dropHovering = false;
+  FileEntry? _hoveredEntry;
   double? _pinchBaseColumns;
   final Map<String, _FileCellRef> _fileCellKeys = <String, _FileCellRef>{};
   String? _error;
@@ -381,6 +389,43 @@ class _FilesScreenState extends State<FilesScreen> {
     if (mounted) await load();
   }
 
+  /// Turns OS file drops into the same upload sources used by the picker, so
+  /// dropped folders keep their relative structure.
+  Future<void> _handleDroppedFiles(List<DropItem> dropped) async {
+    final sources = <UploadSource>[];
+
+    Future<void> add(DropItem item, String relative) async {
+      if (item is DropItemDirectory) {
+        final prefix = '$relative${item.name}/';
+        for (final child in item.children) {
+          await add(child, prefix);
+        }
+        return;
+      }
+      final size = await item.length();
+      sources.add(
+        UploadSource(
+          path: item.path,
+          name: item.name,
+          size: size,
+          relativePath: relative,
+          temporary: item.fromPromise,
+        ),
+      );
+    }
+
+    for (final item in dropped) {
+      await add(item, '');
+    }
+    if (sources.isEmpty || !mounted) return;
+    await UploadProgressDialog.showSources(
+      context,
+      sources: sources,
+      folder: _path,
+    );
+    if (mounted) await load();
+  }
+
   static const _gridColumnsPreference = 'nexadrive.files.grid_columns';
 
   Future<void> _loadGridColumns() async {
@@ -554,6 +599,7 @@ class _FilesScreenState extends State<FilesScreen> {
         ..clear()
         ..addAll(next);
     });
+    AppHaptics.selection();
   }
 
   void _toggleSelect(String path) {
@@ -589,6 +635,114 @@ class _FilesScreenState extends State<FilesScreen> {
       _selecting = _selected.isNotEmpty;
     });
     widget.onSelectionChanged?.call(_selecting);
+  }
+
+  void _ensureSelecting() {
+    if (_selecting) return;
+    AppHaptics.impact();
+    setState(() => _selecting = true);
+    widget.onSelectionChanged?.call(true);
+  }
+
+  void _selectAllVisible() {
+    final visible = _visibleItems;
+    if (visible.isEmpty) return;
+    _ensureSelecting();
+    _dragBaseSelection = const <String>{};
+    _dragAnchorIndex = 0;
+    _keyboardAnchorIndex = 0;
+    _keyboardExtentIndex = visible.length - 1;
+    setState(() {
+      _selected
+        ..clear()
+        ..addAll(visible.map((entry) => entry.path));
+    });
+    AppHaptics.selection();
+  }
+
+  void _selectAllFromHere() {
+    final visible = _visibleItems;
+    if (visible.isEmpty) return;
+    final anchor = _dragAnchorIndex ?? _keyboardAnchorIndex;
+    final start = anchor.clamp(0, visible.length - 1);
+    _ensureSelecting();
+    _dragBaseSelection = const <String>{};
+    _dragAnchorIndex = start;
+    _keyboardAnchorIndex = start;
+    _keyboardExtentIndex = visible.length - 1;
+    _selectRangeTo(visible.length - 1);
+  }
+
+  void _startRangeSelection(int anchor, {Set<String>? base}) {
+    if (anchor < 0) return;
+    _ensureSelecting();
+    _dragAnchorIndex = anchor;
+    _keyboardAnchorIndex = anchor;
+    _keyboardExtentIndex = anchor;
+    _dragBaseSelection =
+        base == null ? const <String>{} : Set<String>.from(base);
+  }
+
+  /// A grid row is [_gridColumns] items wide; a list row is one item.
+  int get _verticalStep => _grid ? _gridColumns : 1;
+
+  void _moveKeyboardSelection(int delta, {required bool extend}) {
+    if (_shortcutsBlocked()) return;
+    final visible = _visibleItems;
+    if (visible.isEmpty) return;
+    if (!_selecting) _startRangeSelection(0);
+
+    final extent = _keyboardExtentIndex.clamp(0, visible.length - 1);
+    final next = (extent + delta).clamp(0, visible.length - 1);
+    _keyboardExtentIndex = next;
+    if (!extend) {
+      _dragBaseSelection = const <String>{};
+      _dragAnchorIndex = next;
+      _keyboardAnchorIndex = next;
+    }
+    _selectRangeTo(next);
+  }
+
+  /// Ctrl/Cmd toggles a single item; Shift extends from the previous anchor.
+  /// A plain tap keeps the existing long-press/tap behavior.
+  void _handleEntryTap(FileEntry entry) {
+    if (_shortcutsBlocked()) return;
+    final toggle = HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed;
+    final extend = HardwareKeyboard.instance.isShiftPressed;
+    if (!_selecting && !toggle && !extend) {
+      _openEntry(entry);
+      return;
+    }
+    final visible = _visibleItems;
+    final index = visible.indexWhere((item) => item.path == entry.path);
+    if (index < 0) return;
+
+    if (extend) {
+      final anchor = (_dragAnchorIndex ?? _keyboardAnchorIndex).clamp(
+        0,
+        visible.length - 1,
+      );
+      _ensureSelecting();
+      _dragBaseSelection = Set<String>.from(_selected);
+      _dragAnchorIndex = anchor;
+      _keyboardAnchorIndex = anchor;
+      _keyboardExtentIndex = index;
+      _selectRangeTo(index);
+      return;
+    }
+    _ensureSelecting();
+    _dragAnchorIndex = index;
+    _keyboardAnchorIndex = index;
+    _keyboardExtentIndex = index;
+    _toggleSelect(entry.path);
+  }
+
+  bool _shortcutsBlocked() {
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus == null) return false;
+    final focused = focus.context?.widget;
+    return focused is EditableText || focused is TextField;
   }
 
   bool _handleBack() {
@@ -667,13 +821,31 @@ class _FilesScreenState extends State<FilesScreen> {
     );
     if (destination == null) return;
     try {
-      await widget.api.batch(
+      final moved = await widget.api.batch(
         action: 'move',
         paths: sourcePaths,
         destination: destination,
       );
       _exitSelection();
       await load();
+      if (!mounted) return;
+      final origin = _path;
+      NexaUndo.show(
+        context,
+        'Moved ${sourcePaths.length == 1 ? '1 item' : '${sourcePaths.length} items'}',
+        onAction: () async {
+          try {
+            await widget.api.batch(
+              action: 'move',
+              paths: moved,
+              destination: origin,
+            );
+            if (mounted) await load();
+          } catch (e) {
+            if (mounted) _toast('Couldn’t undo the move. $e');
+          }
+        },
+      );
     } catch (e) {
       if (mounted) _toast(e.toString());
     }
@@ -729,61 +901,125 @@ class _FilesScreenState extends State<FilesScreen> {
     );
     if (confirm != true) return;
     try {
-      await widget.api.batch(action: 'delete', paths: sourcePaths);
+      final trashed = await widget.api.batch(
+        action: 'delete',
+        paths: sourcePaths,
+      );
       _exitSelection();
       await load();
+      if (!mounted) return;
+      NexaUndo.show(
+        context,
+        sourcePaths.length == 1
+            ? 'Moved 1 item to Trash'
+            : 'Moved ${sourcePaths.length} items to Trash',
+        onAction: () async {
+          try {
+            await TrashRestore.paths(widget.api, trashed);
+            if (mounted) await load();
+          } catch (e) {
+            if (mounted) _toast(e.toString());
+          }
+        },
+      );
     } catch (e) {
       if (mounted) _toast(e.toString());
     }
   }
 
+  /// One compact sheet for the two decisions that affect a listing: how it is
+  /// ordered and which kinds of items are visible.
   Future<void> _pickSort() async {
-    final selected = await showDialog<FileSortOrder>(
-      context: context,
-      builder: (context) {
-        final scheme = Theme.of(context).colorScheme;
-        return SimpleDialog(
-          title: Text(
-            'Sort by',
-            style: AppTextStyle.titleLarge.copyWith(color: scheme.onSurface),
-          ),
-          children: [
-            for (final option in FileSortOrder.values)
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(context, option),
-                child: Row(
+    var sort = _sort;
+    var filter = _filter;
+    await showNexaSheet<void>(
+      context,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final scheme = Theme.of(sheetContext).colorScheme;
+          return NexaSheetBody(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                NexaSheetHeader(
+                  title: 'Sort & filter',
+                  subtitle: 'Choose how this folder reads.',
+                  trailing: TextButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    child: const Text('Done'),
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space16,
+                  ),
+                  child: Text(
+                    'SHOW',
+                    style: AppTextStyle.sectionHeader.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Wrap(
+                  spacing: AppDimens.space8,
                   children: [
-                    Icon(
-                      option == _sort
+                    for (final (value, label) in [
+                      (_FileFilter.all, 'All'),
+                      (_FileFilter.folders, 'Folders'),
+                      (_FileFilter.files, 'Files'),
+                    ])
+                      ChoiceChip(
+                        label: Text(label),
+                        selected: filter == value,
+                        onSelected: (_) => setSheetState(() => filter = value),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: AppDimens.space20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space16,
+                  ),
+                  child: Text(
+                    'SORT BY',
+                    style: AppTextStyle.sectionHeader.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                for (final option in FileSortOrder.values)
+                  ListTile(
+                    leading: Icon(
+                      option == sort
                           ? Icons.radio_button_checked_rounded
                           : Icons.radio_button_unchecked_rounded,
-                      size: AppDimens.iconSm,
-                      color: option == _sort
+                      color: option == sort
                           ? scheme.primary
                           : scheme.onSurfaceVariant,
                     ),
-                    const SizedBox(width: AppDimens.spaceSm),
-                    Text(
+                    title: Text(
                       _sortLabel(option),
                       style: AppTextStyle.bodyLarge.copyWith(
                         color: scheme.onSurface,
-                        fontWeight:
-                            option == _sort ? FontWeight.w600 : FontWeight.w400,
                       ),
                     ),
-                  ],
-                ),
-              ),
-          ],
-        );
-      },
+                    onTap: () => setSheetState(() => sort = option),
+                  ),
+                const SizedBox(height: AppDimens.space8),
+              ],
+            ),
+          );
+        },
+      ),
     );
-    if (selected != null && selected != _sort) {
-      setState(() {
-        _sort = selected;
-        _sortedCache = null;
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _sort = sort;
+      _filter = filter;
+      _sortedCache = null;
+    });
   }
 
   static String _sortLabel(FileSortOrder sort) => switch (sort) {
@@ -897,9 +1133,9 @@ class _FilesScreenState extends State<FilesScreen> {
                     }),
           ),
           NexaRevealBar(
-            // A one-level folder already has its name and a Back action in the
-            // title row; only deeper paths need a separate breadcrumb strip.
-            visible: !_selecting && _path.contains('/'),
+            // The path is always readable, even one level down, so navigation
+            // never depends on remembering what the header title means.
+            visible: !_selecting && _path.isNotEmpty,
             alignment: Alignment.topLeft,
             child: _Breadcrumb(
               path: _path,
@@ -922,21 +1158,126 @@ class _FilesScreenState extends State<FilesScreen> {
             ),
           ),
           Expanded(
-            child: GestureDetector(
-              onScaleStart: _onScaleStart,
-              onScaleUpdate: _onScaleUpdate,
-              onScaleEnd: _onScaleEnd,
-              child: Listener(
-                onPointerDown: _onPointerDown,
-                onPointerMove: _onPointerMove,
-                onPointerUp: _onPointerUp,
-                onPointerCancel: _onPointerUp,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (_) {
-                    _pruneFileCellKeys();
-                    return false;
+            child: Focus(
+              autofocus: true,
+              child: CallbackShortcuts(
+                bindings: {
+                  SingleActivator(
+                    LogicalKeyboardKey.keyA,
+                    control: true,
+                  ): _selectAllVisible,
+                  SingleActivator(
+                    LogicalKeyboardKey.keyA,
+                    meta: true,
+                  ): _selectAllVisible,
+                  SingleActivator(LogicalKeyboardKey.escape): () {
+                    if (!_shortcutsBlocked() && _selecting) _exitSelection();
                   },
-                  child: _body(),
+                  SingleActivator(LogicalKeyboardKey.arrowDown): () =>
+                      _moveKeyboardSelection(_verticalStep, extend: false),
+                  SingleActivator(
+                    LogicalKeyboardKey.arrowDown,
+                    shift: true,
+                  ): () => _moveKeyboardSelection(_verticalStep, extend: true),
+                  SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+                      _moveKeyboardSelection(-_verticalStep, extend: false),
+                  SingleActivator(
+                    LogicalKeyboardKey.arrowUp,
+                    shift: true,
+                  ): () => _moveKeyboardSelection(-_verticalStep, extend: true),
+                  SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+                      _moveKeyboardSelection(1, extend: false),
+                  SingleActivator(
+                    LogicalKeyboardKey.arrowRight,
+                    shift: true,
+                  ): () => _moveKeyboardSelection(1, extend: true),
+                  SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+                      _moveKeyboardSelection(-1, extend: false),
+                  SingleActivator(
+                    LogicalKeyboardKey.arrowLeft,
+                    shift: true,
+                  ): () => _moveKeyboardSelection(-1, extend: true),
+                },
+                child: DropTarget(
+                  enable: !_selecting,
+                  onDragEntered: (_) => setState(() => _dropHovering = true),
+                  onDragExited: (_) => setState(() => _dropHovering = false),
+                  onDragDone: (details) {
+                    setState(() => _dropHovering = false);
+                    unawaited(_handleDroppedFiles(details.files));
+                  },
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: GestureDetector(
+                          onScaleStart: _onScaleStart,
+                          onScaleUpdate: _onScaleUpdate,
+                          onScaleEnd: _onScaleEnd,
+                          child: Listener(
+                            onPointerDown: _onPointerDown,
+                            onPointerMove: _onPointerMove,
+                            onPointerUp: _onPointerUp,
+                            onPointerCancel: _onPointerUp,
+                            child: NotificationListener<ScrollNotification>(
+                              onNotification: (_) {
+                                _pruneFileCellKeys();
+                                return false;
+                              },
+                              child: _body(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (_hoveredEntry != null &&
+                          !_dropHovering &&
+                          MediaQuery.sizeOf(context).width >= 900)
+                        Positioned(
+                          right: AppDimens.space16,
+                          top: AppDimens.space16,
+                          child: IgnorePointer(
+                            child: _HoverPreview(
+                              entry: _hoveredEntry!,
+                              thumbnail: _thumbFor(_hoveredEntry!),
+                            ),
+                          ),
+                        ),
+                      if (_dropHovering)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: Padding(
+                              padding: const EdgeInsets.all(AppDimens.space16),
+                              child: NexaSurface(
+                                level: NexaSurfaceLevel.floating,
+                                radius: AppDimens.radiusMedium,
+                                child: Center(
+                                  child: Semantics(
+                                    label: 'Drop files to upload',
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.cloud_upload_outlined,
+                                        ),
+                                        const SizedBox(
+                                          width: AppDimens.space12,
+                                        ),
+                                        Flexible(
+                                          child: Text(
+                                            'Drop to upload to ${_path.isEmpty ? 'My files' : _path}',
+                                            style: AppTextStyle.titleSmall,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -951,6 +1292,20 @@ class _FilesScreenState extends State<FilesScreen> {
                 icon: const Icon(Icons.close_rounded),
               ),
               title: Format.count(_selected.length, 'item'),
+              titleWidget: AnimatedSwitcher(
+                duration: AppMotion.resolve(context, AppMotion.fast),
+                switchInCurve: AppMotion.curveFor(context, AppMotion.standard),
+                switchOutCurve: AppMotion.curveFor(context, AppMotion.standard),
+                child: Text(
+                  Format.count(_selected.length, 'item'),
+                  key: ValueKey(_selected.length),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyle.titleMedium.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ),
               actions: [
                 NexaActionItem(
                   icon: _visibleItems.isNotEmpty &&
@@ -966,6 +1321,11 @@ class _FilesScreenState extends State<FilesScreen> {
                       ? 'Clear'
                       : 'Select all',
                   onTap: _toggleSelectAll,
+                ),
+                NexaActionItem(
+                  icon: Icons.playlist_add_rounded,
+                  label: 'From here',
+                  onTap: _selectAllFromHere,
                 ),
                 NexaActionItem(
                   icon: Icons.delete_outline_rounded,
@@ -1098,8 +1458,9 @@ class _FilesScreenState extends State<FilesScreen> {
           children: [
             _FilesStatePanel(
               icon: Icons.cloud_off_rounded,
-              title: "Can't reach NexaDrive",
-              message: _error!,
+              title: 'That folder didn’t load',
+              message:
+                  'Can’t reach NexaDrive. Check your connection and try again.',
               primaryLabel: 'Retry',
               primaryIcon: Icons.refresh_rounded,
               onPrimary: load,
@@ -1190,36 +1551,54 @@ class _FilesScreenState extends State<FilesScreen> {
                   thumbnail: _thumbFor(entry),
                   selected: _selected.contains(entry.path),
                   selecting: _selecting,
-                  onTap: _openEntry,
+                  onTap: _handleEntryTap,
                   onLongPress: () => _beginDragSelection(entry.path),
+                  onSecondaryTap: (item) => _showFileMenu(context, item),
+                  onHoverEnter: (item) => setState(() => _hoveredEntry = item),
+                  onHoverExit: () => setState(() => _hoveredEntry = null),
                 );
               },
             )
-          : ListView.builder(
-              padding: EdgeInsets.fromLTRB(
-                AppDimens.pageMargin,
-                AppDimens.space4,
-                AppDimens.pageMargin,
-                bottomPadding,
-              ),
-              itemCount: sections.length * 2,
-              itemBuilder: (context, index) {
-                final section = sections[index ~/ 2];
-                if (index.isEven) {
-                  return _GroupHeader(section.$1, count: section.$2.length);
-                }
-                return _FlatFileGroup(
-                  entries: section.$2,
-                  selecting: _selecting,
-                  thumbnailFor: _thumbFor,
-                  isSelected: (path) => _selected.contains(path),
-                  keyFor: (path) => _keyForFileCell(path, grid: false),
-                  onOpen: _openEntry,
-                  onLongPress: (entry) => _beginDragSelection(entry.path),
-                  onToggleSelect: _toggleSelect,
-                  onMore: (entry) => _showFileMenu(context, entry),
-                );
-              },
+          : CustomScrollView(
+              slivers: [
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: AppDimens.space4),
+                ),
+                for (final section in sections) ...[
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _StickyHeaderDelegate(
+                      child: Material(
+                        color: Theme.of(context).colorScheme.surface,
+                        child: _GroupHeader(
+                          section.$1,
+                          count: section.$2.length,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: _FlatFileGroup(
+                      entries: section.$2,
+                      selecting: _selecting,
+                      thumbnailFor: _thumbFor,
+                      isSelected: (path) => _selected.contains(path),
+                      keyFor: (path) => _keyForFileCell(path, grid: false),
+                      onOpen: _handleEntryTap,
+                      onLongPress: (entry) => _beginDragSelection(entry.path),
+                      onToggleSelect: _toggleSelect,
+                      onMore: (entry) => _showFileMenu(context, entry),
+                      onSecondaryTap: (entry) => _showFileMenu(context, entry),
+                      onHoverEnter: (entry) =>
+                          setState(() => _hoveredEntry = entry),
+                      onHoverExit: () => setState(() => _hoveredEntry = null),
+                    ),
+                  ),
+                ],
+                SliverToBoxAdapter(
+                  child: SizedBox(height: bottomPadding),
+                ),
+              ],
             ),
     );
   }
@@ -1587,7 +1966,7 @@ class _ViewAreaState extends State<_ViewArea> {
                         value: _FileHeaderAction.sort,
                         child: _FileMenuLabel(
                           icon: Icons.sort_rounded,
-                          label: 'Sort by…',
+                          label: 'Sort & filter…',
                         ),
                       ),
                     PopupMenuItem(
@@ -1900,6 +2279,9 @@ class _FlatFileGroup extends StatelessWidget {
   final ValueChanged<FileEntry> onLongPress;
   final ValueChanged<String> onToggleSelect;
   final ValueChanged<FileEntry> onMore;
+  final ValueChanged<FileEntry> onSecondaryTap;
+  final ValueChanged<FileEntry> onHoverEnter;
+  final VoidCallback onHoverExit;
 
   const _FlatFileGroup({
     required this.entries,
@@ -1911,6 +2293,9 @@ class _FlatFileGroup extends StatelessWidget {
     required this.onLongPress,
     required this.onToggleSelect,
     required this.onMore,
+    required this.onSecondaryTap,
+    required this.onHoverEnter,
+    required this.onHoverExit,
   });
 
   @override
@@ -1928,6 +2313,9 @@ class _FlatFileGroup extends StatelessWidget {
             selecting: selecting,
             onTap: onOpen,
             onLongPress: () => onLongPress(entries[index]),
+            onSecondaryTap: onSecondaryTap,
+            onHoverEnter: onHoverEnter,
+            onHoverExit: onHoverExit,
             onSelectToggle: () => onToggleSelect(entries[index].path),
             trailing: selecting
                 ? null
@@ -1956,6 +2344,97 @@ class _FlatFileGroup extends StatelessWidget {
       ],
     );
   }
+}
+
+class _HoverPreview extends StatelessWidget {
+  final FileEntry entry;
+  final Uint8List? thumbnail;
+
+  const _HoverPreview({required this.entry, required this.thumbnail});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return NexaSurface(
+      level: NexaSurfaceLevel.floating,
+      radius: AppDimens.radiusMedium,
+      padding: const EdgeInsets.all(AppDimens.space12),
+      child: SizedBox(
+        width: 220,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+              child: SizedBox(
+                width: AppDimens.iconTileLarge,
+                height: AppDimens.iconTileLarge,
+                child: thumbnail != null
+                    ? Image.memory(thumbnail!, fit: BoxFit.cover)
+                    : entry.isFolder
+                        ? NexaFileGlyph.folder(size: AppDimens.iconTileLarge)
+                        : NexaFileGlyph(
+                            name: entry.name,
+                            type: entry.type,
+                            size: AppDimens.iconTileLarge,
+                          ),
+              ),
+            ),
+            const SizedBox(width: AppDimens.space12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyle.titleSmall.copyWith(
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space2),
+                  Text(
+                    '${FileKind.label(entry.category)} · ${Format.bytes(entry.size)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyle.bodySmall.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+
+  const _StickyHeaderDelegate({required this.child});
+
+  @override
+  double get minExtent => 52;
+
+  @override
+  double get maxExtent => 52;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) =>
+      SizedBox.expand(child: child);
+
+  @override
+  bool shouldRebuild(covariant _StickyHeaderDelegate oldDelegate) =>
+      oldDelegate.child != child;
 }
 
 class _GroupHeader extends StatelessWidget {

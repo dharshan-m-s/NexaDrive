@@ -41,7 +41,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('NexaDrive'), findsOneWidget);
-    expect(find.text('Home'), findsOneWidget);
+    // The sidebar and the editorial page title both label Home.
+    expect(find.text('Home'), findsNWidgets(2));
     expect(find.text('Settings'), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
   });

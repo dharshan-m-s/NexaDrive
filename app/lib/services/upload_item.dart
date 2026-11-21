@@ -47,6 +47,31 @@ enum UploadState {
   }
 }
 
+/// What just happened to a transfer, for UI feedback that outlives the item.
+///
+/// Completed uploads are pruned from the journal quickly, so screens cannot
+/// reliably discover a just-finished transfer by diffing the queue. The manager
+/// emits these events instead.
+enum UploadEventKind { completed, failed }
+
+class UploadEvent {
+  final UploadEventKind kind;
+  final String id;
+  final String name;
+  final String folder;
+  final int size;
+  final String? error;
+
+  const UploadEvent({
+    required this.kind,
+    required this.id,
+    required this.name,
+    required this.folder,
+    required this.size,
+    this.error,
+  });
+}
+
 /// One file on its way to the server.
 ///
 /// The item is the unit of both persistence and UI: the journal stores whole

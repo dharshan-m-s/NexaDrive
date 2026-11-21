@@ -81,6 +81,9 @@ abstract final class AppDimens {
 
   /// The floating pill is compact and thumb-reachable, not a full-width dock.
   static const double bottomNavHeight = 72;
+
+  /// Compact transfer strip that floats immediately above the pill.
+  static const double transferStripHeight = 56;
   static const double bottomNavMaxWidth = 400;
   static const double navBarHeight = 72;
   static const double navBarHeightLarge = 72;

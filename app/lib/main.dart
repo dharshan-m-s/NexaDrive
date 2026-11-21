@@ -85,6 +85,8 @@ class _NexaDriveAppState extends State<NexaDriveApp> {
         final mode = widget.session.themeMode;
         final platformBrightness =
             WidgetsBinding.instance.platformDispatcher.platformBrightness;
+        final highContrast = MediaQuery.maybeOf(context)?.highContrast ??
+            MediaQueryData.fromView(View.of(context)).highContrast;
         final dark = mode == 'dark'
             ? true
             : mode == 'light'
@@ -109,8 +111,8 @@ class _NexaDriveAppState extends State<NexaDriveApp> {
             title: 'NexaDrive',
             debugShowCheckedModeBanner: false,
             scrollBehavior: const NexaScrollBehavior(),
-            theme: AppTheme.light(),
-            darkTheme: AppTheme.dark(),
+            theme: AppTheme.light(highContrast: highContrast),
+            darkTheme: AppTheme.dark(highContrast: highContrast),
             themeMode: mode == 'light'
                 ? ThemeMode.light
                 : mode == 'dark'

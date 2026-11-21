@@ -10,6 +10,7 @@ import '../../../core/utils/format.dart';
 import '../../../core/design/app_motion.dart';
 import '../../../services/api.dart';
 import '../../../services/session.dart';
+import '../../../services/upload_item.dart';
 import '../../../services/upload_manager.dart';
 import '../../../services/sync_service.dart';
 import '../../../services/media_cache.dart';
@@ -26,7 +27,10 @@ import '../screens/sync/sync_center_screen.dart';
 import '../screens/notifications/notifications_screen.dart';
 import '../screens/transfers/transfers_screen.dart';
 import '../screens/login/login_screen.dart';
+import '../../core/models/file_entry.dart';
+import '../navigation/file_opener.dart';
 import '../screens/scanner/scanner_screen.dart';
+import '../screens/search/search_screen.dart';
 import '../widgets/folder_picker.dart';
 import '../../update/android_updater_channel.dart';
 import '../../update/app_platform.dart';
@@ -64,6 +68,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late final Api api;
   late final UpdateController updateController;
   Timer? _queueTimer;
+  late final UploadManager _uploads;
+  StreamSubscription<UploadEvent>? _transferEvents;
+  bool _transferStripVisible = false;
+  int _completedToastCount = 0;
+  int _failedToastCount = 0;
+  UploadEvent? _lastCompletedEvent;
+  Timer? _transferToastTimer;
   bool _handlingExpiredSession = false;
   bool _moreSheetOpen = false;
   bool _shareSheetShowing = false;
@@ -127,9 +138,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // that were interrupted by an earlier crash. The shell claims the queue
     // for the foreground app, so the Android background worker knows to stay
     // out of the way while the app is open.
-    UploadManager.current
+    _uploads = UploadManager.current;
+    _uploads
       ..attach(api)
       ..claimForeground();
+    _transferStripVisible = _hasTransferActivity();
+    _uploads.addListener(_refreshTransferStrip);
+    _transferEvents = _uploads.events.listen(_handleUploadEvent);
     updateController = UpdateController(
       source: UpdateSource(),
       downloader: UpdateDownloader(),
@@ -258,6 +273,144 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  bool _hasTransferActivity() => _uploads.items().any(
+        (item) =>
+            item.state == UploadState.queued ||
+            item.state == UploadState.uploading ||
+            item.state == UploadState.retrying ||
+            item.state == UploadState.paused ||
+            item.state == UploadState.failed,
+      );
+
+  /// Reserve room for the live strip, including any growth from large text.
+  double _transferStripSpace(double gap) =>
+      MediaQuery.textScalerOf(context).scale(AppDimens.transferStripHeight) +
+      gap;
+
+  void _refreshTransferStrip() {
+    if (!mounted) return;
+    final visible = _hasTransferActivity();
+    if (visible == _transferStripVisible) return;
+    setState(() => _transferStripVisible = visible);
+  }
+
+  void _handleUploadEvent(UploadEvent event) {
+    if (!mounted) return;
+    if (event.kind == UploadEventKind.completed) {
+      _completedToastCount++;
+      _lastCompletedEvent = event;
+    } else {
+      _failedToastCount++;
+    }
+    _transferToastTimer?.cancel();
+    _transferToastTimer = Timer(
+      const Duration(milliseconds: 350),
+      _flushTransferToasts,
+    );
+  }
+
+  void _flushTransferToasts() {
+    if (!mounted) return;
+    final completed = _completedToastCount;
+    final failed = _failedToastCount;
+    _completedToastCount = 0;
+    _failedToastCount = 0;
+    if (completed == 0 && failed == 0) return;
+
+    // Never clear unrelated bars here: an Undo for a move/trash action can
+    // still be actionable when an upload finishes a moment later.
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+
+    if (failed > 0) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            failed == 1
+                ? 'That upload didn’t finish'
+                : '$failed uploads didn’t finish',
+          ),
+          action: SnackBarAction(
+            label: 'Retry',
+            onPressed: () => unawaited(_uploads.retryFailed()),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final completedEvent = _lastCompletedEvent;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          completed == 1 ? 'File uploaded' : '$completed files uploaded',
+        ),
+        action: SnackBarAction(
+          label: 'Open',
+          onPressed: () {
+            if (completedEvent == null) return;
+            unawaited(_openCompletedFile(completedEvent));
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openCompletedFile(UploadEvent event) async {
+    if (!mounted) return;
+    final path =
+        event.folder.isEmpty ? event.name : '${event.folder}/${event.name}';
+    await FileOpener.open(
+      context,
+      api: api,
+      entry: FileEntry(
+        name: event.name,
+        path: path,
+        type: 'file',
+        size: event.size,
+      ),
+    );
+  }
+
+  Future<void> _cancelAllTransfers() async {
+    final removable = _uploads
+        .items()
+        .where(
+          (item) =>
+              item.state != UploadState.completed &&
+              item.state != UploadState.cancelled,
+        )
+        .map((item) => item.id)
+        .toList(growable: false);
+    for (final id in removable) {
+      await _uploads.remove(id);
+    }
+  }
+
+  Widget _buildTransferStrip({double maxWidth = AppDimens.bottomNavMaxWidth}) {
+    if (!_transferStripVisible || _shareSheetShowing || _moreSheetOpen) {
+      return const SizedBox.shrink();
+    }
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space12,
+          ),
+          child: ActiveTransferStrip(
+            manager: _uploads,
+            onOpen: _openTransfers,
+            onPauseAll: () => unawaited(_uploads.pauseAll()),
+            onResumeAll: () => unawaited(_uploads.resumeAll()),
+            onRetryFailed: () => unawaited(_uploads.retryFailed()),
+            onCancelAll: () => unawaited(_cancelAllTransfers()),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _openSyncCenter() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => SyncCenterScreen(api: api)),
@@ -274,6 +427,110 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const TransfersScreen()),
     );
+  }
+
+  Future<void> _showCommandPalette() async {
+    final controller = TextEditingController();
+    final commands = <(IconData icon, String label, VoidCallback action)>[
+      (Icons.home_outlined, 'Go to Home', () => _goTo(0)),
+      (Icons.folder_outlined, 'Go to My files', () => _goTo(1)),
+      (Icons.people_outline_rounded, 'Go to Shared', () => _goTo(2)),
+      (Icons.photo_library_outlined, 'Go to Photos', () => _goTo(3)),
+      (Icons.delete_outline_rounded, 'Go to Trash', () => _goTo(4)),
+      (Icons.settings_outlined, 'Go to Settings', () => _goTo(5)),
+      (
+        Icons.swap_vert_circle_outlined,
+        'Open Transfers',
+        _openTransfers,
+      ),
+      (
+        Icons.sync_rounded,
+        'Open Sync center',
+        _openSyncCenter,
+      ),
+      (
+        Icons.notifications_none_rounded,
+        'Open Notifications',
+        _openNotifications,
+      ),
+      (
+        Icons.create_new_folder_outlined,
+        'New folder',
+        () => _openFiles(FilesIntent.newFolder),
+      ),
+    ];
+
+    await showNexaSheet<void>(
+      context,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final query = controller.text.trim();
+          final needle = query.toLowerCase();
+          final matches = commands
+              .where(
+                (command) =>
+                    needle.isEmpty || command.$2.toLowerCase().contains(needle),
+              )
+              .toList(growable: false);
+
+          return NexaSheetBody(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                NexaSheetHeader(title: 'Quick actions', subtitle: 'Ctrl + K'),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space16,
+                  ),
+                  child: NexaSearchField(
+                    controller: controller,
+                    hint: 'Search files or jump somewhere…',
+                    autofocus: true,
+                    onChanged: (_) => setSheetState(() {}),
+                    onClear: () {
+                      controller.clear();
+                      setSheetState(() {});
+                    },
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space8),
+                if (query.isNotEmpty)
+                  ListTile(
+                    leading: const Icon(Icons.search_rounded),
+                    title: Text('Search for “$query”'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              SearchScreen(api: api, initialQuery: query),
+                        ),
+                      );
+                    },
+                  ),
+                for (final command in matches)
+                  ListTile(
+                    leading: Icon(command.$1),
+                    title: Text(command.$2),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      command.$3();
+                    },
+                  ),
+                if (matches.isEmpty && query.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(AppDimens.space24),
+                    child: Text('No quick actions available.'),
+                  ),
+                const SizedBox(height: AppDimens.space8),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    controller.dispose();
   }
 
   void _showMoreSheet() {
@@ -780,9 +1037,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     AndroidShareIntents.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _queueTimer?.cancel();
+    _transferEvents?.cancel();
+    _transferToastTimer?.cancel();
+    _uploads.removeListener(_refreshTransferStrip);
     // The app is no longer in the foreground, so the background worker may
     // take over the queue.
-    UploadManager.current.releaseForeground();
+    _uploads.releaseForeground();
     updateController.dispose();
     super.dispose();
   }
@@ -837,30 +1097,73 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           canPop: index == 0 && !_moreSheetOpen,
           onPopInvokedWithResult: (didPop, _) => _handleSystemBack(didPop),
           child: Scaffold(
-            body: Row(
-              children: [
-                SideNavigation(
-                  index: index,
-                  onSelected: _goTo,
-                  onSync: _openSyncCenter,
-                  onTransfers: _openTransfers,
-                  onNotifications: _openNotifications,
-                ),
-                Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: AppDimens.contentMaxWidth,
-                      ),
-                      child: _PageHost(
-                        index: index,
-                        visited: _visited,
-                        pages: pages,
+            body: CallbackShortcuts(
+              bindings: {
+                SingleActivator(
+                  LogicalKeyboardKey.keyK,
+                  control: true,
+                ): _showCommandPalette,
+                SingleActivator(
+                  LogicalKeyboardKey.keyK,
+                  meta: true,
+                ): _showCommandPalette,
+              },
+              child: Focus(
+                autofocus: true,
+                child: Row(
+                  children: [
+                    SideNavigation(
+                      index: index,
+                      onSelected: _goTo,
+                      onSync: _openSyncCenter,
+                      onTransfers: _openTransfers,
+                      onNotifications: _openNotifications,
+                    ),
+                    Expanded(
+                      child: MediaQuery(
+                        data: MediaQuery.of(context).copyWith(
+                          padding: MediaQuery.paddingOf(context).copyWith(
+                            bottom: _transferStripVisible
+                                ? _transferStripSpace(AppDimens.space16)
+                                : MediaQuery.paddingOf(context).bottom,
+                          ),
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Center(
+                              child: Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: _transferStripVisible
+                                      ? _transferStripSpace(AppDimens.space16)
+                                      : 0,
+                                ),
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: AppDimens.contentMaxWidth,
+                                  ),
+                                  child: _PageHost(
+                                    index: index,
+                                    visited: _visited,
+                                    pages: pages,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (_transferStripVisible)
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: AppDimens.space16,
+                                child: _buildTransferStrip(maxWidth: 460),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ));
     }
@@ -870,8 +1173,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // so scrollable content can reach a position above the pill without painting
     // a full-width navigation sheet.
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final pillInset =
-        AppDimens.space12 * 2 + AppDimens.bottomNavHeight + bottomInset + 18;
+    final transferStripSpace =
+        _transferStripVisible ? _transferStripSpace(AppDimens.space8) : 0.0;
+    final pillInset = AppDimens.space12 * 2 +
+        AppDimens.bottomNavHeight +
+        bottomInset +
+        18 +
+        transferStripSpace;
 
     return PopScope(
         canPop: index == 0 && !_moreSheetOpen,
@@ -899,6 +1207,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     visited: _visited,
                     pages: pages,
                   ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: AppDimens.space10 +
+                    bottomInset +
+                    AppDimens.bottomNavHeight +
+                    AppDimens.space8,
+                child: ExcludeSemantics(
+                  excluding: _moreSheetOpen,
+                  child: _buildTransferStrip(),
                 ),
               ),
               if (_moreSheetOpen) ...[

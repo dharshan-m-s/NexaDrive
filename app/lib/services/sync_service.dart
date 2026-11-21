@@ -731,14 +731,63 @@ class SyncManager {
     return state.values.where((e) => e['conflict'] == true).length;
   }
 
+  /// Best timestamp available for a conflict, or null when the state only
+  /// knows that two copies differ.
+  ///
+  /// The conflict copy name already carries the moment the collision was
+  /// recorded, so it is a better ordering key than either file's modified
+  /// time. Older records may not have it, hence the graceful fallbacks.
+  int? _conflictTimestamp(Map<String, dynamic> item) {
+    final recorded = item['conflictAt']?.toString();
+    if (recorded != null && recorded.isNotEmpty) {
+      final millis = int.tryParse(recorded);
+      if (millis != null) return millis;
+      final parsed = DateTime.tryParse(recorded)?.millisecondsSinceEpoch;
+      if (parsed != null) return parsed;
+    }
+    final copy = item['conflictPath']?.toString() ?? '';
+    final suffix = RegExp(r'\.conflict-(\d+)$').firstMatch(copy);
+    if (suffix != null) {
+      final millis = int.tryParse(suffix.group(1)!);
+      if (millis != null) return millis;
+    }
+    final local = (item['localModifiedMs'] as num?)?.toInt();
+    final remote = DateTime.tryParse(item['remoteModifiedAt']?.toString() ?? '')
+        ?.millisecondsSinceEpoch;
+    if (local == null) return remote;
+    if (remote == null) return local;
+    return local > remote ? local : remote;
+  }
+
+  /// Conflicts are shown newest first when the state has timestamps and
+  /// alphabetically otherwise. Insertion order is an implementation detail of
+  /// the sync engine, not a useful order for someone deciding what to keep.
   Future<List<Map<String, String>>> conflicts() async {
     final state = await _state();
-    return state.entries
+    final entries = state.entries
         .where((e) => e.value['conflict'] == true)
-        .map((e) => {
-              'path': e.key,
-              'conflictPath': (e.value['conflictPath'] ?? '').toString(),
-            })
+        .map((e) => (
+              path: e.key,
+              timestamp: _conflictTimestamp(e.value),
+            ))
+        .toList();
+    final hasTimestamps = entries.any((e) => e.timestamp != null);
+    entries.sort((a, b) {
+      if (hasTimestamps && a.timestamp != b.timestamp) {
+        if (a.timestamp == null) return 1;
+        if (b.timestamp == null) return -1;
+        return b.timestamp!.compareTo(a.timestamp!);
+      }
+      // A path tie-breaker keeps List.sort deterministic across platforms.
+      return a.path.compareTo(b.path);
+    });
+    return entries
+        .map<Map<String, String>>(
+          (e) => {
+            'path': e.path,
+            'conflictPath': (state[e.path]?['conflictPath'] ?? '').toString(),
+          },
+        )
         .toList();
   }
 

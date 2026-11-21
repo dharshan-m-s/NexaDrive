@@ -127,7 +127,7 @@ void main() {
       await tester.tap(find.byTooltip('More actions'));
       await tester.pumpAndSettle();
       expect(find.text('Upload files'), findsOneWidget);
-      expect(find.text('Sort by…'), findsOneWidget);
+      expect(find.text('Sort & filter…'), findsOneWidget);
       expect(find.text('Grid view'), findsOneWidget);
       await tester.tap(find.text('Grid view'));
       await tester.pumpAndSettle();
@@ -274,7 +274,8 @@ void main() {
         findsWidgets,
       );
       // The floating navigation remains mounted beneath the menu.
-      expect(find.text('Home'), findsOneWidget);
+      // The editorial page title and the floating pill both label Home now.
+      expect(find.text('Home'), findsNWidgets(2));
       expect(find.text('Files'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -291,7 +292,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Scan'), findsNothing);
-      expect(find.text('Home'), findsOneWidget);
+      // The editorial page title and the floating pill both label Home now.
+      expect(find.text('Home'), findsNWidgets(2));
       expect(tester.takeException(), isNull);
     });
 

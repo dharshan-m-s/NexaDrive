@@ -15,6 +15,9 @@ class NexaFileTile extends StatelessWidget {
   final FileEntry entry;
   final ValueChanged<FileEntry>? onTap;
   final VoidCallback? onLongPress;
+  final ValueChanged<FileEntry>? onSecondaryTap;
+  final ValueChanged<FileEntry>? onHoverEnter;
+  final VoidCallback? onHoverExit;
   final bool selected;
   final bool selecting;
   final Widget? trailing;
@@ -33,6 +36,9 @@ class NexaFileTile extends StatelessWidget {
     required this.entry,
     this.onTap,
     this.onLongPress,
+    this.onSecondaryTap,
+    this.onHoverEnter,
+    this.onHoverExit,
     this.selected = false,
     this.selecting = false,
     this.trailing,
@@ -59,6 +65,15 @@ class NexaFileTile extends StatelessWidget {
         child: InkWell(
           onTap: onTap == null ? null : () => onTap!(entry),
           onLongPress: onLongPress,
+          onSecondaryTap:
+              onSecondaryTap == null ? null : () => onSecondaryTap!(entry),
+          onHover: (hovering) {
+            if (hovering) {
+              onHoverEnter?.call(entry);
+            } else {
+              onHoverExit?.call();
+            }
+          },
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppDimens.rowInset,
@@ -240,6 +255,9 @@ class NexaFileGridTile extends StatelessWidget {
   final FileEntry entry;
   final ValueChanged<FileEntry>? onTap;
   final VoidCallback? onLongPress;
+  final ValueChanged<FileEntry>? onSecondaryTap;
+  final ValueChanged<FileEntry>? onHoverEnter;
+  final VoidCallback? onHoverExit;
   final bool selected;
   final bool selecting;
   final Uint8List? thumbnail;
@@ -249,6 +267,9 @@ class NexaFileGridTile extends StatelessWidget {
     required this.entry,
     this.onTap,
     this.onLongPress,
+    this.onSecondaryTap,
+    this.onHoverEnter,
+    this.onHoverExit,
     this.selected = false,
     this.selecting = false,
     this.thumbnail,
@@ -272,6 +293,15 @@ class NexaFileGridTile extends StatelessWidget {
         child: InkWell(
           onTap: onTap == null ? null : () => onTap!(entry),
           onLongPress: onLongPress,
+          onSecondaryTap:
+              onSecondaryTap == null ? null : () => onSecondaryTap!(entry),
+          onHover: (hovering) {
+            if (hovering) {
+              onHoverEnter?.call(entry);
+            } else {
+              onHoverExit?.call();
+            }
+          },
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,

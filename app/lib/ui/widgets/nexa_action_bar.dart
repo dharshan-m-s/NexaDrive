@@ -55,6 +55,7 @@ double nexaContextualBarBottomPadding(BuildContext context) =>
 class NexaActionBar extends StatelessWidget {
   final Widget? leading;
   final String title;
+  final Widget? titleWidget;
   final List<NexaActionItem> actions;
   final Color? backgroundColor;
 
@@ -65,6 +66,7 @@ class NexaActionBar extends StatelessWidget {
     super.key,
     this.leading,
     required this.title,
+    this.titleWidget,
     required this.actions,
     this.backgroundColor,
     this.aboveFloatingNav = false,
@@ -105,14 +107,15 @@ class NexaActionBar extends StatelessWidget {
                   const SizedBox(width: AppDimens.space8),
                 ],
                 Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyle.titleMedium.copyWith(
-                      color: scheme.onSurface,
-                    ),
-                  ),
+                  child: titleWidget ??
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyle.titleMedium.copyWith(
+                          color: scheme.onSurface,
+                        ),
+                      ),
                 ),
               ],
             ),

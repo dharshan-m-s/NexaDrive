@@ -129,6 +129,20 @@ class UploadManager extends ChangeNotifier {
   /// The API client the queue uploads through.
   Api? _api;
 
+  /// Terminal transfer outcomes, for shell-level feedback.
+  ///
+  /// This is a broadcast stream because the shell, Transfers screen and any
+  /// future notification surface can all observe the same events.
+  final StreamController<UploadEvent> _eventController =
+      StreamController<UploadEvent>.broadcast();
+
+  /// Emits when an upload finishes or gives up.
+  Stream<UploadEvent> get events => _eventController.stream;
+
+  void _emitEvent(UploadEvent event) {
+    if (!_eventController.isClosed) _eventController.add(event);
+  }
+
   /// Every known item, keyed by id.
   final Map<String, UploadItem> _items = <String, UploadItem>{};
 
@@ -769,6 +783,16 @@ class UploadManager extends ChangeNotifier {
       _items[id] = failed;
       await _persist(failed);
       _notify();
+      _emitEvent(
+        UploadEvent(
+          kind: UploadEventKind.failed,
+          id: failed.id,
+          name: failed.name,
+          folder: failed.folder,
+          size: failed.size,
+          error: failed.error,
+        ),
+      );
     }
   }
 
@@ -1010,6 +1034,15 @@ class UploadManager extends ChangeNotifier {
     _items[id] = done;
     await _persist(done);
     _notify();
+    _emitEvent(
+      UploadEvent(
+        kind: UploadEventKind.completed,
+        id: done.id,
+        name: done.name,
+        folder: done.folder,
+        size: done.size,
+      ),
+    );
     if (done.temporarySource) _deleteTemporarySource(done);
     _scheduleCompletedPrune();
   }
@@ -1291,6 +1324,7 @@ class UploadManager extends ChangeNotifier {
     _notifyTimer = null;
     _ownerTimer?.cancel();
     _ownerTimer = null;
+    unawaited(_eventController.close());
     unawaited(_store.dispose());
     super.dispose();
   }

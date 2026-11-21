@@ -32,5 +32,7 @@ export 'nexa_hero.dart';
 export 'nexa_layout_picker.dart';
 export 'nexa_focus_block.dart';
 export 'nexa_status_pod.dart';
+export 'active_transfer_strip.dart';
+export 'nexa_undo.dart';
 export 'nexa_grouped_list.dart';
 export 'nexa_confirmation.dart';

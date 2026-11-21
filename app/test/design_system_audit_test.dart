@@ -92,10 +92,16 @@ void main() {
         await pumpShell(tester, dark: dark);
 
         expect(find.byType(NexaBottomNav), findsOneWidget);
-        expect(find.text('NexaDrive'), findsOneWidget);
-        expect(find.textContaining('Good morning'), findsNothing);
-        expect(find.textContaining('Good afternoon'), findsNothing);
-        expect(find.textContaining('Good evening'), findsNothing);
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is Text &&
+                RegExp(r'^Good (morning|afternoon|evening)').hasMatch(
+                  widget.data ?? '',
+                ),
+          ),
+          findsOneWidget,
+        );
         // The pill is a tonal M3 surface; no optical material remains.
         final scheme = dark ? AppColors.darkScheme : AppColors.lightScheme;
         expect(
@@ -110,10 +116,12 @@ void main() {
           findsAtLeastNWidgets(1),
         );
         expect(find.byType(BackdropFilter), findsNothing);
-        // Every destination is present and hit-testable.
-        for (final label in ['Home', 'Files', 'Shared', 'Photos', 'More']) {
+        // Every destination is present and hit-testable. Home appears twice:
+        // once as the editorial page title and once in the floating pill.
+        for (final label in ['Files', 'Shared', 'Photos', 'More']) {
           expect(find.text(label), findsOneWidget);
         }
+        expect(find.text('Home'), findsNWidgets(2));
         expect(tester.takeException(), isNull);
       });
     }

@@ -111,6 +111,47 @@ abstract final class AppColors {
   static ColorScheme scheme(Brightness brightness) =>
       brightness == Brightness.dark ? darkScheme : lightScheme;
 
+  /// A high-contrast interpretation of the same warm roles. It raises text and
+  /// outline roles without introducing a second colour language.
+  static ColorScheme highContrast(Brightness brightness) {
+    if (brightness == Brightness.dark) {
+      return darkScheme.copyWith(
+        surface: const Color(0xFF0A0D08),
+        surfaceContainerLowest: const Color(0xFF070A06),
+        surfaceContainerLow: const Color(0xFF141810),
+        surfaceContainer: const Color(0xFF1B2017),
+        surfaceContainerHigh: const Color(0xFF23291F),
+        surfaceContainerHighest: const Color(0xFF2E3529),
+        onSurface: inkDark,
+        onSurfaceVariant: inkDark,
+        outline: inkDark,
+        outlineVariant: const Color(0xFF8A9083),
+        primary: forestDeepDark,
+        onPrimary: const Color(0xFF050A06),
+        primaryContainer: selectionDark,
+        onPrimaryContainer: forestDeepDark,
+        error: const Color(0xFFFFB4A5),
+      );
+    }
+    return lightScheme.copyWith(
+      surface: canvasLight,
+      surfaceContainerLowest: canvasLight,
+      surfaceContainerLow: canvasSecondaryLight,
+      surfaceContainer: canvasSecondaryLight,
+      surfaceContainerHigh: canvasLight,
+      surfaceContainerHighest: canvasSecondaryLight,
+      onSurface: const Color(0xFF11150F),
+      onSurfaceVariant: inkLight,
+      outline: inkLight,
+      outlineVariant: const Color(0xFF5C6255),
+      primary: forestDeepLight,
+      onPrimary: Colors.white,
+      primaryContainer: selectionLight,
+      onPrimaryContainer: forestDeepLight,
+      error: const Color(0xFF7A2618),
+    );
+  }
+
   // --------------------------------------------------------------- primary
   /// Compatibility aliases. [scheme] remains authoritative at runtime.
   static const Color accent = forestLight;

@@ -111,6 +111,13 @@ class _PhotoViewerState extends State<PhotoViewer> {
   /// Bumped when the zoom button is pressed; the active page listens for it.
   final ValueNotifier<int> _zoomSignal = ValueNotifier<int>(0);
 
+  /// Live zoom multiplier relative to "fit", used only by the transient chip.
+  final ValueNotifier<double> _zoomLevel = ValueNotifier<double>(1);
+
+  /// The zoom chip appears on a zoom change, then fades on its own timer.
+  bool _zoomHintVisible = false;
+  Timer? _zoomHintTimer;
+
   @override
   void initState() {
     super.initState();
@@ -128,7 +135,9 @@ class _PhotoViewerState extends State<PhotoViewer> {
   @override
   void dispose() {
     _chromeHideTimer?.cancel();
+    _zoomHintTimer?.cancel();
     _zoomSignal.dispose();
+    _zoomLevel.dispose();
     _controller.dispose();
     for (final image in _decoded.values) {
       image.dispose();
@@ -307,8 +316,33 @@ class _PhotoViewerState extends State<PhotoViewer> {
       _current = index;
       _zoomed = false;
     });
+    _zoomHintTimer?.cancel();
+    _zoomHintVisible = false;
+    _zoomLevel.value = 1;
     _showChrome();
     _prefetchAround(index);
+  }
+
+  /// One dark tonal scheme for every overlay that floats above the media.
+  ThemeData _chromeTheme(BuildContext context) => Theme.of(context).copyWith(
+        brightness: Brightness.dark,
+        colorScheme: AppColors.scheme(Brightness.dark),
+      );
+
+  /// Keeps the transient zoom chip in sync with the active page only.
+  void _onZoomChanged(int index, bool zoomed, double level) {
+    if (index != _current) return;
+    setState(() {
+      _zoomed = zoomed;
+      if (!zoomed) _chromeVisible = true;
+      _zoomHintVisible = true;
+    });
+    _zoomLevel.value = level;
+    _zoomHintTimer?.cancel();
+    _zoomHintTimer = Timer(AppMotion.slow + AppMotion.normal, () {
+      if (!mounted) return;
+      setState(() => _zoomHintVisible = false);
+    });
   }
 
   void _toggleChrome() {
@@ -451,38 +485,77 @@ class _PhotoViewerState extends State<PhotoViewer> {
     return '${local.day} ${months[local.month - 1]} ${local.year} · $time';
   }
 
-  /// Swipe-up details mirror Google Photos: metadata lives in a sheet, while
-  /// the photo itself stays unobstructed.
-  void _showDetails() {
-    final entry = _currentEntry;
+  /// Swipe-up details mirror Google Photos: metadata lives in a draggable
+  /// tonal sheet, while the photo itself stays unobstructed.
+  Future<void> _showDetails() async {
+    // Snapshot the entry: the page can change while the sheet is open.
+    final entry = Map<String, dynamic>.from(_currentEntry);
+    final path = _pathAt(_current);
+    final position = '${_current + 1} of ${_photos.length}';
     final modified = DateTime.tryParse(entry['modified_at']?.toString() ?? '');
-    showNexaSheet<void>(
-      context,
-      builder: (sheetContext) => NexaSheetBody(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const NexaSheetHeader(title: 'Details'),
-            _DetailRow(
-              label: 'Name',
-              value: _pathAt(_current).split('/').last,
-            ),
-            if (modified != null)
-              _DetailRow(
-                label: 'Modified',
-                value: Format.shortDateTime(modified.toLocal()),
+    final scheme = Theme.of(context).colorScheme;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      barrierColor: AppColors.scrimFor(scheme.brightness),
+      // Same tonal role as NexaSurfaceLevel.modal; the sheet supplies the
+      // shape, elevation and Material drag handle.
+      backgroundColor: nexaSurfaceColor(
+        NexaSurfaceLevel.modal,
+        scheme.brightness,
+      ),
+      sheetAnimationStyle: AppMotion.reducedMotion(context)
+          ? const AnimationStyle(
+              duration: Duration.zero,
+              reverseDuration: Duration.zero,
+            )
+          : AppMotion.sheetAnimationStyle,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom +
+                AppDimens.space24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              NexaSheetHeader(
+                title: 'Details',
+                subtitle: position,
+                onClose: () => Navigator.pop(sheetContext),
               ),
-            if (entry['size'] != null)
-              _DetailRow(
-                label: 'Size',
-                value: Format.bytes(entry['size']),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimens.pageMargin,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _DetailRow(label: 'Name', value: path.split('/').last),
+                    if (modified != null)
+                      _DetailRow(
+                        label: 'Modified',
+                        value: Format.shortDateTime(modified.toLocal()),
+                      ),
+                    if (entry['size'] != null)
+                      _DetailRow(
+                        label: 'Size',
+                        value: Format.bytes(entry['size']),
+                      ),
+                    _DetailRow(label: 'Position', value: position),
+                  ],
+                ),
               ),
-            _DetailRow(
-              label: 'Position',
-              value: '${_current + 1} of ${_photos.length}',
-            ),
-          ],
+              const SizedBox(height: AppDimens.space8),
+            ],
+          ),
         ),
       ),
     );
@@ -559,66 +632,113 @@ class _PhotoViewerState extends State<PhotoViewer> {
     );
   }
 
+  /// During a Hero flight the destination is a moving rect, so the shuttle
+  /// paints the same bounded grid thumbnail the user just tapped. The full
+  /// preview is never fetched just to make a transition look good.
+  Widget _heroShuttle(
+    BuildContext context,
+    HeroFlightDirection direction,
+    BuildContext fromHeroContext,
+    BuildContext toHeroContext,
+    String path,
+  ) {
+    final bytes = widget.thumbnailLookup?.call(path);
+    if (bytes != null) {
+      return Image.memory(
+        bytes,
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.medium,
+        gaplessPlayback: true,
+        excludeFromSemantics: true,
+      );
+    }
+    // No grid thumbnail (e.g. opened from a file picker): fall back to the
+    // destination hero's own child, which is what Flutter does by default.
+    final hero = toHeroContext.widget;
+    return hero is Hero ? hero.child : const SizedBox.expand();
+  }
+
   @override
   Widget build(BuildContext context) {
     // Immersive media chrome: a full dark ColorScheme so tonal controls and
     // metadata resolve together over the user's photo.
-    final darkChrome = Theme.of(context).copyWith(
-      brightness: Brightness.dark,
-      colorScheme: AppColors.scheme(Brightness.dark),
-    );
+    final darkChrome = _chromeTheme(context);
+    final compact =
+        MediaQuery.sizeOf(context).width < AppDimens.breakpointCompactMax;
+    final canDismiss = compact && !_zoomed && !_filmstripVisible;
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
           Positioned.fill(
-            child: PageView.builder(
-              controller: _controller,
-              onPageChanged: _onPageChanged,
-              itemCount: _photos.length,
-              itemBuilder: (context, i) {
-                final path = _pathAt(i);
-                final error = _errors[path];
-                final image = _decoded[path];
-                final Widget page;
-                if (error != null) {
-                  page = _ViewerError(message: error, onRetry: () => _retry(i));
-                } else if (image == null) {
-                  page = _LoadingPage(
-                    thumbnail: widget.thumbnailLookup?.call(path),
-                  );
-                } else {
-                  page = _ZoomablePhoto(
-                    key: ValueKey('original:$path'),
-                    image: image,
-                    heroTag: 'photo:$path',
-                    active: i == _current,
-                    zoomSignal: _zoomSignal,
-                    onTap: _toggleChrome,
-                    onZoomedChanged: (zoomed) {
-                      if (i == _current && _zoomed != zoomed) {
-                        setState(() {
-                          _zoomed = zoomed;
-                          if (!zoomed) _chromeVisible = true;
-                        });
-                      }
-                    },
-                  );
-                }
-                return GestureDetector(
-                  // Google Photos reveals metadata with an upward swipe. Keep
-                  // it out of the zoomed state so panning a zoomed photo wins.
-                  onVerticalDragEnd: (details) {
-                    if (!_zoomed &&
-                        i == _current &&
-                        (details.primaryVelocity ?? 0) < -500) {
-                      _showDetails();
-                    }
-                  },
-                  child: page,
-                );
+            child: _SwipeDismissLayer(
+              canDismiss: canDismiss,
+              canShowDetails: !_zoomed && !_filmstripVisible,
+              onDismiss: () {
+                if (mounted) Navigator.of(context).maybePop();
               },
+              onDetails: _showDetails,
+              child: PageView.builder(
+                controller: _controller,
+                onPageChanged: _onPageChanged,
+                itemCount: _photos.length,
+                itemBuilder: (context, i) {
+                  final path = _pathAt(i);
+                  final error = _errors[path];
+                  final image = _decoded[path];
+                  final Widget imageLayer;
+                  if (error != null) {
+                    imageLayer = _ViewerError(
+                      key: ValueKey('error:$path'),
+                      message: error,
+                      onRetry: () => _retry(i),
+                    );
+                  } else if (image == null) {
+                    imageLayer = _LoadingPage(
+                      key: ValueKey('loading:$path'),
+                      thumbnail: widget.thumbnailLookup?.call(path),
+                    );
+                  } else {
+                    imageLayer = _ZoomablePhoto(
+                      key: ValueKey('original:$path'),
+                      image: image,
+                      active: i == _current,
+                      zoomSignal: _zoomSignal,
+                      onTap: _toggleChrome,
+                      onZoomedChanged: (zoomed) =>
+                          _onZoomChanged(i, zoomed, _zoomLevel.value),
+                      onScaleChanged: (level) {
+                        if (i == _current) _zoomLevel.value = level;
+                      },
+                    );
+                  }
+                  // The Hero owns the page for its whole lifetime (loading,
+                  // decoded or error), so the grid -> viewer flight is already
+                  // available on the first frame. Unique tags per path avoid
+                  // conflicts while PageView builds neighbouring pages.
+                  return HeroMode(
+                    enabled: !AppMotion.reducedMotion(context),
+                    child: Hero(
+                      key: ValueKey('photoHero:$path'),
+                      tag: 'photo:$path',
+                      flightShuttleBuilder: (context, animation, direction,
+                              fromHeroContext, toHeroContext) =>
+                          _heroShuttle(
+                        context,
+                        direction,
+                        fromHeroContext,
+                        toHeroContext,
+                        path,
+                      ),
+                      child: KeyedSubtree(
+                        key: ValueKey('photoHeroChild:$path'),
+                        child: imageLayer,
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
           ),
           Positioned(
@@ -669,10 +789,22 @@ class _PhotoViewerState extends State<PhotoViewer> {
                                   ),
                                 ),
                                 const SizedBox(height: AppDimens.space2),
-                                Text(
-                                  '${_current + 1} of ${_photos.length}',
-                                  style: AppTextStyle.caption.copyWith(
-                                    color: Colors.white70,
+                                Semantics(
+                                  label:
+                                      'Photo ${_current + 1} of ${_photos.length}',
+                                  child: ExcludeSemantics(
+                                    child: Text(
+                                      '${_current + 1} of ${_photos.length}',
+                                      style: AppTextStyle.caption.copyWith(
+                                        color: Colors.white70,
+                                        shadows: const [
+                                          Shadow(
+                                            color: AppColors.scrim,
+                                            blurRadius: AppDimens.space6,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -689,6 +821,18 @@ class _PhotoViewerState extends State<PhotoViewer> {
                   ),
                 ),
               ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: MediaQuery.paddingOf(context).top +
+                AppDimens.space56 +
+                AppDimens.space16,
+            child: _ZoomIndicator(
+              visible: _zoomHintVisible,
+              zoomLevel: _zoomLevel,
+              theme: darkChrome,
             ),
           ),
           if (_photos.length > 1 && _filmstripVisible)
@@ -724,7 +868,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
 /// reads as "the photo is broken and looks blurry".
 class _LoadingPage extends StatelessWidget {
   final Uint8List? thumbnail;
-  const _LoadingPage({this.thumbnail});
+  const _LoadingPage({super.key, this.thumbnail});
 
   @override
   Widget build(BuildContext context) {
@@ -766,7 +910,11 @@ class _LoadingPage extends StatelessWidget {
 class _ViewerError extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
-  const _ViewerError({required this.message, required this.onRetry});
+  const _ViewerError({
+    super.key,
+    required this.message,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -817,6 +965,205 @@ class _ViewerError extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Transient zoom chip. It is deliberately not a second control surface: it
+/// only reports the current multiplier, then fades away with the chrome's
+/// timing. A tonal floating NexaSurface keeps it legible on bright photos.
+class _ZoomIndicator extends StatelessWidget {
+  final bool visible;
+  final ValueNotifier<double> zoomLevel;
+  final ThemeData theme;
+
+  const _ZoomIndicator({
+    required this.visible,
+    required this.zoomLevel,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      ignoring: true,
+      child: Center(
+        child: AnimatedOpacity(
+          opacity: visible ? 1 : 0,
+          duration: AppMotion.resolve(context, AppMotion.fast),
+          curve: AppMotion.curveFor(context, AppMotion.fade),
+          child: Theme(
+            data: theme,
+            child: ValueListenableBuilder<double>(
+              valueListenable: zoomLevel,
+              builder: (context, level, _) {
+                final label = '${level.toStringAsFixed(1)}×';
+                final scheme = Theme.of(context).colorScheme;
+                return Semantics(
+                  label: 'Zoom $label',
+                  container: true,
+                  child: ExcludeSemantics(
+                    child: NexaSurface(
+                      level: NexaSurfaceLevel.floating,
+                      radius: AppDimens.radiusPill,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppDimens.space12,
+                        vertical: AppDimens.space6,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.zoom_in_rounded,
+                            size: AppDimens.iconSmall,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: AppDimens.space6),
+                          Text(
+                            label,
+                            style: AppTextStyle.labelMedium.copyWith(
+                              color: scheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Owns the mobile swipe-to-dismiss gesture around the page view.
+///
+/// Vertical drags are only registered while the photo is at fit scale and no
+/// browse layer is open. Horizontal PageView swipes, pinch zoom and double-tap
+/// keep their own recognizers; `InteractiveViewer` disables panning at fit so
+/// it cannot steal the downward drag.
+class _SwipeDismissLayer extends StatefulWidget {
+  final bool canDismiss;
+  final bool canShowDetails;
+  final VoidCallback onDismiss;
+  final VoidCallback onDetails;
+  final Widget child;
+
+  const _SwipeDismissLayer({
+    required this.canDismiss,
+    required this.canShowDetails,
+    required this.onDismiss,
+    required this.onDetails,
+    required this.child,
+  });
+
+  @override
+  State<_SwipeDismissLayer> createState() => _SwipeDismissLayerState();
+}
+
+class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
+    with SingleTickerProviderStateMixin {
+  double _drag = 0;
+  double _settleFrom = 0;
+  AnimationController? _settle;
+
+  @override
+  void didUpdateWidget(covariant _SwipeDismissLayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_drag != 0 && !widget.canDismiss) {
+      _settle?.stop();
+      _settle?.dispose();
+      _settle = null;
+      _drag = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _settle?.dispose();
+    super.dispose();
+  }
+
+  void _settleBack() {
+    if (_drag <= 0) return;
+    if (AppMotion.reducedMotion(context)) {
+      _settle?.stop();
+      setState(() => _drag = 0);
+      return;
+    }
+    _settleFrom = _drag;
+    _settle?.dispose();
+    _settle = AnimationController(vsync: this, duration: AppMotion.normal);
+    _settle!.addListener(() {
+      if (!mounted) return;
+      setState(() => _drag = _settleFrom * (1 - _settle!.value));
+    });
+    _settle!.addStatusListener((status) {
+      if (status.isCompleted || status.isDismissed) {
+        _settle?.dispose();
+        _settle = null;
+      }
+    });
+    _settle!.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final height = MediaQuery.sizeOf(context).height;
+    final maxDrag = height * 0.65;
+    final gesturesEnabled = widget.canDismiss || widget.canShowDetails;
+
+    Widget content = widget.child;
+    if (_drag > 0 && !AppMotion.reducedMotion(context)) {
+      final progress = (_drag / height).clamp(0.0, 1.0);
+      content = Opacity(
+        opacity: (1 - progress * 0.5).clamp(0.35, 1.0),
+        child: Transform.translate(
+          offset: Offset(0, _drag),
+          child: content,
+        ),
+      );
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragStart: gesturesEnabled
+          ? (_) {
+              _settle?.stop();
+              if (_drag != 0) setState(() => _drag = 0);
+            }
+          : null,
+      onVerticalDragUpdate: widget.canDismiss
+          ? (details) {
+              if (details.delta.dy <= 0 && _drag <= 0) return;
+              setState(() {
+                _drag = (_drag + details.delta.dy).clamp(0.0, maxDrag);
+              });
+            }
+          : null,
+      onVerticalDragEnd: gesturesEnabled
+          ? (details) {
+              final velocity = details.primaryVelocity ?? 0;
+              if (widget.canDismiss && _drag > 0) {
+                if (_drag > height * 0.16 || (velocity > 650 && _drag > 20)) {
+                  setState(() => _drag = 0);
+                  widget.onDismiss();
+                } else {
+                  _settleBack();
+                }
+                return;
+              }
+              // Google Photos reveals metadata with an upward swipe.
+              if (widget.canShowDetails && velocity < -500) {
+                widget.onDetails();
+              }
+            }
+          : null,
+      onVerticalDragCancel: gesturesEnabled ? () => _settleBack() : null,
+      child: content,
     );
   }
 }
@@ -1141,20 +1488,20 @@ class _MediaAction extends StatelessWidget {
 
 class _ZoomablePhoto extends StatefulWidget {
   final ui.Image image;
-  final String heroTag;
   final bool active;
   final ValueNotifier<int> zoomSignal;
   final VoidCallback onTap;
   final ValueChanged<bool> onZoomedChanged;
+  final ValueChanged<double> onScaleChanged;
 
   const _ZoomablePhoto({
     super.key,
     required this.image,
-    required this.heroTag,
     required this.active,
     required this.zoomSignal,
     required this.onTap,
     required this.onZoomedChanged,
+    required this.onScaleChanged,
   });
 
   @override
@@ -1220,6 +1567,9 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
     final next = ImageDecodePolicy.filterQualityForScale(scale);
     final zoomed = scale > _fit * 1.25;
     if (next != _quality && mounted) setState(() => _quality = next);
+    if (_fit > 0) {
+      widget.onScaleChanged.call((scale / _fit).clamp(0.1, 20.0));
+    }
     if (zoomed != _zoomed) {
       _zoomed = zoomed;
       if (mounted) widget.onZoomedChanged.call(zoomed);
@@ -1288,20 +1638,21 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
           behavior: HitTestBehavior.opaque,
           onTap: widget.onTap,
           onDoubleTap: _toggleZoom,
-          child: Hero(
-            tag: widget.heroTag,
-            child: InteractiveViewer(
-              transformationController: _transform,
-              constrained: false,
-              minScale: math.max(_fit * 0.9, 0.5),
-              maxScale: math.max(_fit * 8, 1.4),
-              clipBehavior: Clip.none,
-              child: RawImage(
-                image: widget.image,
-                fit: BoxFit.none,
-                filterQuality: _quality,
-                isAntiAlias: true,
-              ),
+          child: InteractiveViewer(
+            transformationController: _transform,
+            constrained: false,
+            // At fit scale there is nothing to pan; leaving it off stops the
+            // viewer competing with the mobile swipe-to-dismiss gesture.
+            // Pinch, double-tap and the overflow zoom button are untouched.
+            panEnabled: _zoomed,
+            minScale: math.max(_fit * 0.9, 0.5),
+            maxScale: math.max(_fit * 8, 1.4),
+            clipBehavior: Clip.none,
+            child: RawImage(
+              image: widget.image,
+              fit: BoxFit.none,
+              filterQuality: _quality,
+              isAntiAlias: true,
             ),
           ),
         );

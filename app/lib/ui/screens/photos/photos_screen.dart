@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/design/app_dimensions.dart';
 import '../../../core/design/app_haptics.dart';
@@ -16,6 +16,7 @@ import '../../../services/api.dart';
 import '../../../services/image_pipeline.dart';
 import '../../../services/session.dart';
 import '../../../services/thumbnail_cache.dart';
+import '../../../services/trash_restore.dart';
 import '../../navigation/file_opener.dart';
 import '../../widgets/nexa_components.dart';
 import '../files/file_share_sheet.dart';
@@ -86,6 +87,21 @@ class _PhotosScreenState extends State<PhotosScreen> {
   bool _dragSelecting = false;
   int? _dragAnchorIndex;
   Set<String> _dragBaseSelection = const <String>{};
+
+  /// The last cell the drag tip reached. Range selection fires one haptic per
+  /// newly reached cell, not one per pointer move.
+  int? _dragLastIndex;
+
+  /// Visual grid position used by desktop arrow-key range extension. Reuses
+  /// the drag anchor/base so keyboard and pointer ranges settle identically.
+  int? _keyboardAnchorIndex;
+
+  /// Keeps shortcuts scoped to selection mode while still receiving events
+  /// bubbled from the contextual bar's chips.
+  final FocusNode _selectionFocusNode = FocusNode(
+    debugLabel: 'photos-selection',
+  );
+
   double? _pinchBaseColumns;
   final Map<String, GlobalKey> _cellKeys = <String, GlobalKey>{};
 
@@ -95,6 +111,12 @@ class _PhotosScreenState extends State<PhotosScreen> {
     _attachDiskCache();
     _loadGridColumns();
     load();
+  }
+
+  @override
+  void dispose() {
+    _selectionFocusNode.dispose();
+    super.dispose();
   }
 
   static const _gridColumnsPreference = 'nexadrive.photos.grid_columns';
@@ -148,7 +170,11 @@ class _PhotosScreenState extends State<PhotosScreen> {
     final path = _pathAtPosition(event.position);
     if (path == null) return;
     final index = _indexByPath[path];
-    if (index != null) _selectRangeTo(_visualIndexOf(index));
+    if (index == null) return;
+    final visual = _visualIndexOf(index);
+    if (visual < 0 || visual == _dragLastIndex) return;
+    _dragLastIndex = visual;
+    if (_selectRangeTo(visual)) AppHaptics.selection();
   }
 
   void _onPointerUp(PointerEvent event) {
@@ -157,6 +183,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
     _dragSelecting = false;
     _dragAnchorIndex = null;
     _dragBaseSelection = const <String>{};
+    _dragLastIndex = null;
   }
 
   void _onScaleStart(ScaleStartDetails details) {
@@ -184,9 +211,9 @@ class _PhotosScreenState extends State<PhotosScreen> {
     final visualAnchor = _visualIndexOf(index);
     if (visualAnchor < 0) return;
     if (!_selecting) {
-      // Entering multi-select: one light impact confirms the gesture. Cells
-      // touched during the continuing drag stay silent on purpose — repeated
-      // feedback mid-drag reads as noise, not signal.
+      // Entering multi-select gets one firm impact. From there the drag only
+      // clicks when the tip reaches a *different* cell (see _onPointerMove),
+      // so feedback tracks selections rather than pointer pixels.
       AppHaptics.impact();
       _dragBaseSelection = <String>{_pathAtVisual(visualAnchor)};
       setState(() {
@@ -201,11 +228,12 @@ class _PhotosScreenState extends State<PhotosScreen> {
     }
     _dragAnchorIndex = visualAnchor;
     _dragSelecting = true;
+    _keyboardAnchorIndex = null;
     final hit = _pathAtPosition(globalPosition);
     final hitIndex = hit == null ? null : _indexByPath[hit];
-    _selectRangeTo(
-      hitIndex == null ? visualAnchor : _visualIndexOf(hitIndex),
-    );
+    final target = hitIndex == null ? visualAnchor : _visualIndexOf(hitIndex);
+    _dragLastIndex = target;
+    _selectRangeTo(target);
   }
 
   int _visualIndexOf(int photoIndex) =>
@@ -215,10 +243,13 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   /// Selects the whole run between the long-press anchor and [index], the way
   /// a phone gallery turns one drag into a range selection. Indices here are
-  /// visual positions in the month-grouped grid.
-  void _selectRangeTo(int index) {
+  /// visual positions in the month-grouped grid. Returns whether the visible
+  /// selection actually changed, so callers can time a single haptic.
+  bool _selectRangeTo(int index) {
     final anchor = _dragAnchorIndex;
-    if (anchor == null || index < 0 || index >= _visualOrder.length) return;
+    if (anchor == null || index < 0 || index >= _visualOrder.length) {
+      return false;
+    }
     final start = index < anchor ? index : anchor;
     final end = index < anchor ? anchor : index;
     final next = <String>{..._dragBaseSelection};
@@ -226,13 +257,14 @@ class _PhotosScreenState extends State<PhotosScreen> {
       next.add(_pathAtVisual(i));
     }
     if (next.length == _selected.length && next.every(_selected.contains)) {
-      return;
+      return false;
     }
     setState(() {
       _selected
         ..clear()
         ..addAll(next);
     });
+    return true;
   }
 
   String? _pathAtPosition(Offset globalPosition) {
@@ -419,7 +451,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
   String _friendlyError(Object e) {
     if (e is ApiException) {
       if (e.status == 401) return 'Your session expired. Sign in again.';
-      if (e.status >= 500) return 'The server could not list your photos.';
+      if (e.status >= 500) return 'The server couldn’t list your photos.';
       return e.message;
     }
     return 'Check your connection and try again.';
@@ -473,11 +505,47 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   // ------------------------------------------------------------ selection
   void _onCellTap(int index) {
-    if (_selecting) {
-      _toggleSelect(index);
-    } else {
+    if (_shortcutsBlocked()) return;
+    final toggle = HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed;
+    final extend = HardwareKeyboard.instance.isShiftPressed;
+    if (!_selecting && !toggle && !extend) {
       _open(index);
+      return;
     }
+    final visual = _visualIndexOf(index);
+    if (visual < 0) return;
+
+    if (!_selecting) {
+      AppHaptics.impact();
+      setState(() => _selecting = true);
+      widget.onSelectionChanged?.call(true);
+    }
+    if (extend) {
+      final anchor = (_dragAnchorIndex ?? _keyboardAnchorIndex ?? visual)
+          .clamp(0, _visualOrder.length - 1);
+      _dragBaseSelection = Set<String>.from(_selected);
+      _dragAnchorIndex = anchor;
+      _keyboardAnchorIndex = anchor;
+      if (_selectRangeTo(visual)) AppHaptics.selection();
+      return;
+    }
+
+    _toggleSelect(index);
+    if (toggle) {
+      // A modifier tap establishes a new range anchor; a plain tap only flips
+      // the item and leaves the previous anchor alone.
+      _dragAnchorIndex = visual;
+      _keyboardAnchorIndex = visual;
+      _dragBaseSelection = <String>{_pathAtVisual(visual)};
+    }
+  }
+
+  bool _shortcutsBlocked() {
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus == null) return false;
+    final focused = focus.context?.widget;
+    return focused is EditableText || focused is TextField;
   }
 
   void _onCellLongPress(int index, Offset globalPosition) {
@@ -487,6 +555,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
   void _toggleSelect(int index) {
     final path = _pathAt(index);
     AppHaptics.selection();
+    _keyboardAnchorIndex = null;
     setState(() {
       if (_selected.contains(path)) {
         _selected.remove(path);
@@ -496,19 +565,145 @@ class _PhotosScreenState extends State<PhotosScreen> {
     });
   }
 
+  /// Chips toggle between "all" and "clear"; Ctrl/Cmd+A is always "all".
   void _toggleSelectAll() {
     AppHaptics.selection();
+    if (_visualOrder.isNotEmpty && _selected.length == _visualOrder.length) {
+      _exitSelection();
+      return;
+    }
+    _selectAllVisible();
+  }
+
+  void _selectAllVisible() {
+    if (_visualOrder.isEmpty) return;
     setState(() {
-      if (_photos.isNotEmpty && _selected.length == _photos.length) {
-        _selected.clear();
-      } else {
-        _selected
-          ..clear()
-          ..addAll(_photos.map((photo) => (photo['path'] ?? '').toString()));
-      }
-      _selecting = _selected.isNotEmpty;
+      _selecting = true;
+      _selected
+        ..clear()
+        ..addAll(_visualOrder.map(_pathAtVisual));
     });
-    widget.onSelectionChanged?.call(_selecting);
+    _keyboardAnchorIndex = null;
+    _dragAnchorIndex = null;
+    _dragBaseSelection = const <String>{};
+    widget.onSelectionChanged?.call(true);
+  }
+
+  /// Selects the visible run from the current range anchor (or the first
+  /// selected cell, or the top of the month-ordered grid) to the very end.
+  void _selectAllFromHere() {
+    if (_visualOrder.isEmpty) return;
+    AppHaptics.selection();
+    final explicit = _keyboardAnchorIndex ?? _dragAnchorIndex;
+    final fromSelected = _selected.isEmpty
+        ? -1
+        : _visualIndexOf(_indexByPath[_selected.first] ?? -1);
+    final anchor = explicit ?? fromSelected;
+    final start = (anchor >= 0 ? anchor : 0).clamp(0, _visualOrder.length - 1);
+    setState(() {
+      _selecting = true;
+      _selected
+        ..clear()
+        ..addAll(
+          List<String>.generate(
+            _visualOrder.length - start,
+            (i) => _pathAtVisual(start + i),
+          ),
+        );
+    });
+    _keyboardAnchorIndex = start;
+    _dragAnchorIndex = start;
+    _dragBaseSelection = Set<String>.from(_selected);
+    widget.onSelectionChanged?.call(true);
+  }
+
+  // ------------------------------------------------------------- keyboard
+  bool _focusIsTextEntry() {
+    final context = FocusManager.instance.primaryFocus?.context;
+    if (context == null) return false;
+    // Text fields and dialogs own their own focus scopes; let them keep keys.
+    return context.findAncestorWidgetOfExactType<EditableText>() != null ||
+        context.findAncestorWidgetOfExactType<Dialog>() != null;
+  }
+
+  KeyEventResult _onSelectionKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (_focusIsTextEntry()) return KeyEventResult.ignored;
+
+    final key = event.logicalKey;
+    final command = HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed;
+
+    if (command && key == LogicalKeyboardKey.keyA) {
+      _selectAllVisible();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      if (!_selecting) return KeyEventResult.ignored;
+      _exitSelection();
+      return KeyEventResult.handled;
+    }
+    if (!_selecting || _visualOrder.isEmpty) return KeyEventResult.ignored;
+
+    final step = switch (key) {
+      LogicalKeyboardKey.arrowLeft => -1,
+      LogicalKeyboardKey.arrowRight => 1,
+      LogicalKeyboardKey.arrowUp => -_gridColumns,
+      LogicalKeyboardKey.arrowDown => _gridColumns,
+      _ => null,
+    };
+    if (step == null) return KeyEventResult.ignored;
+    _extendSelectionByKeyboard(step);
+    return KeyEventResult.handled;
+  }
+
+  /// Arrow keys walk the month-ordered grid and extend a contiguous run, the
+  /// keyboard twin of the drag anchor. The first press plants the anchor; later
+  /// presses move it and click once per newly reached cell.
+  void _extendSelectionByKeyboard(int step) {
+    final current = _keyboardAnchorIndex;
+    if (current == null || current >= _visualOrder.length) {
+      final fromSelected = _selected.isEmpty
+          ? -1
+          : _visualIndexOf(_indexByPath[_selected.first] ?? -1);
+      final start = (fromSelected >= 0 ? fromSelected : 0).clamp(
+        0,
+        _visualOrder.length - 1,
+      );
+      _keyboardAnchorIndex = start;
+      _dragAnchorIndex = start;
+      _dragBaseSelection = Set<String>.from(_selected);
+      _dragLastIndex = start;
+      if (_selected.isEmpty) {
+        setState(() => _selected.add(_pathAtVisual(start)));
+      }
+      AppHaptics.selection();
+      _revealVisualIndex(start);
+      return;
+    }
+
+    final next = (current + step).clamp(0, _visualOrder.length - 1);
+    if (next == current) return;
+    _keyboardAnchorIndex = next;
+    _dragAnchorIndex = next;
+    _dragLastIndex = next;
+    _selectRangeTo(next);
+    AppHaptics.selection();
+    _revealVisualIndex(next);
+  }
+
+  void _revealVisualIndex(int visualIndex) {
+    if (visualIndex < 0 || visualIndex >= _visualOrder.length) return;
+    final context = _cellKeys[_pathAtVisual(visualIndex)]?.currentContext;
+    if (context == null) return;
+    Scrollable.ensureVisible(
+      context,
+      duration: AppMotion.resolve(context, AppMotion.fast),
+      curve: AppMotion.curveFor(context, AppMotion.standard),
+      alignment: 0.5,
+    );
   }
 
   String _pathAt(int index) => (_photos[index]['path'] ?? '').toString();
@@ -523,7 +718,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
       confirmText: 'Trash',
       isDestructive: true,
     );
-    if (confirm != true) return;
+    if (confirm != true || !mounted) return;
     final removed = _selected.toList();
     try {
       await widget.api.batch(action: 'delete', paths: removed);
@@ -533,9 +728,32 @@ class _PhotosScreenState extends State<PhotosScreen> {
         _photos.removeWhere((p) => removed.contains(p['path']));
         _reindex();
       });
-      _toast('${Format.count(removed.length, 'item')} moved to Trash');
+      NexaUndo.show(
+        context,
+        '${Format.count(removed.length, 'item')} moved to Trash',
+        onAction: () => unawaited(_undoTrash(removed)),
+      );
     } catch (e) {
-      if (mounted) _toast(e.toString());
+      if (mounted) _toast(_friendlyError(e));
+    }
+  }
+
+  /// Resolves the freshly created trash ids and restores them, then refreshes
+  /// the gallery so both this tab and the rest of the app agree on state.
+  Future<void> _undoTrash(List<String> paths) async {
+    try {
+      await TrashRestore.paths(widget.api, paths);
+      if (!mounted) return;
+      await load();
+      if (!mounted) return;
+      _toast('Back in your gallery');
+    } catch (e) {
+      if (!mounted) return;
+      _toast(
+        e is StateError
+            ? e.message
+            : 'That restore didn’t finish. Check your connection and try again.',
+      );
     }
   }
 
@@ -560,6 +778,10 @@ class _PhotosScreenState extends State<PhotosScreen> {
     });
     _dragSelecting = false;
     _activePointer = null;
+    _dragAnchorIndex = null;
+    _dragBaseSelection = const <String>{};
+    _dragLastIndex = null;
+    _keyboardAnchorIndex = null;
     widget.onSelectionChanged?.call(false);
   }
 
@@ -614,45 +836,58 @@ class _PhotosScreenState extends State<PhotosScreen> {
   Widget build(BuildContext context) {
     final photoCount = _photos.length;
 
+    Widget page = NexaPage(
+      title: 'Photos',
+      bottomSafeArea: false,
+      subtitle: _selecting
+          ? 'Drag to select · Tap to refine · Arrows extend'
+          : photoCount == 0
+              ? 'Photos, videos and PDFs in one place'
+              : Format.count(photoCount, 'item'),
+      headerAction: _selecting
+          ? null
+          : PopupMenuButton<_PhotosMenuAction>(
+              tooltip: 'Gallery options',
+              icon: const Icon(Icons.more_vert_rounded),
+              onSelected: (action) {
+                switch (action) {
+                  case _PhotosMenuAction.layout:
+                    _showGridDensityPicker();
+                  case _PhotosMenuAction.refresh:
+                    load();
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: _PhotosMenuAction.layout,
+                  child: Text('Gallery layout'),
+                ),
+                PopupMenuItem(
+                  value: _PhotosMenuAction.refresh,
+                  child: Text('Refresh library'),
+                ),
+              ],
+            ),
+      body: _body(),
+    );
+
+    // Shortcuts live only while selecting; key events from the bar's chips
+    // bubble up to this node, while dialogs/text fields keep their own focus.
+    if (_selecting) {
+      page = Focus(
+        focusNode: _selectionFocusNode,
+        autofocus: true,
+        onKeyEvent: _onSelectionKey,
+        child: page,
+      );
+    }
+
     return PopScope(
       canPop: !_selecting,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && _selecting) _exitSelection();
       },
-      child: NexaPage(
-        title: _selecting ? Format.count(_selected.length, 'item') : 'Photos',
-        bottomSafeArea: false,
-        subtitle: _selecting
-            ? 'Drag across photos to select · Tap to refine'
-            : photoCount == 0
-                ? 'Photos, videos and PDFs in one place'
-                : Format.count(photoCount, 'item'),
-        headerAction: _selecting
-            ? null
-            : PopupMenuButton<_PhotosMenuAction>(
-                tooltip: 'Gallery options',
-                icon: const Icon(Icons.more_vert_rounded),
-                onSelected: (action) {
-                  switch (action) {
-                    case _PhotosMenuAction.layout:
-                      _showGridDensityPicker();
-                    case _PhotosMenuAction.refresh:
-                      load();
-                  }
-                },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
-                    value: _PhotosMenuAction.layout,
-                    child: Text('Gallery layout'),
-                  ),
-                  PopupMenuItem(
-                    value: _PhotosMenuAction.refresh,
-                    child: Text('Refresh library'),
-                  ),
-                ],
-              ),
-        body: _body(),
-      ),
+      child: page,
     );
   }
 
@@ -676,21 +911,25 @@ class _PhotosScreenState extends State<PhotosScreen> {
     }
     if (_error != null) {
       return NexaEmptyState(
-        icon: Icons.cloud_off_rounded,
-        title: 'Can’t load photos',
+        icon: Icons.cloud_off_outlined,
+        title: 'That didn’t load — try again',
         hint: _error,
         actionLabel: 'Retry',
         onAction: load,
+        actionIcon: Icons.refresh_rounded,
+        iconSize: AppDimens.iconTile,
       );
     }
     if (_photos.isEmpty) {
       return NexaEmptyState(
         icon: Icons.photo_library_outlined,
-        title: 'No media yet',
+        title: 'Nothing here yet',
         hint:
-            'Upload photos, videos or PDFs from My files and they’ll appear here.',
+            'Photos, videos and PDFs you add will show up here. Upload from My files to get started.',
         actionLabel: 'Refresh',
         onAction: load,
+        actionIcon: Icons.refresh_rounded,
+        iconSize: AppDimens.iconTile,
       );
     }
 
@@ -800,55 +1039,83 @@ class _PhotosScreenState extends State<PhotosScreen> {
             ),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
+                constraints: const BoxConstraints(maxWidth: 560),
                 child: NexaSurface(
                   level: NexaSurfaceLevel.floating,
-                  radius: AppDimens.radiusPill,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimens.space6,
-                    vertical: AppDimens.space4,
+                  radius: AppDimens.radiusMedium,
+                  padding: const EdgeInsets.fromLTRB(
+                    AppDimens.space8,
+                    AppDimens.space6,
+                    AppDimens.space8,
+                    AppDimens.space6,
                   ),
-                  child: Row(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      IconButton(
-                        tooltip: 'Cancel selection',
-                        onPressed: _exitSelection,
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                      Expanded(
-                        child: Text(
-                          Format.count(_selected.length, 'item'),
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyle.bodyEmphasized.copyWith(
-                            color: Theme.of(context).colorScheme.onSurface,
+                      Row(
+                        children: [
+                          _SelectionCount(count: _selected.length),
+                          const SizedBox(width: AppDimens.space8),
+                          Expanded(
+                            child: Text(
+                              'Selected',
+                              style: AppTextStyle.titleMedium.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
                           ),
-                        ),
+                          NexaIconActionItem(
+                            icon: Icons.close_rounded,
+                            tooltip: 'Cancel selection',
+                            onTap: _exitSelection,
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        tooltip: _selected.length == _photos.length
-                            ? 'Clear selection'
-                            : 'Select all',
-                        onPressed: _toggleSelectAll,
-                        icon: Icon(
-                          _selected.length == _photos.length
-                              ? Icons.deselect_rounded
-                              : Icons.select_all_rounded,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Share selected items',
-                        onPressed: _selected.isEmpty ? null : _shareSelected,
-                        icon: const Icon(Icons.share_outlined),
-                      ),
-                      IconButton(
-                        tooltip: 'Move selected items to Trash',
-                        onPressed: _selected.isEmpty ? null : _deleteSelected,
-                        icon: Icon(
-                          Icons.delete_outline_rounded,
-                          color: Theme.of(context).colorScheme.error,
-                        ),
+                      const SizedBox(height: AppDimens.space4),
+                      // Wrapping keeps every action reachable on narrow
+                      // phones instead of hiding the destructive one in a
+                      // horizontal scroller.
+                      Wrap(
+                        spacing: AppDimens.space6,
+                        runSpacing: AppDimens.space2,
+                        children: [
+                          NexaActionItem(
+                            icon: Icons.select_all_rounded,
+                            label: 'Select all from here',
+                            onTap: _selectAllFromHere,
+                          ),
+                          Tooltip(
+                            message: _selected.length == _visualOrder.length
+                                ? 'Clear selection'
+                                : 'Select all',
+                            child: NexaActionItem(
+                              icon: _selected.length == _visualOrder.length
+                                  ? Icons.deselect_rounded
+                                  : Icons.done_all_rounded,
+                              label: _selected.length == _visualOrder.length
+                                  ? 'Clear'
+                                  : 'All',
+                              onTap: _toggleSelectAll,
+                            ),
+                          ),
+                          NexaActionItem(
+                            icon: Icons.share_outlined,
+                            label: 'Share',
+                            enabled: _selected.isNotEmpty,
+                            onTap: _shareSelected,
+                          ),
+                          Tooltip(
+                            message: 'Move selected items to Trash',
+                            child: NexaActionItem(
+                              icon: Icons.delete_outline_rounded,
+                              label: 'Move to trash',
+                              enabled: _selected.isNotEmpty,
+                              onTap: _deleteSelected,
+                              isDestructive: true,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -866,6 +1133,53 @@ class _PhotosScreenState extends State<PhotosScreen> {
       return null;
     }
     return _images.peekThumbnail(_thumbKey(index));
+  }
+}
+
+/// The selection count springs in whenever the run grows or shrinks. A short
+/// ease-out-back overshoot reads as a detent; reduced motion gets an instant
+/// swap through [AppMotion.resolve].
+class _SelectionCount extends StatelessWidget {
+  final int count;
+
+  const _SelectionCount({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final duration = AppMotion.resolve(context, AppMotion.fast);
+    final reduced = AppMotion.reducedMotion(context);
+
+    return AnimatedSwitcher(
+      duration: duration,
+      reverseDuration: duration,
+      switchInCurve: reduced ? Curves.linear : Curves.easeOutBack,
+      switchOutCurve: reduced ? Curves.linear : Curves.easeIn,
+      transitionBuilder: (child, animation) => ScaleTransition(
+        scale: animation,
+        child: FadeTransition(opacity: animation, child: child),
+      ),
+      child: DecoratedBox(
+        key: ValueKey<int>(count),
+        decoration: BoxDecoration(
+          color: scheme.primaryContainer,
+          borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.space8,
+            vertical: AppDimens.space4,
+          ),
+          child: Text(
+            Format.count(count, 'item'),
+            maxLines: 1,
+            style: AppTextStyle.labelMedium.copyWith(
+              color: scheme.onPrimaryContainer,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

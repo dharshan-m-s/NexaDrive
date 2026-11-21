@@ -10,11 +10,15 @@ import 'app_transitions.dart';
 /// ivory/forest palette. Surfaces are solid, dividers are hairlines and shape
 /// stays restrained; the floating pill is the only capsule in the system.
 abstract final class AppTheme {
-  static ThemeData light() => _build(Brightness.light);
-  static ThemeData dark() => _build(Brightness.dark);
+  static ThemeData light({bool highContrast = false}) =>
+      _build(Brightness.light, highContrast);
+  static ThemeData dark({bool highContrast = false}) =>
+      _build(Brightness.dark, highContrast);
 
-  static ThemeData _build(Brightness brightness) {
-    final scheme = AppColors.scheme(brightness);
+  static ThemeData _build(Brightness brightness, bool highContrast) {
+    final scheme = highContrast
+        ? AppColors.highContrast(brightness)
+        : AppColors.scheme(brightness);
     final onSurface = scheme.onSurface;
     final onSurfaceVariant = scheme.onSurfaceVariant;
     final primary = scheme.primary;
@@ -25,15 +29,25 @@ abstract final class AppTheme {
       brightness: brightness,
       colorScheme: scheme,
       scaffoldBackgroundColor: scheme.surface,
-      dividerColor: scheme.outlineVariant,
+      dividerColor: highContrast ? scheme.outline : scheme.outlineVariant,
       materialTapTargetSize: MaterialTapTargetSize.padded,
       visualDensity: VisualDensity.standard,
     );
 
     final textTheme = _textTheme(base.textTheme, onSurface, onSurfaceVariant);
+    final outlineSide = BorderSide(
+      color: highContrast ? scheme.outline : scheme.outlineVariant,
+      width: highContrast ? 1.5 : 1,
+    );
 
     return base.copyWith(
       textTheme: textTheme,
+      // Keyboard focus gets a visible tonal state without introducing a new
+      // ring language; high contrast makes it a solid, legible state layer.
+      focusColor: highContrast ? primary : primary.withValues(alpha: 0.18),
+      hoverColor: highContrast
+          ? primary.withValues(alpha: 0.28)
+          : onSurface.withValues(alpha: 0.06),
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface,
         foregroundColor: onSurface,
@@ -55,7 +69,7 @@ abstract final class AppTheme {
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppDimens.radiusCard),
-          side: BorderSide(color: scheme.outlineVariant),
+          side: outlineSide,
         ),
       ),
       listTileTheme: ListTileThemeData(
@@ -179,7 +193,7 @@ abstract final class AppTheme {
         elevation: AppDimens.elevationLevel3,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppDimens.radiusDialog),
-          side: BorderSide(color: scheme.outlineVariant),
+          side: outlineSide,
         ),
         titleTextStyle: AppTextStyle.title2.copyWith(color: onSurface),
         contentTextStyle: AppTextStyle.bodyMedium.copyWith(
@@ -270,8 +284,7 @@ abstract final class AppTheme {
                 ? scheme.onPrimaryContainer
                 : onSurfaceVariant;
           }),
-          side:
-              WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant)),
+          side: WidgetStatePropertyAll(outlineSide),
           shape: const WidgetStatePropertyAll(StadiumBorder()),
           textStyle: const WidgetStatePropertyAll(AppTextStyle.labelLarge),
         ),
@@ -294,7 +307,7 @@ abstract final class AppTheme {
         elevation: AppDimens.elevationLevel3,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppDimens.radiusPopup),
-          side: BorderSide(color: scheme.outlineVariant),
+          side: outlineSide,
         ),
         textStyle: AppTextStyle.bodyLarge.copyWith(color: onSurface),
       ),

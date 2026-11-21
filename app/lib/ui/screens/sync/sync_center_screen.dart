@@ -25,7 +25,9 @@ class SyncCenterScreen extends StatefulWidget {
 
 class _SyncCenterScreenState extends State<SyncCenterScreen> {
   bool _loading = true;
-  String? _loadError;
+  String? _localLoadError;
+  String? _deviceLoadError;
+  bool _devicesLoading = false;
   String? _folderPath;
   List<Map<String, String>> _androidFolders = [];
   DateTime? _lastSyncAt;
@@ -48,10 +50,33 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
     _init();
   }
 
-  Future<void> _init() async {
+  Future<void> _init({bool devicesOnly = false}) async {
+    if (devicesOnly && _localLoadError == null) {
+      // A device-list retry must not take the folder settings off screen.
+      setState(() => _devicesLoading = true);
+      try {
+        final devices = await widget.api.syncDevices();
+        if (!mounted) return;
+        setState(() {
+          _devices = devices;
+          _deviceLoadError = null;
+          _devicesLoading = false;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _deviceLoadError = _friendlyError(e,
+              verb: 'load', subject: 'the linked device list');
+          _devicesLoading = false;
+        });
+      }
+      return;
+    }
+
     setState(() {
       _loading = true;
-      _loadError = null;
+      _localLoadError = null;
+      _deviceLoadError = null;
     });
     final manager = SyncManager(widget.api);
 
@@ -82,15 +107,6 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
       deviceError = e;
     }
 
-    String? loadError;
-    if (localError != null) {
-      loadError = 'Local sync settings could not be loaded.';
-    } else if (deviceError != null) {
-      loadError = deviceError is ApiException
-          ? deviceError.message
-          : 'The linked device list could not be loaded.';
-    }
-
     if (!mounted) return;
     setState(() {
       _folderPath = folder;
@@ -100,7 +116,20 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
       _conflicts = conflicts;
       _devices = devices;
       _loading = false;
-      _loadError = loadError;
+      if (localError != null) {
+        _localLoadError = _friendlyError(
+          localError,
+          verb: 'load',
+          subject: 'your sync settings',
+        );
+      }
+      if (deviceError != null) {
+        _deviceLoadError = _friendlyError(
+          deviceError,
+          verb: 'load',
+          subject: 'the linked device list',
+        );
+      }
     });
   }
 
@@ -121,7 +150,10 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
         _toast('Added “$path” to phone backup');
       }
     } catch (error) {
-      if (mounted) _toast(error.toString());
+      if (mounted) {
+        _toast(_friendlyError(error,
+            verb: 'save', subject: 'the selected folder'));
+      }
     }
   }
 
@@ -166,7 +198,10 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
         });
       }
     } catch (error) {
-      if (mounted) _toast(error.toString());
+      if (mounted) {
+        _toast(_friendlyError(error,
+            verb: 'update', subject: 'your backup folders'));
+      }
     }
   }
 
@@ -184,7 +219,10 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
         if (mounted) setState(() => _progress = progress);
       });
     } catch (error) {
-      result = SyncResult(errors: 1, error: error.toString());
+      result = SyncResult(
+        errors: 1,
+        error: _friendlyError(error, verb: 'finish', subject: 'the last sync'),
+      );
     }
 
     var conflicts = _conflicts;
@@ -192,7 +230,6 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
     var deviceId = _thisDeviceId;
     var folders = _androidFolders;
     var folderLabel = _folderPath;
-    List<Map<String, dynamic>> devices = _devices;
     try {
       conflicts = await manager.conflictCount();
       lastSync = await manager.lastSyncAt();
@@ -201,10 +238,17 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
         folders = await manager.androidFolders();
         folderLabel = await manager.folder();
       }
-      devices = await widget.api.syncDevices();
     } catch (_) {
-      // The upload result is still authoritative even if refreshing metadata
-      // or the linked-device list fails.
+      // The upload result is still authoritative even if refreshing local
+      // metadata fails.
+    }
+    List<Map<String, dynamic>> devices = _devices;
+    String? deviceLoadError;
+    try {
+      devices = await widget.api.syncDevices();
+    } catch (e) {
+      deviceLoadError =
+          _friendlyError(e, verb: 'load', subject: 'the linked device list');
     }
     if (!mounted) return;
     setState(() {
@@ -213,6 +257,7 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
       _lastSyncAt = lastSync;
       _thisDeviceId = deviceId;
       _devices = devices;
+      _deviceLoadError = deviceLoadError;
       _androidFolders = folders;
       _folderPath = folderLabel;
       _syncing = false;
@@ -221,8 +266,8 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
     if (result.error != null) {
       _toast(result.error!);
     } else if (result.uploaded > 0 || result.errors > 0) {
-      _toast(
-          'Backup finished: ${result.uploaded} uploaded, ${result.errors} error(s)');
+      final errors = result.errors == 1 ? '1 error' : '${result.errors} errors';
+      _toast('Backup finished: ${result.uploaded} uploaded, $errors');
     } else {
       _toast('All selected folders are up to date');
     }
@@ -305,7 +350,9 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
         });
       }
     } catch (e) {
-      if (mounted) _toast(e.toString());
+      if (mounted) {
+        _toast(_friendlyError(e, verb: 'update', subject: 'the linked device'));
+      }
     }
   }
 
@@ -349,7 +396,9 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
         _toast('Device unlinked');
       }
     } catch (e) {
-      if (mounted) _toast(e.toString());
+      if (mounted) {
+        _toast(_friendlyError(e, verb: 'unlink', subject: 'that device'));
+      }
     }
   }
 
@@ -371,12 +420,13 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final status = _resolveStatus();
     return Scaffold(
       body: SafeArea(
         bottom: false,
         child: NexaPage(
           title: 'Sync center',
-          subtitle: _loading ? null : _summary,
+          subtitle: _loading ? null : status.summary,
           leading: const NexaBackButton(),
           headerAction: IconButton(
             tooltip: 'Refresh',
@@ -390,134 +440,240 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
             AppDimens.space24,
           ),
           body: NexaStateSwitcher(
-            stateKey: ValueKey(_loading ? 'loading' : 'content'),
-            child: _loading
-                ? const NexaLoadingBlock()
-                : RefreshIndicator(
-                    onRefresh: _init,
-                    child: ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.only(top: AppDimens.space8),
-                      children: [
-                        _StatusCard(
-                          enabled: _syncing,
-                          hasFolder: _folderPath != null,
-                          supported: _syncSupported,
-                          lastSyncAt: _lastSyncAt,
-                          currentActivity: _syncing ? _progress : null,
-                          conflicts: _conflicts,
-                        ),
-                        if (Platform.isAndroid) ...[
-                          const SizedBox(height: AppDimens.space16),
-                          const _Notice(
-                            icon: Icons.info_outline_rounded,
-                            title: 'One-way phone folder backup',
-                            body:
-                                'Add multiple phone folders. Sync now uploads every file '
-                                'and subfolder from each one, then uploads new or changed '
-                                'files on later runs. Phone files are never deleted.',
-                          ),
-                        ],
-                        const SizedBox(height: AppDimens.space24),
-                        _SectionLabel(Platform.isAndroid
-                            ? 'Phone folders'
-                            : 'Synced folder'),
-                        const SizedBox(height: AppDimens.space8),
-                        if (Platform.isAndroid)
-                          _AndroidFoldersCard(
-                            folders: _androidFolders,
-                            onChoose: _chooseFolder,
-                            onRemove: _removeAndroidFolder,
-                          )
-                        else
-                          _FolderCard(
-                            folder: _folderPath,
-                            onChoose: _chooseFolder,
-                            onClear: _clearFolder,
-                          ),
-                        const SizedBox(height: AppDimens.space24),
-                        SizedBox(
-                          height: AppDimens.touchTargetLarge,
-                          child: FilledButton.icon(
-                            onPressed: _syncing ||
-                                    _folderPath == null ||
-                                    !_syncSupported
-                                ? null
-                                : _runSync,
-                            icon: _syncing
-                                ? SizedBox(
-                                    width: AppDimens.iconSmall,
-                                    height: AppDimens.iconSmall,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: scheme.onPrimary,
-                                    ),
-                                  )
-                                : const Icon(Icons.sync_rounded),
-                            label: Text(_syncing ? 'Syncing…' : 'Sync now'),
-                          ),
-                        ),
-                        if (_lastResult != null) ...[
-                          const SizedBox(height: AppDimens.space16),
-                          _LastRunCard(result: _lastResult!),
-                        ],
-                        if (_conflicts > 0) ...[
-                          const SizedBox(height: AppDimens.space16),
-                          _ConflictCard(api: widget.api, onResolved: _init),
-                        ],
-                        const SizedBox(height: AppDimens.space28),
-                        const _SectionLabel('Linked devices'),
-                        const SizedBox(height: AppDimens.space4),
-                        Text(
-                          'Devices that have synced with this account.',
-                          style: AppTextStyle.bodySmall.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: AppDimens.space12),
-                        if (_loadError != null)
-                          _Notice(
-                            icon: Icons.cloud_off_rounded,
-                            title: 'Device list unavailable',
-                            body: _loadError!,
-                          )
-                        else if (_devices.isEmpty)
-                          const NexaEmptyState(
-                            icon: Icons.devices_other_rounded,
-                            title: 'No linked devices yet',
-                            hint:
-                                'Run a sync from a computer and it will appear here.',
-                          )
-                        else
-                          for (final device in _devices)
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                  bottom: AppDimens.space8),
-                              child: _DeviceRow(
-                                device: device,
-                                isThisDevice: device['id'] == _thisDeviceId,
-                                onRename: () => _renameDevice(device),
-                                onRevoke: () => _revokeDevice(device),
-                              ),
-                            ),
-                      ],
-                    ),
-                  ),
+            stateKey: ValueKey(
+              _loading
+                  ? 'loading'
+                  : _localLoadError != null
+                      ? 'settings-error'
+                      : 'content',
+            ),
+            child: _body(status, scheme),
           ),
         ),
       ),
     );
   }
 
-  /// One-line description of the sync state, so the header says more than
-  /// the page name.
-  String get _summary {
-    if (_syncing) return 'Syncing…';
-    if (_conflicts > 0) {
-      return '$_conflicts conflict${_conflicts == 1 ? '' : 's'}';
+  Widget _body(_SyncStatus status, ColorScheme scheme) {
+    if (_loading) {
+      return const NexaLoadingBlock(label: 'Checking your folders…');
     }
-    if (_lastSyncAt == null) return 'Never synced';
-    return 'Last synced ${Format.relTime(_lastSyncAt)}';
+    if (_localLoadError != null) {
+      return RefreshIndicator(
+        onRefresh: _init,
+        child: NexaErrorStateFullScreen(
+          title: 'We couldn’t load your sync settings',
+          message: '$_localLoadError Nothing has changed on this device.',
+          actionLabel: 'Retry',
+          onAction: _init,
+          icon: Icons.cloud_off_outlined,
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _init,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(top: AppDimens.space8),
+        children: [
+          // Decisions come first: a count in the header is only useful if the
+          // files waiting on the user are immediately within reach.
+          if (_conflicts > 0) ...[
+            _ConflictCard(
+              key: ValueKey(
+                'conflicts-$_conflicts-${_lastSyncAt?.millisecondsSinceEpoch ?? 0}',
+              ),
+              api: widget.api,
+              onResolved: _init,
+            ),
+            const SizedBox(height: AppDimens.space16),
+          ],
+          _StatusCard(status: status, showProgress: _syncing),
+          if (Platform.isAndroid) ...[
+            const SizedBox(height: AppDimens.space16),
+            const _Notice(
+              icon: Icons.info_outline_rounded,
+              title: 'One-way phone folder backup',
+              body: 'Add multiple phone folders. Sync now uploads every file '
+                  'and subfolder from each one, then uploads new or changed '
+                  'files on later runs. Phone files are never deleted.',
+            ),
+          ],
+          const SizedBox(height: AppDimens.space24),
+          _SectionLabel(Platform.isAndroid ? 'Phone folders' : 'Synced folder'),
+          const SizedBox(height: AppDimens.space8),
+          if (Platform.isAndroid)
+            _AndroidFoldersCard(
+              folders: _androidFolders,
+              onChoose: _chooseFolder,
+              onRemove: _removeAndroidFolder,
+            )
+          else
+            _FolderCard(
+              folder: _folderPath,
+              onChoose: _chooseFolder,
+              onClear: _clearFolder,
+            ),
+          const SizedBox(height: AppDimens.space24),
+          SizedBox(
+            height: AppDimens.touchTargetLarge,
+            child: FilledButton.icon(
+              onPressed: _syncing || _folderPath == null || !_syncSupported
+                  ? null
+                  : _runSync,
+              icon: _syncing
+                  ? SizedBox(
+                      width: AppDimens.iconSmall,
+                      height: AppDimens.iconSmall,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: scheme.onPrimary,
+                      ),
+                    )
+                  : const Icon(Icons.sync_rounded),
+              label: Text(_syncing ? 'Syncing…' : 'Sync now'),
+            ),
+          ),
+          if (_lastResult != null) ...[
+            const SizedBox(height: AppDimens.space16),
+            _LastRunCard(result: _lastResult!, onRetry: _runSync),
+          ],
+          const SizedBox(height: AppDimens.space28),
+          const _SectionLabel('Linked devices'),
+          const SizedBox(height: AppDimens.space4),
+          Text(
+            'Devices that have synced with this account.',
+            style: AppTextStyle.bodySmall.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: AppDimens.space12),
+          if (_deviceLoadError != null)
+            _ActionNotice(
+              icon: Icons.cloud_off_outlined,
+              title: 'Linked devices are unavailable',
+              body: '$_deviceLoadError Your folder settings are still here.',
+              actionLabel: 'Retry',
+              onAction: _retryDevices,
+              loading: _devicesLoading,
+            )
+          else if (_devices.isEmpty)
+            NexaEmptyState(
+              icon: Icons.devices_other_rounded,
+              title: 'No linked devices yet',
+              hint: 'Run a sync from a computer and it will appear here.',
+              actionLabel: 'Check again',
+              actionIcon: Icons.refresh_rounded,
+              onAction: _init,
+            )
+          else
+            for (final device in _devices)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppDimens.space8),
+                child: _DeviceRow(
+                  device: device,
+                  isThisDevice: device['id'] == _thisDeviceId,
+                  onRename: () => _renameDevice(device),
+                  onRevoke: () => _revokeDevice(device),
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _retryDevices() => _init(devicesOnly: true);
+
+  /// The header and the status card read the same resolver, so they can never
+  /// disagree about what sync is doing right now.
+  _SyncStatus _resolveStatus() {
+    if (_loading) {
+      return const _SyncStatus(
+        summary: 'Checking your sync…',
+        title: 'Checking your sync…',
+        body: 'Looking over your folders and recent activity.',
+        icon: Icons.sync_rounded,
+        tone: _SyncTone.primary,
+      );
+    }
+    if (_localLoadError != null) {
+      return const _SyncStatus(
+        summary: 'Sync settings unavailable',
+        title: 'We couldn’t load your sync settings',
+        body: 'Nothing has changed on this device. Try again in a moment.',
+        icon: Icons.cloud_off_outlined,
+        tone: _SyncTone.warning,
+      );
+    }
+    if (_syncing) {
+      final progress = _progress.trim();
+      return _SyncStatus(
+        summary: 'Syncing now',
+        title: 'Syncing now',
+        body: progress.isEmpty ? 'Working through your folders…' : progress,
+        icon: Icons.sync_rounded,
+        tone: _SyncTone.primary,
+      );
+    }
+    if (!_syncSupported) {
+      return const _SyncStatus(
+        summary: 'Syncing lives on your other devices',
+        title: 'Sync stays with your other devices',
+        body:
+            'Open NexaDrive on Windows, macOS, Linux or Android to keep folders in step.',
+        icon: Icons.desktop_windows_rounded,
+        tone: _SyncTone.calm,
+      );
+    }
+    if (_conflicts > 0) {
+      final noun = _conflicts == 1 ? 'folder needs' : 'folders need';
+      return _SyncStatus(
+        summary: '$_conflicts $noun attention',
+        title: '$_conflicts $noun attention',
+        body: 'Open the files below to choose which versions to keep.',
+        icon: Icons.folder_open_outlined,
+        tone: _SyncTone.warning,
+      );
+    }
+    if (_folderPath == null) {
+      return const _SyncStatus(
+        summary: 'Ready to set up',
+        title: 'Nothing to sync yet',
+        body:
+            'Choose a folder and NexaDrive will keep it in step with your cloud.',
+        icon: Icons.folder_off_outlined,
+        tone: _SyncTone.calm,
+      );
+    }
+    final lastResult = _lastResult;
+    if (lastResult != null &&
+        (lastResult.error != null || lastResult.errors > 0)) {
+      final detail = _lastRunDetail(lastResult);
+      return _SyncStatus(
+        summary: 'Last run needs a retry',
+        title: 'Last run needs a retry',
+        body: detail,
+        icon: Icons.error_outline_rounded,
+        tone: _SyncTone.warning,
+      );
+    }
+    final relative = _relativeTime(_lastSyncAt);
+    if (relative == null) {
+      return const _SyncStatus(
+        summary: 'Ready for the first backup',
+        title: 'Everything is ready',
+        body: 'Your folder is set. Tap Sync now to make the first backup.',
+        icon: Icons.check_circle_outline_rounded,
+        tone: _SyncTone.success,
+      );
+    }
+    return _SyncStatus(
+      summary: 'Last synced $relative',
+      title: 'Everything is synced',
+      body: 'This device is up to date. Last synced $relative.',
+      icon: Icons.check_circle_outline_rounded,
+      tone: _SyncTone.success,
+    );
   }
 }
 
@@ -538,74 +694,31 @@ class _SectionLabel extends StatelessWidget {
 
 /// The one question the screen exists to answer: is my stuff syncing?
 class _StatusCard extends StatelessWidget {
-  final bool enabled;
-  final bool hasFolder;
-  final bool supported;
-  final DateTime? lastSyncAt;
-  final String? currentActivity;
-  final int conflicts;
+  final _SyncStatus status;
+  final bool showProgress;
 
   const _StatusCard({
-    required this.enabled,
-    required this.hasFolder,
-    required this.supported,
-    required this.lastSyncAt,
-    required this.currentActivity,
-    required this.conflicts,
+    required this.status,
+    required this.showProgress,
   });
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final brightness = Theme.of(context).brightness;
-    final (
-      Color tint,
-      Color container,
-      IconData icon,
-      String title,
-      String body
-    ) = switch ((
-      enabled,
-      !supported,
-      hasFolder,
-      conflicts > 0,
-    )) {
-      (true, _, _, _) => (
-          scheme.primary,
-          scheme.primaryContainer,
-          Icons.sync_rounded,
-          'Syncing now',
-          currentActivity?.isNotEmpty == true ? currentActivity! : 'Working…',
+    final (Color tint, Color container) = switch (status.tone) {
+      _SyncTone.primary => (scheme.primary, scheme.primaryContainer),
+      _SyncTone.calm => (
+          scheme.onSurfaceVariant,
+          scheme.surfaceContainerHighest,
         ),
-      (_, true, _, _) => (
-          scheme.primary,
-          scheme.secondaryContainer,
-          Icons.desktop_windows_rounded,
-          'Desktop feature',
-          'Folder sync is off on this platform.',
-        ),
-      (_, _, false, _) => (
+      _SyncTone.warning => (
           AppColors.warningFor(brightness),
           AppColors.warningContainerFor(brightness),
-          Icons.folder_off_outlined,
-          'Sync is off',
-          'Choose a folder to keep in step with your cloud.',
         ),
-      (_, _, _, true) => (
-          AppColors.warningFor(brightness),
-          AppColors.warningContainerFor(brightness),
-          Icons.warning_amber_rounded,
-          '$conflicts conflict${conflicts == 1 ? '' : 's'} to resolve',
-          'Both copies changed. Pick which version to keep.',
-        ),
-      _ => (
+      _SyncTone.success => (
           AppColors.successFor(brightness),
           AppColors.successContainerFor(brightness),
-          Icons.check_circle_outline_rounded,
-          'Up to date',
-          lastSyncAt == null
-              ? 'Not synced yet.'
-              : 'Last sync ${Format.relTime(lastSyncAt)}.',
         ),
     };
 
@@ -625,7 +738,7 @@ class _StatusCard extends StatelessWidget {
                   color: container,
                   borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
                 ),
-                child: Icon(icon, color: tint),
+                child: Icon(status.icon, color: tint),
               ),
               const SizedBox(width: AppDimens.space16),
               Expanded(
@@ -633,14 +746,14 @@ class _StatusCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      status.title,
                       style: AppTextStyle.titleMedium.copyWith(
                         color: scheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: AppDimens.space4),
                     Text(
-                      body,
+                      status.body,
                       style: AppTextStyle.bodyMedium.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
@@ -650,7 +763,7 @@ class _StatusCard extends StatelessWidget {
               ),
             ],
           ),
-          if (enabled) ...[
+          if (showProgress) ...[
             const SizedBox(height: AppDimens.space16),
             LinearProgressIndicator(
               minHeight: AppDimens.space4,
@@ -802,17 +915,58 @@ class _FolderCard extends StatelessWidget {
 
 class _LastRunCard extends StatelessWidget {
   final SyncResult result;
-  const _LastRunCard({required this.result});
+  final VoidCallback onRetry;
+  const _LastRunCard({required this.result, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final brightness = Theme.of(context).brightness;
+    final failed = result.error != null || result.errors > 0;
+    final detail = _lastRunDetail(result);
     return NexaSurface(
       level: NexaSurfaceLevel.surface,
       padding: const EdgeInsets.all(AppDimens.space16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (failed) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.error_outline_rounded,
+                    size: AppDimens.iconMedium,
+                    color: AppColors.warningFor(brightness)),
+                const SizedBox(width: AppDimens.space8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Last run needs a retry',
+                        style: AppTextStyle.titleMedium
+                            .copyWith(color: scheme.onSurface),
+                      ),
+                      const SizedBox(height: AppDimens.space4),
+                      Text(
+                        detail,
+                        style: AppTextStyle.bodySmall.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            NexaTextButton(
+              onPressed: onRetry,
+              icon:
+                  const Icon(Icons.refresh_rounded, size: AppDimens.iconSmall),
+              child: const Text('Retry'),
+            ),
+            const Divider(height: AppDimens.space20),
+          ],
           Text(
             'Last run',
             style: AppTextStyle.titleMedium.copyWith(color: scheme.onSurface),
@@ -883,7 +1037,11 @@ class _Row extends StatelessWidget {
 class _ConflictCard extends StatefulWidget {
   final Api api;
   final VoidCallback onResolved;
-  const _ConflictCard({required this.api, required this.onResolved});
+  const _ConflictCard({
+    super.key,
+    required this.api,
+    required this.onResolved,
+  });
 
   @override
   State<_ConflictCard> createState() => _ConflictCardState();
@@ -892,6 +1050,7 @@ class _ConflictCard extends StatefulWidget {
 class _ConflictCardState extends State<_ConflictCard> {
   List<Map<String, String>> _items = const [];
   bool _loading = true;
+  String? _loadError;
 
   @override
   void initState() {
@@ -900,6 +1059,11 @@ class _ConflictCardState extends State<_ConflictCard> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
     try {
       final items = await SyncManager(widget.api).conflicts();
       if (mounted) {
@@ -908,8 +1072,17 @@ class _ConflictCardState extends State<_ConflictCard> {
           _loading = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _loadError = _friendlyError(
+            e,
+            verb: 'load',
+            subject: 'the files that need attention',
+          );
+        });
+      }
     }
   }
 
@@ -926,7 +1099,8 @@ class _ConflictCardState extends State<_ConflictCard> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString()),
+          content:
+              Text(_friendlyError(e, verb: 'save', subject: 'that choice')),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
@@ -938,72 +1112,232 @@ class _ConflictCardState extends State<_ConflictCard> {
 
   @override
   Widget build(BuildContext context) {
+    final stateKey = _loading
+        ? 'loading'
+        : _loadError != null
+            ? 'error'
+            : _items.isEmpty
+                ? 'empty'
+                : 'content';
+    return NexaStateSwitcher(
+      stateKey: ValueKey(stateKey),
+      child: _content(context),
+    );
+  }
+
+  Widget _content(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final brightness = Theme.of(context).brightness;
-    final onContainer = AppColors.onWarningContainerFor(brightness);
-    if (_loading || _items.isEmpty) return const SizedBox.shrink();
+    final warning = AppColors.warningFor(brightness);
+
+    if (_loading) {
+      return NexaSurface(
+        level: NexaSurfaceLevel.surface,
+        padding: const EdgeInsets.all(AppDimens.space16),
+        child: Row(
+          children: [
+            SizedBox(
+              width: AppDimens.iconMedium,
+              height: AppDimens.iconMedium,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: scheme.primary,
+              ),
+            ),
+            const SizedBox(width: AppDimens.space12),
+            Expanded(
+              child: Text(
+                'Checking for files that need a decision…',
+                style: AppTextStyle.bodyMedium.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_loadError != null) {
+      return NexaSurface(
+        level: NexaSurfaceLevel.surface,
+        padding: const EdgeInsets.all(AppDimens.space16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'We couldn’t load these files',
+              style: AppTextStyle.titleMedium.copyWith(color: scheme.onSurface),
+            ),
+            const SizedBox(height: AppDimens.space4),
+            Text(
+              '$_loadError Your other sync settings are still here.',
+              style: AppTextStyle.bodySmall.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            NexaTextButton(
+              onPressed: _load,
+              icon:
+                  const Icon(Icons.refresh_rounded, size: AppDimens.iconSmall),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_items.isEmpty) {
+      return NexaSurface(
+        level: NexaSurfaceLevel.surface,
+        padding: const EdgeInsets.all(AppDimens.space16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Nothing left to decide here',
+              style: AppTextStyle.titleMedium.copyWith(color: scheme.onSurface),
+            ),
+            const SizedBox(height: AppDimens.space4),
+            Text(
+              'Those files may have been settled on another device.',
+              style: AppTextStyle.bodySmall.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            NexaTextButton(
+              onPressed: _load,
+              icon:
+                  const Icon(Icons.refresh_rounded, size: AppDimens.iconSmall),
+              child: const Text('Check again'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return NexaSurface(
       level: NexaSurfaceLevel.surface,
-      color: AppColors.warningContainerFor(brightness),
       padding: const EdgeInsets.all(AppDimens.space16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.warning_amber_rounded,
-                  size: AppDimens.iconMedium, color: onContainer),
+              Icon(Icons.folder_open_outlined,
+                  size: AppDimens.iconMedium, color: warning),
               const SizedBox(width: AppDimens.space8),
               Text(
-                'Conflicts',
-                style: AppTextStyle.titleMedium.copyWith(color: onContainer),
+                'Needs your decision',
+                style:
+                    AppTextStyle.titleMedium.copyWith(color: scheme.onSurface),
               ),
             ],
           ),
           const SizedBox(height: AppDimens.space4),
           Text(
-            'A copy of the cloud version was saved next to the local file.',
-            style: AppTextStyle.bodySmall.copyWith(color: onContainer),
+            'Both versions changed. Keep the one you want.',
+            style:
+                AppTextStyle.bodySmall.copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: AppDimens.space12),
           for (final item in _items) ...[
-            Text(
-              item['path'] ?? '',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyle.bodyMedium.copyWith(color: onContainer),
-            ),
-            const SizedBox(height: AppDimens.space8),
-            Wrap(
-              spacing: AppDimens.space8,
-              runSpacing: AppDimens.space4,
-              children: [
-                FilledButton.tonal(
-                  onPressed: () => _resolve(
-                    item['path']!,
-                    (m, p) => m.resolveConflictKeepLocal(p),
-                  ),
-                  child: const Text('Keep mine'),
-                ),
-                OutlinedButton(
-                  onPressed: () => _resolve(
-                    item['path']!,
-                    (m, p) => m.resolveConflictKeepRemote(p),
-                  ),
-                  child: const Text('Keep cloud'),
-                ),
-                TextButton(
-                  onPressed: () => _resolve(
-                    item['path']!,
-                    (m, p) => m.resolveConflictKeepBoth(p),
-                  ),
-                  child: const Text('Keep both'),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppDimens.space16),
+            _ConflictRow(item: item, onResolve: _resolve),
+            if (item != _items.last) const Divider(height: AppDimens.space20),
           ],
         ],
       ),
+    );
+  }
+}
+
+class _ConflictRow extends StatelessWidget {
+  final Map<String, String> item;
+  final Future<void> Function(
+    String path,
+    Future<void> Function(SyncManager, String) action,
+  ) onResolve;
+
+  const _ConflictRow({
+    required this.item,
+    required this.onResolve,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final path = item['path'] ?? '';
+    final basename = _fileName(path);
+    final name = basename.isEmpty ? 'This file' : basename;
+    final copyName = _fileName(item['conflictPath'] ?? '');
+    final copyLabel = copyName.isEmpty ? 'the cloud copy' : '“$copyName”';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          label: 'Conflict in $name. Both versions changed. '
+              'Keep the one you want.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style:
+                    AppTextStyle.titleSmall.copyWith(color: scheme.onSurface),
+              ),
+              const SizedBox(height: AppDimens.space2),
+              Text(
+                path.isEmpty ? 'Location unavailable' : path,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyle.bodySmall.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppDimens.space8),
+        Text(
+          'Keep mine uploads your copy; keep cloud replaces it here; '
+          'keep both also keeps $copyLabel on this device.',
+          style:
+              AppTextStyle.bodySmall.copyWith(color: scheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: AppDimens.space8),
+        Wrap(
+          spacing: AppDimens.space8,
+          runSpacing: AppDimens.space4,
+          children: [
+            FilledButton.tonal(
+              onPressed: path.isEmpty
+                  ? null
+                  : () => onResolve(
+                        path,
+                        (m, p) => m.resolveConflictKeepLocal(p),
+                      ),
+              child: const Text('Keep mine'),
+            ),
+            OutlinedButton(
+              onPressed: path.isEmpty
+                  ? null
+                  : () => onResolve(
+                        path,
+                        (m, p) => m.resolveConflictKeepRemote(p),
+                      ),
+              child: const Text('Keep cloud'),
+            ),
+            TextButton(
+              onPressed: path.isEmpty
+                  ? null
+                  : () => onResolve(
+                        path,
+                        (m, p) => m.resolveConflictKeepBoth(p),
+                      ),
+              child: const Text('Keep both'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -1161,4 +1495,196 @@ class _Notice extends StatelessWidget {
       ),
     );
   }
+}
+
+/// An inline failure with exactly one way forward. Used when local settings
+/// are fine but one supporting list could not be loaded.
+class _ActionNotice extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+  final String actionLabel;
+  final VoidCallback onAction;
+  final bool loading;
+
+  const _ActionNotice({
+    required this.icon,
+    required this.title,
+    required this.body,
+    required this.actionLabel,
+    required this.onAction,
+    this.loading = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return NexaSurface(
+      level: NexaSurfaceLevel.surface,
+      padding: const EdgeInsets.all(AppDimens.space16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: AppDimens.iconTile,
+            height: AppDimens.iconTile,
+            decoration: BoxDecoration(
+              color: scheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(AppDimens.radiusSmall),
+            ),
+            child: Icon(
+              icon,
+              size: AppDimens.iconSmall,
+              color: scheme.onSecondaryContainer,
+            ),
+          ),
+          const SizedBox(width: AppDimens.space12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: AppTextStyle.titleMedium.copyWith(
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space4),
+                Text(
+                  body,
+                  style: AppTextStyle.bodySmall.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space8),
+                if (loading)
+                  SizedBox(
+                    width: AppDimens.iconSmall,
+                    height: AppDimens.iconSmall,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: scheme.primary,
+                    ),
+                  )
+                else
+                  NexaTextButton(
+                    onPressed: onAction,
+                    icon: const Icon(Icons.refresh_rounded,
+                        size: AppDimens.iconSmall),
+                    child: Text(actionLabel),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _SyncTone { primary, calm, warning, success }
+
+/// One resolved description of sync, shared by the page header and its status
+/// card so the two can never tell different stories.
+class _SyncStatus {
+  final String summary;
+  final String title;
+  final String body;
+  final IconData icon;
+  final _SyncTone tone;
+
+  const _SyncStatus({
+    required this.summary,
+    required this.title,
+    required this.body,
+    required this.icon,
+    required this.tone,
+  });
+}
+
+/// Human relative time for the header: "Last synced 4 minutes ago", not "4m".
+String? _relativeTime(DateTime? time) {
+  if (time == null) return null;
+  final difference = DateTime.now().difference(time);
+  if (difference.inMinutes < 1) return 'just now';
+  if (difference.inMinutes < 60) {
+    final minutes = difference.inMinutes;
+    return '$minutes ${minutes == 1 ? 'minute' : 'minutes'} ago';
+  }
+  if (difference.inHours < 24) {
+    final hours = difference.inHours;
+    return '$hours ${hours == 1 ? 'hour' : 'hours'} ago';
+  }
+  if (difference.inDays == 1) return 'yesterday';
+  if (difference.inDays < 7) return '${difference.inDays} days ago';
+  return Format.relTime(time);
+}
+
+/// Turns "Request failed (500)" and socket noise into a sentence that says
+/// what failed and what the person can do next.
+String _friendlyError(
+  Object error, {
+  required String verb,
+  required String subject,
+}) {
+  if (error is ApiException) {
+    if (error.status == 401) {
+      return 'Your session expired. Sign in again so we can $verb $subject.';
+    }
+    if (error.status == 403) {
+      return 'You don’t have permission to $verb $subject.';
+    }
+    if (error.status >= 500) {
+      return 'The server couldn’t $verb $subject right now. Try again in a moment.';
+    }
+    final message = error.message.trim();
+    final lowered = message.toLowerCase();
+    final vague = message.isEmpty ||
+        lowered == 'request failed' ||
+        lowered.startsWith('request failed (') ||
+        lowered == 'unknown error';
+    if (!vague) return 'We couldn’t $verb $subject: $message';
+  }
+  final text = error.toString().toLowerCase();
+  if (error is SocketException ||
+      text.contains('socketexception') ||
+      text.contains('failed host lookup') ||
+      text.contains('network is unreachable') ||
+      text.contains('connection refused') ||
+      text.contains('clientexception') ||
+      text.contains('timeoutexception')) {
+    return 'You appear to be offline. We couldn’t $verb $subject.';
+  }
+  return 'We couldn’t $verb $subject. Try again in a moment.';
+}
+
+/// Keeps a failed run's explanation warm and specific, without rewording a
+/// message the sync engine already made actionable.
+String _lastRunDetail(SyncResult result) {
+  final reported = result.error?.trim() ?? '';
+  if (reported.isNotEmpty) {
+    final lowered = reported.toLowerCase();
+    final alreadyFriendly = [
+      'we couldn’t',
+      'your session expired',
+      'you don’t have permission',
+      'the server couldn’t',
+      'you appear to be offline',
+    ].any(lowered.startsWith);
+    if (alreadyFriendly) return reported;
+    return _friendlyError(
+      reported,
+      verb: 'finish',
+      subject: 'the last sync',
+    );
+  }
+  final noun = result.errors == 1 ? 'file' : 'files';
+  return '${result.errors} $noun could not be transferred. Try running sync again.';
+}
+
+/// The visible name of a path, without platform-specific separators.
+String _fileName(String path) {
+  final parts =
+      path.split(RegExp(r'[\\/]')).where((part) => part.isNotEmpty).toList();
+  return parts.isEmpty ? '' : parts.last;
 }
