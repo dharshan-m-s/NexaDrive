@@ -423,6 +423,7 @@ class _SyncCenterScreenState extends State<SyncCenterScreen> {
     final status = _resolveStatus();
     return Scaffold(
       body: SafeArea(
+        top: false,
         bottom: false,
         child: NexaPage(
           title: 'Sync center',

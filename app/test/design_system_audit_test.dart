@@ -336,8 +336,18 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      // The shell must push every destination below the status bar so headers
-      // never collide with the notification panel.
+      // The shell is full-bleed so the floating chrome can disappear entirely;
+      // the header itself owns the top inset and must stay clear of the status
+      // bar while it is visible.
+      final header = find.byKey(
+        const ValueKey<String>('nexa_scroll_aware_header_content'),
+      );
+      expect(header, findsOneWidget);
+      expect(
+        tester.getTopLeft(header).dy,
+        greaterThanOrEqualTo(statusBar),
+        reason: 'header content must clear the status bar',
+      );
       final host = tester.getRect(
         find
             .descendant(
@@ -346,8 +356,8 @@ void main() {
             )
             .first,
       );
-      expect(host.top, greaterThanOrEqualTo(statusBar),
-          reason: 'page content must clear the status bar');
+      expect(host.top, closeTo(0, 1),
+          reason: 'the shell must remain full-bleed behind the chrome');
     });
 
     testWidgets('reduced motion still renders the shell', (tester) async {

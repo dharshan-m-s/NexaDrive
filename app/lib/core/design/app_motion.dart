@@ -66,6 +66,15 @@ abstract final class AppMotion {
   /// surfaces. It reads as a spring without a rubbery overshoot.
   static const Curve sheetSettleCurve = standard;
 
+  /// Floating page chrome glides to its rest edge after a scroll ends. It is
+  /// short enough never to feel like the page is catching up with the finger,
+  /// yet long enough for a partly exposed header to read as one continuous
+  /// surface. Mirrored M3 easing makes leaving and returning feel like the same
+  /// physical path.
+  static const Duration headerSettle = Duration(milliseconds: 280);
+  static const Curve headerRevealCurve = enter;
+  static const Curve headerHideCurve = exit;
+
   /// Connected route transition: both pages share one fade, and the incoming
   /// page eases a few pixels forward into its final scale.
   static const Curve routeFadeCurve = enter;

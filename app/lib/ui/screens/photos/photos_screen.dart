@@ -112,6 +112,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
 
   double? _pinchBaseColumns;
   final Map<String, GlobalKey> _cellKeys = <String, GlobalKey>{};
+  bool _thumbRefreshScheduled = false;
 
   @override
   void initState() {
@@ -513,6 +514,17 @@ class _PhotosScreenState extends State<PhotosScreen> {
         maxEdge: max,
       );
 
+  /// The gallery fetches previews in bursts. One rebuild per completion made a
+  /// large library stutter while scrolling, so coalesce a frame's completions.
+  void _scheduleThumbRefresh() {
+    if (!mounted || _thumbRefreshScheduled) return;
+    _thumbRefreshScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _thumbRefreshScheduled = false;
+      if (mounted) setState(() {});
+    });
+  }
+
   Future<void> _ensureThumb(ImageRepository pipeline, int index) async {
     if (index < 0 || index >= _photos.length) return;
     final key = _thumbKey(index);
@@ -522,11 +534,14 @@ class _PhotosScreenState extends State<PhotosScreen> {
     _loadingThumbs.add(path);
     try {
       await pipeline.thumbnail(key, max: 512);
-      if (mounted) setState(() {});
+      _scheduleThumbRefresh();
     } on ThumbnailUnavailable {
       // Render the format placeholder — never substitute a different
       // rendition for the preview.
-      if (mounted) setState(() => _noThumbnail.add(path));
+      if (mounted) {
+        _noThumbnail.add(path);
+        _scheduleThumbRefresh();
+      }
     } catch (_) {
       // Transient failures leave the placeholder; scrolling retries.
     } finally {
@@ -921,15 +936,28 @@ class _PhotosScreenState extends State<PhotosScreen> {
   @override
   Widget build(BuildContext context) {
     final photoCount = _photos.length;
+    final subtitle = _selecting
+        ? 'Drag to select · Tap to refine · Arrows extend'
+        : photoCount == 0
+            ? 'Photos, videos and PDFs in one place'
+            : Format.count(photoCount, 'item');
 
     Widget page = NexaPage(
       title: 'Photos',
       bottomSafeArea: false,
-      subtitle: _selecting
-          ? 'Drag to select · Tap to refine · Arrows extend'
-          : photoCount == 0
-              ? 'Photos, videos and PDFs in one place'
-              : Format.count(photoCount, 'item'),
+      headerContentExtent: nexaHeaderContentExtent(
+        context,
+        title: 'Photos',
+        subtitle: subtitle,
+        leading: null,
+        action: null,
+        actions: null,
+        largeTitle: true,
+        // The only trailing chrome is the 48px gallery menu plus its gap.
+        trailingExtent:
+            _selecting ? 0 : AppDimens.touchTarget + AppDimens.space8,
+      ),
+      subtitle: subtitle,
       headerAction: _selecting
           ? null
           : PopupMenuButton<_PhotosMenuAction>(
@@ -954,7 +982,9 @@ class _PhotosScreenState extends State<PhotosScreen> {
                 ),
               ],
             ),
-      body: _body(),
+      sliverBuilder: _buildSlivers,
+      onRefresh: load,
+      bottomBar: _selectionBar(),
     );
 
     // Shortcuts live only while selecting; key events from the bar's chips
@@ -967,6 +997,22 @@ class _PhotosScreenState extends State<PhotosScreen> {
         child: page,
       );
     }
+
+    // Pinch and scroll bookkeeping live above the page so they still see
+    // notifications from the single scroll view the shell now owns.
+    page = GestureDetector(
+      onScaleStart: _onScaleStart,
+      onScaleUpdate: _onScaleUpdate,
+      onScaleEnd: _onScaleEnd,
+      child: page,
+    );
+    page = NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollEndNotification) _pruneCellKeys();
+        return false;
+      },
+      child: page,
+    );
 
     // The contextual bar floats over the grid. Tracking at this level keeps a
     // range drag alive when the finger reaches the bottom edge over that bar.
@@ -988,51 +1034,69 @@ class _PhotosScreenState extends State<PhotosScreen> {
     );
   }
 
-  /// The body, cross-faded between states so a resolved library settles in.
-  Widget _body() => NexaStateSwitcher(
-        stateKey: ValueKey(_bodyState),
-        child: _buildBody(),
-      );
-
-  String get _bodyState => _loading
-      ? 'loading'
-      : _error != null
-          ? 'error'
-          : _photos.isEmpty
-              ? 'empty'
-              : 'content';
-
-  Widget _buildBody() {
+  /// The library's own slivers. The page shell prepends the floating header to
+  /// this same list, so content never reserves or re-measures header space.
+  List<Widget> _buildSlivers(BuildContext context) {
     if (_loading) {
-      return const NexaLoadingBlock();
+      return [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.pageMargin,
+            ),
+            child: const NexaLoadingBlock(),
+          ),
+        ),
+      ];
     }
     if (_error != null) {
-      return NexaEmptyState(
-        icon: Icons.cloud_off_outlined,
-        title: 'That didn’t load — try again',
-        hint: _error,
-        actionLabel: 'Retry',
-        onAction: load,
-        actionIcon: Icons.refresh_rounded,
-        iconSize: AppDimens.iconTile,
-      );
+      return [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.pageMargin,
+            ),
+            child: NexaEmptyState(
+              icon: Icons.cloud_off_outlined,
+              title: 'That didn’t load — try again',
+              hint: _error,
+              actionLabel: 'Retry',
+              onAction: load,
+              actionIcon: Icons.refresh_rounded,
+              iconSize: AppDimens.iconTile,
+            ),
+          ),
+        ),
+      ];
     }
     if (_photos.isEmpty) {
-      return NexaEmptyState(
-        icon: Icons.photo_library_outlined,
-        title: 'Nothing here yet',
-        hint:
-            'Photos, videos and PDFs you add will show up here. Upload from My files to get started.',
-        actionLabel: 'Refresh',
-        onAction: load,
-        actionIcon: Icons.refresh_rounded,
-        iconSize: AppDimens.iconTile,
-      );
+      return [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.pageMargin,
+            ),
+            child: NexaEmptyState(
+              icon: Icons.photo_library_outlined,
+              title: 'Nothing here yet',
+              hint:
+                  'Photos, videos and PDFs you add will show up here. Upload from My files to get started.',
+              actionLabel: 'Refresh',
+              onAction: load,
+              actionIcon: Icons.refresh_rounded,
+              iconSize: AppDimens.iconTile,
+            ),
+          ),
+        ),
+      ];
     }
 
-    final groups = _groups;
-    final bottomClearance =
-        _selecting ? AppDimens.space24 : MediaQuery.paddingOf(context).bottom;
+    final bottomClearance = MediaQuery.paddingOf(context).bottom;
+    final bottomPadding = _selecting
+        ? AppDimens.space24
+        : bottomClearance > AppDimens.space24
+            ? nexaContextualBarBottomPadding(context)
+            : AppDimens.space24;
     final viewportWidth = MediaQuery.sizeOf(context).width;
     final contentWidth = (viewportWidth - AppDimens.pageMargin * 2)
         .clamp(80.0, AppDimens.contentMaxWidth);
@@ -1041,75 +1105,145 @@ class _PhotosScreenState extends State<PhotosScreen> {
     final decodeWidth =
         (tileWidth * MediaQuery.devicePixelRatioOf(context)).round();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: load,
-            child: GestureDetector(
-              onScaleStart: _onScaleStart,
-              onScaleUpdate: _onScaleUpdate,
-              onScaleEnd: _onScaleEnd,
-              child: NotificationListener<ScrollNotification>(
-                onNotification: (_) {
-                  _pruneCellKeys();
-                  return false;
-                },
-                child: CustomScrollView(
-                  slivers: [
-                    for (final (label, indices) in groups) ...[
-                      SliverToBoxAdapter(
-                        child:
-                            _MonthHeader(label: label, count: indices.length),
-                      ),
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimens.space2,
-                        ),
-                        sliver: SliverGrid.builder(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: _gridColumns,
-                            mainAxisSpacing: AppDimens.space2,
-                            crossAxisSpacing: AppDimens.space2,
-                            childAspectRatio: 1,
+    final slivers = <Widget>[];
+    for (final (label, indices) in _groups) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: _MonthHeader(label: label, count: indices.length),
+        ),
+      );
+      slivers.add(
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: AppDimens.space2),
+          sliver: SliverGrid.builder(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: _gridColumns,
+              mainAxisSpacing: AppDimens.space2,
+              crossAxisSpacing: AppDimens.space2,
+              childAspectRatio: 1,
+            ),
+            itemCount: indices.length,
+            itemBuilder: (context, i) {
+              final index = indices[i];
+              final path = _pathAt(index);
+              return _PhotoCell(
+                key: _keyForCell(path),
+                bytes: _thumbBytes(index),
+                decodeWidth: decodeWidth,
+                category: _categoryAt(index),
+                unavailable: _noThumbnail.contains(path),
+                name: _photos[index]['name']?.toString() ?? path,
+                semanticLabel: '${_mediaLabel(_categoryAt(index))}: '
+                    '${_photos[index]['name'] ?? path}',
+                heroTag: 'photo:$path',
+                selected: _selected.contains(path),
+                selecting: _selecting,
+                onTap: () => _onCellTap(index),
+                onLongPressStart: (position) =>
+                    _onCellLongPress(index, position),
+                onVisible: () => _ensureThumb(_images, index),
+              );
+            },
+          ),
+        ),
+      );
+      slivers.add(
+        const SliverToBoxAdapter(child: SizedBox(height: AppDimens.space16)),
+      );
+    }
+    slivers.add(SliverToBoxAdapter(child: SizedBox(height: bottomPadding)));
+    return slivers;
+  }
+
+  Widget _selectionBar() => NexaRevealBar(
+        visible: _selecting,
+        alignment: Alignment.bottomCenter,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            AppDimens.pageMargin,
+            AppDimens.space4,
+            AppDimens.pageMargin,
+            nexaContextualBarBottomPadding(context) + AppDimens.space4,
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: NexaSurface(
+                level: NexaSurfaceLevel.floating,
+                radius: AppDimens.radiusMedium,
+                padding: const EdgeInsets.fromLTRB(
+                  AppDimens.space8,
+                  AppDimens.space6,
+                  AppDimens.space8,
+                  AppDimens.space6,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        _SelectionCount(count: _selected.length),
+                        const SizedBox(width: AppDimens.space8),
+                        Expanded(
+                          child: Text(
+                            'Selected',
+                            style: AppTextStyle.titleMedium.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
                           ),
-                          itemCount: indices.length,
-                          itemBuilder: (context, i) {
-                            final index = indices[i];
-                            final path = _pathAt(index);
-                            return _PhotoCell(
-                              key: _keyForCell(path),
-                              bytes: _thumbBytes(index),
-                              decodeWidth: decodeWidth,
-                              category: _categoryAt(index),
-                              unavailable: _noThumbnail.contains(path),
-                              name: _photos[index]['name']?.toString() ?? path,
-                              semanticLabel:
-                                  '${_mediaLabel(_categoryAt(index))}: '
-                                  '${_photos[index]['name'] ?? path}',
-                              heroTag: 'photo:$path',
-                              selected: _selected.contains(path),
-                              selecting: _selecting,
-                              onTap: () => _onCellTap(index),
-                              onLongPressStart: (position) =>
-                                  _onCellLongPress(index, position),
-                              onVisible: () => _ensureThumb(_images, index),
-                            );
-                          },
                         ),
-                      ),
-                      const SliverToBoxAdapter(
-                        child: SizedBox(height: AppDimens.space16),
-                      ),
-                    ],
-                    SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: bottomClearance > AppDimens.space24
-                            ? bottomClearance
-                            : AppDimens.space24,
-                      ),
+                        NexaIconActionItem(
+                          icon: Icons.close_rounded,
+                          tooltip: 'Cancel selection',
+                          onTap: _exitSelection,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppDimens.space4),
+                    // Wrapping keeps every action reachable on narrow
+                    // phones instead of hiding the destructive one in a
+                    // horizontal scroller.
+                    Wrap(
+                      spacing: AppDimens.space6,
+                      runSpacing: AppDimens.space2,
+                      children: [
+                        NexaActionItem(
+                          icon: Icons.select_all_rounded,
+                          label: 'Select all from here',
+                          onTap: _selectAllFromHere,
+                        ),
+                        Tooltip(
+                          message: _selected.length == _visualOrder.length
+                              ? 'Clear selection'
+                              : 'Select all',
+                          child: NexaActionItem(
+                            icon: _selected.length == _visualOrder.length
+                                ? Icons.deselect_rounded
+                                : Icons.done_all_rounded,
+                            label: _selected.length == _visualOrder.length
+                                ? 'Clear'
+                                : 'All',
+                            onTap: _toggleSelectAll,
+                          ),
+                        ),
+                        NexaActionItem(
+                          icon: Icons.share_outlined,
+                          label: 'Share',
+                          enabled: _selected.isNotEmpty,
+                          onTap: _shareSelected,
+                        ),
+                        Tooltip(
+                          message: 'Move selected items to Trash',
+                          child: NexaActionItem(
+                            icon: Icons.delete_outline_rounded,
+                            label: 'Move to trash',
+                            enabled: _selected.isNotEmpty,
+                            onTap: _deleteSelected,
+                            isDestructive: true,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1117,106 +1251,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
             ),
           ),
         ),
-        NexaRevealBar(
-          visible: _selecting,
-          alignment: Alignment.bottomCenter,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              AppDimens.pageMargin,
-              AppDimens.space4,
-              AppDimens.pageMargin,
-              nexaContextualBarBottomPadding(context) + AppDimens.space4,
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: NexaSurface(
-                  level: NexaSurfaceLevel.floating,
-                  radius: AppDimens.radiusMedium,
-                  padding: const EdgeInsets.fromLTRB(
-                    AppDimens.space8,
-                    AppDimens.space6,
-                    AppDimens.space8,
-                    AppDimens.space6,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          _SelectionCount(count: _selected.length),
-                          const SizedBox(width: AppDimens.space8),
-                          Expanded(
-                            child: Text(
-                              'Selected',
-                              style: AppTextStyle.titleMedium.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ),
-                          ),
-                          NexaIconActionItem(
-                            icon: Icons.close_rounded,
-                            tooltip: 'Cancel selection',
-                            onTap: _exitSelection,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppDimens.space4),
-                      // Wrapping keeps every action reachable on narrow
-                      // phones instead of hiding the destructive one in a
-                      // horizontal scroller.
-                      Wrap(
-                        spacing: AppDimens.space6,
-                        runSpacing: AppDimens.space2,
-                        children: [
-                          NexaActionItem(
-                            icon: Icons.select_all_rounded,
-                            label: 'Select all from here',
-                            onTap: _selectAllFromHere,
-                          ),
-                          Tooltip(
-                            message: _selected.length == _visualOrder.length
-                                ? 'Clear selection'
-                                : 'Select all',
-                            child: NexaActionItem(
-                              icon: _selected.length == _visualOrder.length
-                                  ? Icons.deselect_rounded
-                                  : Icons.done_all_rounded,
-                              label: _selected.length == _visualOrder.length
-                                  ? 'Clear'
-                                  : 'All',
-                              onTap: _toggleSelectAll,
-                            ),
-                          ),
-                          NexaActionItem(
-                            icon: Icons.share_outlined,
-                            label: 'Share',
-                            enabled: _selected.isNotEmpty,
-                            onTap: _shareSelected,
-                          ),
-                          Tooltip(
-                            message: 'Move selected items to Trash',
-                            child: NexaActionItem(
-                              icon: Icons.delete_outline_rounded,
-                              label: 'Move to trash',
-                              enabled: _selected.isNotEmpty,
-                              onTap: _deleteSelected,
-                              isDestructive: true,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+      );
 
   Uint8List? _thumbBytes(int index) {
     if (_noThumbnail.contains(_pathAt(index))) {

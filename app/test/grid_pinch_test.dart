@@ -153,7 +153,7 @@ void main() {
       );
 
       final detector = pinchDetector(tester);
-      expect(find.byType(GridView), findsNothing);
+      expect(find.byType(SliverGrid), findsNothing);
       expect(find.byType(CustomScrollView), findsWidgets);
 
       // One-finger accept leaves the base null; the two-finger update must
@@ -164,9 +164,9 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(GridView), findsOneWidget);
+      expect(find.byType(SliverGrid), findsOneWidget);
       final delegate = tester
-          .widget<GridView>(find.byType(GridView))
+          .widget<SliverGrid>(find.byType(SliverGrid))
           .gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
       // base 2 / scale 0.5 => 4 columns.
       expect(delegate.crossAxisCount, 4);

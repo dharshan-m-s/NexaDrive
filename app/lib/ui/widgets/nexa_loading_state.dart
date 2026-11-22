@@ -143,6 +143,11 @@ class NexaSkeletonList extends StatelessWidget {
     );
 
     return ListView.builder(
+      // The skeleton is a fixed-size placeholder inside a page scroll view,
+      // never an independent scroller. Shrink wrapping keeps it from demanding
+      // an unbounded height when it is used as a sliver child.
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: padding,
       itemCount: itemCount,
       itemBuilder: (context, index) => _SkeletonItem(

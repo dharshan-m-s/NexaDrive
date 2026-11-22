@@ -47,6 +47,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
 
     return Scaffold(
       body: SafeArea(
+        top: false,
         bottom: false,
         child: NexaPage(
           title: 'Audit log',

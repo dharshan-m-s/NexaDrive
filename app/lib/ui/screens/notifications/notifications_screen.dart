@@ -125,6 +125,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     return Scaffold(
       body: SafeArea(
+        top: false,
         bottom: false,
         child: NexaPage(
           title: 'Notifications',

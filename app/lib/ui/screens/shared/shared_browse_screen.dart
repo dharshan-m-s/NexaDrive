@@ -128,6 +128,7 @@ class _SharedBrowseScreenState extends State<SharedBrowseScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
+        top: false,
         bottom: false,
         child: NexaPage(
           title: _title,

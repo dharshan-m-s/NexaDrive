@@ -202,6 +202,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
         .toList(growable: false);
     return Scaffold(
       body: SafeArea(
+        top: false,
         bottom: false,
         child: NexaPage(
           title: 'Transfers',

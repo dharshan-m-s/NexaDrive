@@ -14,6 +14,7 @@ export 'nexa_button.dart';
 export 'nexa_text_field.dart';
 export 'nexa_sheet.dart';
 export 'nexa_page.dart';
+export 'nexa_scroll_aware_header.dart';
 export 'nexa_list_tile.dart';
 export 'nexa_chip.dart';
 export 'nexa_badge.dart';

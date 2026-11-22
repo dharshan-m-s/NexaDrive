@@ -123,7 +123,6 @@ void main() {
         tester,
         FilesScreen(api: _ScrollApi()),
       );
-
       final first = find.text('item00.txt');
       expect(first, findsOneWidget);
       final before = scrollableState(tester, first).position.pixels;

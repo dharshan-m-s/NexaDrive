@@ -87,6 +87,7 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
 
     return Scaffold(
       body: SafeArea(
+        top: false,
         bottom: false,
         child: NexaPage(
           headerIcon: Icons.article_rounded,

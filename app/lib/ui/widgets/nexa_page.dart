@@ -1,6 +1,77 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import '../../core/design/app_dimensions.dart';
+import '../../core/design/app_motion.dart';
 import '../../core/design/app_typography.dart';
+import 'nexa_scroll_aware_header.dart';
+
+/// Measures the actual large-title header height from the live text scale and
+/// viewport. A fixed estimate left a dead band under short titles (Photos) and
+/// clipped wrapped ones on narrow screens.
+double nexaHeaderContentExtent(
+  BuildContext context, {
+  required String title,
+  required String? subtitle,
+  required Widget? leading,
+  required Widget? action,
+  required List<Widget>? actions,
+  required bool largeTitle,
+  double? trailingExtent,
+  TextStyle? titleStyle,
+  int titleMaxLines = 2,
+  int subtitleMaxLines = 2,
+  double? textWidth,
+  double? topPadding,
+  double? bottomPadding,
+}) {
+  final textScaler = MediaQuery.textScalerOf(context);
+  final direction = Directionality.of(context);
+  final trailingCount = (action == null ? 0 : 1) + (actions?.length ?? 0);
+  final trailing = trailingExtent ??
+      (trailingCount == 0
+          ? 0.0
+          : trailingCount * (AppDimens.touchTarget + AppDimens.space8));
+  final leadingExtent =
+      leading == null ? 0.0 : AppDimens.touchTarget + AppDimens.space8;
+  final availableWidth = textWidth ??
+      (MediaQuery.sizeOf(context).width -
+          AppDimens.pageMargin * 2 -
+          leadingExtent -
+          (leading == null ? 0.0 : AppDimens.space16) -
+          trailing);
+  final lineWidth = availableWidth.clamp(48.0, double.infinity);
+
+  double lineHeight(String value, TextStyle style, int maxLines) {
+    final painter = TextPainter(
+      text: TextSpan(text: value, style: style),
+      maxLines: maxLines,
+      ellipsis: '…',
+      textDirection: direction,
+      textScaler: textScaler,
+    )..layout(maxWidth: lineWidth);
+    return painter.height;
+  }
+
+  final titleHeight = lineHeight(
+    title,
+    titleStyle ??
+        (largeTitle ? AppTextStyle.headlineSmall : AppTextStyle.title2),
+    titleMaxLines,
+  );
+  var textHeight = titleHeight;
+  final sub = subtitle;
+  if (sub != null && sub.isNotEmpty) {
+    textHeight += AppDimens.space2 +
+        lineHeight(sub, AppTextStyle.bodySmall, subtitleMaxLines);
+  }
+  var rowHeight = AppDimens.touchTarget;
+  if (textHeight > rowHeight) rowHeight = textHeight;
+  return ((topPadding ?? AppDimens.space16) +
+          leadingExtent +
+          rowHeight +
+          (bottomPadding ?? AppDimens.space16))
+      .ceilToDouble();
+}
 
 /// The single NexaDrive page shell — Material 3 tonal scaffold with a
 /// large-title header and optional bottom action bar.
@@ -17,10 +88,20 @@ class NexaPage extends StatelessWidget {
   /// tab pages disable it so their background extends behind the floating pill;
   /// standalone routes keep the default safe-area behavior.
   final bool bottomSafeArea;
-  final Widget body;
+  final Widget? body;
+
+  /// Pages that already render slivers can supply them here. The floating
+  /// header is added as the first sliver of the same scroll view, which keeps
+  /// its hide/reveal geometry and the content in one coordinated layout.
+  final List<Widget> Function(BuildContext context)? sliverBuilder;
+  final RefreshCallback? onRefresh;
   final Widget? bottomBar;
   final EdgeInsetsGeometry padding;
   final double? maxWidth;
+
+  /// Override the header's content extent when a screen knows its chrome is
+  /// shorter than the shell's conservative default.
+  final double? headerContentExtent;
   final Color? backgroundColor;
   final Color? headerForeground;
   final IconData? headerIcon;
@@ -35,7 +116,9 @@ class NexaPage extends StatelessWidget {
     this.largeTitle = true,
     this.scrollable = false,
     this.bottomSafeArea = true,
-    required this.body,
+    this.body,
+    this.sliverBuilder,
+    this.onRefresh,
     this.bottomBar,
     this.padding = const EdgeInsets.fromLTRB(
       AppDimens.pageMargin,
@@ -44,6 +127,7 @@ class NexaPage extends StatelessWidget {
       0,
     ),
     this.maxWidth = AppDimens.contentMaxWidth,
+    this.headerContentExtent,
     this.backgroundColor,
     this.headerForeground,
     this.headerIcon,
@@ -51,11 +135,17 @@ class NexaPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    assert(
+      body != null || sliverBuilder != null,
+      'NexaPage needs either body or sliverBuilder.',
+    );
     final scheme = Theme.of(context).colorScheme;
     final bg = backgroundColor ?? scheme.surface;
     final fg = headerForeground ?? scheme.onSurface;
     final pagePadding = padding.resolve(Directionality.of(context));
-    final bottomClearance = MediaQuery.paddingOf(context).bottom;
+    final viewPadding = MediaQuery.paddingOf(context);
+    final topInset = viewPadding.top;
+    final bottomClearance = viewPadding.bottom;
     final scrollPadding = bottomSafeArea
         ? pagePadding
         : pagePadding.copyWith(
@@ -63,46 +153,74 @@ class NexaPage extends StatelessWidget {
                 ? pagePadding.bottom
                 : bottomClearance,
           );
+    // Fixed extents keep the sliver's layout stable while it snaps. Screens
+    // with known short chrome can override this through [headerContentExtent].
+    final headerExtent = headerContentExtent ??
+        (leading != null
+            ? (largeTitle ? 184.0 : 192.0)
+            : (largeTitle ? 128.0 : 136.0));
+
+    Widget buildHeader() => NexaScrollAwareHeader(
+          header: _Header(
+            title: title,
+            subtitle: subtitle,
+            leading: leading,
+            action: headerAction,
+            actions: actions,
+            largeTitle: largeTitle,
+            foreground: fg,
+            icon: headerIcon,
+          ),
+          backgroundColor: bg,
+          initialContentExtent: headerExtent,
+        );
+
+    final Widget scrollView;
+    if (sliverBuilder != null) {
+      // Pages that own their content slivers share one scroll position with
+      // the header. Nothing below changes size when the chrome snaps away.
+      scrollView = NexaHeaderSnapScrollView(
+        headerExtent: topInset + headerExtent,
+        slivers: [
+          buildHeader(),
+          ...sliverBuilder!(context),
+        ],
+        onRefresh: onRefresh,
+      );
+    } else {
+      // Generic pages keep the old body contract: the body receives bounded
+      // height and may bring its own ListView/Expanded. NestedScrollView is the
+      // framework's coordinator for a floating header above such a body, so
+      // scrolling the inner list still drives the outer header.
+      Widget content = _constrain(body!);
+      content = scrollable
+          ? SingleChildScrollView(padding: scrollPadding, child: content)
+          : Padding(padding: pagePadding, child: content);
+      scrollView = _NestedPageScrollView(
+        headerExtent: topInset + headerExtent,
+        headerBuilder: (_) => buildHeader(),
+        body: onRefresh == null
+            ? content
+            : RefreshIndicator(onRefresh: onRefresh!, child: content),
+      );
+    }
 
     return SafeArea(
-      // Main tabs let the page continue behind the floating pill. Standalone
-      // routes retain normal bottom-inset protection through the default flag.
-      top: true,
+      top: false,
       bottom: bottomSafeArea,
       child: Material(
         type: MaterialType.transparency,
         child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: bg,
-          ),
+          decoration: BoxDecoration(color: bg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Header / Viewing Area
-              _Header(
-                title: title,
-                subtitle: subtitle,
-                leading: leading,
-                action: headerAction,
-                actions: actions,
-                largeTitle: largeTitle,
-                foreground: fg,
-                icon: headerIcon,
-              ),
-              // Body
-              Expanded(
-                child: scrollable
-                    ? SingleChildScrollView(
-                        padding: scrollPadding,
-                        child: _constrain(body),
-                      )
-                    : Padding(
-                        padding: padding,
-                        child: _constrain(body),
-                      ),
-              ),
-              // Bottom bar
-              if (bottomBar != null) _BottomBar(bottomBar: bottomBar!),
+              Expanded(child: scrollView),
+              if (bottomBar != null)
+                _BottomBar(
+                  bottomBar: bottomBar!,
+                  applyBottomInset: bottomSafeArea,
+                ),
             ],
           ),
         ),
@@ -118,6 +236,98 @@ class NexaPage extends StatelessWidget {
             child: child,
           ),
         );
+}
+
+/// Coordinates a floating header with a body that owns its own scroll view.
+///
+/// NestedScrollView moves its outer header programmatically from inner scroll
+/// events, so Flutter's built-in floating-header snap listener never sees a
+/// scroll gesture on the outer position. This listens to the inner body and
+/// performs the same settle once the gesture ends.
+class _NestedPageScrollView extends StatefulWidget {
+  const _NestedPageScrollView({
+    required this.headerExtent,
+    required this.headerBuilder,
+    required this.body,
+  });
+
+  final double headerExtent;
+  final Widget Function(BuildContext context) headerBuilder;
+  final Widget body;
+
+  @override
+  State<_NestedPageScrollView> createState() => _NestedPageScrollViewState();
+}
+
+class _NestedPageScrollViewState extends State<_NestedPageScrollView> {
+  final GlobalKey<NestedScrollViewState> _nestedKey =
+      GlobalKey<NestedScrollViewState>();
+
+  /// NestedScrollView mirrors outer settles onto the inner position. Those
+  /// programmatic notifications are not new gestures and must not re-snap the
+  /// header in the opposite direction.
+  bool _settling = false;
+
+  bool _onBodyNotification(ScrollNotification notification) {
+    final outer = _nestedKey.currentState?.outerController;
+
+    if (notification is ScrollStartNotification) {
+      if (_settling && notification.dragDetails == null) return false;
+      _settling = false;
+      return false;
+    }
+
+    if (notification is ScrollEndNotification && outer?.hasClients == true) {
+      if (_settling) {
+        _settling = false;
+        return false;
+      }
+      final hidden = outer!.position.maxScrollExtent;
+      // NestedScrollView's inner body can stay at offset zero while its outer
+      // header position follows the gesture. The outer position therefore owns
+      // the authoritative direction at release; the inner direction can be idle
+      // even after a long drag.
+      final direction = outer.position.userScrollDirection;
+      final target = direction == ScrollDirection.reverse ||
+              (direction == ScrollDirection.idle &&
+                  outer.position.pixels > hidden / 2)
+          ? hidden
+          : 0.0;
+      if ((outer.position.pixels - target).abs() > 1) {
+        _settling = true;
+        final duration = AppMotion.resolve(context, AppMotion.headerSettle);
+        // The outer position is driven programmatically by NestedScrollView;
+        // defer one frame so the inner drag's final update cannot cancel this
+        // settle.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final nested = _nestedKey.currentState;
+          if (!mounted ||
+              nested == null ||
+              !nested.outerController.hasClients) {
+            return;
+          }
+          nested.outerController.animateTo(
+            target,
+            duration: duration,
+            curve: AppMotion.headerRevealCurve,
+          );
+        });
+      }
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return NestedScrollView(
+      key: _nestedKey,
+      headerSliverBuilder: (context, _) => [widget.headerBuilder(context)],
+      body: NotificationListener<ScrollNotification>(
+        onNotification: _onBodyNotification,
+        child: widget.body,
+      ),
+    );
+  }
 }
 
 class _Header extends StatelessWidget {
@@ -206,65 +416,72 @@ class _Header extends StatelessWidget {
         AppDimens.space16,
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        // The back affordance keeps its intrinsic size instead of being
+        // stretched to the full header width, which used to centre the arrow.
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (leading != null) ...[
             leading!,
             const SizedBox(height: AppDimens.space8),
           ],
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              ExcludeSemantics(
-                child: Container(
-                  width: AppDimens.touchTarget,
-                  height: AppDimens.touchTarget,
-                  decoration: BoxDecoration(
-                    color: scheme.secondaryContainer,
-                    borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-                  ),
-                  child: Icon(
-                    icon ?? _iconForTitle(title),
-                    color: scheme.onSecondaryContainer,
-                    size: AppDimens.iconMedium,
+          SizedBox(
+            width: double.infinity,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                ExcludeSemantics(
+                  child: Container(
+                    width: AppDimens.touchTarget,
+                    height: AppDimens.touchTarget,
+                    decoration: BoxDecoration(
+                      color: scheme.secondaryContainer,
+                      borderRadius:
+                          BorderRadius.circular(AppDimens.radiusMedium),
+                    ),
+                    child: Icon(
+                      icon ?? _iconForTitle(title),
+                      color: scheme.onSecondaryContainer,
+                      size: AppDimens.iconMedium,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: AppDimens.space16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: titleStyle,
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: AppDimens.space2),
+                const SizedBox(width: AppDimens.space16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       Text(
-                        subtitle!,
+                        title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyle.bodySmall.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
+                        style: titleStyle,
                       ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: AppDimens.space2),
+                        Text(
+                          subtitle!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyle.bodySmall.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              if (action != null) ...[
-                const SizedBox(width: AppDimens.space8),
-                action!,
+                if (action != null) ...[
+                  const SizedBox(width: AppDimens.space8),
+                  action!,
+                ],
+                if (actions != null) ...[
+                  const SizedBox(width: AppDimens.space8),
+                  ...actions!,
+                ],
               ],
-              if (actions != null) ...[
-                const SizedBox(width: AppDimens.space8),
-                ...actions!,
-              ],
-            ],
+            ),
           ),
         ],
       ),
@@ -274,22 +491,28 @@ class _Header extends StatelessWidget {
 
 class _BottomBar extends StatelessWidget {
   final Widget bottomBar;
+  final bool applyBottomInset;
 
-  const _BottomBar({required this.bottomBar});
+  const _BottomBar({
+    required this.bottomBar,
+    required this.applyBottomInset,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final child =
+        applyBottomInset ? SafeArea(top: false, child: bottomBar) : bottomBar;
     return Container(
       width: double.infinity,
-      // The child SafeArea supplies the system/host bottom inset exactly once.
-      // Keep only visual spacing here to avoid doubling the inset.
+      // A full-bleed page already lets its bar publish its own pill clearance;
+      // adding another SafeArea here produced a strip below the floating pill.
       padding: const EdgeInsets.fromLTRB(
         AppDimens.pageMargin,
         AppDimens.space8,
         AppDimens.pageMargin,
         AppDimens.space8,
       ),
-      child: SafeArea(top: false, child: bottomBar),
+      child: child,
     );
   }
 }
@@ -343,7 +566,8 @@ class NexaImmersivePage extends StatelessWidget {
       child: Column(
         children: [
           Expanded(child: body),
-          if (bottomBar != null) _BottomBar(bottomBar: bottomBar!),
+          if (bottomBar != null)
+            _BottomBar(bottomBar: bottomBar!, applyBottomInset: true),
         ],
       ),
     );

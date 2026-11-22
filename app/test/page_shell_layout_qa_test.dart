@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nexadrive/core/design/app_dimensions.dart';
 import 'package:nexadrive/core/design/app_theme.dart';
 import 'package:nexadrive/core/models/file_entry.dart';
 import 'package:nexadrive/services/api.dart';
@@ -27,6 +28,27 @@ import 'package:nexadrive/ui/widgets/nexa_components.dart';
 /// cannot reproduce bit-exact pixels; any overflow, unconstrained-flex error,
 /// layout exception or paint exception fails the run.
 void main() {
+  testWidgets('a leading back control stays pinned to the top left',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_host(
+      AppTheme.light(),
+      NexaPage(
+        title: 'Transfers',
+        leading: const NexaBackButton(),
+        body: const SizedBox.shrink(),
+      ),
+    ));
+    await tester.pump();
+
+    final back = tester.getRect(find.byType(NexaBackButton));
+    expect(back.left, closeTo(AppDimens.pageMargin, 1));
+    expect(back.width, lessThanOrEqualTo(AppDimens.touchTarget + 1));
+    expect(tester.takeException(), isNull);
+  });
+
   final sizes = <String, Size>{
     'narrow (500x600)': const Size(500, 600),
     'short (800x480)': const Size(800, 480),

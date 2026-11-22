@@ -96,6 +96,10 @@ class _AppShellState extends State<AppShell>
   /// simultaneous requests.
   final Set<int> _visited = <int>{0};
 
+  /// Bumped on every destination change so cached pages restore their floating
+  /// header without losing scroll position or re-issued requests.
+  final ValueNotifier<int> _headerReset = ValueNotifier<int>(0);
+
   /// Number of destinations in the shell.
   static const int _pageCount = 6;
 
@@ -1080,6 +1084,7 @@ class _AppShellState extends State<AppShell>
     // take over the queue.
     _uploads.releaseForeground();
     updateController.dispose();
+    _headerReset.dispose();
     super.dispose();
   }
 
@@ -1258,10 +1263,14 @@ class _AppShellState extends State<AppShell>
                                   constraints: const BoxConstraints(
                                     maxWidth: AppDimens.contentMaxWidth,
                                   ),
-                                  child: _PageHost(
-                                    index: index,
-                                    visited: _visited,
-                                    pages: pages,
+                                  child: NexaHeaderResetScope(
+                                    notifier: _headerReset,
+                                    child: _PageHost(
+                                      index: index,
+                                      visited: _visited,
+                                      pages: pages,
+                                      headerReset: _headerReset,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1343,10 +1352,14 @@ class _AppShellState extends State<AppShell>
                         bottom: pillInset,
                       ),
                     ),
-                    child: _PageHost(
-                      index: index,
-                      visited: _visited,
-                      pages: pages,
+                    child: NexaHeaderResetScope(
+                      notifier: _headerReset,
+                      child: _PageHost(
+                        index: index,
+                        visited: _visited,
+                        pages: pages,
+                        headerReset: _headerReset,
+                      ),
                     ),
                   ),
                 ),
@@ -1509,11 +1522,13 @@ class _PageHost extends StatefulWidget {
   final int index;
   final Set<int> visited;
   final List<Widget> pages;
+  final ValueNotifier<int> headerReset;
 
   const _PageHost({
     required this.index,
     required this.visited,
     required this.pages,
+    required this.headerReset,
   });
 
   @override
@@ -1553,7 +1568,14 @@ class _PageHostState extends State<_PageHost>
   @override
   void didUpdateWidget(covariant _PageHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.index != widget.index) _startReveal();
+    if (oldWidget.index != widget.index) {
+      // Notifying during build would mark cached pages dirty mid-build. Broadcast
+      // the new entry token on the next frame instead.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.headerReset.value++;
+      });
+      _startReveal();
+    }
   }
 
   void _startReveal() {
@@ -1591,19 +1613,16 @@ class _PageHostState extends State<_PageHost>
       ],
     );
 
-    if (AppMotion.reducedMotion(context)) {
-      return SafeArea(top: true, bottom: false, child: stack);
-    }
+    // The floating header owns the status-bar inset. Wrapping the page in a
+    // second top SafeArea left a permanent strip behind the notification panel
+    // when the chrome hid.
+    if (AppMotion.reducedMotion(context)) return stack;
 
-    return SafeArea(
-      top: true,
-      bottom: false,
-      child: FadeTransition(
-        opacity: _opacity,
-        child: SlideTransition(
-          position: _offset,
-          child: ScaleTransition(scale: _scale, child: stack),
-        ),
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(
+        position: _offset,
+        child: ScaleTransition(scale: _scale, child: stack),
       ),
     );
   }
