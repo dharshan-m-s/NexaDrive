@@ -302,11 +302,13 @@ class NexaFileGridTile extends StatelessWidget {
               onHoverExit?.call();
             }
           },
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AspectRatio(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Dense grids can make a cell narrower than its text block is
+              // tall. Let the square artwork give up height first so the name
+              // and metadata always fit inside the cell. A scroll view gives
+              // unbounded height, where flex children are not allowed.
+              final artwork = AspectRatio(
                 aspectRatio: 1,
                 child: Stack(
                   children: [
@@ -351,24 +353,34 @@ class NexaFileGridTile extends StatelessWidget {
                       ),
                   ],
                 ),
-              ),
-              const SizedBox(height: AppDimens.space10),
-              Text(
-                entry.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyle.callout.copyWith(color: scheme.onSurface),
-              ),
-              const SizedBox(height: AppDimens.space2),
-              Text(
-                details,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyle.bodySmall.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+              );
+              final boundedHeight = constraints.hasBoundedHeight;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize:
+                    boundedHeight ? MainAxisSize.max : MainAxisSize.min,
+                children: [
+                  if (boundedHeight) Expanded(child: artwork) else artwork,
+                  const SizedBox(height: AppDimens.space10),
+                  Text(
+                    entry.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        AppTextStyle.callout.copyWith(color: scheme.onSurface),
+                  ),
+                  const SizedBox(height: AppDimens.space2),
+                  Text(
+                    details,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyle.bodySmall.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),

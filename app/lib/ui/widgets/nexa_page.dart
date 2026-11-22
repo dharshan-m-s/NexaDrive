@@ -94,6 +94,10 @@ class NexaPage extends StatelessWidget {
   /// header is added as the first sliver of the same scroll view, which keeps
   /// its hide/reveal geometry and the content in one coordinated layout.
   final List<Widget> Function(BuildContext context)? sliverBuilder;
+
+  /// Optional edge feel for sliver pages. Media libraries use elastic physics
+  /// so reaching either end has the same responsive rubber band as Files.
+  final ScrollPhysics? scrollPhysics;
   final RefreshCallback? onRefresh;
   final Widget? bottomBar;
   final EdgeInsetsGeometry padding;
@@ -118,6 +122,7 @@ class NexaPage extends StatelessWidget {
     this.bottomSafeArea = true,
     this.body,
     this.sliverBuilder,
+    this.scrollPhysics,
     this.onRefresh,
     this.bottomBar,
     this.padding = const EdgeInsets.fromLTRB(
@@ -186,6 +191,7 @@ class NexaPage extends StatelessWidget {
           ...sliverBuilder!(context),
         ],
         onRefresh: onRefresh,
+        physics: scrollPhysics,
       );
     } else {
       // Generic pages keep the old body contract: the body receives bounded

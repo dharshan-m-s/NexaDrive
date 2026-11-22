@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// NexaDrive motion — the single Material 3 motion system.
@@ -173,6 +174,20 @@ abstract final class AppMotion {
     stiffness: 180.0,
     damping: 24.0,
   );
+
+  /// Edge resistance for long lists. The closer the content is to its limit,
+  /// the harder it pulls back, so reaching the end reads as responsive instead
+  /// of frozen. The floating-header coordinator yields while out of range.
+  static const ScrollPhysics elasticScrollPhysics = BouncingScrollPhysics();
+
+  /// Native floating-header snap: animates the chrome alone, leaving the list
+  /// offset untouched. This is what keeps a deep Files/Photos scroll in place
+  /// when the top bar returns.
+  static FloatingHeaderSnapConfiguration headerSnapFor(BuildContext context) =>
+      FloatingHeaderSnapConfiguration(
+        curve: reducedMotion(context) ? Curves.linear : headerRevealCurve,
+        duration: resolve(context, headerSettle),
+      );
 
   // -------------------------------------------------------- gesture limits
   /// Distance after which a press is treated as a scroll/drag and released.

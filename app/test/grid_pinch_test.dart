@@ -176,8 +176,30 @@ void main() {
 
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getInt('nexadrive.files.grid_columns'), 4);
+      expect(prefs.getBool('nexadrive.files.grid'), isTrue);
       expect(selectionCalls, isEmpty);
       expect(find.byTooltip('Cancel selection'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('grid/list choice is restored and persists across toggles',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'nexadrive.files.grid': true,
+      });
+      await pumpScreen(tester, FilesScreen(api: _GridApi()));
+
+      expect(find.byType(SliverGrid), findsOneWidget);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('nexadrive.files.grid'), isTrue);
+
+      await tester.tap(find.byTooltip('More actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('List view'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SliverGrid), findsNothing);
+      expect(prefs.getBool('nexadrive.files.grid'), isFalse);
       expect(tester.takeException(), isNull);
     });
   });

@@ -3,23 +3,31 @@ import 'package:flutter/rendering.dart';
 
 import '../../core/design/app_motion.dart';
 
-/// Snaps a page that owns its slivers to the floating header's edge.
+/// Completes the floating header's hide near the very top of a scroll view.
 ///
-/// A floating header can only disappear once the scroll offset reaches its full
-/// extent, which includes the system top inset. Without this coordinator a
-/// short drag parks the chrome over the status bar. Moving the scroll position
-/// to the header edge on release hides it completely without changing layout.
+/// Flutter's floating sliver already snaps the chrome alone while the body is
+/// past the header band; that is what keeps a deep Files/Photos scroll in place
+/// when the top bar returns. The sliver cannot hide fully before the scroll
+/// offset reaches its own extent, so this coordinator only settles the position
+/// while it is still inside that short band. It never drags a deep list back to
+/// offset zero.
 class NexaHeaderSnapScrollView extends StatefulWidget {
   const NexaHeaderSnapScrollView({
     super.key,
     required this.headerExtent,
     required this.slivers,
     this.onRefresh,
+    this.physics,
   });
 
   final double headerExtent;
   final List<Widget> slivers;
   final RefreshCallback? onRefresh;
+
+  /// Optional scroll physics for pages that need a specific edge feel, such as
+  /// the Files list's elastic overscroll. The header coordinator leaves
+  /// out-of-range settles to the physics so the rubber band is not cut short.
+  final ScrollPhysics? physics;
 
   @override
   State<NexaHeaderSnapScrollView> createState() =>
@@ -29,8 +37,6 @@ class NexaHeaderSnapScrollView extends StatefulWidget {
 class _NexaHeaderSnapScrollViewState extends State<NexaHeaderSnapScrollView> {
   final ScrollController _controller = ScrollController();
   double _startPixels = 0;
-  double _lastPixels = 0;
-  ScrollDirection _lastDirection = ScrollDirection.idle;
 
   /// The settle is a programmatic scroll. Its end notification must not be
   /// mistaken for a new user gesture, or a long downward drag would reveal the
@@ -58,19 +64,6 @@ class _NexaHeaderSnapScrollViewState extends State<NexaHeaderSnapScrollView> {
       _settling = false;
       _userDriven = userDriven;
       _startPixels = notification.metrics.pixels;
-      _lastPixels = notification.metrics.pixels;
-      _lastDirection = ScrollDirection.idle;
-      return false;
-    }
-
-    if (notification is ScrollUpdateNotification) {
-      if (_settling) return false;
-      final delta = notification.metrics.pixels - _lastPixels;
-      if (delta.abs() > 0.5) {
-        _lastDirection =
-            delta > 0 ? ScrollDirection.reverse : ScrollDirection.forward;
-        _lastPixels = notification.metrics.pixels;
-      }
       return false;
     }
 
@@ -78,39 +71,31 @@ class _NexaHeaderSnapScrollViewState extends State<NexaHeaderSnapScrollView> {
       if (_settling || !_userDriven) {
         _settling = false;
         _userDriven = false;
-        _lastPixels = _controller.position.pixels;
-        _lastDirection = ScrollDirection.idle;
         return false;
       }
-      final hidden = widget.headerExtent.clamp(
-        0.0,
-        _controller.position.maxScrollExtent,
-      );
-      final current = _controller.position.pixels;
-      final direction = _lastDirection == ScrollDirection.idle
-          ? (current > _startPixels
-              ? ScrollDirection.reverse
-              : current < _startPixels
-                  ? ScrollDirection.forward
-                  : ScrollDirection.idle)
-          : _lastDirection;
-
-      // Once the chrome is fully offscreen, a downward gesture is ordinary
-      // content scrolling. Snapping it back to the header edge on every release
-      // makes the library look stuck and can pull the chrome into view again.
-      final double? target;
-      if (direction == ScrollDirection.forward) {
-        target = 0.0;
-      } else if (current >= hidden - 1) {
-        target = null;
-      } else if (direction == ScrollDirection.reverse || current > hidden / 2) {
-        target = hidden;
-      } else {
-        target = 0.0;
+      // Elastic physics owns its own return from an edge. Animating the header
+      // to an in-range target here would cancel the rubber band mid-flight.
+      if (_controller.position.outOfRange) {
+        _userDriven = false;
+        return false;
       }
-      _lastDirection = ScrollDirection.idle;
-      _lastPixels = current;
-      if (target != null && (current - target).abs() > 1) {
+      final position = _controller.position;
+      final edge = widget.headerExtent.clamp(0.0, position.maxScrollExtent);
+      final current = position.pixels;
+
+      // Past the header band Flutter's native floating snap animates only the
+      // chrome. Touching the scroll position here would yank a deep list back
+      // towards the top every time the user asked for the top bar.
+      if (current >= edge - 1) {
+        _userDriven = false;
+        return false;
+      }
+
+      // Inside the band there is not enough scroll range for the native sliver
+      // to hide completely. A short position settle finishes that one case.
+      final net = current - _startPixels;
+      final target = net > edge / 3 ? edge : 0.0;
+      if ((current - target).abs() > 1) {
         final settleTarget = target;
         _settling = true;
         final duration = AppMotion.resolve(context, AppMotion.headerSettle);
@@ -135,6 +120,7 @@ class _NexaHeaderSnapScrollViewState extends State<NexaHeaderSnapScrollView> {
   Widget build(BuildContext context) {
     Widget view = CustomScrollView(
       controller: _controller,
+      physics: widget.physics,
       clipBehavior: Clip.hardEdge,
       slivers: widget.slivers,
     );
@@ -170,11 +156,11 @@ class NexaHeaderResetScope extends InheritedNotifier<ValueNotifier<int>> {
 /// The geometry is owned by Flutter's `RenderSliverFloatingPersistentHeader`
 /// (`floating: true`, `pinned: false`). That is the same render object behind
 /// `SliverAppBar`, so the surface tracks the finger 1:1 and never changes the
-/// body's layout when the gesture ends. The snap itself is driven by the shared
-/// scroll position in [NexaHeaderSnapScrollView], which keeps the header and the
-/// body in agreement on every platform scroll physics. The top system inset is
-/// part of the header surface, so hiding it removes the whole chrome instead of
-/// leaving a strip under the status bar.
+/// body's layout when the gesture ends. Its native snap animation moves only
+/// the header, not the list offset. [NexaHeaderSnapScrollView] settles the
+/// position only in the short band before the header can hide on its own. The
+/// top system inset is part of the header surface, so hiding it removes the
+/// whole chrome instead of leaving a strip under the status bar.
 class NexaScrollAwareHeader extends StatefulWidget {
   const NexaScrollAwareHeader({
     super.key,
@@ -247,9 +233,9 @@ class _NexaScrollAwareHeaderState extends State<NexaScrollAwareHeader>
     final topInset = MediaQuery.paddingOf(context).top;
     final extent = topInset + widget.initialContentExtent;
 
-    // The scroll coordinator owns the settle. Flutter's built-in snap animates
-    // the header's internal offset separately from the scroll position, and a
-    // fling end can make it reveal the surface while the body keeps scrolling.
+    // Native snap owns the chrome after the header band. It is deliberately
+    // enabled here: animating the scroll position instead would teleport a deep
+    // Files/Photos list back to the top whenever the user asked for the bar.
     return SliverPersistentHeader(
       key: ValueKey<String>('nexa_floating_header_$_generation'),
       floating: true,
@@ -257,6 +243,7 @@ class _NexaScrollAwareHeaderState extends State<NexaScrollAwareHeader>
       delegate: _NexaHeaderDelegate(
         extent: extent,
         vsync: this,
+        snap: AppMotion.headerSnapFor(context),
         child: Material(
           key: const ValueKey<String>('nexa_scroll_aware_header'),
           color: widget.backgroundColor ?? scheme.surface,
@@ -282,15 +269,20 @@ class _NexaHeaderDelegate extends SliverPersistentHeaderDelegate {
   _NexaHeaderDelegate({
     required this.extent,
     required this.vsync,
+    required FloatingHeaderSnapConfiguration snap,
     required this.child,
-  });
+  }) : _snap = snap;
 
   final double extent;
 
   @override
   final TickerProvider vsync;
 
+  final FloatingHeaderSnapConfiguration _snap;
   final Widget child;
+
+  @override
+  FloatingHeaderSnapConfiguration get snapConfiguration => _snap;
 
   @override
   double get minExtent => extent;
@@ -312,5 +304,8 @@ class _NexaHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(covariant _NexaHeaderDelegate oldDelegate) =>
-      oldDelegate.extent != extent || oldDelegate.child != child;
+      oldDelegate.extent != extent ||
+      oldDelegate.child != child ||
+      oldDelegate._snap.curve != _snap.curve ||
+      oldDelegate._snap.duration != _snap.duration;
 }

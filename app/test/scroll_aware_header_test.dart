@@ -40,11 +40,6 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> scrollToBottom(WidgetTester tester, Finder scrollable) async {
-    await tester.drag(scrollable, const Offset(0, -20000));
-    await tester.pumpAndSettle();
-  }
-
   ScrollableState scrollPosition(WidgetTester tester) {
     final scrollables = find.byType(Scrollable, skipOffstage: false);
     ScrollableState? best;
@@ -58,6 +53,15 @@ void main() {
     }
     if (best == null) throw StateError('No scrollable content was found.');
     return best;
+  }
+
+  Future<void> scrollToBottom(WidgetTester tester) async {
+    // A single enormous drag is not a realistic fling and can make elastic
+    // physics bounce all the way back to the top. Land on the extent directly
+    // so the tests exercise the header state at the bottom, not the spring.
+    final position = scrollPosition(tester).position;
+    position.jumpTo(position.maxScrollExtent);
+    await tester.pumpAndSettle();
   }
 
   testWidgets(
@@ -124,7 +128,7 @@ void main() {
       reason: 'a swipe in the vacated header slot must still scroll',
     );
 
-    await scrollToBottom(tester, scrollable);
+    await scrollToBottom(tester);
     final hidden = tester.getRect(header);
     expect(hidden.bottom, lessThan(1));
 
@@ -235,12 +239,11 @@ void main() {
     expect(header, findsOneWidget);
     expect(tester.getRect(header).bottom, lessThan(1));
 
-    await scrollToBottom(tester, scrollable);
+    await scrollToBottom(tester);
     final hidden = tester.getRect(header);
-    expect(
-      scrollPosition(tester).position.pixels,
-      greaterThan(scrollPosition(tester).position.minScrollExtent),
-    );
+    final deepOffset = scrollPosition(tester).position.pixels;
+    expect(deepOffset,
+        greaterThan(scrollPosition(tester).position.minScrollExtent));
     expect(hidden.bottom, lessThan(1));
 
     await tester.drag(scrollable, const Offset(0, 24));
@@ -248,6 +251,11 @@ void main() {
     final restored = tester.getRect(header);
     expect(restored.top, closeTo(initial.top, 2));
     expect(restored.height, closeTo(initial.height, 1));
+    expect(
+      scrollPosition(tester).position.pixels,
+      greaterThan(deepOffset * 0.8),
+      reason: 'revealing the chrome must not teleport a deep list to the top',
+    );
     expect(find.byTooltip('Search files'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -273,14 +281,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.getRect(header).bottom, lessThan(1));
 
-    await scrollToBottom(tester, scrollable);
+    await scrollToBottom(tester);
     expect(tester.getRect(header).bottom, lessThan(1));
+    final deepOffset = scrollPosition(tester).position.pixels;
 
     await tester.drag(scrollable, const Offset(0, 24));
     await tester.pumpAndSettle();
     final restored = tester.getRect(header);
     expect(restored.top, closeTo(initial.top, 2));
     expect(restored.height, closeTo(initial.height, 1));
+    expect(
+      scrollPosition(tester).position.pixels,
+      greaterThan(deepOffset * 0.8),
+      reason: 'the gallery must stay where it was while chrome returns',
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -375,6 +389,69 @@ void main() {
       reason: 'a second swipe must advance the grid, not reveal the chrome',
     );
     expect(tester.getRect(header).bottom, lessThanOrEqualTo(1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Files row separators are centred in the page gutters',
+      (tester) async {
+    await pumpAtPhoneSize(tester, FilesScreen(api: _ScrollApi()));
+
+    final separators = find.byWidgetPredicate(
+      (widget) => widget is Divider && widget.height == 1,
+    );
+    expect(separators, findsWidgets);
+    final divider = tester.widget<Divider>(separators.first);
+    expect(divider.indent, AppDimens.rowInset);
+    expect(divider.endIndent, AppDimens.rowInset);
+    // Divider's own box spans the row; the decorated box carries the inset.
+    final line = find.descendant(
+      of: separators.first,
+      matching: find.byType(DecoratedBox),
+    );
+    final rect = tester.getRect(line);
+    expect(rect.left, closeTo(AppDimens.rowInset, 1));
+    expect(rect.right, closeTo(400 - AppDimens.rowInset, 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Files list rubber-bands at the top edge', (tester) async {
+    await pumpAtPhoneSize(tester, FilesScreen(api: _ScrollApi()));
+    final scrollable = find.byType(CustomScrollView);
+    expect(scrollPosition(tester).position.pixels, 0);
+
+    await tester.drag(scrollable, const Offset(0, 80));
+    await tester.pump();
+    expect(
+      scrollPosition(tester).position.pixels,
+      lessThan(0),
+      reason: 'a downward pull must stretch past the top edge',
+    );
+
+    await tester.pumpAndSettle();
+    expect(scrollPosition(tester).position.pixels, closeTo(0, 1));
+    expect(tester.getRect(header).top, closeTo(0, 2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Photos grid rubber-bands at the top edge', (tester) async {
+    await pumpAtPhoneSize(
+      tester,
+      PhotosScreen(api: _PhotosScrollApi(), session: _scrollSession()),
+    );
+    final scrollable = find.byType(CustomScrollView);
+    expect(scrollPosition(tester).position.pixels, 0);
+
+    await tester.drag(scrollable, const Offset(0, 80));
+    await tester.pump();
+    expect(
+      scrollPosition(tester).position.pixels,
+      lessThan(0),
+      reason: 'the gallery must stretch past the top edge like Files',
+    );
+
+    await tester.pumpAndSettle();
+    expect(scrollPosition(tester).position.pixels, closeTo(0, 1));
+    expect(tester.getRect(header).top, closeTo(0, 2));
     expect(tester.takeException(), isNull);
   });
 }

@@ -89,6 +89,11 @@ class _PhotoViewerState extends State<PhotoViewer> {
   late List<Map<String, dynamic>> _photos;
   late int _current;
 
+  /// The destination of an in-flight page animation. Raw swipes add to this
+  /// instead of the last settled page, so two quick flicks do not reset each
+  /// other or get dropped while the first animation is still running.
+  int? _pendingPage;
+
   /// Decoded preview frames. The visible page always stays; speculative
   /// neighbours are dropped once the pixel budget is reached.
   final Map<String, ui.Image> _decoded = {};
@@ -315,6 +320,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
     setState(() {
       _current = index;
       _zoomed = false;
+      if (_pendingPage == index) _pendingPage = null;
     });
     _zoomHintTimer?.cancel();
     _zoomHintVisible = false;
@@ -326,16 +332,28 @@ class _PhotoViewerState extends State<PhotoViewer> {
   /// Browsing is programmatic only: raw pointer events decide when a swipe is
   /// a single finger page change, so a pinch can never be stolen mid-gesture.
   void _changePage(int index) {
-    if (index < 0 || index >= _photos.length || index == _current) return;
+    if (index < 0 || index >= _photos.length) return;
+    final live = _pendingPage ?? _controller.page ?? _current.toDouble();
+    if ((live - index).abs() < 0.01) return;
     if (AppMotion.reducedMotion(context)) {
+      _pendingPage = null;
       _controller.jumpToPage(index);
       return;
     }
+    _pendingPage = index;
     _controller.animateToPage(
       index,
       duration: AppMotion.resolve(context, AppMotion.normal),
       curve: AppMotion.standard,
     );
+  }
+
+  /// Steps from the in-flight destination so two quick swipes accumulate even
+  /// while the first page animation is still running.
+  void _stepPage(int delta) {
+    final base =
+        _pendingPage ?? (_controller.page ?? _current.toDouble()).round();
+    _changePage(base + delta);
   }
 
   /// One dark tonal scheme for every overlay that floats above the media.
@@ -454,6 +472,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
       _photos.removeAt(index);
       _errors.remove(removed);
       _current = index.clamp(0, _photos.length - 1);
+      _pendingPage = null;
     });
     _toast('Moved to Trash');
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -647,31 +666,10 @@ class _PhotoViewerState extends State<PhotoViewer> {
     );
   }
 
-  /// During a Hero flight the destination is a moving rect, so the shuttle
-  /// paints the same bounded grid thumbnail the user just tapped. The full
-  /// preview is never fetched just to make a transition look good.
-  Widget _heroShuttle(
-    BuildContext context,
-    HeroFlightDirection direction,
-    BuildContext fromHeroContext,
-    BuildContext toHeroContext,
-    String path,
-  ) {
-    final bytes = widget.thumbnailLookup?.call(path);
-    if (bytes != null) {
-      return Image.memory(
-        bytes,
-        fit: BoxFit.cover,
-        filterQuality: FilterQuality.medium,
-        gaplessPlayback: true,
-        excludeFromSemantics: true,
-      );
-    }
-    // No grid thumbnail (e.g. opened from a file picker): fall back to the
-    // destination hero's own child, which is what Flutter does by default.
-    final hero = toHeroContext.widget;
-    return hero is Hero ? hero.child : const SizedBox.expand();
-  }
+  // There is deliberately no Hero shuttle here. The grid cell is cover-cropped
+  // while the viewer photo is fitted; a shared-element flight has to land in
+  // the full viewport and would stretch the thumbnail before swapping in the
+  // correctly sized photo. The route transition owns the entrance instead.
 
   @override
   Widget build(BuildContext context) {
@@ -695,7 +693,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
                 if (mounted) Navigator.of(context).maybePop();
               },
               onDetails: _showDetails,
-              onPageDelta: (delta) => _changePage(_current + delta),
+              onPageDelta: _stepPage,
               child: PageView.builder(
                 controller: _controller,
                 // Browsing is owned by the raw-pointer layer above. This keeps
@@ -734,29 +732,12 @@ class _PhotoViewerState extends State<PhotoViewer> {
                       },
                     );
                   }
-                  // The Hero owns the page for its whole lifetime (loading,
-                  // decoded or error), so the grid -> viewer flight is already
-                  // available on the first frame. Unique tags per path avoid
-                  // conflicts while PageView builds neighbouring pages.
-                  return HeroMode(
-                    enabled: !AppMotion.reducedMotion(context),
-                    child: Hero(
-                      key: ValueKey('photoHero:$path'),
-                      tag: 'photo:$path',
-                      flightShuttleBuilder: (context, animation, direction,
-                              fromHeroContext, toHeroContext) =>
-                          _heroShuttle(
-                        context,
-                        direction,
-                        fromHeroContext,
-                        toHeroContext,
-                        path,
-                      ),
-                      child: KeyedSubtree(
-                        key: ValueKey('photoHeroChild:$path'),
-                        child: imageLayer,
-                      ),
-                    ),
+                  // No Hero: the grid cell is cover-cropped while this page is
+                  // fitted. Sharing them would stretch the thumbnail to the
+                  // full viewport, then rescale it when the photo decodes.
+                  return KeyedSubtree(
+                    key: ValueKey('photoPage:$path'),
+                    child: imageLayer,
                   );
                 },
               ),
@@ -884,9 +865,9 @@ class _PhotoViewerState extends State<PhotoViewer> {
 /// Placeholder shown while the viewer preview downloads.
 ///
 /// The grid thumbnail, when available, is drawn strongly blurred and dimmed
-/// behind the spinner â the standard "progressive loading" treatment. That
-/// reads unambiguously as *loading*; showing a sharp but small preview instead
-/// reads as "the photo is broken and looks blurry".
+/// behind the spinner. It is deliberately `contain`-fitted inside the viewport:
+/// a `cover`-fit full-screen preview made a 3:4 photo look full-screen for a
+/// frame before the decoded image snapped back to its real proportions.
 class _LoadingPage extends StatelessWidget {
   final Uint8List? thumbnail;
   const _LoadingPage({super.key, this.thumbnail});
@@ -898,17 +879,21 @@ class _LoadingPage extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         if (preview != null)
-          ImageFiltered(
-            imageFilter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-            child: Opacity(
-              opacity: 0.45,
-              child: Image.memory(
-                preview,
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.medium,
-                gaplessPlayback: true,
-                cacheWidth: 1024,
-                excludeFromSemantics: true,
+          Center(
+            child: ImageFiltered(
+              imageFilter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+              child: Opacity(
+                opacity: 0.45,
+                child: FittedBox(
+                  fit: BoxFit.contain,
+                  child: Image.memory(
+                    preview,
+                    filterQuality: FilterQuality.medium,
+                    gaplessPlayback: true,
+                    cacheWidth: 1024,
+                    excludeFromSemantics: true,
+                  ),
+                ),
               ),
             ),
           ),
@@ -1092,7 +1077,7 @@ class _SwipeDismissLayer extends StatefulWidget {
 }
 
 class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   double _drag = 0;
   double _settleFrom = 0;
   AnimationController? _settle;
@@ -1113,6 +1098,18 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
   double _swipeDx = 0;
   double _swipeVelocity = 0;
 
+  /// Once horizontal paging owns a gesture, vertical drag/dismiss must not
+  /// interpret the same downward drift as a swipe-up or dismissal. Latched
+  /// until the next pointer down so the vertical recognizer's late `onEnd`
+  /// cannot pop the viewer after the page has already changed.
+  bool _pageSwipeClaimed = false;
+
+  /// Animates the finger-following page offset back to zero while `PageView`
+  /// performs its own page animation, so there is no visible snap-back.
+  AnimationController? _swipeSettle;
+  CurvedAnimation? _swipeSettleCurve;
+  double _swipeSettleFrom = 0;
+
   @override
   void didUpdateWidget(covariant _SwipeDismissLayer oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -1126,8 +1123,17 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
 
   @override
   void dispose() {
+    _stopSwipeSettle();
     _settle?.dispose();
     super.dispose();
+  }
+
+  void _stopSwipeSettle() {
+    _swipeSettleCurve?.dispose();
+    _swipeSettleCurve = null;
+    _swipeSettle?.stop();
+    _swipeSettle?.dispose();
+    _swipeSettle = null;
   }
 
   /// Cancels any visual offset from a dismissal drag without playing a settle
@@ -1142,30 +1148,83 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
     if (notify && mounted) setState(() {});
   }
 
-  void _resetSwipe({bool notify = true}) {
-    final hadOffset = _swipeDx != 0;
+  void _clearSwipeTracking() {
     _swipePointer = null;
     _swipeAxis = null;
-    _swipeDx = 0;
     _swipeVelocity = 0;
+  }
+
+  void _resetSwipe({bool notify = true}) {
+    final hadOffset = _swipeDx != 0 || _swipeSettle != null;
+    _stopSwipeSettle();
+    _clearSwipeTracking();
+    _swipeDx = 0;
     if (hadOffset && notify && mounted) setState(() {});
   }
 
+  /// Eases the finger-following offset out over the same interval as the page
+  /// animation. Keeping the offset during that animation is what removes the
+  /// jump back to the old page before paging begins.
+  void _settleSwipeOffset() {
+    final from = _swipeDx;
+    if (from == 0) return;
+    if (AppMotion.reducedMotion(context)) {
+      _swipeDx = 0;
+      if (mounted) setState(() {});
+      return;
+    }
+    _stopSwipeSettle();
+    _swipeSettleFrom = from;
+    _swipeSettle = AnimationController(
+      vsync: this,
+      duration: AppMotion.resolve(context, AppMotion.normal),
+    );
+    _swipeSettleCurve = CurvedAnimation(
+      parent: _swipeSettle!,
+      curve: AppMotion.standard,
+    );
+    _swipeSettle!.addListener(() {
+      if (!mounted) return;
+      setState(() {
+        _swipeDx = _swipeSettleFrom * (1 - _swipeSettleCurve!.value);
+      });
+    });
+    _swipeSettle!.addStatusListener((status) {
+      if (status.isCompleted || status.isDismissed) {
+        _swipeDx = 0;
+        _swipeSettleCurve?.dispose();
+        _swipeSettleCurve = null;
+        _swipeSettle?.dispose();
+        _swipeSettle = null;
+      }
+    });
+    _swipeSettle!.forward(from: 0);
+  }
+
   void _onPointerDown(PointerDownEvent event) {
+    final starting = _activePointers.isEmpty;
     final wasSuspended = _pinchSuspended;
     _activePointers.add(event.pointer);
+    if (starting) {
+      // A fresh gesture must not inherit dismissal offset, swipe offset or the
+      // horizontal claim that suppressed vertical drag on the previous one.
+      _resetDismissDrag(notify: false);
+      _resetSwipe(notify: false);
+      _pageSwipeClaimed = false;
+    }
     if (_activePointers.length > 1) {
       _resetDismissDrag(notify: false);
       _resetSwipe(notify: false);
       _pinchSuspended = true;
     } else {
-      _resetSwipe(notify: false);
       _swipePointer = event.pointer;
       _swipeStart = event.position;
       _swipeLast = event.position;
       _swipeLastTime = event.timeStamp;
     }
-    if (wasSuspended != _pinchSuspended && mounted) setState(() {});
+    if ((starting || wasSuspended != _pinchSuspended) && mounted) {
+      setState(() {});
+    }
   }
 
   void _onPointerMove(PointerMoveEvent event) {
@@ -1189,6 +1248,18 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
       return;
     }
 
+    // Horizontal paging now owns this gesture. Drop any vertical drag the
+    // parallel recognizer accumulated from the same downward drift and keep
+    // vertical callbacks disabled until the next pointer down.
+    final claimedNow = !_pageSwipeClaimed;
+    if (claimedNow) {
+      _settle?.stop();
+      _settle?.dispose();
+      _settle = null;
+      _drag = 0;
+      _pageSwipeClaimed = true;
+    }
+
     final elapsed = (event.timeStamp - _swipeLastTime).inMilliseconds;
     if (elapsed > 0) {
       _swipeVelocity = (event.position.dx - _swipeLast.dx) * 1000 / elapsed;
@@ -1198,7 +1269,7 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
 
     final width = MediaQuery.sizeOf(context).width;
     final next = dx.clamp(-width * 0.6, width * 0.6);
-    if ((next - _swipeDx).abs() > 0.5 && mounted) {
+    if ((claimedNow || (next - _swipeDx).abs() > 0.5) && mounted) {
       setState(() => _swipeDx = next);
     }
   }
@@ -1219,8 +1290,11 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
     final dx = _swipeDx;
     final velocity = _swipeVelocity;
     final tracked = _swipePointer != null;
-    _resetSwipe(notify: false);
+    _clearSwipeTracking();
+
     if (!tracked || !wasUp || !widget.canPage || axis != Axis.horizontal) {
+      // Cancels and pinch suspensions must never leave the content translated.
+      _resetSwipe();
       return;
     }
 
@@ -1231,8 +1305,18 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
         : dx >= threshold || (velocity > 600 && dx > 20)
             ? -1
             : 0;
-    if (mounted) setState(() {});
-    if (delta != 0) widget.onPageDelta(delta);
+
+    if (delta == 0) {
+      // Below the threshold, ease back to rest instead of snapping.
+      _settleSwipeOffset();
+      return;
+    }
+
+    // The horizontal claim stays latched until the next pointer down, so a
+    // late vertical-drag-end from the same diagonal swipe cannot dismiss.
+    _resetDismissDrag(notify: false);
+    _settleSwipeOffset();
+    widget.onPageDelta(delta);
   }
 
   void _settleBack() {
@@ -1290,12 +1374,14 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
         behavior: HitTestBehavior.translucent,
         onVerticalDragStart: gesturesEnabled
             ? (_) {
+                if (_pageSwipeClaimed) return;
                 _settle?.stop();
                 if (_drag != 0) setState(() => _drag = 0);
               }
             : null,
         onVerticalDragUpdate: gesturesEnabled && widget.canDismiss
             ? (details) {
+                if (_pageSwipeClaimed) return;
                 if (details.delta.dy <= 0 && _drag <= 0) return;
                 setState(() {
                   _drag = (_drag + details.delta.dy).clamp(0.0, maxDrag);
@@ -1304,6 +1390,7 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
             : null,
         onVerticalDragEnd: gesturesEnabled
             ? (details) {
+                if (_pageSwipeClaimed) return;
                 final velocity = details.primaryVelocity ?? 0;
                 if (widget.canDismiss && _drag > 0) {
                   if (_drag > height * 0.16 || (velocity > 650 && _drag > 20)) {
@@ -1320,7 +1407,12 @@ class _SwipeDismissLayerState extends State<_SwipeDismissLayer>
                 }
               }
             : null,
-        onVerticalDragCancel: gesturesEnabled ? () => _settleBack() : null,
+        onVerticalDragCancel: gesturesEnabled
+            ? () {
+                if (_pageSwipeClaimed) return;
+                _settleBack();
+              }
+            : null,
         child: content,
       ),
     );
@@ -1772,6 +1864,10 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
 
   /// Guards the re-entrant listener fired when we write the corrected matrix.
   bool _applyingBounds = false;
+
+  /// The first fit is written during [build], before the image paints. The
+  /// listener must not call `setState` from inside that same build.
+  bool _applyingFit = false;
   late final VoidCallback _zoomListener;
 
   @override
@@ -1817,7 +1913,7 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
   }
 
   void _onTransformChanged() {
-    if (_applyingBounds) return;
+    if (_applyingBounds || _applyingFit) return;
     final vp = _viewport;
     final settled = vp == null
         ? _transform.value
@@ -1866,10 +1962,22 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
   Matrix4 _matrixFor(double scale, Size viewport, Size photo) =>
       PhotoZoomPolicy.matrixFor(scale, viewport, photo);
 
+  /// Writes the orientation-correct matrix before the first paint.
+  ///
+  /// The old version deferred this to a post-frame `setState`, so a portrait
+  /// photo's first frame was the untransformed source at its natural size —
+  /// full-screen and wrong — before it snapped to fit one frame later.
   void _applyFit() {
     final vp = _viewport;
     if (vp == null || _fitted) return;
-    _transform.value = _matrixFor(_fit, vp, _photo);
+    final matrix = _matrixFor(_fit, vp, _photo);
+    final scale = matrix.getMaxScaleOnAxis();
+    _applyingFit = true;
+    _transform.value = matrix;
+    _applyingFit = false;
+    _quality = ImageDecodePolicy.filterQualityForScale(scale);
+    _zoomed = PhotoZoomPolicy.isZoomed(scale, _fit);
+    _canPan = _zoomed;
     _fitted = true;
   }
 
@@ -1902,11 +2010,9 @@ class _ZoomablePhotoState extends State<_ZoomablePhoto>
           _fit = fit;
           _fitted = false;
         }
-        if (!_fitted) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) setState(_applyFit);
-          });
-        }
+        // Apply during this build so the first painted frame already has the
+        // photo's real orientation and fit. No post-frame correction, no flash.
+        _applyFit();
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,

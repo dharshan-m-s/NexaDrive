@@ -92,6 +92,10 @@ class _FilesScreenState extends State<FilesScreen> {
   Offset? _lastPointerPosition;
   bool _dragSelecting = false;
   int? _dragAnchorIndex;
+
+  /// Avoids re-hit-testing and re-hapticking the same cell on every pointer
+  /// move and every edge-auto-scroll frame.
+  int? _dragLastIndex;
   Set<String> _dragBaseSelection = const <String>{};
 
   /// Keeps a range drag alive when the pointer reaches the viewport edge.
@@ -112,6 +116,7 @@ class _FilesScreenState extends State<FilesScreen> {
   _FileFilter _filter = _FileFilter.all;
   bool _searchExpanded = false;
   List<FileEntry>? _sortedCache;
+  List<FileEntry>? _visibleCache;
   final Set<String> _busyDownloads = <String>{};
   final Set<String> _noThumbnail = <String>{};
   final Set<String> _loadingThumbs = <String>{};
@@ -122,7 +127,7 @@ class _FilesScreenState extends State<FilesScreen> {
   @override
   void initState() {
     super.initState();
-    _loadGridColumns();
+    _loadLayoutPreferences();
     _attachDiskCache();
     load();
     final intent = widget.intent;
@@ -174,7 +179,7 @@ class _FilesScreenState extends State<FilesScreen> {
       if (!mounted) return;
       setState(() {
         _items = items.map(FileEntry.fromJson).toList();
-        _sortedCache = null;
+        _invalidateListingCache();
         _thumbKeys.clear();
         _loading = false;
       });
@@ -466,16 +471,23 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   static const _gridColumnsPreference = 'nexadrive.files.grid_columns';
+  static const _viewModePreference = 'nexadrive.files.grid';
 
-  Future<void> _loadGridColumns() async {
+  /// Loads density and view mode in one pass so neither async read can win a
+  /// race against the other or overwrite a fresh user choice.
+  Future<void> _loadLayoutPreferences() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final saved = prefs.getInt(_gridColumnsPreference);
-      if (saved != null && mounted) {
-        setState(() => _gridColumns = NexaGridLayout.clamp(saved));
-      }
+      if (!mounted) return;
+      final columns = prefs.getInt(_gridColumnsPreference);
+      final grid = prefs.getBool(_viewModePreference);
+      if (columns == null && grid == null) return;
+      setState(() {
+        if (columns != null) _gridColumns = NexaGridLayout.clamp(columns);
+        if (grid != null) _grid = grid;
+      });
     } catch (_) {
-      // The grid still works with the default density.
+      // The listing still works with the defaults.
     }
   }
 
@@ -488,6 +500,24 @@ class _FilesScreenState extends State<FilesScreen> {
     }
   }
 
+  Future<void> _saveViewMode(bool grid) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_viewModePreference, grid);
+    } catch (_) {
+      // The selected view remains active for this session.
+    }
+  }
+
+  /// Single write path for every list/grid change, including pinch and picker.
+  void _setGrid(bool grid) {
+    if (_grid == grid) return;
+    _selectionAutoScroller?.stopAutoScroll();
+    setState(() => _grid = grid);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _pruneFileCellKeys());
+    unawaited(_saveViewMode(grid));
+  }
+
   Future<void> _showGridLayoutPicker() async {
     final selected = await showNexaGridLayoutPicker(
       context: context,
@@ -496,16 +526,14 @@ class _FilesScreenState extends State<FilesScreen> {
       subtitle: 'Choose how many files fit across the grid.',
     );
     if (selected == null || !mounted || selected == _gridColumns) return;
-    setState(() {
-      _gridColumns = selected;
-      _grid = true;
-    });
+    setState(() => _gridColumns = selected);
+    _setGrid(true);
     await _saveGridColumns(selected);
   }
 
-  /// List and grid cells can briefly coexist during the view cross-fade, so
-  /// their hit-test keys must live in separate namespaces. The ref keeps the
-  /// real path alongside the key, which is what range selection needs.
+  /// Keys are namespaced by view so a state cross-fade can never mix cells
+  /// from the two layouts. The ref keeps the real path alongside the key,
+  /// which is what range selection needs.
   GlobalKey _keyForFileCell(String path, {required bool grid}) {
     final id = '${grid ? 'grid' : 'list'}:$path';
     return _fileCellKeys
@@ -541,13 +569,16 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   void _onPointerDown(PointerDownEvent event) {
+    // A second finger (pinch, scroll) must never steal an active range drag.
+    if (_dragSelecting && _activePointer != null) return;
     _activePointer = event.pointer;
     _lastPointerPosition = event.position;
   }
 
   void _onPointerMove(PointerMoveEvent event) {
+    if (_dragSelecting && event.pointer != _activePointer) return;
     _lastPointerPosition = event.position;
-    if (!_dragSelecting || event.pointer != _activePointer) return;
+    if (!_dragSelecting) return;
     _selectAtLastPointer();
     _updateSelectionAutoScroll(event.position);
   }
@@ -558,6 +589,7 @@ class _FilesScreenState extends State<FilesScreen> {
     _lastPointerPosition = null;
     _dragSelecting = false;
     _dragAnchorIndex = null;
+    _dragLastIndex = null;
     _dragBaseSelection = const <String>{};
     _selectionAutoScroller?.stopAutoScroll();
   }
@@ -571,7 +603,9 @@ class _FilesScreenState extends State<FilesScreen> {
     final path = _pathAtPosition(position);
     if (path == null) return;
     final index = _visibleItems.indexWhere((entry) => entry.path == path);
-    if (index >= 0) _selectRangeTo(index);
+    if (index < 0 || index == _dragLastIndex) return;
+    _dragLastIndex = index;
+    _selectRangeTo(index);
   }
 
   void _updateSelectionAutoScroll(Offset position) {
@@ -618,7 +652,7 @@ class _FilesScreenState extends State<FilesScreen> {
     if (details.pointerCount == 2) {
       // Density is a grid concept; make the pinch visible even when the user
       // is currently in the compact list.
-      if (!_grid) setState(() => _grid = true);
+      _setGrid(true);
       _pinchBaseColumns = _gridColumns.toDouble();
     }
   }
@@ -630,7 +664,7 @@ class _FilesScreenState extends State<FilesScreen> {
       // Density is a grid concept; make the pinch visible even when the user
       // starts from the compact list. Switch before capturing the base so the
       // list -> grid transition is part of the same gesture.
-      if (!_grid) setState(() => _grid = true);
+      _setGrid(true);
       base = _gridColumns.toDouble();
       _pinchBaseColumns = base;
     }
@@ -704,7 +738,9 @@ class _FilesScreenState extends State<FilesScreen> {
     final hit = _pathAtPosition(_lastPointerPosition ?? Offset.zero);
     final target =
         hit == null ? anchor : visible.indexWhere((entry) => entry.path == hit);
-    _selectRangeTo(target < 0 ? anchor : target);
+    final resolved = target < 0 ? anchor : target;
+    _dragLastIndex = resolved;
+    _selectRangeTo(resolved);
   }
 
   void _selectRangeTo(int index) {
@@ -744,6 +780,7 @@ class _FilesScreenState extends State<FilesScreen> {
     setState(() {
       _selecting = false;
       _selected.clear();
+      _dragLastIndex = null;
     });
     widget.onSelectionChanged?.call(false);
   }
@@ -1145,7 +1182,7 @@ class _FilesScreenState extends State<FilesScreen> {
     setState(() {
       _sort = sort;
       _filter = filter;
-      _sortedCache = null;
+      _invalidateListingCache();
     });
   }
 
@@ -1184,8 +1221,14 @@ class _FilesScreenState extends State<FilesScreen> {
 
   List<FileEntry> get _sorted => _sortedCache ??= _computeSorted();
 
+  void _invalidateListingCache() {
+    _sortedCache = null;
+    _visibleCache = null;
+  }
+
   /// The current folder listing after the user's type filter is applied.
-  List<FileEntry> get _visibleItems => filterFileEntries(
+  /// Cached because drag hit-testing reads it on every auto-scroll frame.
+  List<FileEntry> get _visibleItems => _visibleCache ??= filterFileEntries(
       _sorted,
       switch (_filter) {
         _FileFilter.all => FileEntryFilter.all,
@@ -1563,7 +1606,7 @@ class _FilesScreenState extends State<FilesScreen> {
                       load();
                     },
               onExitSelection: _exitSelection,
-              onToggleView: () => setState(() => _grid = !_grid),
+              onToggleView: () => _setGrid(!_grid),
               isGrid: _grid,
               gridColumns: _gridColumns,
               onLayout: _showGridLayoutPicker,
@@ -1616,7 +1659,10 @@ class _FilesScreenState extends State<FilesScreen> {
                 selected: _filter,
                 folderCount: _folderCount,
                 fileCount: _fileCount,
-                onChanged: (value) => setState(() => _filter = value),
+                onChanged: (value) {
+                  _invalidateListingCache();
+                  setState(() => _filter = value);
+                },
               ),
           ],
         ),
@@ -1630,6 +1676,7 @@ class _FilesScreenState extends State<FilesScreen> {
           headerExtent:
               MediaQuery.paddingOf(context).top + _headerContentExtent(context),
           onRefresh: load,
+          physics: AppMotion.elasticScrollPhysics,
           slivers: [
             _headerSliver(),
             ..._contentSlivers(),
@@ -1646,7 +1693,7 @@ class _FilesScreenState extends State<FilesScreen> {
               ? 'empty'
               : _visibleItems.isEmpty
                   ? 'filtered-empty:${_filter.name}'
-                  : 'content:${_grid ? 'grid' : 'list'}:${_filter.name}';
+                  : 'content:${_filter.name}';
 
   List<Widget> _contentSlivers() {
     // The shell already publishes pill-inclusive clearance through MediaQuery.
@@ -1748,7 +1795,10 @@ class _FilesScreenState extends State<FilesScreen> {
               message: 'Change the filter to see the rest of this folder.',
               primaryLabel: 'Show all items',
               primaryIcon: Icons.filter_list_rounded,
-              onPrimary: () => setState(() => _filter = _FileFilter.all),
+              onPrimary: () {
+                _invalidateListingCache();
+                setState(() => _filter = _FileFilter.all);
+              },
             ),
           ),
         ),
@@ -1849,12 +1899,10 @@ class _FilesScreenState extends State<FilesScreen> {
           },
           separatorBuilder: (context, index) => Divider(
             height: 1,
-            indent: AppDimens.rowInset +
-                (_selecting
-                    ? AppDimens.touchTarget + AppDimens.space4
-                    : AppDimens.iconMedium) +
-                AppDimens.iconTile +
-                AppDimens.space16,
+            // Keep the hairline centred in the page gutters. Deriving the left
+            // inset from the leading tile controls pushed it right whenever
+            // selection mode changed the leading width.
+            indent: AppDimens.rowInset,
             endIndent: AppDimens.rowInset,
             color: Theme.of(context).colorScheme.outlineVariant,
           ),

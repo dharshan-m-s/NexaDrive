@@ -49,6 +49,14 @@ void main() {
     expect(find.text('PDF'), findsOneWidget);
     expect(find.byTooltip('Gallery options'), findsOneWidget);
     expect(find.byTooltip('Change grid density'), findsNothing);
+    // Grid cells are cover-cropped, so they must not be Hero sources: a flight
+    // would land full-screen and rescale the photo on decode.
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Hero && '${widget.tag}'.startsWith('photo:'),
+      ),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 

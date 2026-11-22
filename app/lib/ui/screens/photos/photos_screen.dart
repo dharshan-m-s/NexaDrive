@@ -983,6 +983,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
               ],
             ),
       sliverBuilder: _buildSlivers,
+      scrollPhysics: AppMotion.elasticScrollPhysics,
       onRefresh: load,
       bottomBar: _selectionBar(),
     );
@@ -1135,7 +1136,6 @@ class _PhotosScreenState extends State<PhotosScreen> {
                 name: _photos[index]['name']?.toString() ?? path,
                 semanticLabel: '${_mediaLabel(_categoryAt(index))}: '
                     '${_photos[index]['name'] ?? path}',
-                heroTag: 'photo:$path',
                 selected: _selected.contains(path),
                 selecting: _selecting,
                 onTap: () => _onCellTap(index),
@@ -1365,7 +1365,6 @@ class _PhotoCell extends StatelessWidget {
   final bool unavailable;
   final String name;
   final String? semanticLabel;
-  final String heroTag;
   final bool selected;
   final bool selecting;
   final VoidCallback onTap;
@@ -1380,7 +1379,6 @@ class _PhotoCell extends StatelessWidget {
     required this.unavailable,
     required this.name,
     required this.semanticLabel,
-    required this.heroTag,
     required this.selected,
     required this.selecting,
     required this.onTap,
@@ -1451,7 +1449,10 @@ class _PhotoCell extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Hero(tag: heroTag, child: content),
+                    // No Hero: this tile is cover-cropped while the viewer is
+                    // fitted. A shared-element flight would stretch it to the
+                    // full viewport before the photo snapped to its real size.
+                    content,
                     if (badge != null)
                       Positioned(
                         left: AppDimens.space6,
